@@ -1,6 +1,10 @@
 # BMAD Dev Agent Container
 # Sandbox for running Claude Code with full project tooling
 # Stack: Go + Node.js + gh CLI + Claude Code
+#
+# Two modes:
+#   1. MOUNT mode (default): project mounted as volume at /workspace
+#   2. CLONE mode: repo cloned from GitHub into /workspace (for parallel waves)
 
 FROM node:22-bookworm
 
@@ -34,9 +38,10 @@ RUN go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest \
 # Claude Code CLI
 RUN npm install -g @anthropic-ai/claude-code
 
-# Working directory = mounted project
+# Entrypoint handles clone-then-run
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
 WORKDIR /workspace
 
-# Default: run Claude Code with full permissions (container IS the sandbox)
-ENTRYPOINT ["claude"]
-CMD ["--dangerously-skip-permissions"]
+ENTRYPOINT ["/entrypoint.sh"]
