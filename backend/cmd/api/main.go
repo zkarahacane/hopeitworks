@@ -57,16 +57,25 @@ func run() error {
 	jwtExpiration := 24 * time.Hour
 	authService := service.NewAuthService(userRepo, jwtSecret, jwtExpiration)
 
-	// Project service
+	// Project repository (shared)
 	projectRepo := pgadapter.NewProjectRepo(queries)
+
+	// Project user service
+	projectUserRepo := pgadapter.NewProjectUserRepo(queries)
+	projectUserService := service.NewProjectUserService(projectUserRepo, projectRepo, userRepo)
+
+	// Project service
 	projectService := service.NewProjectService(projectRepo)
-	projectHandler := handler.NewProjectHandler(projectService)
+	projectHandler := handler.NewProjectHandler(projectService, projectUserService)
 
 	// User service
 	userService := service.NewUserService(userRepo)
 	userHandler := handler.NewUserHandler(userService)
 
 	server := handler.NewServer(projectHandler, userHandler)
+
+	// Project user handler
+	projectUserHandler := handler.NewProjectUserHandler(projectUserService)
 
 	// Build router
 	r := chi.NewRouter()
@@ -76,6 +85,14 @@ func run() error {
 	r.Use(authmw.Auth(authService))
 
 	handler.HandlerFromMuxWithBaseURL(server, r, "/api/v1")
+
+	// Mount project_users routes (manually registered, not in OpenAPI spec yet)
+	r.Route("/api/v1/projects/{id}/users", func(r chi.Router) {
+		r.Use(authmw.RequireProjectAccess(projectUserRepo))
+		r.Get("/", projectUserHandler.ListMembers)
+		r.Post("/", projectUserHandler.AddUser)
+		r.Delete("/{user_id}", projectUserHandler.RemoveUser)
+	})
 
 	// Health check
 	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
