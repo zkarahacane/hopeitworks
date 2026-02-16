@@ -1,0 +1,35 @@
+package config
+
+import "time"
+
+// Config holds the complete application configuration.
+type Config struct {
+	Server   ServerConfig   `yaml:"server"`
+	Database DatabaseConfig `yaml:"database"`
+	Log      LogConfig      `yaml:"logging"`
+}
+
+// ServerConfig holds HTTP server settings.
+type ServerConfig struct {
+	Port         int           `yaml:"port"`
+	ReadTimeout  time.Duration `yaml:"read_timeout"`
+	WriteTimeout time.Duration `yaml:"write_timeout"`
+}
+
+// DatabaseConfig holds PostgreSQL connection settings.
+type DatabaseConfig struct {
+	Host            string `yaml:"host"`
+	Port            int    `yaml:"port"`
+	Name            string `yaml:"name"`
+	User            string `yaml:"user"`
+	Password        string `yaml:"password"`
+	SSLMode         string `yaml:"sslmode"`
+	MaxConns        int32  `yaml:"max_conns"`
+	MinConns        int32  `yaml:"min_conns"`
+	MaxConnLifetime string `yaml:"max_conn_lifetime"`
+}
+
+// LogConfig holds logging settings.
+type LogConfig struct {
+	Level string `yaml:"level"`
+}

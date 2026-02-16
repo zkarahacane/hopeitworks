@@ -35,5 +35,14 @@ coverage
 # Vitest
 __screenshots__/
 
+# Playwright
+/e2e/results/
+/playwright-report/
+/blob-report/
+/test-results/
+
 # Vite
 *.timestamp-*-*.mjs
+
+# Generated API types
+src/api/schema.d.ts
