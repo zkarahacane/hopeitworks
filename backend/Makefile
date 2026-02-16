@@ -11,7 +11,11 @@ generate: ## Generate code from OpenAPI spec and SQL queries
 	go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen -config .oapi-codegen.yaml ../api/openapi.yaml
 	@echo "Generating database query functions from SQL..."
 	@if [ -n "$$(find queries -name '*.sql' 2>/dev/null)" ]; then \
-		sqlc generate; \
+		if command -v sqlc >/dev/null 2>&1; then \
+			sqlc generate; \
+		else \
+			echo "sqlc not found, skipping SQL generation (files should be committed)"; \
+		fi; \
 	else \
 		echo "No SQL queries found, skipping sqlc generation"; \
 	fi

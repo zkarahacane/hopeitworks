@@ -9,9 +9,14 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/zakari/hopeitworks/backend/internal/adapter/postgres"
-	"github.com/zakari/hopeitworks/backend/internal/api"
+	pgadapter "github.com/zakari/hopeitworks/backend/internal/adapter/postgres"
+	"github.com/zakari/hopeitworks/backend/internal/api/handler"
+	authmw "github.com/zakari/hopeitworks/backend/internal/api/middleware"
 	internalconfig "github.com/zakari/hopeitworks/backend/internal/config"
+	"github.com/zakari/hopeitworks/backend/internal/domain/service"
 	pkglog "github.com/zakari/hopeitworks/backend/pkg/log"
 )
 
@@ -43,13 +48,40 @@ func run() error {
 	defer pool.Close()
 	logger.Info("database connected")
 
+	// Build dependency graph
+	queries := pgadapter.New(pool)
+
+	// Auth service and middleware
+	userRepo := pgadapter.NewUserRepository(pool)
+	jwtSecret := getEnvOrDefault("JWT_SECRET", "dev-secret-key-change-in-production")
+	jwtExpiration := 24 * time.Hour
+	authService := service.NewAuthService(userRepo, jwtSecret, jwtExpiration)
+
+	// Project service
+	projectRepo := pgadapter.NewProjectRepo(queries)
+	projectService := service.NewProjectService(projectRepo)
+	projectHandler := handler.NewProjectHandler(projectService)
+	server := handler.NewServer(projectHandler)
+
 	// Build router
-	router := api.NewRouter(pool, logger)
+	r := chi.NewRouter()
+	r.Use(chimiddleware.Logger)
+	r.Use(chimiddleware.Recoverer)
+	r.Use(chimiddleware.RequestID)
+	r.Use(authmw.Auth(authService))
+
+	handler.HandlerFromMuxWithBaseURL(server, r, "/api/v1")
+
+	// Health check
+	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ok"))
+	})
 
 	// Create HTTP server
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Server.Port),
-		Handler:      router,
+		Handler:      r,
 		ReadTimeout:  cfg.Server.ReadTimeout,
 		WriteTimeout: cfg.Server.WriteTimeout,
 	}
@@ -84,4 +116,11 @@ func run() error {
 	}
 
 	return nil
+}
+
+func getEnvOrDefault(key, defaultVal string) string {
+	if val := os.Getenv(key); val != "" {
+		return val
+	}
+	return defaultVal
 }
