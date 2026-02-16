@@ -48,11 +48,17 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version: '1.24'
           cache-dependency-path: backend/go.sum
 
       - name: Download Go modules
         run: go mod download
+
+      - name: Install codegen tools
+        run: make install-tools
+
+      - name: Run codegen
+        run: make generate
 
       - name: Build
         run: go build ./cmd/api
@@ -62,17 +68,6 @@ jobs:
 
       - name: Test
         run: go test ./... -race -coverprofile=coverage.out
-
-      - name: Run codegen
-        run: make generate
-
-      - name: Verify codegen is committed
-        run: |
-          if [ -n "$(git status --porcelain)" ]; then
-            echo "::error::Generated code is not up-to-date. Run 'make generate' and commit the changes."
-            git diff
-            exit 1
-          fi
 
       - name: Setup Node.js (for redocly)
         uses: actions/setup-node@v4

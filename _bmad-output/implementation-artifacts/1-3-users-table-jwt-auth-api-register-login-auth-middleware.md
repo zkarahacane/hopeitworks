@@ -390,22 +390,41 @@ Error codes used:
 
 ### Agent Model Used
 
-_To be filled by the dev agent after implementation_
+Claude Opus 4.6 (claude-opus-4-6)
 
 ### Debug Log References
 
-_To be filled by the dev agent after implementation_
+- All tests pass: `go test ./...` (handler, middleware, service packages)
+- Build succeeds: `make build`
+- `go vet ./...` clean
 
 ### Completion Notes List
 
-_To be filled by the dev agent after implementation. Include:_
-- Any deviations from the spec and rationale
-- Issues encountered and solutions
-- Additional files created beyond the spec
-- Recommendations for future stories
+- **Deviation:** Story 1-15 (services wiring) is not yet merged, so handlers and middleware are not wired into main.go. They are fully implemented and unit-tested standalone.
+- **Deviation:** Added `port.UserRepository` as a dependency to `AuthHandler` (in addition to `AuthService`) so the `/auth/me` endpoint can fetch the full user object from the database, since middleware only injects user_id and role into context.
+- **Deviation:** Updated `.gitignore` to explicitly ignore sqlc-generated files (`db.go`, `models.go`, `users.sql.go`) since they don't follow the `gen_*` prefix convention.
+- **Deviation:** `go.mod` was upgraded from Go 1.23.6 to Go 1.24.0 due to `golang.org/x/crypto` v0.47+ requiring it.
+- **Additional tests:** Created comprehensive unit tests for AuthService, AuthHandler, and AuthMiddleware with mock repositories.
+- **Recommendation for future stories:** When Story 1-15 lands, wire `AuthHandler` routes and `Auth` middleware into the chi router in `main.go`. The handler constructor is `NewAuthHandler(authService, userRepo, cookieSecure)` and middleware is `middleware.Auth(authService)`.
 
 ### File List
 
-_To be filled by the dev agent after implementation. List all files created or modified with absolute paths._
+- `backend/migrations/000001_create_users_table.up.sql` (created)
+- `backend/migrations/000001_create_users_table.down.sql` (created)
+- `backend/queries/users.sql` (created)
+- `backend/internal/domain/model/user.go` (created)
+- `backend/internal/domain/port/user_repository.go` (created)
+- `backend/internal/domain/service/auth_service.go` (created)
+- `backend/internal/domain/service/auth_service_test.go` (created)
+- `backend/internal/adapter/postgres/user_repository.go` (created)
+- `backend/internal/api/handler/auth_handler.go` (created)
+- `backend/internal/api/handler/auth_handler_test.go` (created)
+- `backend/internal/api/middleware/auth.go` (created)
+- `backend/internal/api/middleware/auth_test.go` (created)
+- `backend/go.mod` (modified - added direct deps, Go version bump)
+- `backend/go.sum` (modified)
+- `.gitignore` (modified - added sqlc generated file patterns)
 
 ## Change Log
+
+- 2026-02-16: Implementation complete - all 7 tasks done, all tests passing

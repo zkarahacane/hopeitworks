@@ -5,49 +5,54 @@ import (
 	"net/http"
 
 	"github.com/google/uuid"
+	"github.com/zakari/hopeitworks/backend/internal/domain/model"
+	"github.com/zakari/hopeitworks/backend/internal/domain/service"
 )
 
 type contextKey string
 
 const (
-	userIDKey contextKey = "user_id"
-	roleKey   contextKey = "user_role"
+	ContextKeyUserID contextKey = "user_id"
+	ContextKeyRole   contextKey = "user_role"
 )
 
-// AuthMiddleware validates JWT cookies and injects user info into context.
-// This is a placeholder that will be fully implemented in Story 1-3.
-// For now, it extracts the user context if already set (e.g., by tests).
-func AuthMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Full JWT validation will be implemented in Story 1-3.
-		// This middleware is a pass-through to allow the handler to check
-		// for authentication context that may be set by upstream middleware.
-		next.ServeHTTP(w, r)
-	})
-}
-
-// SetUserContext sets user information in the request context.
-// Used by auth middleware after successful JWT validation.
-func SetUserContext(ctx context.Context, userID uuid.UUID, role string) context.Context {
-	ctx = context.WithValue(ctx, userIDKey, userID)
-	ctx = context.WithValue(ctx, roleKey, role)
-	return ctx
-}
-
-// UserIDFromContext extracts the user ID from the context.
+// UserIDFromContext extracts the user ID from the request context.
 func UserIDFromContext(ctx context.Context) (uuid.UUID, bool) {
-	id, ok := ctx.Value(userIDKey).(uuid.UUID)
+	id, ok := ctx.Value(ContextKeyUserID).(uuid.UUID)
 	return id, ok
 }
 
-// RoleFromContext extracts the user role from the context.
-func RoleFromContext(ctx context.Context) (string, bool) {
-	role, ok := ctx.Value(roleKey).(string)
+// RoleFromContext extracts the user role from the request context.
+func RoleFromContext(ctx context.Context) (model.Role, bool) {
+	role, ok := ctx.Value(ContextKeyRole).(model.Role)
 	return role, ok
 }
 
-// IsAdmin checks if the user in the context has admin role.
-func IsAdmin(ctx context.Context) bool {
-	role, ok := RoleFromContext(ctx)
-	return ok && role == "admin"
+// Auth returns middleware that validates JWT tokens and injects user context.
+func Auth(authService *service.AuthService) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			cookie, err := r.Cookie("token")
+			if err != nil {
+				writeUnauthorized(w)
+				return
+			}
+
+			claims, err := authService.ValidateToken(cookie.Value)
+			if err != nil {
+				writeUnauthorized(w)
+				return
+			}
+
+			ctx := context.WithValue(r.Context(), ContextKeyUserID, claims.UserID)
+			ctx = context.WithValue(ctx, ContextKeyRole, claims.Role)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
+func writeUnauthorized(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusUnauthorized)
+	w.Write([]byte(`{"error":{"code":"UNAUTHORIZED","message":"Authentication required"}}`))
 }

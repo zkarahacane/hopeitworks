@@ -50,6 +50,14 @@ func run() error {
 
 	// Build dependency graph
 	queries := pgadapter.New(pool)
+
+	// Auth service and middleware
+	userRepo := pgadapter.NewUserRepository(pool)
+	jwtSecret := getEnvOrDefault("JWT_SECRET", "dev-secret-key-change-in-production")
+	jwtExpiration := 24 * time.Hour
+	authService := service.NewAuthService(userRepo, jwtSecret, jwtExpiration)
+
+	// Project service
 	projectRepo := pgadapter.NewProjectRepo(queries)
 	projectService := service.NewProjectService(projectRepo)
 	projectHandler := handler.NewProjectHandler(projectService)
@@ -60,7 +68,7 @@ func run() error {
 	r.Use(chimiddleware.Logger)
 	r.Use(chimiddleware.Recoverer)
 	r.Use(chimiddleware.RequestID)
-	r.Use(authmw.AuthMiddleware)
+	r.Use(authmw.Auth(authService))
 
 	handler.HandlerFromMuxWithBaseURL(server, r, "/api/v1")
 
@@ -108,4 +116,11 @@ func run() error {
 	}
 
 	return nil
+}
+
+func getEnvOrDefault(key, defaultVal string) string {
+	if val := os.Getenv(key); val != "" {
+		return val
+	}
+	return defaultVal
 }
