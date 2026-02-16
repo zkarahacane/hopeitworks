@@ -1,0 +1,5 @@
+@layer tailwind-base, primevue, tailwind-utilities;
+
+@import 'tailwindcss/preflight.css' layer(tailwind-base);
+@import 'tailwindcss/theme.css' layer(tailwind-base);
+@import 'tailwindcss/utilities.css' layer(tailwind-utilities);
