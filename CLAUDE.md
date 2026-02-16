@@ -231,6 +231,52 @@ npm run test:e2e                     # Playwright (against docker-compose.test.y
 - Config: `config.yaml` + env var override, resolved at startup
 - No hot-reload for MVP — restart to apply config changes
 
+## Story Implementation Pipeline
+
+Stories are implemented via Docker containers running Claude Code agents. **Never implement stories directly in the local repo** — always use the pipeline scripts.
+
+### Scripts
+
+| Script | Purpose |
+|--------|---------|
+| `scripts/bmad-dev.sh` | Launch dev agent containers (clone mode or interactive) |
+| `scripts/pipeline.sh` | Runs inside container: dev-story (Opus) → code-review (Sonnet) → merge-story (Sonnet) |
+
+### Usage
+
+```bash
+# Full pipeline for a single story (dev → review → merge)
+./scripts/bmad-dev.sh --story <story-key> --pipeline
+
+# Full pipeline for an entire wave (all stories in parallel)
+./scripts/bmad-dev.sh --wave <N> --pipeline
+
+# Setup wave branch first (if using wave-based merging)
+./scripts/bmad-dev.sh --wave <N> --setup
+
+# Single phase on a story
+./scripts/bmad-dev.sh --story <story-key> --phase dev-story
+./scripts/bmad-dev.sh --story <story-key> --phase code-review
+./scripts/bmad-dev.sh --story <story-key> --phase merge-story
+
+# Monitor running containers
+./scripts/bmad-dev.sh --status
+docker logs -f bmad-dev-<story-key>-pipeline
+```
+
+### Parallel execution rules
+
+- Stories in the same wave can run in parallel (each in its own Docker container)
+- Each container clones the repo independently — no git conflicts during dev
+- **Never run parallel local agents on the same working directory** — use `git worktree` if needed
+- Merge conflicts are resolved at merge time (sequential merge order matters)
+- **Verify CI is green on develop before launching pipelines** — agents wait for CI green to merge
+
+### Required env vars
+
+- `CLAUDE_CODE_OAUTH_TOKEN` — OAuth token for Claude Code
+- `GITHUB_TOKEN` — GitHub token for gh CLI
+
 # Project Context — Current State
 
 ## Project Overview
