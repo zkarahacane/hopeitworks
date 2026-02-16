@@ -54,8 +54,8 @@ test.describe('Board Page', () => {
     await page.goto('/projects/p1/board')
 
     await expect(page.locator('h1')).toHaveText('Story Board')
-    await expect(page.getByText('User Authentication')).toBeVisible()
-    await expect(page.getByText('Pipeline Execution')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'User Authentication' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Pipeline Execution' })).toBeVisible()
 
     await expect(page.getByText('Backlog')).toHaveCount(2)
     await expect(page.getByText('Running')).toHaveCount(2)
