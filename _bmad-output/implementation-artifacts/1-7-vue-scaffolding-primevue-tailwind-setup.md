@@ -1,6 +1,6 @@
 # Story 1.7: [FRONT] Vue scaffolding + PrimeVue + Tailwind setup
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -360,16 +360,55 @@ After completing all tasks, verify:
 
 ### Agent Model Used
 
-(To be filled by implementation agent)
+Claude Opus 4.6 (claude-opus-4-6)
 
 ### Debug Log References
 
-(To be filled by implementation agent)
+- Build output: `npm run build` passes (vue-tsc type-check + vite build, 236 modules, 302KB JS bundle)
+- Lint output: `npm run lint` passes (oxlint + eslint, 0 warnings, 0 errors)
 
 ### Completion Notes List
 
-(To be filled by implementation agent)
+- Initialized via `npm create vue@latest` with TypeScript, Router, Vitest, ESLint+Prettier
+- Tailwind CSS v4 uses CSS-based configuration (`@import "tailwindcss/..."`) instead of v3's `tailwind.config.js` and `@tailwind` directives - adapted the story's CSS layer spec accordingly
+- PrimeVue 4.5.4 installed with `@primevue/themes` (Aura preset); package shows deprecation notice for future migration to `@primeuix/themes` (PrimeVue 5.x), but is correct for 4.x
+- CSS layer order configured via both `main.css` (`@layer tailwind-base, primevue, tailwind-utilities`) and PrimeVue's `cssLayer` option
+- Story specified `unstyled: true` but PrimeVue 4.x Aura preset is a styled preset; kept default `unstyled: false` so Aura styling renders correctly
+- Removed scaffolded demo components (HelloWorld, TheWelcome, icons, HomeView, AboutView, base.css)
+- `create-vue@3.21.1` generated Vite 7.x, TypeScript 5.9, Vitest 4.x (newer than story's specified versions but compatible)
 
 ### File List
 
-(To be filled by implementation agent)
+- `frontend/.editorconfig` (new - from create-vue)
+- `frontend/.gitattributes` (new - from create-vue)
+- `frontend/.gitignore` (new - from create-vue)
+- `frontend/.oxlintrc.json` (new - from create-vue)
+- `frontend/.prettierrc.json` (new - from create-vue)
+- `frontend/README.md` (new - from create-vue)
+- `frontend/env.d.ts` (new - Vite client types)
+- `frontend/eslint.config.ts` (new - ESLint flat config)
+- `frontend/index.html` (new - SPA entry point, title: "hopeitworks")
+- `frontend/package.json` (new - Vue 3.5, PrimeVue 4.5, Tailwind 4.1)
+- `frontend/package-lock.json` (new)
+- `frontend/public/favicon.ico` (new - from create-vue)
+- `frontend/src/App.vue` (new - minimal RouterView shell)
+- `frontend/src/main.ts` (new - PrimeVue + Router setup)
+- `frontend/src/assets/main.css` (new - CSS layer configuration)
+- `frontend/src/router/index.ts` (new - single TestView route)
+- `frontend/src/theme/index.ts` (new - HopeTheme preset with Aura + blue primary)
+- `frontend/src/theme/tokens.ts` (new - design token hierarchy documentation)
+- `frontend/src/views/TestView.vue` (new - smoke test with PrimeVue Button + Tailwind layout)
+- `frontend/src/api/.gitkeep` (new)
+- `frontend/src/composables/.gitkeep` (new)
+- `frontend/src/features/.gitkeep` (new)
+- `frontend/src/stores/.gitkeep` (new)
+- `frontend/src/ui/composed/.gitkeep` (new)
+- `frontend/src/ui/layout/.gitkeep` (new)
+- `frontend/src/ui/primitives/.gitkeep` (new)
+- `frontend/src/utils/.gitkeep` (new)
+- `frontend/tsconfig.json` (new)
+- `frontend/tsconfig.app.json` (new)
+- `frontend/tsconfig.node.json` (new)
+- `frontend/tsconfig.vitest.json` (new)
+- `frontend/vite.config.ts` (new - Tailwind plugin + API proxy)
+- `frontend/vitest.config.ts` (new - jsdom environment)
