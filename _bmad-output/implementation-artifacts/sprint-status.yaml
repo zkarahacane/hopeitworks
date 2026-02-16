@@ -45,16 +45,16 @@ development_status:
   1-1-go-project-scaffolding-docker-compose-dev-stack: done
   1-2-openapi-spec-code-gen-pipeline: done
   1-3-users-table-jwt-auth-api-register-login-auth-middleware: done
-  1-4-user-management-api-admin-crud: ready-for-dev
+  1-4-user-management-api-admin-crud: done
   1-5-projects-table-project-crud-api: done
-  1-6-rbac-middleware-project-users-table: ready-for-dev
+  1-6-rbac-middleware-project-users-table: done
   1-7-vue-scaffolding-primevue-tailwind-setup: done
   1-8-app-shell-layout-header-sidebar-status-bar: done
   1-9-login-page-auth-guard: done
-  1-10-project-list-page: ready-for-dev
-  1-11-project-creation-form: ready-for-dev
-  1-12-project-settings-page: ready-for-dev
-  1-13-user-management-page-admin-only: ready-for-dev
+  1-10-project-list-page: done
+  1-11-project-creation-form: in-progress
+  1-12-project-settings-page: in-progress
+  1-13-user-management-page-admin-only: done
   1-14-claude-md-files-for-agent-scoping: done
   1-15-go-backend-services-wiring: done
   1-16-vue-app-routing-state-tooling: done
@@ -242,19 +242,19 @@ parallel_waves:
     stories:
       - key: 1-4-user-management-api-admin-crud
         domain: back
-        status: backlog
+        status: done
         explicit_deps: [1-3-users-table-jwt-auth-api-register-login-auth-middleware]
       - key: 1-6-rbac-middleware-project-users-table
         domain: back
-        status: backlog
+        status: done
         explicit_deps: [1-3-users-table-jwt-auth-api-register-login-auth-middleware, 1-5-projects-table-project-crud-api]
       - key: 1-10-project-list-page
         domain: front
-        status: backlog
+        status: done
         explicit_deps: [1-8-app-shell-layout-header-sidebar-status-bar, 1-9-login-page-auth-guard]
       - key: 1-13-user-management-page-admin-only
         domain: front
-        status: backlog
+        status: done
         explicit_deps: [1-9-login-page-auth-guard]
     container_count: 4
     depends_on: [wave-2]
@@ -265,15 +265,15 @@ parallel_waves:
     stories:
       - key: 1-11-project-creation-form
         domain: front
-        status: backlog
+        status: in-progress
         explicit_deps: [1-10-project-list-page]
       - key: 1-12-project-settings-page
         domain: front
-        status: backlog
+        status: in-progress
         explicit_deps: [1-10-project-list-page]
       - key: 1-18-dev-seed-data-fixtures
         domain: back
-        status: backlog
+        status: done
         explicit_deps: [1-3-users-table-jwt-auth-api-register-login-auth-middleware, 1-5-projects-table-project-crud-api]
     container_count: 3
     depends_on: [wave-3]
