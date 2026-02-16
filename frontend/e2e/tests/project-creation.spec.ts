@@ -49,8 +49,8 @@ test.describe('Project Creation', () => {
     await page.getByRole('button', { name: 'New Project' }).click()
     await expect(page.getByText('Create Project')).toBeVisible()
 
-    // Click Create without filling the form
-    await page.getByRole('button', { name: 'Create' }).click()
+    // Click Create without filling the form (use exact match to avoid matching empty state button)
+    await page.getByRole('button', { name: 'Create', exact: true }).click()
 
     // Validation error should appear
     await expect(page.getByText('Project name is required')).toBeVisible()
@@ -88,8 +88,8 @@ test.describe('Project Creation', () => {
     await page.locator('#project-name').fill('My New Project')
     await page.locator('#project-description').fill('A test project')
 
-    // Submit
-    await page.getByRole('button', { name: 'Create' }).click()
+    // Submit (use exact match to avoid matching empty state button)
+    await page.getByRole('button', { name: 'Create', exact: true }).click()
 
     // Should navigate to project detail page
     await expect(page).toHaveURL('/projects/p-new-1')
