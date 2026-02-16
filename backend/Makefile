@@ -17,15 +17,15 @@ run: build
 
 ## docker-up: Start the docker-compose development stack
 docker-up:
-	docker compose -f ../deploy/docker-compose.yml --env-file ../deploy/.env up --build -d
+	docker compose -f ../deploy/docker-compose.yml up --build -d
 
 ## docker-down: Stop the docker-compose development stack
 docker-down:
-	docker compose -f ../deploy/docker-compose.yml --env-file ../deploy/.env down
+	docker compose -f ../deploy/docker-compose.yml down
 
 ## docker-logs: Follow docker-compose logs
 docker-logs:
-	docker compose -f ../deploy/docker-compose.yml --env-file ../deploy/.env logs -f
+	docker compose -f ../deploy/docker-compose.yml logs -f
 
 ## clean: Remove build artifacts and clean cache
 clean:
