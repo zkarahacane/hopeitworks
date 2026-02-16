@@ -7,6 +7,16 @@ import (
 )
 
 func TestLoad(t *testing.T) {
+	// Clear any environment variables that could interfere with the test
+	t.Setenv("DB_HOST", "")
+	t.Setenv("DB_PORT", "")
+	t.Setenv("DB_NAME", "")
+	t.Setenv("DB_USER", "")
+	t.Setenv("DB_PASSWORD", "")
+	t.Setenv("DB_SSLMODE", "")
+	t.Setenv("SERVER_PORT", "")
+	t.Setenv("LOG_LEVEL", "")
+
 	yaml := `
 server:
   port: 8080
@@ -95,6 +105,16 @@ logging:
 }
 
 func TestLoad_ValidationFails(t *testing.T) {
+	// Clear any environment variables that could provide values and prevent validation failure
+	t.Setenv("DB_HOST", "")
+	t.Setenv("DB_PORT", "")
+	t.Setenv("DB_NAME", "")
+	t.Setenv("DB_USER", "")
+	t.Setenv("DB_PASSWORD", "")
+	t.Setenv("DB_SSLMODE", "")
+	t.Setenv("SERVER_PORT", "")
+	t.Setenv("LOG_LEVEL", "")
+
 	yaml := `
 server:
   port: 8080
