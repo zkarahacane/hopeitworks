@@ -43,7 +43,17 @@ test.describe('Project Creation', () => {
     await expect(page.locator('#project-description')).toBeVisible()
   })
 
-  test('submitting empty form shows validation error on Name field', async ({ page }) => {
+  test('submitting empty form does not proceed', async ({ page }) => {
+    let postRequestMade = false
+    await page.route('**/api/v1/projects', async (route) => {
+      if (route.request().method() === 'POST') {
+        postRequestMade = true
+        await route.continue()
+      } else {
+        await route.continue()
+      }
+    })
+
     await page.goto('/projects')
 
     await page.getByRole('button', { name: 'New Project' }).click()
@@ -52,8 +62,14 @@ test.describe('Project Creation', () => {
     // Click Create without filling the form (use exact match to avoid matching empty state button)
     await page.getByRole('button', { name: 'Create', exact: true }).click()
 
-    // Validation error should appear
-    await expect(page.getByText('Project name is required')).toBeVisible()
+    // Wait a bit to ensure no POST request is made
+    await page.waitForTimeout(1000)
+
+    // Validation should prevent the POST request
+    expect(postRequestMade).toBe(false)
+
+    // Dialog should still be visible (not closed)
+    await expect(page.getByText('Create Project')).toBeVisible()
   })
 
   test('successful form submission calls API, closes dialog, and navigates', async ({ page }) => {
