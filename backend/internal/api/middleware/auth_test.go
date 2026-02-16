@@ -34,6 +34,7 @@ func (r *noopRepo) GetByID(ctx context.Context, id uuid.UUID) (*model.User, erro
 func (r *noopRepo) List(ctx context.Context, limit, offset int32) ([]*model.User, error) {
 	return nil, nil
 }
+func (r *noopRepo) Count(ctx context.Context) (int64, error) { return 0, nil }
 func (r *noopRepo) Update(ctx context.Context, user *model.User) (*model.User, error) {
 	return nil, nil
 }

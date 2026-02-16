@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/google/uuid"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 	"github.com/zakari/hopeitworks/backend/internal/domain/model"
 	"github.com/zakari/hopeitworks/backend/pkg/errors"
 )
@@ -71,4 +72,16 @@ func toAPIProject(p *model.Project) Project {
 		proj.OwnerId = *p.OwnerID
 	}
 	return proj
+}
+
+// toAPIUser converts a domain User to the API User type.
+func toAPIUser(u *model.User) User {
+	return User{
+		Id:        u.ID,
+		Email:     openapi_types.Email(u.Email),
+		Name:      u.Name,
+		Role:      UserRole(u.Role),
+		CreatedAt: u.CreatedAt,
+		UpdatedAt: u.UpdatedAt,
+	}
 }

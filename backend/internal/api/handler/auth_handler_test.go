@@ -62,6 +62,10 @@ func (m *mockRepo) List(ctx context.Context, limit, offset int32) ([]*model.User
 	return nil, nil
 }
 
+func (m *mockRepo) Count(ctx context.Context) (int64, error) {
+	return int64(len(m.users)), nil
+}
+
 func (m *mockRepo) Update(ctx context.Context, user *model.User) (*model.User, error) {
 	return nil, nil
 }

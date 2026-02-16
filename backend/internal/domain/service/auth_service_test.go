@@ -66,6 +66,10 @@ func (m *mockUserRepository) List(ctx context.Context, limit, offset int32) ([]*
 	return result, nil
 }
 
+func (m *mockUserRepository) Count(ctx context.Context) (int64, error) {
+	return int64(len(m.users)), nil
+}
+
 func (m *mockUserRepository) Update(ctx context.Context, user *model.User) (*model.User, error) {
 	existing, ok := m.users[user.ID.String()]
 	if !ok {

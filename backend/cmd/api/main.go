@@ -61,7 +61,12 @@ func run() error {
 	projectRepo := pgadapter.NewProjectRepo(queries)
 	projectService := service.NewProjectService(projectRepo)
 	projectHandler := handler.NewProjectHandler(projectService)
-	server := handler.NewServer(projectHandler)
+
+	// User service
+	userService := service.NewUserService(userRepo)
+	userHandler := handler.NewUserHandler(userService)
+
+	server := handler.NewServer(projectHandler, userHandler)
 
 	// Build router
 	r := chi.NewRouter()
