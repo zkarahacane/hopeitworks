@@ -130,3 +130,51 @@ jobs:
           name: playwright-report
           path: frontend/e2e/results/
           retention-days: 7
+
+  semgrep:
+    name: Semgrep SAST
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    container:
+      image: semgrep/semgrep
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Scan backend (Go)
+        run: semgrep --config auto --include="backend/**" --json -o semgrep-backend.json . || true
+
+      - name: Scan frontend (Vue/TS)
+        run: semgrep --config auto --include="frontend/src/**" --json -o semgrep-frontend.json . || true
+
+      - name: Summary
+        run: |
+          echo "=== Backend findings ==="
+          cat semgrep-backend.json | python3 -c "
+          import json, sys
+          data = json.load(sys.stdin)
+          results = data.get('results', [])
+          print(f'Total: {len(results)} findings')
+          for r in results:
+            sev = r['extra']['severity']
+            path = r['path']
+            line = r['start']['line']
+            msg = r['extra']['message'][:120]
+            print(f'  [{sev}] {path}:{line} - {msg}')
+          " 2>/dev/null || echo "No results"
+
+          echo ""
+          echo "=== Frontend findings ==="
+          cat semgrep-frontend.json | python3 -c "
+          import json, sys
+          data = json.load(sys.stdin)
+          results = data.get('results', [])
+          print(f'Total: {len(results)} findings')
+          for r in results:
+            sev = r['extra']['severity']
+            path = r['path']
+            line = r['start']['line']
+            msg = r['extra']['message'][:120]
+            print(f'  [{sev}] {path}:{line} - {msg}')
+          " 2>/dev/null || echo "No results"
+
