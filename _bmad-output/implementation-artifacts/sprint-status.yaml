@@ -48,7 +48,7 @@ development_status:
   1-4-user-management-api-admin-crud: backlog
   1-5-projects-table-project-crud-api: backlog
   1-6-rbac-middleware-project-users-table: backlog
-  1-7-vue-scaffolding-primevue-tailwind-setup: backlog
+  1-7-vue-scaffolding-primevue-tailwind-setup: review
   1-8-app-shell-layout-header-sidebar-status-bar: backlog
   1-9-login-page-auth-guard: backlog
   1-10-project-list-page: backlog
