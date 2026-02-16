@@ -1,0 +1,18 @@
+server:
+  port: 8080
+  read_timeout: 15s
+  write_timeout: 15s
+
+database:
+  host: localhost
+  port: 5432
+  name: hopeitworks_dev
+  user: hopeitworks
+  password: hopeitworks_dev_password
+  sslmode: disable
+  max_conns: 25
+  min_conns: 5
+  max_conn_lifetime: 1h
+
+logging:
+  level: debug

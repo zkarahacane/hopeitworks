@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -12,39 +11,42 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/zakari/hopeitworks/backend/internal/adapter/postgres"
 	pgadapter "github.com/zakari/hopeitworks/backend/internal/adapter/postgres"
 	"github.com/zakari/hopeitworks/backend/internal/api/handler"
 	authmw "github.com/zakari/hopeitworks/backend/internal/api/middleware"
+	internalconfig "github.com/zakari/hopeitworks/backend/internal/config"
 	"github.com/zakari/hopeitworks/backend/internal/domain/service"
+	pkglog "github.com/zakari/hopeitworks/backend/pkg/log"
 )
 
 func main() {
 	if err := run(); err != nil {
-		log.Fatalf("fatal: %v", err)
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
 	}
 }
 
 func run() error {
-	// Load config from environment
-	port := os.Getenv("SERVER_PORT")
-	if port == "" {
-		port = "8080"
+	ctx := context.Background()
+
+	// Load configuration
+	cfg, err := internalconfig.Load("config.yaml")
+	if err != nil {
+		return fmt.Errorf("loading config: %w", err)
 	}
-	dbURL := buildDatabaseURL()
+
+	// Initialize structured logger
+	logger := pkglog.New(cfg.Log.Level)
+	logger.Info("config loaded")
 
 	// Connect to database
-	ctx := context.Background()
-	pool, err := pgxpool.New(ctx, dbURL)
+	pool, err := postgres.NewPool(ctx, cfg.Database)
 	if err != nil {
 		return fmt.Errorf("connecting to database: %w", err)
 	}
 	defer pool.Close()
-
-	if err := pool.Ping(ctx); err != nil {
-		return fmt.Errorf("pinging database: %w", err)
-	}
-	log.Println("Connected to database")
+	logger.Info("database connected")
 
 	// Build dependency graph
 	queries := pgadapter.New(pool)
@@ -68,62 +70,42 @@ func run() error {
 		w.Write([]byte("ok"))
 	})
 
-	// Start server with graceful shutdown
+	// Create HTTP server
 	srv := &http.Server{
-		Addr:         ":" + port,
+		Addr:         fmt.Sprintf(":%d", cfg.Server.Port),
 		Handler:      r,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		ReadTimeout:  cfg.Server.ReadTimeout,
+		WriteTimeout: cfg.Server.WriteTimeout,
 	}
+
+	// Graceful shutdown
+	shutdownCh := make(chan os.Signal, 1)
+	signal.Notify(shutdownCh, syscall.SIGTERM, syscall.SIGINT)
 
 	errCh := make(chan error, 1)
 	go func() {
-		log.Printf("Starting API server on :%s", port)
-		errCh <- srv.ListenAndServe()
+		logger.Info("server listening", "port", cfg.Server.Port)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			errCh <- err
+		}
 	}()
 
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-
 	select {
-	case sig := <-quit:
-		log.Printf("Received signal %s, shutting down...", sig)
 	case err := <-errCh:
-		if err != nil && err != http.ErrServerClosed {
-			return fmt.Errorf("server error: %w", err)
+		return fmt.Errorf("server error: %w", err)
+	case sig := <-shutdownCh:
+		logger.Info("shutting down gracefully", "signal", sig.String())
+
+		shutdownCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+
+		if err := srv.Shutdown(shutdownCtx); err != nil {
+			return fmt.Errorf("server shutdown: %w", err)
 		}
+
+		pool.Close()
+		logger.Info("server stopped")
 	}
 
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	if err := srv.Shutdown(shutdownCtx); err != nil {
-		return fmt.Errorf("server shutdown: %w", err)
-	}
-	log.Println("Server stopped")
 	return nil
-}
-
-func buildDatabaseURL() string {
-	dbURL := os.Getenv("DATABASE_URL")
-	if dbURL != "" {
-		return dbURL
-	}
-
-	host := getEnvOrDefault("DB_HOST", "localhost")
-	port := getEnvOrDefault("DB_PORT", "5432")
-	name := getEnvOrDefault("DB_NAME", "hopeitworks_dev")
-	user := getEnvOrDefault("DB_USER", "hopeitworks")
-	password := getEnvOrDefault("DB_PASSWORD", "hopeitworks_dev_password")
-	sslmode := getEnvOrDefault("DB_SSLMODE", "disable")
-
-	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s",
-		user, password, host, port, name, sslmode)
-}
-
-func getEnvOrDefault(key, defaultVal string) string {
-	if val := os.Getenv(key); val != "" {
-		return val
-	}
-	return defaultVal
 }
