@@ -64,6 +64,10 @@ func (r *UserRepository) List(ctx context.Context, limit, offset int32) ([]*mode
 	return users, nil
 }
 
+func (r *UserRepository) Count(ctx context.Context) (int64, error) {
+	return r.q.CountUsers(ctx)
+}
+
 func (r *UserRepository) Update(ctx context.Context, user *model.User) (*model.User, error) {
 	row, err := r.q.UpdateUser(ctx, UpdateUserParams{
 		ID:    user.ID,

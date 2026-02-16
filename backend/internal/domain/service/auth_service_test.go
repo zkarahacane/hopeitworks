@@ -81,6 +81,10 @@ func (m *mockUserRepository) Update(ctx context.Context, user *model.User) (*mod
 	return existing, nil
 }
 
+func (m *mockUserRepository) Count(ctx context.Context) (int64, error) {
+	return int64(len(m.users)), nil
+}
+
 func (m *mockUserRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	u, ok := m.users[id.String()]
 	if !ok {

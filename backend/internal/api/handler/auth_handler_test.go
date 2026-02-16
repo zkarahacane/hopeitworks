@@ -66,6 +66,7 @@ func (m *mockRepo) Update(ctx context.Context, user *model.User) (*model.User, e
 	return nil, nil
 }
 
+func (m *mockRepo) Count(ctx context.Context) (int64, error)       { return int64(len(m.users)), nil }
 func (m *mockRepo) Delete(ctx context.Context, id uuid.UUID) error { return nil }
 
 type pgDupError struct{}
