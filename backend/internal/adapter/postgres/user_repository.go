@@ -81,11 +81,6 @@ func (r *UserRepository) Update(ctx context.Context, user *model.User) (*model.U
 	return toDomainUser(row), nil
 }
 
-// Count returns the total number of active (non-deleted) users.
-func (r *UserRepository) Count(ctx context.Context) (int64, error) {
-	return r.q.CountUsers(ctx)
-}
-
 func (r *UserRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	return r.q.DeleteUser(ctx, id)
 }
@@ -99,6 +94,5 @@ func toDomainUser(u User) *model.User {
 		Role:         model.Role(u.Role),
 		CreatedAt:    u.CreatedAt,
 		UpdatedAt:    u.UpdatedAt,
-		DeletedAt:    u.DeletedAt,
 	}
 }
