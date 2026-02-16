@@ -1,6 +1,6 @@
 # Story 1.14: [SHARED] CLAUDE.md files for agent scoping
 
-Status: ready-for-dev
+Status: dev-complete
 
 ## Story
 
@@ -637,16 +637,28 @@ The actual composition logic (base + backend/frontend + project → single CLAUD
 
 ### Agent Model Used
 
-_To be filled by dev agent_
+Claude Opus 4.6 (claude-opus-4-6)
 
 ### Debug Log References
 
-_To be filled by dev agent_
+No debug issues encountered. All files created successfully on first pass. Validation against architecture.md confirmed full alignment with all acceptance criteria.
 
 ### Completion Notes List
 
-_To be filled by dev agent_
+- Created `agent/claude-md/` directory and all 5 template files
+- `README.md`: Documents composition rule (base + backend/frontend + project), scoping rules, editing guidelines
+- `base.md`: Covers git workflow, branch naming, conventional commits, quality standards, testing principles, naming conventions, error handling, security
+- `backend.md`: Covers hexagonal architecture with full package layout, chi router patterns, sqlc conventions, DomainError pattern with categories and HTTP mapping, slog structured logging, testing patterns (table-driven, testcontainers, factories, mocks), go-wire DI, pgx/v5 transactions, oapi-codegen workflow
+- `frontend.md`: Covers Vue 3 Composition API conventions, PrimeVue component usage rules, Tailwind CSS layout-only usage, useAsyncAction pattern, Pinia store patterns, openapi-fetch API client, component organization (ui/ vs features/), testing patterns (Vitest, Playwright)
+- `project.md`: Documents project overview, full project structure, key file paths table, shared API contract workflow, implementation status, known constraints, code generation pipeline, architectural boundaries
+- All content cross-referenced against `_bmad-output/planning-artifacts/architecture.md` for accuracy
+- No contradictions between files; all self-contained
+- base.md is 154 lines (below suggested 200-300), but all required content is present and complete
 
 ### File List
 
-_To be filled by dev agent_
+- `agent/claude-md/README.md` — Composition rules and editing guidelines
+- `agent/claude-md/base.md` — Project-wide conventions (git, commits, quality, testing, naming)
+- `agent/claude-md/backend.md` — Go-specific patterns (hexagonal, chi, sqlc, DomainError, slog, testing)
+- `agent/claude-md/frontend.md` — Vue-specific patterns (Composition API, PrimeVue, Tailwind, Pinia, testing)
+- `agent/claude-md/project.md` — Current state (overview, key paths, API contract, status, constraints)
