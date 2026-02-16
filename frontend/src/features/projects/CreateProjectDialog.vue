@@ -34,7 +34,7 @@ const createProjectSchema = toTypedSchema(
   }),
 )
 
-const { defineField, handleSubmit, errors, resetForm, setFieldTouched } = useForm({
+const { defineField, handleSubmit, errors, resetForm, validate } = useForm({
   validationSchema: createProjectSchema,
 })
 
@@ -43,8 +43,15 @@ const [description, descriptionAttrs] = defineField('description')
 
 const { createProject } = useProjects()
 
-const onSubmit = handleSubmit(
-  async (values) => {
+async function onSubmit() {
+  // Explicitly validate to ensure errors are shown
+  const { valid } = await validate()
+  if (!valid) {
+    return
+  }
+
+  // If validation passes, submit the form
+  await handleSubmit(async (values) => {
     const project = await createProject.execute({
       name: values.name,
       description: values.description || undefined,
@@ -53,13 +60,8 @@ const onSubmit = handleSubmit(
       emit('created', project as Project)
       close()
     }
-  },
-  () => {
-    // On validation failure, mark fields as touched to show errors
-    setFieldTouched('name', true)
-    setFieldTouched('description', true)
-  },
-)
+  })()
+}
 
 function close() {
   resetForm()
