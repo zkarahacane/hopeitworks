@@ -59,7 +59,7 @@ development_status:
   1-15-go-backend-services-wiring: done
   1-16-vue-app-routing-state-tooling: done
   1-17-github-actions-ci-pipeline: done
-  1-18-dev-seed-data-fixtures: ready-for-dev
+  1-18-dev-seed-data-fixtures: done
   epic-1-retrospective: optional
 
   # Epic 2: Story Board & Management
