@@ -4,7 +4,7 @@ This directory contains modular CLAUDE.md templates that are composed at runtime
 
 ## Directory Structure
 
-```
+```text
 agent/claude-md/
 ├── README.md          # This file — composition rules
 ├── base.md            # Common: git, commits, quality, testing principles

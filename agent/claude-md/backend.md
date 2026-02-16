@@ -20,7 +20,7 @@ You are working exclusively in the `backend/` directory. **NEVER** modify files 
 
 ### Package Layout
 
-```
+```text
 backend/
 ├── cmd/api/
 │   ├── main.go              # Entry point
@@ -109,6 +109,7 @@ id := chi.URLParam(r, "id")
 ### Configuration
 
 `sqlc.yaml`:
+
 ```yaml
 version: "2"
 sql:
@@ -125,6 +126,7 @@ sql:
 ### Query Files
 
 Queries in `backend/queries/*.sql`:
+
 ```sql
 -- name: GetStoryByKey :one
 SELECT * FROM stories WHERE project_id = $1 AND key = $2 LIMIT 1;
@@ -248,6 +250,7 @@ log.LoggerFrom(ctx).Info("processing run",
 ### Structured Fields
 
 Always include relevant context:
+
 - `request_id` — from middleware
 - `user_id` — from auth context
 - `project_id` — from request scope
@@ -400,6 +403,7 @@ var AdapterSet = wire.NewSet(
 ### Wire File
 
 `cmd/api/wire.go`:
+
 ```go
 //go:build wireinject
 // +build wireinject
@@ -460,6 +464,7 @@ err := transactor.WithinTransaction(ctx, func(ctx context.Context) error {
 ### Generated Output
 
 oapi-codegen produces:
+
 - Server interface (chi-compatible)
 - Request/response types
 - Parameter types
@@ -497,7 +502,7 @@ func (h *StoryHandler) GetStory(w http.ResponseWriter, r *http.Request, id strin
 
 ## Go Module
 
-```
+```text
 module github.com/zakari/hopeitworks/backend
 ```
 
