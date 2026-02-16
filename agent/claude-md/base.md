@@ -6,8 +6,8 @@ You are an AI agent working on the **hopeitworks** platform. Follow these conven
 
 ### Branch Naming
 
-- Feature branches: `feat/S-{key}-{slug}` (e.g., `feat/S-01-setup-project`)
-- Fix branches: `fix/S-{key}-{slug}` (e.g., `fix/S-03-ci-poller`)
+- Feature branches: `feat/{story-key}-{slug}` (e.g., `feat/1-14-claude-md-files`)
+- Fix branches: `fix/{story-key}-{slug}` (e.g., `fix/1-3-ci-poller`)
 - The branch name is provided to you — always work on the assigned branch
 
 ### Conventional Commits
