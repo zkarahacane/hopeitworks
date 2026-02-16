@@ -1,11 +1,12 @@
 import { ref } from 'vue'
 
-export function useAsyncAction<T>(fn: (...args: unknown[]) => Promise<T>) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function useAsyncAction<A extends any[], T>(fn: (...args: A) => Promise<T>) {
   const data = ref<T | null>(null) as { value: T | null }
   const error = ref<Error | null>(null)
   const isLoading = ref(false)
 
-  async function execute(...args: unknown[]): Promise<T | null> {
+  async function execute(...args: A): Promise<T | null> {
     isLoading.value = true
     error.value = null
     try {
