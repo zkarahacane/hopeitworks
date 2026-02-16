@@ -1,6 +1,6 @@
 # Story 1.1: Go project scaffolding + docker-compose dev stack
 
-Status: dev-complete
+Status: done
 
 ## Story
 
@@ -284,3 +284,7 @@ Files created:
 - `/workspace/backend/migrations/.gitkeep`
 - `/workspace/backend/queries/.gitkeep`
 - `/workspace/backend/testdata/.gitkeep`
+
+## Change Log
+
+- **2026-02-16**: Merged to wave-1 via PR #3
