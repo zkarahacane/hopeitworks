@@ -4,6 +4,9 @@ export interface User {
   id: string
   email: string
   name: string
+  role: 'admin' | 'user'
+  created_at?: string
+  updated_at?: string
 }
 
 interface AuthState {
@@ -37,7 +40,8 @@ export const useAuthStore = defineStore('auth', {
           this.error = body?.message ?? 'Invalid email or password'
           return false
         }
-        this.user = (await res.json()) as User
+        const json = await res.json()
+        this.user = { ...json, role: json.role ?? 'user' } as User
         return true
       } catch {
         this.error = 'Network error. Please try again.'
@@ -63,7 +67,8 @@ export const useAuthStore = defineStore('auth', {
           credentials: 'include',
         })
         if (res.ok) {
-          this.user = (await res.json()) as User
+          const json = await res.json()
+          this.user = { ...json, role: json.role ?? 'user' } as User
         } else {
           this.user = null
         }

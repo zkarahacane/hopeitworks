@@ -1,6 +1,13 @@
 import type { Router } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
+declare module 'vue-router' {
+  interface RouteMeta {
+    requiresAuth?: boolean
+    requiresAdmin?: boolean
+  }
+}
+
 let authChecked = false
 
 export function setupAuthGuard(router: Router) {
@@ -19,6 +26,18 @@ export function setupAuthGuard(router: Router) {
       return { path: '/login', query: { redirect: to.fullPath } }
     }
     if (to.path === '/login' && auth.isAuthenticated) {
+      return { path: '/' }
+    }
+  })
+}
+
+/** Guard that redirects non-admin users to dashboard. Must run after setupAuthGuard. */
+export function setupAdminGuard(router: Router) {
+  router.beforeEach((to) => {
+    if (to.meta.requiresAdmin !== true) return
+
+    const auth = useAuthStore()
+    if (auth.user?.role !== 'admin') {
       return { path: '/' }
     }
   })

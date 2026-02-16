@@ -5,7 +5,7 @@ import ProjectsView from '@/views/ProjectsView.vue'
 import ProjectDetailView from '@/views/ProjectDetailView.vue'
 import RunDetailView from '@/views/RunDetailView.vue'
 import ApprovalsView from '@/views/ApprovalsView.vue'
-import { setupAuthGuard } from './guards'
+import { setupAuthGuard, setupAdminGuard } from './guards'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -46,9 +46,16 @@ const router = createRouter({
       component: ApprovalsView,
       meta: { requiresAuth: true },
     },
+    {
+      path: '/admin/users',
+      name: 'admin-users',
+      component: () => import('@/views/admin/UserManagementView.vue'),
+      meta: { requiresAuth: true, requiresAdmin: true },
+    },
   ],
 })
 
 setupAuthGuard(router)
+setupAdminGuard(router)
 
 export default router

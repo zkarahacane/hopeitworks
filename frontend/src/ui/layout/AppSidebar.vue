@@ -2,6 +2,8 @@
 import { computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import Button from 'primevue/button'
+import Divider from 'primevue/divider'
+import { useAuthStore } from '@/stores/auth'
 
 const props = defineProps<{
   collapsed: boolean
@@ -14,6 +16,9 @@ const emit = defineEmits<{
 
 const router = useRouter()
 const route = useRoute()
+const authStore = useAuthStore()
+
+const isAdmin = computed(() => authStore.user?.role === 'admin')
 
 /** Determine if a nav item is active based on current route path */
 function isActive(itemRoute: string): boolean {
@@ -26,6 +31,10 @@ const navItems = [
   { label: 'Projects', icon: 'pi pi-folder', route: '/projects' },
   { label: 'Runs', icon: 'pi pi-play', route: '/runs' },
   { label: 'Settings', icon: 'pi pi-cog', route: '/settings' },
+]
+
+const adminNavItems = [
+  { label: 'Users', icon: 'pi pi-users', route: '/admin/users' },
 ]
 
 const sidebarWidth = computed(() => (props.collapsed ? 'w-12' : 'w-60'))
@@ -71,6 +80,24 @@ function navigate(route: string) {
         ]"
         @click="navigate(item.route)"
       />
+
+      <template v-if="isAdmin">
+        <Divider />
+        <Button
+          v-for="item in adminNavItems"
+          :key="item.route"
+          :icon="item.icon"
+          :label="collapsed && !mobileOpen ? undefined : item.label"
+          :text="!isActive(item.route)"
+          :severity="isActive(item.route) ? 'primary' : undefined"
+          :class="[
+            'justify-start',
+            collapsed && !mobileOpen ? '!px-0 justify-center' : '',
+            isActive(item.route) ? '!bg-primary-50 !text-primary-700' : '',
+          ]"
+          @click="navigate(item.route)"
+        />
+      </template>
     </nav>
   </aside>
 </template>
