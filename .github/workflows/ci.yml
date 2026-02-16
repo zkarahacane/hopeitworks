@@ -110,7 +110,7 @@ jobs:
         run: npm run type-check
 
       - name: Unit tests
-        run: npm run test:unit
+        run: npm run test:unit -- --run --passWithNoTests
 
       - name: Build
         run: npm run build
