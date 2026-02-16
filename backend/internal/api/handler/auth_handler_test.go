@@ -29,7 +29,7 @@ func newMockRepo() *mockRepo {
 	}
 }
 
-func (m *mockRepo) Create(ctx context.Context, user *model.User) (*model.User, error) {
+func (m *mockRepo) Create(_ context.Context, user *model.User) (*model.User, error) {
 	if _, exists := m.byEmail[user.Email]; exists {
 		return nil, &pgDupError{}
 	}
@@ -42,7 +42,7 @@ func (m *mockRepo) Create(ctx context.Context, user *model.User) (*model.User, e
 	return user, nil
 }
 
-func (m *mockRepo) GetByEmail(ctx context.Context, email string) (*model.User, error) {
+func (m *mockRepo) GetByEmail(_ context.Context, email string) (*model.User, error) {
 	u, ok := m.byEmail[email]
 	if !ok {
 		return nil, errors.New("no rows")
@@ -50,7 +50,7 @@ func (m *mockRepo) GetByEmail(ctx context.Context, email string) (*model.User, e
 	return u, nil
 }
 
-func (m *mockRepo) GetByID(ctx context.Context, id uuid.UUID) (*model.User, error) {
+func (m *mockRepo) GetByID(_ context.Context, id uuid.UUID) (*model.User, error) {
 	u, ok := m.users[id.String()]
 	if !ok {
 		return nil, errors.New("no rows")
@@ -58,19 +58,19 @@ func (m *mockRepo) GetByID(ctx context.Context, id uuid.UUID) (*model.User, erro
 	return u, nil
 }
 
-func (m *mockRepo) List(ctx context.Context, limit, offset int32) ([]*model.User, error) {
+func (m *mockRepo) List(_ context.Context, _, _ int32) ([]*model.User, error) {
 	return nil, nil
 }
 
-func (m *mockRepo) Count(ctx context.Context) (int64, error) {
+func (m *mockRepo) Count(_ context.Context) (int64, error) {
 	return int64(len(m.users)), nil
 }
 
-func (m *mockRepo) Update(ctx context.Context, user *model.User) (*model.User, error) {
+func (m *mockRepo) Update(_ context.Context, _ *model.User) (*model.User, error) {
 	return nil, nil
 }
 
-func (m *mockRepo) Delete(ctx context.Context, id uuid.UUID) error { return nil }
+func (m *mockRepo) Delete(_ context.Context, _ uuid.UUID) error { return nil }
 
 type pgDupError struct{}
 

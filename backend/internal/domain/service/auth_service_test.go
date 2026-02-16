@@ -58,7 +58,7 @@ func (m *mockUserRepository) GetByID(_ context.Context, id uuid.UUID) (*model.Us
 	return u, nil
 }
 
-func (m *mockUserRepository) List(_ context.Context, limit, offset int32) ([]*model.User, error) {
+func (m *mockUserRepository) List(_ context.Context, _, _ int32) ([]*model.User, error) {
 	var result []*model.User
 	for _, u := range m.users {
 		result = append(result, u)

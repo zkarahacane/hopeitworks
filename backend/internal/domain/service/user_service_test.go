@@ -64,7 +64,7 @@ func (m *mockUserRepo) List(_ context.Context, limit, offset int32) ([]*model.Us
 	return result, nil
 }
 
-func (m *mockUserRepo) Count(ctx context.Context) (int64, error) {
+func (m *mockUserRepo) Count(_ context.Context) (int64, error) {
 	return int64(len(m.users)), nil
 }
 

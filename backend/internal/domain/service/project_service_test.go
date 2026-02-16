@@ -30,7 +30,7 @@ func (m *mockProjectRepo) Create(ctx context.Context, project *model.Project) (*
 	return project, nil
 }
 
-func (m *mockProjectRepo) GetByID(ctx context.Context, id uuid.UUID) (*model.Project, error) {
+func (m *mockProjectRepo) GetByID(_ context.Context, id uuid.UUID) (*model.Project, error) {
 	p, ok := m.projects[id]
 	if !ok {
 		return nil, errors.NewNotFound("project", id)
@@ -38,7 +38,7 @@ func (m *mockProjectRepo) GetByID(ctx context.Context, id uuid.UUID) (*model.Pro
 	return p, nil
 }
 
-func (m *mockProjectRepo) List(ctx context.Context, limit, offset int32) ([]*model.Project, error) {
+func (m *mockProjectRepo) List(_ context.Context, limit, offset int32) ([]*model.Project, error) {
 	result := make([]*model.Project, 0)
 	i := int32(0)
 	for _, p := range m.projects {
@@ -50,16 +50,16 @@ func (m *mockProjectRepo) List(ctx context.Context, limit, offset int32) ([]*mod
 	return result, nil
 }
 
-func (m *mockProjectRepo) Count(ctx context.Context) (int64, error) {
+func (m *mockProjectRepo) Count(_ context.Context) (int64, error) {
 	return int64(len(m.projects)), nil
 }
 
-func (m *mockProjectRepo) Update(ctx context.Context, project *model.Project) (*model.Project, error) {
+func (m *mockProjectRepo) Update(_ context.Context, project *model.Project) (*model.Project, error) {
 	m.projects[project.ID] = project
 	return project, nil
 }
 
-func (m *mockProjectRepo) Delete(ctx context.Context, id uuid.UUID) error {
+func (m *mockProjectRepo) Delete(_ context.Context, id uuid.UUID) error {
 	delete(m.projects, id)
 	return nil
 }
