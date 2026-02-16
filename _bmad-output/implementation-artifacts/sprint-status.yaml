@@ -59,6 +59,7 @@ development_status:
   1-15-go-backend-services-wiring: done
   1-16-vue-app-routing-state-tooling: done
   1-17-github-actions-ci-pipeline: done
+  1-18-dev-seed-data-fixtures: backlog
   epic-1-retrospective: optional
 
   # Epic 2: Story Board & Management
@@ -270,9 +271,13 @@ parallel_waves:
         domain: front
         status: backlog
         explicit_deps: [1-10-project-list-page]
-    container_count: 2
+      - key: 1-18-dev-seed-data-fixtures
+        domain: back
+        status: backlog
+        explicit_deps: [1-3-users-table-jwt-auth-api-register-login-auth-middleware, 1-5-projects-table-project-crud-api]
+    container_count: 3
     depends_on: [wave-3]
-    notes: "Final E1 frontend pages - Epic 1 COMPLETE after this wave"
+    notes: "Final E1 frontend pages + dev seed data - Epic 1 COMPLETE after this wave"
 
   # ============================================================
   # PHASE 2: CORE PLATFORM (Epics 2, 3, 6 in parallel)
