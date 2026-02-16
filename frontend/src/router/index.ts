@@ -5,7 +5,7 @@ import ProjectsView from '@/views/ProjectsView.vue'
 import ProjectDetailView from '@/views/ProjectDetailView.vue'
 import RunDetailView from '@/views/RunDetailView.vue'
 import ApprovalsView from '@/views/ApprovalsView.vue'
-import { requireAuth } from './guards'
+import { setupAuthGuard } from './guards'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -49,6 +49,6 @@ const router = createRouter({
   ],
 })
 
-router.beforeEach(requireAuth)
+setupAuthGuard(router)
 
 export default router
