@@ -12,16 +12,34 @@ import (
 
 // ProjectHandler implements project-related HTTP handlers.
 type ProjectHandler struct {
-	service *service.ProjectService
+	service     *service.ProjectService
+	userService *service.ProjectUserService
 }
 
 // NewProjectHandler creates a new ProjectHandler.
-func NewProjectHandler(svc *service.ProjectService) *ProjectHandler {
-	return &ProjectHandler{service: svc}
+func NewProjectHandler(svc *service.ProjectService, userSvc *service.ProjectUserService) *ProjectHandler {
+	return &ProjectHandler{service: svc, userService: userSvc}
+}
+
+// checkProjectAccess verifies the current user has access to the given project.
+// Admins bypass the check; non-admins must be project members.
+func (h *ProjectHandler) checkProjectAccess(r *http.Request, projectID uuid.UUID) error {
+	if middleware.IsAdmin(r.Context()) {
+		return nil
+	}
+	userID, _ := middleware.UserIDFromContext(r.Context())
+	isMember, err := h.userService.IsUserInProject(r.Context(), projectID, userID)
+	if err != nil {
+		return err
+	}
+	if !isMember {
+		return errors.NewForbidden("You are not a member of this project")
+	}
+	return nil
 }
 
 // ListProjects handles GET /projects.
-// Any authenticated user can list projects.
+// Admins see all projects; non-admins see only their assigned projects.
 func (h *ProjectHandler) ListProjects(w http.ResponseWriter, r *http.Request, params ListProjectsParams) {
 	page := 1
 	perPage := 20
@@ -32,7 +50,15 @@ func (h *ProjectHandler) ListProjects(w http.ResponseWriter, r *http.Request, pa
 		perPage = *params.PerPage
 	}
 
-	result, err := h.service.List(r.Context(), page, perPage)
+	var result *service.ListResult
+	var err error
+
+	if middleware.IsAdmin(r.Context()) {
+		result, err = h.service.List(r.Context(), page, perPage)
+	} else {
+		userID, _ := middleware.UserIDFromContext(r.Context())
+		result, err = h.userService.ListProjectsForUser(r.Context(), userID, page, perPage)
+	}
 	if err != nil {
 		writeErrorResponse(w, err)
 		return
@@ -87,8 +113,13 @@ func (h *ProjectHandler) CreateProject(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetProject handles GET /projects/{id}.
-// Any authenticated user can get a project.
+// Admins can access any project; non-admins must be project members.
 func (h *ProjectHandler) GetProject(w http.ResponseWriter, r *http.Request, id IdPath) {
+	if err := h.checkProjectAccess(r, id); err != nil {
+		writeErrorResponse(w, err)
+		return
+	}
+
 	project, err := h.service.GetByID(r.Context(), id)
 	if err != nil {
 		writeErrorResponse(w, err)
