@@ -275,20 +275,41 @@ Routes do not need to exist yet. Use `router-link` or `to` prop where applicable
 
 ### Agent Model Used
 
-_(empty — to be filled by implementing agent)_
+Claude Opus 4.6 (claude-opus-4-6)
 
 ### Debug Log References
 
-_(empty — to be filled by implementing agent)_
+- Build: `npm run build` — passes with 0 errors (252 modules transformed)
+- Lint: `npm run lint` — 0 warnings, 0 errors (oxlint + eslint)
 
 ### Completion Notes List
 
-_(empty — to be filled by implementing agent)_
+- Installed Pinia as a new dependency and registered it in `main.ts`
+- Created `useLayoutStore` Pinia store with `sidebarCollapsed` state persisted to localStorage
+- Created `useKeyboard` composable for keydown bindings with input/textarea guard
+- Created `useBreakpoint` composable using `matchMedia` for reactive `isMobile` ref
+- Created `AppHeader.vue` with PrimeVue Button for hamburger and user menu placeholder
+- Created `AppSidebar.vue` with collapsible desktop sidebar (240/48px) and mobile overlay drawer
+- Created `AppStatusBar.vue` with connection status indicator and version string
+- Created `AppShell.vue` wiring all components with skip-nav link, keyboard shortcut (`[`), responsive layout
+- Updated `App.vue` to use `AppShell` as the root layout wrapper
+- Added placeholder routes for `/projects`, `/runs`, `/settings` in router
+- All semantic HTML elements used: `<header>`, `<aside>`, `<nav>`, `<main>`, `<footer>`
+- Zero custom CSS — Tailwind utility classes only, PrimeVue components for interactivity
 
 ### File List
 
-_(empty — to be filled by implementing agent)_
+- `frontend/src/stores/layout.ts` — Pinia store for sidebar collapsed state
+- `frontend/src/composables/useKeyboard.ts` — Keyboard shortcut composable
+- `frontend/src/composables/useBreakpoint.ts` — Responsive breakpoint composable
+- `frontend/src/ui/layout/AppHeader.vue` — Header component (48px)
+- `frontend/src/ui/layout/AppSidebar.vue` — Sidebar component (240/48px collapsible)
+- `frontend/src/ui/layout/AppStatusBar.vue` — Status bar component (24px)
+- `frontend/src/ui/layout/AppShell.vue` — Root layout shell
+- `frontend/src/App.vue` — Updated to use AppShell
+- `frontend/src/router/index.ts` — Updated with placeholder routes
+- `frontend/src/main.ts` — Updated to register Pinia
 
 ## Change Log
 
-_(empty)_
+- 2026-02-16: Initial implementation of Story 1-8
