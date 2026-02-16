@@ -44,21 +44,21 @@ development_status:
   epic-1: in-progress
   1-1-go-project-scaffolding-docker-compose-dev-stack: done
   1-2-openapi-spec-code-gen-pipeline: done
-  1-3-users-table-jwt-auth-api-register-login-auth-middleware: ready-for-dev
+  1-3-users-table-jwt-auth-api-register-login-auth-middleware: done
   1-4-user-management-api-admin-crud: backlog
-  1-5-projects-table-project-crud-api: ready-for-dev
+  1-5-projects-table-project-crud-api: done
   1-6-rbac-middleware-project-users-table: backlog
   1-7-vue-scaffolding-primevue-tailwind-setup: done
-  1-8-app-shell-layout-header-sidebar-status-bar: ready-for-dev
-  1-9-login-page-auth-guard: ready-for-dev
+  1-8-app-shell-layout-header-sidebar-status-bar: done
+  1-9-login-page-auth-guard: done
   1-10-project-list-page: backlog
   1-11-project-creation-form: backlog
   1-12-project-settings-page: backlog
   1-13-user-management-page-admin-only: backlog
   1-14-claude-md-files-for-agent-scoping: done
-  1-15-go-backend-services-wiring: ready-for-dev
-  1-16-vue-app-routing-state-tooling: ready-for-dev
-  1-17-github-actions-ci-pipeline: ready-for-dev
+  1-15-go-backend-services-wiring: done
+  1-16-vue-app-routing-state-tooling: done
+  1-17-github-actions-ci-pipeline: done
   epic-1-retrospective: optional
 
   # Epic 2: Story Board & Management
@@ -188,13 +188,13 @@ parallel_waves:
         status: done
       - key: 1-2-openapi-spec-code-gen-pipeline
         domain: back
-        status: backlog
+        status: done
       - key: 1-7-vue-scaffolding-primevue-tailwind-setup
         domain: front
-        status: backlog
+        status: done
       - key: 1-14-claude-md-files-for-agent-scoping
         domain: shared
-        status: backlog
+        status: done
     container_count: 4
     depends_on: []
     notes: "Foundation: Go scaffold+Docker, OpenAPI pipeline, Vue+PrimeVue+Tailwind init, CLAUDE.md files (reduced scope - services wiring and Vue infra moved to wave 2)"
@@ -204,33 +204,33 @@ parallel_waves:
     stories:
       - key: 1-3-users-table-jwt-auth-api-register-login-auth-middleware
         domain: back
-        status: backlog
+        status: done
         explicit_deps: [1-2-openapi-spec-code-gen-pipeline]
       - key: 1-5-projects-table-project-crud-api
         domain: back
-        status: backlog
+        status: done
         explicit_deps: [1-2-openapi-spec-code-gen-pipeline]
       - key: 1-8-app-shell-layout-header-sidebar-status-bar
         domain: front
-        status: backlog
+        status: done
         explicit_deps: [1-7-vue-scaffolding-primevue-tailwind-setup]
       - key: 1-9-login-page-auth-guard
         domain: front
-        status: backlog
+        status: done
         explicit_deps: [1-7-vue-scaffolding-primevue-tailwind-setup]
       # CI pipeline
       - key: 1-17-github-actions-ci-pipeline
         type: infra
-        status: ready-for-dev
+        status: done
         explicit_deps: [1-1-go-project-scaffolding-docker-compose-dev-stack, 1-7-vue-scaffolding-primevue-tailwind-setup]
       # Split stories from wave 1
       - key: 1-15-go-backend-services-wiring
         domain: back
-        status: backlog
+        status: done
         explicit_deps: [1-1-go-project-scaffolding-docker-compose-dev-stack]
       - key: 1-16-vue-app-routing-state-tooling
         domain: front
-        status: backlog
+        status: done
         explicit_deps: [1-7-vue-scaffolding-primevue-tailwind-setup]
     container_count: 6
     depends_on: [wave-1]

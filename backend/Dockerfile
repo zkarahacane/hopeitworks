@@ -10,7 +10,7 @@ RUN apk add --no-cache ca-certificates
 COPY go.mod go.sum* ./
 RUN go mod download
 
-# Copy source code
+# Copy source code (includes committed generated files: gen_server.go, *.sql.go)
 COPY . .
 
 # Build static binary

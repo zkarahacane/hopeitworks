@@ -26,11 +26,6 @@ tmp/
 
 # Go
 backend/bin/
-backend/internal/api/handler/gen_*
-backend/internal/adapter/postgres/gen_*
-backend/internal/adapter/postgres/db.go
-backend/internal/adapter/postgres/models.go
-backend/internal/adapter/postgres/users.sql.go
 
 # Frontend
 frontend/dist/
