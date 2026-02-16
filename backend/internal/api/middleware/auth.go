@@ -28,6 +28,12 @@ func RoleFromContext(ctx context.Context) (model.Role, bool) {
 	return role, ok
 }
 
+// IsAdmin checks if the user in the context has admin role.
+func IsAdmin(ctx context.Context) bool {
+	role, ok := RoleFromContext(ctx)
+	return ok && role == model.RoleAdmin
+}
+
 // Auth returns middleware that validates JWT tokens and injects user context.
 func Auth(authService *service.AuthService) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
