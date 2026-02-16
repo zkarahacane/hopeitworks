@@ -99,7 +99,10 @@ jobs:
           node-version: '22'
 
       - name: Install dependencies
-        run: npm install
+        run: |
+          rm -rf node_modules package-lock.json
+          npm install --include=optional
+          npm rebuild
 
       - name: Generate API types
         run: npm run generate:api
