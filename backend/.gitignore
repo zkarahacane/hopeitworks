@@ -37,5 +37,6 @@ Thumbs.db
 /api
 
 # Generated code (reproduced via make generate)
-internal/api/handler/gen_*.go
-internal/adapter/postgres/gen_*.go
+# NOTE: These are currently committed to support CI until code generation is added to CI pipeline
+# internal/api/handler/gen_*.go
+# internal/adapter/postgres/gen_*.go
