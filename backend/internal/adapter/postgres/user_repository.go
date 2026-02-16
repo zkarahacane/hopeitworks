@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -81,16 +82,15 @@ func (r *UserRepository) Update(ctx context.Context, user *model.User) (*model.U
 	return toDomainUser(row), nil
 }
 
-// Count returns the total number of active (non-deleted) users.
-func (r *UserRepository) Count(ctx context.Context) (int64, error) {
-	return r.q.CountUsers(ctx)
-}
-
 func (r *UserRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	return r.q.DeleteUser(ctx, id)
 }
 
 func toDomainUser(u User) *model.User {
+	var deletedAt *time.Time
+	if u.DeletedAt.Valid {
+		deletedAt = &u.DeletedAt.Time
+	}
 	return &model.User{
 		ID:           u.ID,
 		Email:        u.Email,
@@ -99,6 +99,6 @@ func toDomainUser(u User) *model.User {
 		Role:         model.Role(u.Role),
 		CreatedAt:    u.CreatedAt,
 		UpdatedAt:    u.UpdatedAt,
-		DeletedAt:    u.DeletedAt,
+		DeletedAt:    deletedAt,
 	}
 }
