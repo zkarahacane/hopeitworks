@@ -1,6 +1,6 @@
 # Story 1.1: Go project scaffolding + docker-compose dev stack
 
-Status: ready-for-dev
+Status: dev-complete
 
 ## Story
 
@@ -27,59 +27,59 @@ so that I have the project shell ready for implementing the backend services.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Initialize Go module and base project structure (AC: #1, #2)
-  - [ ] Create backend/ directory
-  - [ ] Initialize Go module: `go mod init github.com/zakari/hopeitworks/backend`
-  - [ ] Create cmd/api/main.go entry point with minimal setup (just fmt.Println("Starting API server..."))
-  - [ ] Create internal/ directory structure: domain/, adapter/, api/, config/
-  - [ ] Create pkg/ directory structure: log/, errors/, config/, exec/
-  - [ ] Create migrations/, queries/, testdata/ directories
-  - [ ] Create .gitignore for Go (vendor/, *.exe, .env, etc.)
-  - [ ] Verify `go build ./cmd/api` produces a binary
+- [x] Task 1: Initialize Go module and base project structure (AC: #1, #2)
+  - [x] Create backend/ directory
+  - [x] Initialize Go module: `go mod init github.com/zakari/hopeitworks/backend`
+  - [x] Create cmd/api/main.go entry point with minimal setup (just fmt.Println("Starting API server..."))
+  - [x] Create internal/ directory structure: domain/, adapter/, api/, config/
+  - [x] Create pkg/ directory structure: log/, errors/, config/, exec/
+  - [x] Create migrations/, queries/, testdata/ directories
+  - [x] Create .gitignore for Go (vendor/, *.exe, .env, etc.)
+  - [x] Verify `go build ./cmd/api` produces a binary
 
-- [ ] Task 7: Create docker-compose.yml development stack (AC: #3)
-  - [ ] Create deploy/docker-compose.yml
-  - [ ] Define postgres service: official image, version 16
-  - [ ] Configure postgres: database name, user, password via environment
-  - [ ] Add postgres volume for data persistence
-  - [ ] Add postgres healthcheck (pg_isready)
-  - [ ] Define api service: build from backend/Dockerfile
-  - [ ] Configure api environment variables (DB connection, log level)
-  - [ ] Map api port 8080:8080
-  - [ ] Add api depends_on postgres with condition: service_healthy
-  - [ ] Create shared network for services
-  - [ ] Add restart policies (on-failure)
+- [x] Task 7: Create docker-compose.yml development stack (AC: #3)
+  - [x] Create deploy/docker-compose.yml
+  - [x] Define postgres service: official image, version 16
+  - [x] Configure postgres: database name, user, password via environment
+  - [x] Add postgres volume for data persistence
+  - [x] Add postgres healthcheck (pg_isready)
+  - [x] Define api service: build from backend/Dockerfile
+  - [x] Configure api environment variables (DB connection, log level)
+  - [x] Map api port 8080:8080
+  - [x] Add api depends_on postgres with condition: service_healthy
+  - [x] Create shared network for services
+  - [x] Add restart policies (on-failure)
 
-- [ ] Task 8: Create backend Dockerfile (AC: #3)
-  - [ ] Create backend/Dockerfile with multi-stage build
-  - [ ] Stage 1: Builder - use golang:1.23-alpine
-  - [ ] Copy go.mod, go.sum and download dependencies
-  - [ ] Copy source code and build static binary
-  - [ ] Stage 2: Runtime - use alpine:3.19
-  - [ ] Copy binary from builder
-  - [ ] Add ca-certificates for HTTPS
-  - [ ] Create non-root user
-  - [ ] Set ENTRYPOINT to binary
-  - [ ] Document exposed port (8080)
+- [x] Task 8: Create backend Dockerfile (AC: #3)
+  - [x] Create backend/Dockerfile with multi-stage build
+  - [x] Stage 1: Builder - use golang:1.23-alpine
+  - [x] Copy go.mod, go.sum and download dependencies
+  - [x] Copy source code and build static binary
+  - [x] Stage 2: Runtime - use alpine:3.19
+  - [x] Copy binary from builder
+  - [x] Add ca-certificates for HTTPS
+  - [x] Create non-root user
+  - [x] Set ENTRYPOINT to binary
+  - [x] Document exposed port (8080)
 
-- [ ] Task 9: Create .env.example and documentation (AC: #3)
-  - [ ] Create backend/.env.example with all config variables documented
-  - [ ] Include database connection variables
-  - [ ] Include server configuration variables
-  - [ ] Include logging configuration
-  - [ ] Add comments explaining each variable
-  - [ ] Create deploy/.env for local development defaults
-  - [ ] Add .env to .gitignore
+- [x] Task 9: Create .env.example and documentation (AC: #3)
+  - [x] Create backend/.env.example with all config variables documented
+  - [x] Include database connection variables
+  - [x] Include server configuration variables
+  - [x] Include logging configuration
+  - [x] Add comments explaining each variable
+  - [x] Create deploy/.env for local development defaults
+  - [x] Add .env to .gitignore
 
-- [ ] Task 10: Create initial Makefile for common operations (AC: #1)
-  - [ ] Create backend/Makefile
-  - [ ] Add `make build` target (builds cmd/api)
-  - [ ] Add `make run` target (runs local binary)
-  - [ ] Add `make docker-up` target (docker compose up)
-  - [ ] Add `make docker-down` target (docker compose down)
-  - [ ] Add `make docker-logs` target (follows logs)
-  - [ ] Add `make clean` target (removes binary, cleans cache)
-  - [ ] Add help target with descriptions
+- [x] Task 10: Create initial Makefile for common operations (AC: #1)
+  - [x] Create backend/Makefile
+  - [x] Add `make build` target (builds cmd/api)
+  - [x] Add `make run` target (runs local binary)
+  - [x] Add `make docker-up` target (docker compose up)
+  - [x] Add `make docker-down` target (docker compose down)
+  - [x] Add `make docker-logs` target (follows logs)
+  - [x] Add `make clean` target (removes binary, cleans cache)
+  - [x] Add help target with descriptions
 
 ## Dev Notes
 
@@ -239,20 +239,48 @@ hopeitworks/
 
 ### Agent Model Used
 
-_To be filled by the dev agent after implementation_
+Claude Opus 4.6 (claude-opus-4-6)
 
 ### Debug Log References
 
-_To be filled by the dev agent after implementation_
+- Go build verified: `go build ./cmd/api` succeeds, produces working binary
+- Binary execution verified: outputs "Starting API server..." as expected
+- Makefile `make build` target verified working
 
 ### Completion Notes List
 
-_To be filled by the dev agent after implementation. Include:_
-- Any deviations from the spec and rationale
-- Issues encountered and solutions
-- Additional files created beyond the spec
-- Recommendations for future stories
+- All directory structures created exactly as specified in the architecture document
+- Empty directories preserved via .gitkeep files (standard Git practice)
+- No deviations from the spec
+- go.sum not generated since there are no external dependencies yet (expected for Story 1.15)
+- deploy/.env is gitignored by the root .gitignore pattern `.env`
+- Dockerfile uses `go.sum*` glob in COPY to handle missing go.sum gracefully during build
+- Makefile docker targets reference `../deploy/` paths relative to backend/ directory
 
 ### File List
 
-_To be filled by the dev agent after implementation. List all files created or modified with absolute paths._
+Files created:
+- `/workspace/backend/go.mod`
+- `/workspace/backend/cmd/api/main.go`
+- `/workspace/backend/.gitignore`
+- `/workspace/backend/.env.example`
+- `/workspace/backend/Dockerfile`
+- `/workspace/backend/Makefile`
+- `/workspace/deploy/docker-compose.yml`
+- `/workspace/deploy/.env`
+- `/workspace/deploy/postgres/.gitkeep`
+- `/workspace/backend/internal/domain/model/.gitkeep`
+- `/workspace/backend/internal/domain/port/.gitkeep`
+- `/workspace/backend/internal/domain/service/.gitkeep`
+- `/workspace/backend/internal/adapter/postgres/.gitkeep`
+- `/workspace/backend/internal/api/handler/.gitkeep`
+- `/workspace/backend/internal/api/middleware/.gitkeep`
+- `/workspace/backend/internal/eventbus/.gitkeep`
+- `/workspace/backend/internal/config/.gitkeep`
+- `/workspace/backend/pkg/log/.gitkeep`
+- `/workspace/backend/pkg/errors/.gitkeep`
+- `/workspace/backend/pkg/exec/.gitkeep`
+- `/workspace/backend/pkg/config/.gitkeep`
+- `/workspace/backend/migrations/.gitkeep`
+- `/workspace/backend/queries/.gitkeep`
+- `/workspace/backend/testdata/.gitkeep`
