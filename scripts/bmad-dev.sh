@@ -291,7 +291,7 @@ if $PIPELINE && [[ -n "$WAVE_NUM" ]]; then
     echo ""
     echo -e "${YELLOW}Launching ${#STORIES[@]} containers (each runs: dev-story → code-review → merge-story)${NC}"
     read -rp "Continue? [y/N] " confirm
-    [[ "${confirm,,}" != "y" ]] && exit 0
+    case "$confirm" in [yY]) ;; *) exit 0 ;; esac
 
     _PIPELINE_MODE=true
     for story in "${STORIES[@]}"; do
@@ -345,7 +345,7 @@ if [[ -n "$WAVE_NUM" && -n "$PHASE" ]]; then
     echo ""
     echo -e "${YELLOW}Launching ${#STORIES[@]} containers ($MODEL)${NC}"
     read -rp "Continue? [y/N] " confirm
-    [[ "${confirm,,}" != "y" ]] && exit 0
+    case "$confirm" in [yY]) ;; *) exit 0 ;; esac
 
     for story in "${STORIES[@]}"; do
         cname="bmad-dev-${story}-${PHASE}"
