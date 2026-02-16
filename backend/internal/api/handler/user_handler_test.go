@@ -2,6 +2,7 @@ package handler
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -14,8 +15,6 @@ import (
 	"github.com/zakari/hopeitworks/backend/internal/domain/port"
 	"github.com/zakari/hopeitworks/backend/internal/domain/service"
 	"github.com/zakari/hopeitworks/backend/pkg/errors"
-
-	"context"
 )
 
 // mockUserRepo is a mock implementation of port.UserRepository for handler tests.
