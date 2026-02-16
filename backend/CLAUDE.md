@@ -377,9 +377,11 @@ go test ./... -run Integration
 # With verbose output
 go test ./... -v
 
-# Lint
+# Lint — MUST pass before committing (enforced in CI)
 golangci-lint run ./...
 ```
+
+**IMPORTANT:** Always run `golangci-lint run ./...` before committing Go code. CI will reject PRs with lint errors. Configuration is in `backend/.golangci.yml`.
 
 ## go-wire Dependency Injection
 

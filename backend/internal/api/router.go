@@ -14,7 +14,7 @@ import (
 )
 
 // NewRouter creates a chi.Router with middleware and route mounts.
-func NewRouter(pool *pgxpool.Pool, logger *slog.Logger) chi.Router {
+func NewRouter(_ *pgxpool.Pool, logger *slog.Logger) chi.Router {
 	r := chi.NewRouter()
 
 	// Middleware chain

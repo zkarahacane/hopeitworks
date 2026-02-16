@@ -18,6 +18,8 @@ func TestNew(t *testing.T) {
 	}
 }
 
+const redactedValue = "[REDACTED]"
+
 func TestScrubHandler(t *testing.T) {
 	var buf bytes.Buffer
 	jsonHandler := slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo})
@@ -39,13 +41,13 @@ func TestScrubHandler(t *testing.T) {
 	if entry["username"] != "alice" {
 		t.Errorf("username should not be redacted, got %q", entry["username"])
 	}
-	if entry["password"] != "[REDACTED]" {
+	if entry["password"] != redactedValue {
 		t.Errorf("password should be redacted, got %q", entry["password"])
 	}
-	if entry["token"] != "[REDACTED]" {
+	if entry["token"] != redactedValue {
 		t.Errorf("token should be redacted, got %q", entry["token"])
 	}
-	if entry["api_key"] != "[REDACTED]" {
+	if entry["api_key"] != redactedValue {
 		t.Errorf("api_key should be redacted, got %q", entry["api_key"])
 	}
 }

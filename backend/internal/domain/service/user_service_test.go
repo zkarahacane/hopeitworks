@@ -35,7 +35,7 @@ func (m *mockUserRepo) Create(ctx context.Context, user *model.User) (*model.Use
 	return user, nil
 }
 
-func (m *mockUserRepo) GetByEmail(ctx context.Context, email string) (*model.User, error) {
+func (m *mockUserRepo) GetByEmail(_ context.Context, email string) (*model.User, error) {
 	for _, u := range m.users {
 		if u.Email == email {
 			return u, nil
@@ -44,7 +44,7 @@ func (m *mockUserRepo) GetByEmail(ctx context.Context, email string) (*model.Use
 	return nil, errors.NewNotFound("user", email)
 }
 
-func (m *mockUserRepo) GetByID(ctx context.Context, id uuid.UUID) (*model.User, error) {
+func (m *mockUserRepo) GetByID(_ context.Context, id uuid.UUID) (*model.User, error) {
 	u, ok := m.users[id]
 	if !ok {
 		return nil, errors.NewNotFound("user", id)
@@ -52,7 +52,7 @@ func (m *mockUserRepo) GetByID(ctx context.Context, id uuid.UUID) (*model.User, 
 	return u, nil
 }
 
-func (m *mockUserRepo) List(ctx context.Context, limit, offset int32) ([]*model.User, error) {
+func (m *mockUserRepo) List(_ context.Context, limit, offset int32) ([]*model.User, error) {
 	result := make([]*model.User, 0)
 	i := int32(0)
 	for _, u := range m.users {

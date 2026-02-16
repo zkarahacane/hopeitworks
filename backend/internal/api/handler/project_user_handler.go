@@ -15,7 +15,7 @@ import (
 
 // AddProjectUserRequest is the request body for adding a user to a project.
 type AddProjectUserRequest struct {
-	UserID uuid.UUID        `json:"user_id"`
+	UserID uuid.UUID         `json:"user_id"`
 	Role   model.ProjectRole `json:"role,omitempty"`
 }
 

@@ -84,11 +84,15 @@ func newTestHandler() (*AuthHandler, *mockRepo) {
 	return handler, repo
 }
 
+const (
+	testRegisterBody   = `{"email":"test@example.com","password":"secureP@ss1","name":"Test User"}`
+	testTokenCookieKey = "token"
+)
+
 func TestRegisterHandler_Success(t *testing.T) {
 	h, _ := newTestHandler()
 
-	body := `{"email":"test@example.com","password":"secureP@ss1","name":"Test User"}`
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewBufferString(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewBufferString(testRegisterBody))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
@@ -113,7 +117,7 @@ func TestRegisterHandler_Success(t *testing.T) {
 	cookies := rec.Result().Cookies()
 	found := false
 	for _, c := range cookies {
-		if c.Name == "token" && c.Value != "" {
+		if c.Name == testTokenCookieKey && c.Value != "" {
 			found = true
 			if !c.HttpOnly {
 				t.Error("cookie should be httpOnly")
@@ -131,14 +135,13 @@ func TestRegisterHandler_Success(t *testing.T) {
 func TestRegisterHandler_DuplicateEmail(t *testing.T) {
 	h, _ := newTestHandler()
 
-	body := `{"email":"test@example.com","password":"secureP@ss1","name":"Test User"}`
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewBufferString(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewBufferString(testRegisterBody))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	h.Register(rec, req)
 
 	// Register same email again
-	req = httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewBufferString(body))
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewBufferString(testRegisterBody))
 	req.Header.Set("Content-Type", "application/json")
 	rec = httptest.NewRecorder()
 	h.Register(rec, req)
@@ -179,8 +182,7 @@ func TestLoginHandler_Success(t *testing.T) {
 	h, _ := newTestHandler()
 
 	// Register first
-	body := `{"email":"test@example.com","password":"secureP@ss1","name":"Test User"}`
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewBufferString(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewBufferString(testRegisterBody))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	h.Register(rec, req)
@@ -199,7 +201,7 @@ func TestLoginHandler_Success(t *testing.T) {
 	cookies := rec.Result().Cookies()
 	found := false
 	for _, c := range cookies {
-		if c.Name == "token" && c.Value != "" {
+		if c.Name == testTokenCookieKey && c.Value != "" {
 			found = true
 		}
 	}
@@ -212,8 +214,7 @@ func TestLoginHandler_WrongPassword(t *testing.T) {
 	h, _ := newTestHandler()
 
 	// Register
-	body := `{"email":"test@example.com","password":"secureP@ss1","name":"Test User"}`
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewBufferString(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewBufferString(testRegisterBody))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	h.Register(rec, req)
@@ -244,7 +245,7 @@ func TestLogoutHandler(t *testing.T) {
 	cookies := rec.Result().Cookies()
 	found := false
 	for _, c := range cookies {
-		if c.Name == "token" && c.MaxAge < 0 {
+		if c.Name == testTokenCookieKey && c.MaxAge < 0 {
 			found = true
 		}
 	}
@@ -257,14 +258,15 @@ func TestMeHandler_Authenticated(t *testing.T) {
 	h, _ := newTestHandler()
 
 	// Register to create a user
-	body := `{"email":"test@example.com","password":"secureP@ss1","name":"Test User"}`
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewBufferString(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewBufferString(testRegisterBody))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	h.Register(rec, req)
 
 	var regResp userResponse
-	json.NewDecoder(rec.Body).Decode(&regResp)
+	if err := json.NewDecoder(rec.Body).Decode(&regResp); err != nil {
+		t.Fatalf("failed to decode register response: %v", err)
+	}
 	userID, _ := uuid.Parse(regResp.ID)
 
 	// Call Me with context set (simulating middleware)
@@ -280,7 +282,9 @@ func TestMeHandler_Authenticated(t *testing.T) {
 	}
 
 	var meResp userResponse
-	json.NewDecoder(rec.Body).Decode(&meResp)
+	if err := json.NewDecoder(rec.Body).Decode(&meResp); err != nil {
+		t.Fatalf("failed to decode me response: %v", err)
+	}
 	if meResp.Email != "test@example.com" {
 		t.Errorf("expected email test@example.com, got %s", meResp.Email)
 	}

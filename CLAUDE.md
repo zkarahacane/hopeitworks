@@ -77,8 +77,10 @@ chore(deploy): update docker-compose health checks
 
 ### Linting
 
-- Backend: `golangci-lint run ./...`
+- Backend: `cd backend && golangci-lint run ./...` — **MUST pass before committing**
 - Frontend: `npm run lint`
+- Configuration: `backend/.golangci.yml` (errcheck, staticcheck, gofmt, goimports, revive, goconst, etc.)
+- golangci-lint is **enforced in CI** — PRs will fail if lint errors are present
 
 ## Testing Principles
 

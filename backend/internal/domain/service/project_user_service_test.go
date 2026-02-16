@@ -101,8 +101,10 @@ func (m *mockProjectUserServiceUserRepo) GetByID(_ context.Context, id uuid.UUID
 	return u, nil
 }
 
-func (m *mockProjectUserServiceUserRepo) List(_ context.Context, _, _ int32) ([]*model.User, error) { return nil, nil }
-func (m *mockProjectUserServiceUserRepo) Count(_ context.Context) (int64, error)                    { return 0, nil }
+func (m *mockProjectUserServiceUserRepo) List(_ context.Context, _, _ int32) ([]*model.User, error) {
+	return nil, nil
+}
+func (m *mockProjectUserServiceUserRepo) Count(_ context.Context) (int64, error) { return 0, nil }
 func (m *mockProjectUserServiceUserRepo) Update(_ context.Context, user *model.User) (*model.User, error) {
 	return user, nil
 }

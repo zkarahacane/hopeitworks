@@ -84,7 +84,7 @@ func TestAuthMiddleware_ValidToken(t *testing.T) {
 func TestAuthMiddleware_NoCookie(t *testing.T) {
 	authSvc := newTestAuthService()
 
-	handler := Auth(authSvc)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := Auth(authSvc)(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 		t.Error("handler should not be called when no cookie is present")
 	}))
 
@@ -101,7 +101,7 @@ func TestAuthMiddleware_NoCookie(t *testing.T) {
 func TestAuthMiddleware_InvalidToken(t *testing.T) {
 	authSvc := newTestAuthService()
 
-	handler := Auth(authSvc)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := Auth(authSvc)(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 		t.Error("handler should not be called with invalid token")
 	}))
 
@@ -128,7 +128,7 @@ func TestAuthMiddleware_ExpiredToken(t *testing.T) {
 	// Use the same secret for validation
 	authSvc := newTestAuthService()
 
-	handler := Auth(authSvc)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := Auth(authSvc)(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 		t.Error("handler should not be called with expired token")
 	}))
 

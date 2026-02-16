@@ -95,9 +95,9 @@ func run() error {
 	})
 
 	// Health check
-	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
+	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("ok"))
+		_, _ = w.Write([]byte("ok"))
 	})
 
 	// Create HTTP server
