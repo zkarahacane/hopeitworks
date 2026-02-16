@@ -9,9 +9,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
-	domainerrors "github.com/zakari/hopeitworks/backend/internal/domain/model"
+	"github.com/zakari/hopeitworks/backend/internal/domain/model"
 	"github.com/zakari/hopeitworks/backend/internal/domain/port"
-	pkgerrors "github.com/zakari/hopeitworks/backend/pkg/errors"
+	apperrors "github.com/zakari/hopeitworks/backend/pkg/errors"
 )
 
 // Ensure ProjectRepo implements port.ProjectRepository at compile time.
@@ -27,7 +27,7 @@ func NewProjectRepo(queries *Queries) *ProjectRepo {
 	return &ProjectRepo{queries: queries}
 }
 
-func (r *ProjectRepo) Create(ctx context.Context, project *domainerrors.Project) (*domainerrors.Project, error) {
+func (r *ProjectRepo) Create(ctx context.Context, project *model.Project) (*model.Project, error) {
 	params := CreateProjectParams{
 		Name:         project.Name,
 		Description:  textFromStringPtr(project.Description),
@@ -43,33 +43,33 @@ func (r *ProjectRepo) Create(ctx context.Context, project *domainerrors.Project)
 	row, err := r.queries.CreateProject(ctx, params)
 	if err != nil {
 		if isUniqueViolation(err) {
-			return nil, pkgerrors.NewConflict("project", project.Name)
+			return nil, apperrors.NewConflict("project", project.Name)
 		}
-		return nil, pkgerrors.NewInternal("failed to create project", err)
+		return nil, apperrors.NewInternal("failed to create project", err)
 	}
 	return toDomainProject(row), nil
 }
 
-func (r *ProjectRepo) GetByID(ctx context.Context, id uuid.UUID) (*domainerrors.Project, error) {
+func (r *ProjectRepo) GetByID(ctx context.Context, id uuid.UUID) (*model.Project, error) {
 	row, err := r.queries.GetProject(ctx, id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, pkgerrors.NewNotFound("project", id)
+			return nil, apperrors.NewNotFound("project", id)
 		}
-		return nil, pkgerrors.NewInternal("failed to get project", err)
+		return nil, apperrors.NewInternal("failed to get project", err)
 	}
 	return toDomainProject(row), nil
 }
 
-func (r *ProjectRepo) List(ctx context.Context, limit, offset int32) ([]*domainerrors.Project, error) {
+func (r *ProjectRepo) List(ctx context.Context, limit, offset int32) ([]*model.Project, error) {
 	rows, err := r.queries.ListProjects(ctx, ListProjectsParams{
 		Limit:  limit,
 		Offset: offset,
 	})
 	if err != nil {
-		return nil, pkgerrors.NewInternal("failed to list projects", err)
+		return nil, apperrors.NewInternal("failed to list projects", err)
 	}
-	projects := make([]*domainerrors.Project, len(rows))
+	projects := make([]*model.Project, len(rows))
 	for i, row := range rows {
 		projects[i] = toDomainProject(row)
 	}
@@ -79,12 +79,12 @@ func (r *ProjectRepo) List(ctx context.Context, limit, offset int32) ([]*domaine
 func (r *ProjectRepo) Count(ctx context.Context) (int64, error) {
 	count, err := r.queries.CountProjects(ctx)
 	if err != nil {
-		return 0, pkgerrors.NewInternal("failed to count projects", err)
+		return 0, apperrors.NewInternal("failed to count projects", err)
 	}
 	return count, nil
 }
 
-func (r *ProjectRepo) Update(ctx context.Context, project *domainerrors.Project) (*domainerrors.Project, error) {
+func (r *ProjectRepo) Update(ctx context.Context, project *model.Project) (*model.Project, error) {
 	params := UpdateProjectParams{
 		ID:           project.ID,
 		Name:         textFromStringPtr(&project.Name),
@@ -101,12 +101,12 @@ func (r *ProjectRepo) Update(ctx context.Context, project *domainerrors.Project)
 	row, err := r.queries.UpdateProject(ctx, params)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, pkgerrors.NewNotFound("project", project.ID)
+			return nil, apperrors.NewNotFound("project", project.ID)
 		}
 		if isUniqueViolation(err) {
-			return nil, pkgerrors.NewConflict("project", project.Name)
+			return nil, apperrors.NewConflict("project", project.Name)
 		}
-		return nil, pkgerrors.NewInternal("failed to update project", err)
+		return nil, apperrors.NewInternal("failed to update project", err)
 	}
 	return toDomainProject(row), nil
 }
@@ -114,14 +114,14 @@ func (r *ProjectRepo) Update(ctx context.Context, project *domainerrors.Project)
 func (r *ProjectRepo) Delete(ctx context.Context, id uuid.UUID) error {
 	err := r.queries.DeleteProject(ctx, id)
 	if err != nil {
-		return pkgerrors.NewInternal("failed to delete project", err)
+		return apperrors.NewInternal("failed to delete project", err)
 	}
 	return nil
 }
 
 // toDomainProject maps a sqlc-generated Project to a domain Project.
-func toDomainProject(p Project) *domainerrors.Project {
-	project := &domainerrors.Project{
+func toDomainProject(p Project) *model.Project {
+	project := &model.Project{
 		ID:           p.ID,
 		Name:         p.Name,
 		GitProvider:  p.GitProvider,
