@@ -35,7 +35,7 @@ func (r *noopRepo) List(_ context.Context, _, _ int32) ([]*model.User, error) {
 	return nil, nil
 }
 func (r *noopRepo) Count(_ context.Context) (int64, error) { return 0, nil }
-func (r *noopRepo) Update(_ context.Context, user *model.User) (*model.User, error) {
+func (r *noopRepo) Update(_ context.Context, _ *model.User) (*model.User, error) {
 	return nil, nil
 }
 func (r *noopRepo) Delete(_ context.Context, _ uuid.UUID) error { return nil }

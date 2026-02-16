@@ -68,11 +68,14 @@ func run() error {
 	projectService := service.NewProjectService(projectRepo)
 	projectHandler := handler.NewProjectHandler(projectService, projectUserService)
 
+	// Auth handler
+	authHandler := handler.NewAuthHandler(authService, userRepo, false)
+
 	// User service
 	userService := service.NewUserService(userRepo)
 	userHandler := handler.NewUserHandler(userService)
 
-	server := handler.NewServer(projectHandler, userHandler)
+	server := handler.NewServer(authHandler, projectHandler, userHandler)
 
 	// Project user handler
 	projectUserHandler := handler.NewProjectUserHandler(projectUserService)

@@ -42,7 +42,7 @@ func (m *mockUserRepository) Create(ctx context.Context, user *model.User) (*mod
 	return user, nil
 }
 
-func (m *mockUserRepository) GetByEmail(ctx context.Context, email string) (*model.User, error) {
+func (m *mockUserRepository) GetByEmail(_ context.Context, email string) (*model.User, error) {
 	u, ok := m.byEmail[email]
 	if !ok {
 		return nil, errors.New("no rows")
@@ -50,7 +50,7 @@ func (m *mockUserRepository) GetByEmail(ctx context.Context, email string) (*mod
 	return u, nil
 }
 
-func (m *mockUserRepository) GetByID(ctx context.Context, id uuid.UUID) (*model.User, error) {
+func (m *mockUserRepository) GetByID(_ context.Context, id uuid.UUID) (*model.User, error) {
 	u, ok := m.users[id.String()]
 	if !ok {
 		return nil, errors.New("no rows")
@@ -58,7 +58,7 @@ func (m *mockUserRepository) GetByID(ctx context.Context, id uuid.UUID) (*model.
 	return u, nil
 }
 
-func (m *mockUserRepository) List(ctx context.Context, limit, offset int32) ([]*model.User, error) {
+func (m *mockUserRepository) List(_ context.Context, limit, offset int32) ([]*model.User, error) {
 	var result []*model.User
 	for _, u := range m.users {
 		result = append(result, u)
@@ -66,11 +66,11 @@ func (m *mockUserRepository) List(ctx context.Context, limit, offset int32) ([]*
 	return result, nil
 }
 
-func (m *mockUserRepository) Count(ctx context.Context) (int64, error) {
+func (m *mockUserRepository) Count(_ context.Context) (int64, error) {
 	return int64(len(m.users)), nil
 }
 
-func (m *mockUserRepository) Update(ctx context.Context, user *model.User) (*model.User, error) {
+func (m *mockUserRepository) Update(_ context.Context, user *model.User) (*model.User, error) {
 	existing, ok := m.users[user.ID.String()]
 	if !ok {
 		return nil, errors.New("no rows")
@@ -85,7 +85,7 @@ func (m *mockUserRepository) Update(ctx context.Context, user *model.User) (*mod
 	return existing, nil
 }
 
-func (m *mockUserRepository) Delete(ctx context.Context, id uuid.UUID) error {
+func (m *mockUserRepository) Delete(_ context.Context, id uuid.UUID) error {
 	u, ok := m.users[id.String()]
 	if !ok {
 		return errors.New("no rows")
