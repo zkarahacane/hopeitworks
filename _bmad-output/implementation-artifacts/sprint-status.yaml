@@ -58,6 +58,7 @@ development_status:
   1-14-claude-md-files-for-agent-scoping: backlog
   1-15-go-backend-services-wiring: backlog
   1-16-vue-app-routing-state-tooling: backlog
+  1-17-github-actions-ci-pipeline: ready-for-dev
   epic-1-retrospective: optional
 
   # Epic 2: Story Board & Management
@@ -217,6 +218,11 @@ parallel_waves:
         domain: front
         status: backlog
         explicit_deps: [1-7-vue-scaffolding-primevue-tailwind-setup]
+      # CI pipeline
+      - key: 1-17-github-actions-ci-pipeline
+        type: infra
+        status: ready-for-dev
+        explicit_deps: [1-1-go-project-scaffolding-docker-compose-dev-stack, 1-7-vue-scaffolding-primevue-tailwind-setup]
       # Split stories from wave 1
       - key: 1-15-go-backend-services-wiring
         domain: back
