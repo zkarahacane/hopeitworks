@@ -11,7 +11,7 @@
 
 ## Project Structure
 
-```
+```text
 hopeitworks/
 ├── backend/                    # Go module — autonomous
 │   ├── cmd/api/                # Entry point + wire.go
@@ -98,11 +98,8 @@ Both sides generate types and clients from the same OpenAPI spec. Never manually
 ### Completed
 
 - Story 1-1: Go project scaffolding + docker-compose dev stack
-
-### In Progress (Wave 1)
-
-- Story 1-2: OpenAPI spec + code generation pipeline
-- Story 1-7: Vue scaffolding + PrimeVue + Tailwind setup
+- Story 1-2: OpenAPI 3.0 spec + code generation pipeline
+- Story 1-7: Vue 3 scaffolding + PrimeVue 4 + Tailwind CSS v4
 - Story 1-14: CLAUDE.md files for agent scoping
 
 ## Known Constraints
@@ -129,7 +126,7 @@ Both sides generate types and clients from the same OpenAPI spec. Never manually
 
 ## Architectural Boundaries
 
-```
+```text
 ┌─────────────┐     openapi.yaml      ┌──────────────┐
 │   Frontend   │◄────────────────────►│   Backend    │
 │   (Vue 3)    │   HTTP + SSE         │   (Go API)   │

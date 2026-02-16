@@ -127,6 +127,7 @@ export const HopeTheme = definePreset(Aura, {
 ### Use Tailwind ONLY for Layout
 
 Tailwind is for structural layout only:
+
 - `flex`, `grid`, `gap`, `p-*`, `m-*`, `w-*`, `h-*`
 - `items-center`, `justify-between`, `space-x-*`
 - Responsive breakpoints: `md:`, `lg:`
@@ -157,6 +158,7 @@ Tailwind is for structural layout only:
 - No `<style scoped>` blocks except for complex animations or SVG
 - No inline styles
 - CSS layer order in `assets/main.css`:
+
   ```css
   @layer tailwind-base, primevue, tailwind-utilities;
   ```
@@ -234,6 +236,7 @@ export const useStoriesStore = defineStore('stories', () => {
 ### Store Organization
 
 One store per domain:
+
 - `stores/auth.ts`
 - `stores/projects.ts`
 - `stores/stories.ts`
@@ -294,7 +297,7 @@ This generates TypeScript types and the typed `paths` interface. Never manually 
 
 ### Directory Structure
 
-```
+```text
 frontend/src/
 ├── ui/                          # Atomic layer (shared only)
 │   ├── primitives/              # PrimeVue wrappers, base components
@@ -365,7 +368,7 @@ frontend/src/
 
 Views are 1:1 with routes and compose feature components:
 
-```
+```text
 views/
 ├── LoginView.vue
 ├── DashboardView.vue
@@ -423,6 +426,7 @@ export function useSSE(projectId: string) {
 ### Loading States
 
 Every async operation uses `useAsyncAction` pattern:
+
 - `isLoading` — show PrimeVue `Skeleton` or `ProgressSpinner`
 - `error` — show inline `Message` for validation (400), `Toast` for transient errors (500)
 - `data` — render the actual content
@@ -482,7 +486,7 @@ Do NOT test that PrimeVue renders a button correctly — that is PrimeVue's resp
 
 Tests live co-located in `__tests__/` directories next to source files:
 
-```
+```text
 features/stories/
 ├── StoryBoard.vue
 ├── StoryDetail.vue

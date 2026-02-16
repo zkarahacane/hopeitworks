@@ -6,8 +6,8 @@ You are an AI agent working on the **hopeitworks** platform. Follow these conven
 
 ### Branch Naming
 
-- Feature branches: `feat/{story-key}-{slug}` (e.g., `feat/1-14-claude-md-files`)
-- Fix branches: `fix/{story-key}-{slug}` (e.g., `fix/1-3-ci-poller`)
+- Feature branches: `feat/S-{key}-{slug}` (e.g., `feat/S-01-setup-project`)
+- Fix branches: `fix/S-{key}-{slug}` (e.g., `fix/S-03-ci-poller`)
 - The branch name is provided to you — always work on the assigned branch
 
 ### Conventional Commits
@@ -15,6 +15,7 @@ You are an AI agent working on the **hopeitworks** platform. Follow these conven
 Format: `type(scope): message`
 
 Types:
+
 - `feat` — new feature
 - `fix` — bug fix
 - `refactor` — code restructuring without behavior change
@@ -23,17 +24,20 @@ Types:
 - `chore` — build, CI, tooling changes
 
 Scope matches the domain area:
+
 - Backend: `pipeline`, `auth`, `api`, `dag`, `git`, `agent`, `event`, `cost`, `config`
 - Frontend: `ui`, `stories`, `runs`, `approvals`, `dag`, `editor`, `auth`
 - Shared: `api-spec`, `deploy`, `ci`
 
 Rules:
+
 - Message in imperative mood, lowercase, no period at end
 - Body is optional — explains WHY, not WHAT
 - One logical change per commit
 
 Examples:
-```
+
+```text
 feat(pipeline): add retry logic for failed steps
 fix(auth): handle token expiry on page refresh
 refactor(dag): extract cycle detection into helper
@@ -94,6 +98,7 @@ chore(deploy): update docker-compose health checks
 ## Documentation
 
 - README updated for public API changes
+- CHANGELOG.md follows Keep a Changelog format
 - Code comments explain WHY, not WHAT
 - Document non-obvious architectural decisions inline
 - Generated code should never be manually edited — regenerate from source
@@ -128,22 +133,70 @@ chore(deploy): update docker-compose health checks
 - Format: `{entity}.{action}` dot-notation (`run.started`, `step.completed`, `hitl.pending`)
 - Payload: JSON with `snake_case` fields
 
+## API Response Format
+
+### Success (single resource)
+
+Direct object, HTTP 200/201:
+
+```json
+{ "id": "...", "summary": "...", "status": "..." }
+```
+
+### Success (list)
+
+Array with pagination metadata, HTTP 200:
+
+```json
+{
+  "data": [...],
+  "pagination": { "total": 42, "page": 1, "per_page": 20 }
+}
+```
+
+### Error
+
+Consistent error envelope:
+
+```json
+{
+  "error": {
+    "code": "STORY_NOT_FOUND",
+    "message": "Story S-03 not found in project X",
+    "details": {}
+  }
+}
+```
+
+### Async Operations
+
+Async operations return 202 Accepted:
+
+```json
+{ "epic_run_id": "...", "status": "scheduling", "stories_count": 5 }
+```
+
 ## Error Handling Philosophy
 
 - Errors are values — handle them explicitly, never ignore
 - Wrap errors with context as they propagate up the call stack
-- API errors follow a consistent envelope format:
-  ```json
-  {
-    "error": {
-      "code": "STORY_NOT_FOUND",
-      "message": "Story S-03 not found in project X",
-      "details": {}
-    }
-  }
-  ```
 - Error codes are `UPPER_SNAKE_CASE`
 - Error messages are human-readable and actionable
+- See "API Response Format > Error" above for the standard error envelope
+
+## Code Generation Philosophy
+
+This project follows a **code-gen-first** approach. Never manually write code that should be generated from a spec.
+
+| Domain | Spec Source | Generator | Output |
+|--------|-----------|-----------|--------|
+| API handlers | `api/openapi.yaml` | oapi-codegen | chi server interfaces + types |
+| API client | `api/openapi.yaml` | openapi-typescript + openapi-fetch | TypeScript typed fetch client |
+| Database queries | `backend/queries/*.sql` | sqlc | type-safe Go functions |
+| DI wiring | `wire.go` provider sets | go-wire | `wire_gen.go` auto-generated |
+| Prompts | Handlebars templates | runtime rendering | agent prompts |
+
+Generated files (e.g., `wire_gen.go`, `db/` for sqlc, `frontend/src/api/generated/`) must NEVER be manually edited — always regenerate from source.
 
 ## Security
 
@@ -151,3 +204,29 @@ chore(deploy): update docker-compose health checks
 - Use environment variables for all sensitive configuration
 - Validate all external input at system boundaries
 - Agent containers have no host filesystem access
+
+## CI Pipeline
+
+### Backend CI
+
+```bash
+golangci-lint run ./...              # Lint
+go test ./... -short                 # Unit tests (fast, no containers)
+go test ./... -run Integration       # Integration tests (testcontainers)
+```
+
+### Frontend CI
+
+```bash
+npm run lint                         # ESLint
+npm run type-check                   # tsc --noEmit
+npm run test:unit                    # Vitest
+npm run test:e2e                     # Playwright (against docker-compose.test.yml)
+```
+
+## Infrastructure
+
+- **Docker Compose** in `deploy/` for local dev stack
+- Health checks: `GET /health` (liveness) and `GET /ready` (readiness: DB + Docker socket)
+- Config: `config.yaml` + env var override, resolved at startup
+- No hot-reload for MVP — restart to apply config changes
