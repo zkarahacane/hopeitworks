@@ -4,7 +4,7 @@ export function useBreakpoint() {
   const query = window.matchMedia('(max-width: 1023px)')
   const isMobile = ref(query.matches)
 
-  function onChange(event: MediaQueryListEvent) {
+  const onChange = (event: MediaQueryListEvent) => {
     isMobile.value = event.matches
   }
 

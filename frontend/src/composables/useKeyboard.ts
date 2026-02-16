@@ -1,7 +1,7 @@
 import { onMounted, onUnmounted } from 'vue'
 
 export function useKeyboard(bindings: Record<string, () => void>): void {
-  function handler(event: KeyboardEvent) {
+  const handler = (event: KeyboardEvent) => {
     const target = event.target as HTMLElement | null
     if (
       target &&
