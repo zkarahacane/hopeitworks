@@ -1,4 +1,4 @@
-.PHONY: build run docker-up docker-down docker-logs clean help generate lint-api install-tools seed reset-db
+.PHONY: build run docker-up docker-down docker-logs clean help generate lint lint-api install-tools seed reset-db
 
 # Database connection defaults (match docker-compose.yml)
 DB_HOST ?= localhost
@@ -33,10 +33,14 @@ lint-api: ## Validate OpenAPI spec
 	@echo "Validating OpenAPI spec..."
 	npx --yes @redocly/cli lint ../api/openapi.yaml
 
+lint: ## Run golangci-lint
+	golangci-lint run ./...
+
 install-tools: ## Install code generation tool dependencies
 	@echo "Installing code generation tools..."
 	go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@latest
 	go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
+	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 	@echo "Tools installed."
 
 build: ## Build the API binary
