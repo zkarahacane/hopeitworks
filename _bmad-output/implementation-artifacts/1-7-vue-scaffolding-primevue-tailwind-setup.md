@@ -366,6 +366,7 @@ Claude Opus 4.6 (claude-opus-4-6)
 
 - Build output: `npm run build` passes (vue-tsc type-check + vite build, 236 modules, 302KB JS bundle)
 - Lint output: `npm run lint` passes (oxlint + eslint, 0 warnings, 0 errors)
+- PR: https://github.com/zkarahacane/hopeitworks/pull/6
 
 ### Completion Notes List
 
@@ -379,6 +380,7 @@ Claude Opus 4.6 (claude-opus-4-6)
 
 ### File List
 
+- `.gitignore` (modified - updated frontend patterns)
 - `frontend/.editorconfig` (new - from create-vue)
 - `frontend/.gitattributes` (new - from create-vue)
 - `frontend/.gitignore` (new - from create-vue)
