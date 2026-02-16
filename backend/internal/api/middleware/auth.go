@@ -68,5 +68,5 @@ func Auth(authService *service.AuthService) func(http.Handler) http.Handler {
 func writeUnauthorized(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusUnauthorized)
-	w.Write([]byte(`{"error":{"code":"UNAUTHORIZED","message":"Authentication required"}}`))
+	_, _ = w.Write([]byte(`{"error":{"code":"UNAUTHORIZED","message":"Authentication required"}}`))
 }

@@ -82,7 +82,15 @@ func run() error {
 	r.Use(chimiddleware.Logger)
 	r.Use(chimiddleware.Recoverer)
 	r.Use(chimiddleware.RequestID)
+
+	// Auth middleware skips public paths
 	r.Use(authmw.Auth(authService))
+
+	// Health check (skipped by auth middleware)
+	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	})
 
 	handler.HandlerFromMuxWithBaseURL(server, r, "/api/v1")
 
@@ -92,12 +100,6 @@ func run() error {
 		r.Get("/", projectUserHandler.ListMembers)
 		r.Post("/", projectUserHandler.AddUser)
 		r.Delete("/{user_id}", projectUserHandler.RemoveUser)
-	})
-
-	// Health check
-	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("ok"))
 	})
 
 	// Create HTTP server

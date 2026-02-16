@@ -51,7 +51,7 @@ func RequireProjectAccess(repo port.ProjectUserRepository) func(http.Handler) ht
 func writeForbidden(w http.ResponseWriter, msg string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusForbidden)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"error": map[string]interface{}{
 			"code":    "FORBIDDEN",
 			"message": msg,
@@ -62,7 +62,7 @@ func writeForbidden(w http.ResponseWriter, msg string) {
 func writeBadRequest(w http.ResponseWriter, msg string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusBadRequest)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"error": map[string]interface{}{
 			"code":    "VALIDATION_ERROR",
 			"message": msg,
@@ -73,7 +73,7 @@ func writeBadRequest(w http.ResponseWriter, msg string) {
 func writeInternalError(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusInternalServerError)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"error": map[string]interface{}{
 			"code":    "INTERNAL_ERROR",
 			"message": "An internal error occurred",

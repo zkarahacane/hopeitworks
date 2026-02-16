@@ -19,26 +19,26 @@ func newTestAuthService() *service.AuthService {
 // noopRepo is a minimal mock repo just for token generation.
 type noopRepo struct{}
 
-func (r *noopRepo) Create(ctx context.Context, user *model.User) (*model.User, error) {
+func (r *noopRepo) Create(_ context.Context, user *model.User) (*model.User, error) {
 	user.ID = uuid.New()
 	user.CreatedAt = time.Now()
 	user.UpdatedAt = time.Now()
 	return user, nil
 }
-func (r *noopRepo) GetByEmail(ctx context.Context, email string) (*model.User, error) {
+func (r *noopRepo) GetByEmail(_ context.Context, _ string) (*model.User, error) {
 	return nil, nil
 }
-func (r *noopRepo) GetByID(ctx context.Context, id uuid.UUID) (*model.User, error) {
+func (r *noopRepo) GetByID(_ context.Context, _ uuid.UUID) (*model.User, error) {
 	return nil, nil
 }
-func (r *noopRepo) List(ctx context.Context, limit, offset int32) ([]*model.User, error) {
+func (r *noopRepo) List(_ context.Context, _, _ int32) ([]*model.User, error) {
 	return nil, nil
 }
-func (r *noopRepo) Count(ctx context.Context) (int64, error) { return 0, nil }
-func (r *noopRepo) Update(ctx context.Context, user *model.User) (*model.User, error) {
+func (r *noopRepo) Count(_ context.Context) (int64, error) { return 0, nil }
+func (r *noopRepo) Update(_ context.Context, user *model.User) (*model.User, error) {
 	return nil, nil
 }
-func (r *noopRepo) Delete(ctx context.Context, id uuid.UUID) error { return nil }
+func (r *noopRepo) Delete(_ context.Context, _ uuid.UUID) error { return nil }
 
 func TestAuthMiddleware_ValidToken(t *testing.T) {
 	authSvc := newTestAuthService()
