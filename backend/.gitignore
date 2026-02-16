@@ -35,3 +35,7 @@ Thumbs.db
 
 # Build output
 /api
+
+# Generated code (reproduced via make generate)
+internal/api/handler/gen_*.go
+internal/adapter/postgres/gen_*.go
