@@ -198,9 +198,9 @@ run_clone() {
     docker run \
         --name "$container_name" \
         --rm -d \
-        -v "${HOME}/.gitconfig:/root/.gitconfig:ro" \
-        -v "${HOME}/.config/gh:/root/.config/gh:ro" \
-        -v "${ssh_dir}:/root/.ssh" \
+        -v "${HOME}/.gitconfig:/home/dev/.gitconfig:ro" \
+        -v "${HOME}/.config/gh:/home/dev/.config/gh:ro" \
+        -v "${ssh_dir}:/home/dev/.ssh" \
         -v "/var/run/docker.sock:/var/run/docker.sock" \
         -e "CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN}" \
         -e "GITHUB_TOKEN=${GITHUB_TOKEN:-}" \
@@ -225,9 +225,9 @@ run_mount() {
         --name "$container_name" \
         --rm -it \
         -v "$PROJECT_ROOT:/workspace" \
-        -v "${HOME}/.gitconfig:/root/.gitconfig:ro" \
-        -v "${HOME}/.config/gh:/root/.config/gh:ro" \
-        -v "${ssh_dir}:/root/.ssh" \
+        -v "${HOME}/.gitconfig:/home/dev/.gitconfig:ro" \
+        -v "${HOME}/.config/gh:/home/dev/.config/gh:ro" \
+        -v "${ssh_dir}:/home/dev/.ssh" \
         -v "/var/run/docker.sock:/var/run/docker.sock" \
         -e "CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN}" \
         -e "GITHUB_TOKEN=${GITHUB_TOKEN:-}" \

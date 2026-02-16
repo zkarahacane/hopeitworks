@@ -30,20 +30,30 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
     | tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
     && apt-get update && apt-get install -y gh && rm -rf /var/lib/apt/lists/*
 
-# Go tools
+# Go tools (installed as root, then copied)
 RUN go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest \
     && go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@latest \
     && go install github.com/google/wire/cmd/wire@latest \
-    && go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+    && go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest \
+    && cp /root/go/bin/* /usr/local/bin/
 
 # Claude Code CLI
 RUN npm install -g @anthropic-ai/claude-code
+
+# Update PATH for non-root user
+ENV PATH="/usr/local/go/bin:/usr/local/bin:${PATH}"
+
+# Non-root user (claude --dangerously-skip-permissions refuses root)
+RUN useradd -m -s /bin/bash dev \
+    && mkdir -p /workspace /home/dev/go /home/dev/.ssh /home/dev/.config/gh \
+    && chown -R dev:dev /workspace /home/dev
 
 # Entrypoint + pipeline scripts
 COPY entrypoint.sh /entrypoint.sh
 COPY pipeline.sh /pipeline.sh
 RUN chmod +x /entrypoint.sh /pipeline.sh
 
+USER dev
 WORKDIR /workspace
 
 ENTRYPOINT ["/entrypoint.sh"]

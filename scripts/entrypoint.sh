@@ -15,8 +15,15 @@ if [[ -n "${REPO_URL:-}" ]]; then
     echo "=== CLONE mode ==="
     BASE_BRANCH="${BASE_BRANCH:-main}"
 
+    # Inject token for HTTPS auth on private repos
+    CLONE_URL="$REPO_URL"
+    if [[ -n "${GITHUB_TOKEN:-}${GH_TOKEN:-}" ]] && [[ "$CLONE_URL" == https://github.com/* ]]; then
+        TOKEN="${GITHUB_TOKEN:-$GH_TOKEN}"
+        CLONE_URL="${CLONE_URL/https:\/\/github.com/https://${TOKEN}@github.com}"
+    fi
+
     echo "Cloning $REPO_URL (branch: $BASE_BRANCH)..."
-    git clone --branch "$BASE_BRANCH" --single-branch "$REPO_URL" /workspace
+    git clone --branch "$BASE_BRANCH" --single-branch "$CLONE_URL" /workspace
     cd /workspace
 
     # Create or checkout feature branch (feat/ prefix for BMAD compatibility)
@@ -30,6 +37,12 @@ if [[ -n "${REPO_URL:-}" ]]; then
             echo "Creating new branch: $FEAT_BRANCH (from $BASE_BRANCH)"
             git checkout -b "$FEAT_BRANCH"
         fi
+    fi
+
+    # Configure git to use token for push operations too
+    if [[ -n "${GITHUB_TOKEN:-}${GH_TOKEN:-}" ]]; then
+        TOKEN="${GITHUB_TOKEN:-$GH_TOKEN}"
+        git remote set-url origin "${REPO_URL/https:\/\/github.com/https://${TOKEN}@github.com}"
     fi
 
     echo "=== Ready ==="
