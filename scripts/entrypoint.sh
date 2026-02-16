@@ -31,7 +31,7 @@ if [[ -n "${REPO_URL:-}" ]]; then
         FEAT_BRANCH="feat/${STORY_BRANCH}"
         if git ls-remote --heads origin "$FEAT_BRANCH" | grep -q "$FEAT_BRANCH"; then
             echo "Checking out existing branch: $FEAT_BRANCH"
-            git fetch origin "$FEAT_BRANCH"
+            git fetch origin "$FEAT_BRANCH:$FEAT_BRANCH"
             git checkout "$FEAT_BRANCH"
         else
             echo "Creating new branch: $FEAT_BRANCH (from $BASE_BRANCH)"

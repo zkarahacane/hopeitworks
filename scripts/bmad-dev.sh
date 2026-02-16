@@ -197,7 +197,7 @@ run_clone() {
 
     docker run \
         --name "$container_name" \
-        --rm -d \
+        -d \
         -v "${HOME}/.gitconfig:/home/dev/.gitconfig:ro" \
         -v "${HOME}/.config/gh:/home/dev/.config/gh:ro" \
         -v "${ssh_dir}:/home/dev/.ssh" \
