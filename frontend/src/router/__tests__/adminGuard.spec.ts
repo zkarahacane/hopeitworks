@@ -49,7 +49,7 @@ describe('setupAdminGuard', () => {
     setupAdminGuard(router)
 
     const auth = useAuthStore()
-    auth.user = { id: '2', email: 'user@test.com', name: 'User', role: 'user' }
+    auth.user = { id: '2', email: 'user@test.com', name: 'User', role: 'member' }
 
     await router.push('/admin/users')
     await router.isReady()
@@ -75,7 +75,7 @@ describe('setupAdminGuard', () => {
     setupAdminGuard(router)
 
     const auth = useAuthStore()
-    auth.user = { id: '2', email: 'user@test.com', name: 'User', role: 'user' }
+    auth.user = { id: '2', email: 'user@test.com', name: 'User', role: 'member' }
 
     await router.push('/projects')
     await router.isReady()

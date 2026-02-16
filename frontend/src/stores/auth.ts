@@ -4,7 +4,7 @@ export interface User {
   id: string
   email: string
   name: string
-  role: 'admin' | 'user'
+  role: 'admin' | 'member'
   created_at?: string
   updated_at?: string
 }
@@ -41,7 +41,7 @@ export const useAuthStore = defineStore('auth', {
           return false
         }
         const json = await res.json()
-        this.user = { ...json, role: json.role ?? 'user' } as User
+        this.user = { ...json, role: json.role ?? 'member' } as User
         return true
       } catch {
         this.error = 'Network error. Please try again.'
@@ -68,7 +68,7 @@ export const useAuthStore = defineStore('auth', {
         })
         if (res.ok) {
           const json = await res.json()
-          this.user = { ...json, role: json.role ?? 'user' } as User
+          this.user = { ...json, role: json.role ?? 'member' } as User
         } else {
           this.user = null
         }

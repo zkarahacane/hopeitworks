@@ -7,14 +7,11 @@ import ConfirmationService from 'primevue/confirmationservice'
 import ToastService from 'primevue/toastservice'
 import App from './App.vue'
 import router from './router'
-import { setupAuthGuard, setupAdminGuard } from './router/guards'
 import { HopeTheme } from '@/theme'
 
 const app = createApp(App)
 
 app.use(createPinia())
-setupAuthGuard(router)
-setupAdminGuard(router)
 app.use(router)
 app.use(ConfirmationService)
 app.use(ToastService)
