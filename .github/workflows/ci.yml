@@ -84,6 +84,9 @@ jobs:
       run:
         working-directory: frontend/
 
+    env:
+      CI: true
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -113,3 +116,17 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Install Playwright browsers
+        run: npx playwright install chromium --with-deps
+
+      - name: Run E2E tests
+        run: npm run test:e2e
+
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report
+          path: frontend/e2e/results/
+          retention-days: 7
