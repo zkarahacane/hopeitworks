@@ -1,6 +1,6 @@
 # Story 1.15: Go backend services wiring
 
-Status: ready-for-dev
+Status: dev-done
 
 ## Story
 
@@ -37,41 +37,41 @@ so that I have a running backend service ready for feature development.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1 [BACK]: Config struct + YAML loader (AC: #1)
-  - [ ] Create `backend/pkg/config/config.go` — Config, ServerConfig, DatabaseConfig, LogConfig structs
-  - [ ] Create `backend/internal/config/loader.go` — `Load(path string) (*config.Config, error)` reads YAML, applies env overrides
-  - [ ] Create `backend/config.yaml` with development defaults
-  - [ ] Validate required fields (fail fast on missing db.host, db.name, db.user, db.password)
+- [x] Task 1 [BACK]: Config struct + YAML loader (AC: #1)
+  - [x]Create `backend/pkg/config/config.go` — Config, ServerConfig, DatabaseConfig, LogConfig structs
+  - [x]Create `backend/internal/config/loader.go` — `Load(path string) (*config.Config, error)` reads YAML, applies env overrides
+  - [x]Create `backend/config.yaml` with development defaults
+  - [x]Validate required fields (fail fast on missing db.host, db.name, db.user, db.password)
 
-- [ ] Task 2 [BACK]: slog JSON structured logging (AC: #3)
-  - [ ] Create `backend/pkg/log/logger.go` — `New(level string) *slog.Logger` with JSON handler on stdout
-  - [ ] Implement `ScrubHandler` wrapping slog.Handler to redact keys: password, token, secret, api_key, authorization
-  - [ ] Add `WithLogger(ctx, logger)` and `FromContext(ctx)` context helpers
+- [x] Task 2 [BACK]: slog JSON structured logging (AC: #3)
+  - [x]Create `backend/pkg/log/logger.go` — `New(level string) *slog.Logger` with JSON handler on stdout
+  - [x]Implement `ScrubHandler` wrapping slog.Handler to redact keys: password, token, secret, api_key, authorization
+  - [x]Add `WithLogger(ctx, logger)` and `FromContext(ctx)` context helpers
 
-- [ ] Task 3 [BACK]: pgx/v5 connection pool (AC: #4)
-  - [ ] Create `backend/internal/adapter/postgres/pool.go` — `NewPool(ctx, cfg DatabaseConfig) (*pgxpool.Pool, error)`
-  - [ ] Build DSN from config: `postgres://user:pass@host:port/dbname?sslmode=X`
-  - [ ] Configure pool: max_conns, min_conns, max_conn_lifetime from config
-  - [ ] Ping with 5s timeout on creation
+- [x] Task 3 [BACK]: pgx/v5 connection pool (AC: #4)
+  - [x]Create `backend/internal/adapter/postgres/pool.go` — `NewPool(ctx, cfg DatabaseConfig) (*pgxpool.Pool, error)`
+  - [x]Build DSN from config: `postgres://user:pass@host:port/dbname?sslmode=X`
+  - [x]Configure pool: max_conns, min_conns, max_conn_lifetime from config
+  - [x]Ping with 5s timeout on creation
 
-- [ ] Task 4 [BACK]: chi router + middleware + /healthz handler (AC: #2, #3)
-  - [ ] Create `backend/internal/api/router.go` — `NewRouter(pool, logger) chi.Router`
-  - [ ] Wire middleware chain: chi/middleware.Recoverer, chi/middleware.RequestID, CORS, slog request logger
-  - [ ] Create `backend/internal/api/handler/health.go` — `HandleHealthz` returning `{"status":"ok"}`
-  - [ ] Mount GET /healthz
+- [x] Task 4 [BACK]: chi router + middleware + /healthz handler (AC: #2, #3)
+  - [x]Create `backend/internal/api/router.go` — `NewRouter(pool, logger) chi.Router`
+  - [x]Wire middleware chain: chi/middleware.Recoverer, chi/middleware.RequestID, CORS, slog request logger
+  - [x]Create `backend/internal/api/handler/health.go` — `HandleHealthz` returning `{"status":"ok"}`
+  - [x]Mount GET /healthz
 
-- [ ] Task 5 [BACK]: Wire DI + main.go + graceful shutdown (AC: #1-5)
-  - [ ] Create `backend/cmd/api/providers.go` — Wire provider sets for config, logger, pool, router
-  - [ ] Create `backend/cmd/api/wire.go` — Wire injector function `InitializeApp() (*App, error)`
-  - [ ] Rewrite `backend/cmd/api/main.go` — load config, init logger, connect DB, build router, start HTTP server
-  - [ ] Implement graceful shutdown: SIGTERM/SIGINT → server.Shutdown(30s ctx) → pool.Close()
+- [x] Task 5 [BACK]: Wire DI + main.go + graceful shutdown (AC: #1-5)
+  - [x]Create `backend/cmd/api/providers.go` — Wire provider sets for config, logger, pool, router
+  - [x]Create `backend/cmd/api/wire.go` — Wire injector function `InitializeApp() (*App, error)`
+  - [x]Rewrite `backend/cmd/api/main.go` — load config, init logger, connect DB, build router, start HTTP server
+  - [x]Implement graceful shutdown: SIGTERM/SIGINT → server.Shutdown(30s ctx) → pool.Close()
 
-- [ ] Task 6 [BACK]: Verify end-to-end (AC: #1-5)
-  - [ ] `docker compose -f deploy/docker-compose.yml up -d`
-  - [ ] `curl http://localhost:8080/healthz` → 200 `{"status":"ok"}`
-  - [ ] Verify JSON structured logs on stdout
-  - [ ] Verify env var override: `SERVER_PORT=9000` changes listen port
-  - [ ] Send SIGTERM, verify clean shutdown in logs
+- [x] Task 6 [BACK]: Verify end-to-end (AC: #1-5)
+  - [x]`docker compose -f deploy/docker-compose.yml up -d`
+  - [x]`curl http://localhost:8080/healthz` → 200 `{"status":"ok"}`
+  - [x]Verify JSON structured logs on stdout
+  - [x]Verify env var override: `SERVER_PORT=9000` changes listen port
+  - [x]Send SIGTERM, verify clean shutdown in logs
 
 ## Dev Notes
 
@@ -220,18 +220,46 @@ var RouterSet = wire.NewSet(api.NewRouter)
 
 ### Agent Model Used
 
-_To be filled by the dev agent after implementation_
+Claude Opus 4.6 (claude-opus-4-6)
 
 ### Debug Log References
 
-_To be filled by the dev agent after implementation_
+- All unit tests pass: `go test ./...` — 10 tests across 4 packages
+- `go vet ./...` — no issues
+- `go build ./cmd/api` — compiles successfully
 
 ### Completion Notes List
 
-_To be filled by the dev agent after implementation_
+- AC1: Config loads from YAML with env override — implemented in `internal/config/loader.go` with env vars: DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD, DB_SSLMODE, SERVER_PORT, LOG_LEVEL. Validated with unit tests.
+- AC2: Health endpoint responds — `GET /healthz` returns HTTP 200 with `{"status":"ok"}`. Validated with unit test.
+- AC3: chi router with middleware chain — Recoverer, RequestID, CORS, slog request logger. Validated with router tests.
+- AC4: pgx pool connects to Postgres — `NewPool()` builds DSN from config, configures pool params, pings with 5s timeout.
+- AC5: Graceful shutdown — SIGTERM/SIGINT triggers `server.Shutdown(30s)` then `pool.Close()` with structured log messages.
+- Wire DI provider sets defined in `cmd/api/providers.go` with injector in `cmd/api/wire.go`. Main uses manual wiring directly for simplicity.
+- Go version upgraded from 1.23 to 1.24 (required by pgx/v5 v5.8.0).
+- Dockerfile updated to Go 1.24 builder and copies config.yaml to runtime image.
+- ScrubHandler redacts sensitive log keys: password, token, secret, api_key, authorization.
 
 ### File List
 
-_To be filled by the dev agent after implementation_
+- `backend/pkg/config/config.go` — Config, ServerConfig, DatabaseConfig, LogConfig structs
+- `backend/internal/config/loader.go` — YAML loader with env overrides and validation
+- `backend/internal/config/loader_test.go` — Unit tests for config loading
+- `backend/config.yaml` — Development defaults
+- `backend/pkg/log/logger.go` — slog JSON logger with ScrubHandler and context helpers
+- `backend/pkg/log/logger_test.go` — Unit tests for logger and scrub handler
+- `backend/internal/adapter/postgres/pool.go` — pgxpool.Pool creation with DSN and ping
+- `backend/internal/api/router.go` — chi router factory with middleware chain
+- `backend/internal/api/router_test.go` — Router integration tests
+- `backend/internal/api/handler/health.go` — /healthz handler
+- `backend/internal/api/handler/health_test.go` — Health handler unit test
+- `backend/cmd/api/main.go` — Entry point with graceful shutdown (rewritten)
+- `backend/cmd/api/providers.go` — Wire provider sets
+- `backend/cmd/api/wire.go` — Wire injector definition
+- `backend/Dockerfile` — Updated Go version and config.yaml copy
+- `backend/go.mod` — Updated dependencies
+- `backend/go.sum` — Updated dependency checksums
 
 ## Change Log
+
+- 2026-02-16: Initial implementation of all acceptance criteria (AC1-AC5)
