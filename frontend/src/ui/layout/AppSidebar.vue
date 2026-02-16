@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import Button from 'primevue/button'
 
 const props = defineProps<{
@@ -13,6 +13,13 @@ const emit = defineEmits<{
 }>()
 
 const router = useRouter()
+const route = useRoute()
+
+/** Determine if a nav item is active based on current route path */
+function isActive(itemRoute: string): boolean {
+  if (itemRoute === '/') return route.path === '/'
+  return route.path.startsWith(itemRoute)
+}
 
 const navItems = [
   { label: 'Dashboard', icon: 'pi pi-home', route: '/' },
@@ -55,10 +62,12 @@ function navigate(route: string) {
         :key="item.route"
         :icon="item.icon"
         :label="collapsed && !mobileOpen ? undefined : item.label"
-        text
+        :text="!isActive(item.route)"
+        :severity="isActive(item.route) ? 'primary' : undefined"
         :class="[
           'justify-start',
           collapsed && !mobileOpen ? '!px-0 justify-center' : '',
+          isActive(item.route) ? '!bg-primary-50 !text-primary-700' : '',
         ]"
         @click="navigate(item.route)"
       />

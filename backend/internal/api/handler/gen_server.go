@@ -84,8 +84,9 @@ type UpdateProjectRequest struct {
 
 // UpdateUserRequest defines model for UpdateUserRequest.
 type UpdateUserRequest struct {
-	Email *openapi_types.Email `json:"email,omitempty"`
-	Name  *string              `json:"name,omitempty"`
+	Email *openapi_types.Email    `json:"email,omitempty"`
+	Name  *string                 `json:"name,omitempty"`
+	Role  *UpdateUserRequestRole  `json:"role,omitempty"`
 }
 
 // User defines model for User.
@@ -94,6 +95,7 @@ type User struct {
 	Email     openapi_types.Email `json:"email"`
 	Id        openapi_types.UUID  `json:"id"`
 	Name      string              `json:"name"`
+	Role      UserRole            `json:"role"`
 	UpdatedAt time.Time           `json:"updated_at"`
 }
 
@@ -115,11 +117,20 @@ type PerPageParam = int
 // SortByParam defines model for SortByParam.
 type SortByParam = string
 
+// UserRole defines the role enum for User.
+type UserRole string
+
+// UpdateUserRequestRole defines the role enum for UpdateUserRequest.
+type UpdateUserRequestRole string
+
 // BadRequest defines model for BadRequest.
 type BadRequest = Error
 
 // Conflict defines model for Conflict.
 type Conflict = Error
+
+// Forbidden defines model for Forbidden.
+type Forbidden = Error
 
 // NotFound defines model for NotFound.
 type NotFound = Error

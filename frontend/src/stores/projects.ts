@@ -1,9 +1,74 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
+import { apiClient } from '@/api/client'
 
+/** Project entity matching the OpenAPI Project schema */
+export interface Project {
+  id: string
+  name: string
+  description?: string
+  owner_id: string
+  created_at: string
+  updated_at: string
+}
+
+/** Pagination metadata from API list responses */
+export interface Pagination {
+  total: number
+  page: number
+  per_page: number
+}
+
+/** Parameters for fetching paginated project lists */
+export interface FetchProjectsParams {
+  page?: number
+  per_page?: number
+  sort_by?: string
+}
+
+/**
+ * Pinia store for project state management.
+ * Handles fetching, storing, and resetting the project list with pagination.
+ */
 export const useProjectsStore = defineStore('projects', () => {
-  const items = ref<Array<{ id: string; name: string }>>([])
-  const current = ref<{ id: string; name: string } | null>(null)
+  const items = ref<Project[]>([])
+  const pagination = ref<Pagination | null>(null)
   const isLoading = ref(false)
-  return { items, current, isLoading }
+  const error = ref<string | null>(null)
+
+  /** Fetch projects from the API with optional pagination and sorting params */
+  async function fetchProjects(params: FetchProjectsParams = {}) {
+    isLoading.value = true
+    error.value = null
+    try {
+      const { data, error: apiError } = await apiClient.GET('/projects', {
+        params: {
+          query: {
+            page: params.page,
+            per_page: params.per_page,
+            sort_by: params.sort_by,
+          },
+        },
+      })
+      if (apiError) {
+        error.value = 'Failed to load projects'
+        return
+      }
+      items.value = (data?.data as Project[]) ?? []
+      pagination.value = (data?.pagination as Pagination) ?? null
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to load projects'
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  /** Reset store state to initial values */
+  function reset() {
+    items.value = []
+    pagination.value = null
+    error.value = null
+  }
+
+  return { items, pagination, isLoading, error, fetchProjects, reset }
 })

@@ -17,6 +17,7 @@ func (r Role) IsValid() bool {
 	return r == RoleAdmin || r == RoleUser
 }
 
+// User represents a platform user.
 type User struct {
 	ID           uuid.UUID
 	Email        string
@@ -25,4 +26,5 @@ type User struct {
 	Role         Role
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
+	DeletedAt    *time.Time
 }
