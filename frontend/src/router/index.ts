@@ -5,6 +5,7 @@ import ProjectsView from '@/views/ProjectsView.vue'
 import ProjectDetailView from '@/views/ProjectDetailView.vue'
 import RunDetailView from '@/views/RunDetailView.vue'
 import ApprovalsView from '@/views/ApprovalsView.vue'
+import StoryBoardView from '@/views/StoryBoardView.vue'
 import { setupAuthGuard, setupAdminGuard } from './guards'
 
 const router = createRouter({
@@ -32,6 +33,18 @@ const router = createRouter({
       path: '/projects/:id',
       name: 'project-detail',
       component: ProjectDetailView,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/projects/:id/board',
+      name: 'story-board',
+      component: StoryBoardView,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/projects/:id/epics/:epicId',
+      name: 'epic-detail',
+      component: () => import('@/views/ProjectDetailView.vue'),
       meta: { requiresAuth: true },
     },
     {

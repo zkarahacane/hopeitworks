@@ -25,6 +25,8 @@ tags:
     description: User management endpoints
   - name: projects
     description: Project management endpoints
+  - name: epics
+    description: Epic management endpoints
 
 paths:
   # ── Auth ────────────────────────────────────────────────────────────────
@@ -298,6 +300,49 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  # ── Epics ─────────────────────────────────────────────────────────────
+  /projects/{id}/epics:
+    get:
+      operationId: listEpicsByProject
+      summary: List all epics for a project with story counts
+      tags: [epics]
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/PerPageParam"
+        - $ref: "#/components/parameters/SortByParam"
+      responses:
+        "200":
+          description: Paginated list of epics with story counts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EpicList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /projects/{id}/epics/{epicId}:
+    get:
+      operationId: getEpic
+      summary: Get a single epic by ID
+      tags: [epics]
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+        - $ref: "#/components/parameters/EpicIdPath"
+      responses:
+        "200":
+          description: Epic details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Epic"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
 # ── Components ──────────────────────────────────────────────────────────
 components:
   securitySchemes:
@@ -337,6 +382,15 @@ components:
         maximum: 100
         default: 20
       description: Items per page
+
+    EpicIdPath:
+      name: epicId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Epic UUID
 
     SortByParam:
       name: sort_by
@@ -521,6 +575,85 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Project"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+
+    # ── Epic ──────────────────────────────────────────────────────────
+    Epic:
+      type: object
+      required:
+        - id
+        - project_id
+        - name
+        - status
+        - story_counts
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 770e8400-e29b-41d4-a716-446655440000
+        project_id:
+          type: string
+          format: uuid
+          example: 660e8400-e29b-41d4-a716-446655440000
+        name:
+          type: string
+          example: "Project Foundation & Authentication"
+        description:
+          type: string
+          example: "Admin can create an account, authenticate, and configure a first project"
+        status:
+          type: string
+          enum: [open, in_progress, completed]
+          example: in_progress
+        story_counts:
+          $ref: "#/components/schemas/StoryCounts"
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-01-15T10:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2026-01-15T10:30:00Z"
+
+    StoryCounts:
+      type: object
+      required:
+        - total
+        - backlog
+        - running
+        - done
+        - failed
+      properties:
+        total:
+          type: integer
+          example: 12
+        backlog:
+          type: integer
+          example: 5
+        running:
+          type: integer
+          example: 3
+        done:
+          type: integer
+          example: 3
+        failed:
+          type: integer
+          example: 1
+
+    EpicList:
+      type: object
+      required:
+        - data
+        - pagination
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Epic"
         pagination:
           $ref: "#/components/schemas/Pagination"
 
