@@ -1,0 +1,116 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop, 'wave-*']
+  pull_request:
+    branches: [main, develop, 'wave-*']
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend/
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: hopeitworks
+          POSTGRES_PASSWORD: hopeitworks_ci_password
+          POSTGRES_DB: hopeitworks_test
+        options: >-
+          --health-cmd "pg_isready -U hopeitworks"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    env:
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_NAME: hopeitworks_test
+      DB_USER: hopeitworks
+      DB_PASSWORD: hopeitworks_ci_password
+      DB_SSLMODE: disable
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache-dependency-path: backend/go.sum
+
+      - name: Download Go modules
+        run: go mod download
+
+      - name: Build
+        run: go build ./cmd/api
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./... -race -coverprofile=coverage.out
+
+      - name: Run codegen
+        run: make generate
+
+      - name: Verify codegen is committed
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::error::Generated code is not up-to-date. Run 'make generate' and commit the changes."
+            git diff
+            exit 1
+          fi
+
+      - name: Setup Node.js (for redocly)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Lint OpenAPI spec
+        run: make lint-api
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend/
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: 'frontend/package-lock.json'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npm run type-check
+
+      - name: Unit tests
+        run: npm run test:unit -- --run --passWithNoTests
+
+      - name: Build
+        run: npm run build
