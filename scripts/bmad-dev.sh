@@ -372,7 +372,7 @@ if [[ -n "$WAVE_NUM" && -n "$PHASE" ]]; then
         stop_container "$cname"
         run_clone "$cname" "$WAVE_BRANCH" "$story" \
             --model "$MODEL" \
-            -p "$WORKFLOW" \
+            "$WORKFLOW" \
             "${CLAUDE_ARGS[@]+"${CLAUDE_ARGS[@]}"}"
         echo -e "  ${GREEN}✓ $cname${NC}"
     done
@@ -409,7 +409,7 @@ if [[ -n "$STORY_NAME" && -n "$PHASE" ]]; then
 
     run_clone "$cname" "$WAVE_BRANCH" "$STORY_NAME" \
         --model "$MODEL" \
-        -p "$WORKFLOW" \
+        "$WORKFLOW" \
         "${CLAUDE_ARGS[@]+"${CLAUDE_ARGS[@]}"}"
 
     echo -e "${GREEN}Container: $cname${NC}"

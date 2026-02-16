@@ -40,7 +40,7 @@ Execute /bmad-bmm-dev-story for story ${STORY_KEY}.
 The story file is at _bmad-output/implementation-artifacts/${STORY_KEY}.md
 Work on branch feat/${STORY_KEY}. Commit and push all code. Create a PR targeting ${BASE_BRANCH}."
 
-if claude --dangerously-skip-permissions --model opus -p "$DEV_PROMPT" "$@"; then
+if echo "$DEV_PROMPT" | claude --dangerously-skip-permissions --model opus "$@"; then
     log "✅ dev-story complete"
 else
     log "❌ dev-story failed (exit $?)"
@@ -56,7 +56,7 @@ Execute /bmad-bmm-code-review for story ${STORY_KEY}.
 The story file is at _bmad-output/implementation-artifacts/${STORY_KEY}.md
 Review ALL code changes on branch feat/${STORY_KEY} vs ${BASE_BRANCH}. Fix any issues found. Push fixes and ensure CI is green."
 
-if claude --dangerously-skip-permissions --model sonnet -p "$REVIEW_PROMPT" "$@"; then
+if echo "$REVIEW_PROMPT" | claude --dangerously-skip-permissions --model sonnet "$@"; then
     log "✅ code-review complete"
 else
     log "❌ code-review failed (exit $?)"
@@ -71,7 +71,7 @@ MERGE_PROMPT="${STORY_CONTEXT}
 Execute /bmad-bmm-merge-story for story ${STORY_KEY}.
 Merge the PR for feat/${STORY_KEY} into ${BASE_BRANCH} via squash merge. Ensure CI is green before merging."
 
-if claude --dangerously-skip-permissions --model sonnet -p "$MERGE_PROMPT" "$@"; then
+if echo "$MERGE_PROMPT" | claude --dangerously-skip-permissions --model sonnet "$@"; then
     log "✅ merge-story complete"
 else
     log "❌ merge-story failed (exit $?)"
