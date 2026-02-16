@@ -70,7 +70,7 @@ func (m *mockRepo) Delete(ctx context.Context, id uuid.UUID) error { return nil 
 
 type pgDupError struct{}
 
-func (e *pgDupError) Error() string   { return "duplicate key" }
+func (e *pgDupError) Error() string    { return "duplicate key" }
 func (e *pgDupError) SQLState() string { return "23505" }
 
 func newTestHandler() (*AuthHandler, *mockRepo) {

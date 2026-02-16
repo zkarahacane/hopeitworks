@@ -94,7 +94,7 @@ func (m *mockUserRepository) Delete(ctx context.Context, id uuid.UUID) error {
 // pgDuplicateKeyError simulates a PostgreSQL unique constraint violation.
 type pgDuplicateKeyError struct{}
 
-func (e *pgDuplicateKeyError) Error() string   { return "duplicate key" }
+func (e *pgDuplicateKeyError) Error() string    { return "duplicate key" }
 func (e *pgDuplicateKeyError) SQLState() string { return "23505" }
 
 func TestRegister_Success(t *testing.T) {
