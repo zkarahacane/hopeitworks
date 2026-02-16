@@ -52,14 +52,14 @@ development_status:
   1-8-app-shell-layout-header-sidebar-status-bar: done
   1-9-login-page-auth-guard: done
   1-10-project-list-page: ready-for-dev
-  1-11-project-creation-form: backlog
-  1-12-project-settings-page: backlog
+  1-11-project-creation-form: ready-for-dev
+  1-12-project-settings-page: ready-for-dev
   1-13-user-management-page-admin-only: ready-for-dev
   1-14-claude-md-files-for-agent-scoping: done
   1-15-go-backend-services-wiring: done
   1-16-vue-app-routing-state-tooling: done
   1-17-github-actions-ci-pipeline: done
-  1-18-dev-seed-data-fixtures: backlog
+  1-18-dev-seed-data-fixtures: ready-for-dev
   epic-1-retrospective: optional
 
   # Epic 2: Story Board & Management
