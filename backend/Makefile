@@ -1,12 +1,4 @@
-.PHONY: build run docker-up docker-down docker-logs clean help generate lint-api install-tools seed reset-db
-
-# Database connection defaults (match docker-compose.yml)
-DB_HOST ?= localhost
-DB_PORT ?= 5432
-DB_NAME ?= hopeitworks_dev
-DB_USER ?= hopeitworks
-DB_PASS ?= hopeitworks_dev_password
-DATABASE_URL ?= postgres://$(DB_USER):$(DB_PASS)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)?sslmode=disable
+.PHONY: build run docker-up docker-down docker-logs clean help generate lint-api install-tools
 
 help: ## Show this help message
 	@echo "Usage: make [target]"
@@ -19,11 +11,7 @@ generate: ## Generate code from OpenAPI spec and SQL queries
 	go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen -config .oapi-codegen.yaml ../api/openapi.yaml
 	@echo "Generating database query functions from SQL..."
 	@if [ -n "$$(find queries -name '*.sql' 2>/dev/null)" ]; then \
-		if command -v sqlc >/dev/null 2>&1; then \
-			sqlc generate; \
-		else \
-			echo "sqlc not found, skipping SQL generation (files should be committed)"; \
-		fi; \
+		sqlc generate; \
 	else \
 		echo "No SQL queries found, skipping sqlc generation"; \
 	fi
@@ -59,20 +47,3 @@ clean: ## Remove build artifacts and clean cache
 	rm -f internal/api/handler/gen_*.go
 	rm -f internal/adapter/postgres/gen_*.go
 	go clean -cache -testcache
-
-seed: ## Seed the local database with dev fixtures
-	@echo "Running migrations..."
-	@migrate -path migrations/ -database "$(DATABASE_URL)" up
-	@echo "Seeding dev data..."
-	@PGPASSWORD="$(DB_PASS)" psql -h $(DB_HOST) -p $(DB_PORT) -U $(DB_USER) -d $(DB_NAME) -f testdata/seed.sql
-	@echo "Seed complete. Credentials:"
-	@echo "  admin@hopeitworks.dev / admin123 (admin)"
-	@echo "  dev@hopeitworks.dev   / dev123   (user)"
-	@echo "  alice@hopeitworks.dev / alice123  (user)"
-
-reset-db: ## Drop and recreate dev database, run migrations, and seed
-	@echo "Dropping database $(DB_NAME)..."
-	@PGPASSWORD="$(DB_PASS)" dropdb -h $(DB_HOST) -p $(DB_PORT) -U $(DB_USER) --if-exists $(DB_NAME)
-	@echo "Creating database $(DB_NAME)..."
-	@PGPASSWORD="$(DB_PASS)" createdb -h $(DB_HOST) -p $(DB_PORT) -U $(DB_USER) $(DB_NAME)
-	@$(MAKE) seed

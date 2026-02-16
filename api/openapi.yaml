@@ -129,8 +129,6 @@ paths:
                 $ref: "#/components/schemas/UserList"
         "401":
           $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
 
   /users/{id}:
     get:
@@ -148,8 +146,6 @@ paths:
                 $ref: "#/components/schemas/User"
         "401":
           $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -176,8 +172,6 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -192,8 +186,6 @@ paths:
           description: User deleted
         "401":
           $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -393,7 +385,6 @@ components:
         - id
         - email
         - name
-        - role
         - created_at
         - updated_at
       properties:
@@ -408,10 +399,6 @@ components:
         name:
           type: string
           example: Jane Doe
-        role:
-          type: string
-          enum: [admin, user]
-          example: user
         created_at:
           type: string
           format: date-time
@@ -433,9 +420,6 @@ components:
           type: string
           format: email
           example: new-email@example.com
-        role:
-          type: string
-          enum: [admin, user]
 
     UserList:
       type: object
@@ -578,12 +562,6 @@ components:
             $ref: "#/components/schemas/Error"
     NotFound:
       description: Resource not found
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/Error"
-    Forbidden:
-      description: Forbidden - admin access required
       content:
         application/json:
           schema:

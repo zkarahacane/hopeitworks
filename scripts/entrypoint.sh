@@ -5,12 +5,7 @@ set -euo pipefail
 #
 # Modes:
 #   MOUNT (default): /workspace already populated via volume
-#   CLONE: clones REPO_URL, checks out CLONE_BRANCH, creates feat/ branch
-#
-# Env vars:
-#   CLONE_BRANCH - branch to clone from (default: develop)
-#   BASE_BRANCH  - PR merge target (default: CLONE_BRANCH) — passed to pipeline
-#   STORY_BRANCH - story key → creates feat/{STORY_BRANCH}
+#   CLONE: clones REPO_URL, checks out BASE_BRANCH, creates feat/ branch
 #
 # Pipeline mode:
 #   If PIPELINE=true, runs /pipeline.sh instead of claude directly
@@ -18,8 +13,7 @@ set -euo pipefail
 
 if [[ -n "${REPO_URL:-}" ]]; then
     echo "=== CLONE mode ==="
-    CLONE_BRANCH="${CLONE_BRANCH:-develop}"
-    BASE_BRANCH="${BASE_BRANCH:-$CLONE_BRANCH}"
+    BASE_BRANCH="${BASE_BRANCH:-main}"
 
     # Inject token for HTTPS auth on private repos
     CLONE_URL="$REPO_URL"
@@ -28,8 +22,8 @@ if [[ -n "${REPO_URL:-}" ]]; then
         CLONE_URL="${CLONE_URL/https:\/\/github.com/https://${TOKEN}@github.com}"
     fi
 
-    echo "Cloning $REPO_URL (branch: $CLONE_BRANCH)..."
-    git clone --branch "$CLONE_BRANCH" --single-branch "$CLONE_URL" /workspace
+    echo "Cloning $REPO_URL (branch: $BASE_BRANCH)..."
+    git clone --branch "$BASE_BRANCH" --single-branch "$CLONE_URL" /workspace
     cd /workspace
 
     # Create or checkout feature branch (feat/ prefix for BMAD compatibility)
@@ -40,7 +34,7 @@ if [[ -n "${REPO_URL:-}" ]]; then
             git fetch origin "$FEAT_BRANCH:$FEAT_BRANCH"
             git checkout "$FEAT_BRANCH"
         else
-            echo "Creating new branch: $FEAT_BRANCH (from $CLONE_BRANCH)"
+            echo "Creating new branch: $FEAT_BRANCH (from $BASE_BRANCH)"
             git checkout -b "$FEAT_BRANCH"
         fi
     fi
@@ -51,7 +45,6 @@ if [[ -n "${REPO_URL:-}" ]]; then
         git remote set-url origin "${REPO_URL/https:\/\/github.com/https://${TOKEN}@github.com}"
     fi
 
-    echo "Clone: $CLONE_BRANCH | Merge target: $BASE_BRANCH"
     echo "=== Ready ==="
 else
     echo "=== MOUNT mode ==="

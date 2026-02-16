@@ -26,6 +26,8 @@ tmp/
 
 # Go
 backend/bin/
+backend/internal/api/handler/gen_*
+backend/internal/adapter/postgres/gen_*
 
 # Frontend
 frontend/dist/

@@ -1,6 +1,3 @@
-# Dev seed data: after starting the stack, run `cd backend && make seed` to populate
-# test users and projects. Run `cd backend && make reset-db` to drop, recreate, and seed.
-
 services:
   postgres:
     image: postgres:16-alpine

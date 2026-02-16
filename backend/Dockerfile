@@ -1,5 +1,5 @@
 # Stage 1: Builder
-FROM golang:1.24-alpine AS builder
+FROM golang:1.23-alpine AS builder
 
 WORKDIR /build
 
@@ -10,7 +10,7 @@ RUN apk add --no-cache ca-certificates
 COPY go.mod go.sum* ./
 RUN go mod download
 
-# Copy source code (includes committed generated files: gen_server.go, *.sql.go)
+# Copy source code
 COPY . .
 
 # Build static binary
@@ -27,9 +27,8 @@ RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
 WORKDIR /app
 
-# Copy binary and config from builder
+# Copy binary from builder
 COPY --from=builder /build/api .
-COPY --from=builder /build/config.yaml .
 
 # Use non-root user
 USER appuser
