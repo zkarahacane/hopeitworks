@@ -269,6 +269,26 @@ if $SETUP && [[ -n "$WAVE_NUM" ]]; then
     exit 0
 fi
 
+# --story --pipeline: full pipeline on single story (must be before wave pipeline)
+if [[ -n "$STORY_NAME" ]] && $PIPELINE; then
+    WAVE_BRANCH="${WAVE_NUM:+wave-${WAVE_NUM}}"
+    WAVE_BRANCH="${WAVE_BRANCH:-main}"
+
+    cname="bmad-dev-${STORY_NAME}-pipeline"
+    stop_container "$cname"
+
+    echo -e "${GREEN}Launching pipeline: $STORY_NAME (dev → review → merge)${NC}"
+    echo -e "  Base: $WAVE_BRANCH → feat/$STORY_NAME"
+
+    _PIPELINE_MODE=true
+    run_clone "$cname" "$WAVE_BRANCH" "$STORY_NAME" \
+        "${CLAUDE_ARGS[@]+"${CLAUDE_ARGS[@]}"}"
+
+    echo -e "${GREEN}Container: $cname${NC}"
+    echo "  docker logs -f $cname"
+    exit 0
+fi
+
 # --wave --pipeline: full pipeline on all stories (dev → review → merge)
 if $PIPELINE && [[ -n "$WAVE_NUM" ]]; then
     WAVE_BRANCH="wave-${WAVE_NUM}"
@@ -390,26 +410,6 @@ if [[ -n "$STORY_NAME" && -n "$PHASE" ]]; then
     run_clone "$cname" "$WAVE_BRANCH" "$STORY_NAME" \
         --model "$MODEL" \
         -p "$WORKFLOW" \
-        "${CLAUDE_ARGS[@]+"${CLAUDE_ARGS[@]}"}"
-
-    echo -e "${GREEN}Container: $cname${NC}"
-    echo "  docker logs -f $cname"
-    exit 0
-fi
-
-# --story --pipeline: full pipeline on single story
-if [[ -n "$STORY_NAME" ]] && $PIPELINE; then
-    WAVE_BRANCH="${WAVE_NUM:+wave-${WAVE_NUM}}"
-    WAVE_BRANCH="${WAVE_BRANCH:-main}"
-
-    cname="bmad-dev-${STORY_NAME}-pipeline"
-    stop_container "$cname"
-
-    echo -e "${GREEN}Launching pipeline: $STORY_NAME (dev → review → merge)${NC}"
-    echo -e "  Base: $WAVE_BRANCH → feat/$STORY_NAME"
-
-    _PIPELINE_MODE=true
-    run_clone "$cname" "$WAVE_BRANCH" "$STORY_NAME" \
         "${CLAUDE_ARGS[@]+"${CLAUDE_ARGS[@]}"}"
 
     echo -e "${GREEN}Container: $cname${NC}"

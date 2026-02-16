@@ -7,22 +7,40 @@ set -euo pipefail
 # Each phase runs Claude Code with the appropriate workflow.
 # If a phase fails (non-zero exit), the pipeline stops.
 #
+# Env vars (set by entrypoint):
+#   STORY_KEY   - story key (e.g. 1-2-openapi-spec-code-gen-pipeline)
+#   BASE_BRANCH - target branch for merge (e.g. wave-1)
+#
 # Usage (inside container):
 #   /pipeline.sh [extra-claude-args...]
 
 STORY_KEY="${STORY_KEY:-unknown}"
+BASE_BRANCH="${BASE_BRANCH:-main}"
 LOG_PREFIX="[pipeline:${STORY_KEY}]"
 
 log() { echo "$LOG_PREFIX $1"; }
 
 log "=== Starting pipeline ==="
 log "Story: $STORY_KEY"
+log "Base: $BASE_BRANCH"
 log "Branch: $(git branch --show-current 2>/dev/null || echo 'unknown')"
 log ""
 
+# Build context prompt that tells each agent exactly what to do
+STORY_CONTEXT="You are running in automated pipeline mode inside a Docker container.
+Story key: ${STORY_KEY}
+Feature branch: feat/${STORY_KEY}
+Base branch: ${BASE_BRANCH}
+IMPORTANT: Do NOT ask questions. Act autonomously. Pick story ${STORY_KEY} automatically."
+
 # Phase 1: Dev Story (Opus)
 log "=== Phase 1/3: dev-story (opus) ==="
-if claude --dangerously-skip-permissions --model opus -p "/bmad-bmm-dev-story" "$@"; then
+DEV_PROMPT="${STORY_CONTEXT}
+Execute /bmad-bmm-dev-story for story ${STORY_KEY}.
+The story file is at _bmad-output/implementation-artifacts/${STORY_KEY}.md
+Work on branch feat/${STORY_KEY}. Commit and push all code. Create a PR targeting ${BASE_BRANCH}."
+
+if claude --dangerously-skip-permissions --model opus -p "$DEV_PROMPT" "$@"; then
     log "✅ dev-story complete"
 else
     log "❌ dev-story failed (exit $?)"
@@ -33,7 +51,12 @@ log ""
 
 # Phase 2: Code Review (Sonnet)
 log "=== Phase 2/3: code-review (sonnet) ==="
-if claude --dangerously-skip-permissions --model sonnet -p "/bmad-bmm-code-review" "$@"; then
+REVIEW_PROMPT="${STORY_CONTEXT}
+Execute /bmad-bmm-code-review for story ${STORY_KEY}.
+The story file is at _bmad-output/implementation-artifacts/${STORY_KEY}.md
+Review ALL code changes on branch feat/${STORY_KEY} vs ${BASE_BRANCH}. Fix any issues found. Push fixes and ensure CI is green."
+
+if claude --dangerously-skip-permissions --model sonnet -p "$REVIEW_PROMPT" "$@"; then
     log "✅ code-review complete"
 else
     log "❌ code-review failed (exit $?)"
@@ -44,7 +67,11 @@ log ""
 
 # Phase 3: Merge Story (Sonnet)
 log "=== Phase 3/3: merge-story (sonnet) ==="
-if claude --dangerously-skip-permissions --model sonnet -p "/bmad-bmm-merge-story" "$@"; then
+MERGE_PROMPT="${STORY_CONTEXT}
+Execute /bmad-bmm-merge-story for story ${STORY_KEY}.
+Merge the PR for feat/${STORY_KEY} into ${BASE_BRANCH} via squash merge. Ensure CI is green before merging."
+
+if claude --dangerously-skip-permissions --model sonnet -p "$MERGE_PROMPT" "$@"; then
     log "✅ merge-story complete"
 else
     log "❌ merge-story failed (exit $?)"
