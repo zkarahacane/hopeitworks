@@ -57,12 +57,14 @@ func run() error {
 	jwtExpiration := 24 * time.Hour
 	authService := service.NewAuthService(userRepo, jwtSecret, jwtExpiration)
 
+	// Project repository (shared)
+	projectRepo := pgadapter.NewProjectRepo(queries)
+
 	// Project user service
 	projectUserRepo := pgadapter.NewProjectUserRepo(queries)
-	projectUserService := service.NewProjectUserService(projectUserRepo, pgadapter.NewProjectRepo(queries), userRepo)
+	projectUserService := service.NewProjectUserService(projectUserRepo, projectRepo, userRepo)
 
 	// Project service
-	projectRepo := pgadapter.NewProjectRepo(queries)
 	projectService := service.NewProjectService(projectRepo)
 	projectHandler := handler.NewProjectHandler(projectService, projectUserService)
 
