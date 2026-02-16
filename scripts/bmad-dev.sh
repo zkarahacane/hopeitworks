@@ -3,7 +3,7 @@ set -euo pipefail
 
 # BMAD Dev Agent Launcher
 #
-# Story lifecycle: dev-story (Opus) → code-review (Sonnet) → merge-story (Sonnet)
+# Story lifecycle: dev-story (Opus) → code-review (Sonnet) → merge-story (Opus)
 # Branching: develop (clone) → feat/story-key (PR targets wave-X)
 #
 # Usage:
@@ -86,7 +86,7 @@ get_model() {
     case "$1" in
         dev-story)    echo "opus" ;;
         code-review)  echo "sonnet" ;;
-        merge-story)  echo "sonnet" ;;
+        merge-story)  echo "opus" ;;
         *)            echo "opus" ;;
     esac
 }

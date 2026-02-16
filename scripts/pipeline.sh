@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # BMAD Story Pipeline - runs inside a container
-# Chains: dev-story (opus) → code-review (sonnet) → merge-story (sonnet)
+# Chains: dev-story (opus) → code-review (sonnet) → merge-story (opus)
 #
 # Each phase runs Claude Code with the appropriate workflow.
 # If a phase fails (non-zero exit), the pipeline stops.
@@ -66,12 +66,12 @@ fi
 log ""
 
 # Phase 3: Merge Story (Sonnet)
-log "=== Phase 3/3: merge-story (sonnet) ==="
+log "=== Phase 3/3: merge-story (opus) ==="
 MERGE_PROMPT="${STORY_CONTEXT}
 Execute /bmad-bmm-merge-story for story ${STORY_KEY}.
 Merge the PR for feat/${STORY_KEY} into ${BASE_BRANCH} via squash merge. Ensure CI is green before merging."
 
-if echo "$MERGE_PROMPT" | claude --dangerously-skip-permissions --model sonnet "$@"; then
+if echo "$MERGE_PROMPT" | claude --dangerously-skip-permissions --model opus "$@"; then
     log "✅ merge-story complete"
 else
     log "❌ merge-story failed (exit $?)"
