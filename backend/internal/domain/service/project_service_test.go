@@ -15,7 +15,7 @@ type mockProjectRepo struct {
 	createFn func(ctx context.Context, p *model.Project) (*model.Project, error)
 }
 
-func newMockRepo() *mockProjectRepo {
+func newMockProjectRepoForService() *mockProjectRepo {
 	return &mockProjectRepo{
 		projects: make(map[uuid.UUID]*model.Project),
 	}
@@ -109,7 +109,7 @@ func TestProjectService_Create(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			repo := newMockRepo()
+			repo := newMockProjectRepoForService()
 			svc := NewProjectService(repo)
 
 			result, err := svc.Create(context.Background(), tt.params)
@@ -143,7 +143,7 @@ func TestProjectService_Create(t *testing.T) {
 }
 
 func TestProjectService_List(t *testing.T) {
-	repo := newMockRepo()
+	repo := newMockProjectRepoForService()
 	svc := NewProjectService(repo)
 
 	// Create some projects
@@ -181,7 +181,7 @@ func TestProjectService_List(t *testing.T) {
 }
 
 func TestProjectService_Update(t *testing.T) {
-	repo := newMockRepo()
+	repo := newMockProjectRepoForService()
 	svc := NewProjectService(repo)
 
 	// Create a project first
@@ -242,7 +242,7 @@ func TestProjectService_Update(t *testing.T) {
 }
 
 func TestProjectService_Delete(t *testing.T) {
-	repo := newMockRepo()
+	repo := newMockProjectRepoForService()
 	svc := NewProjectService(repo)
 
 	id := uuid.New()

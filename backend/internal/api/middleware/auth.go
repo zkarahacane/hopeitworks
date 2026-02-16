@@ -34,6 +34,14 @@ func IsAdmin(ctx context.Context) bool {
 	return ok && role == model.RoleAdmin
 }
 
+// SetUserContext sets user information in the request context.
+// Used for testing and by auth middleware after successful JWT validation.
+func SetUserContext(ctx context.Context, userID uuid.UUID, role model.Role) context.Context {
+	ctx = context.WithValue(ctx, ContextKeyUserID, userID)
+	ctx = context.WithValue(ctx, ContextKeyRole, role)
+	return ctx
+}
+
 // Auth returns middleware that validates JWT tokens and injects user context.
 func Auth(authService *service.AuthService) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {

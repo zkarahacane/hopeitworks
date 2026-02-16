@@ -25,7 +25,7 @@ type mockProjectRepo struct {
 // Compile-time check that mockProjectRepo implements port.ProjectRepository.
 var _ port.ProjectRepository = (*mockProjectRepo)(nil)
 
-func newMockRepo() *mockProjectRepo {
+func newMockProjectRepo() *mockProjectRepo {
 	return &mockProjectRepo{
 		projects: make(map[uuid.UUID]*model.Project),
 	}
@@ -72,7 +72,7 @@ func (m *mockProjectRepo) Delete(_ context.Context, id uuid.UUID) error {
 }
 
 func setupHandler() (*ProjectHandler, *mockProjectRepo) {
-	repo := newMockRepo()
+	repo := newMockProjectRepo()
 	svc := service.NewProjectService(repo)
 	handler := NewProjectHandler(svc)
 	return handler, repo
@@ -83,19 +83,19 @@ func TestCreateProject_AdminOnly(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		role       string
+		role       model.Role
 		body       string
 		wantStatus int
 	}{
 		{
 			name:       "admin can create",
-			role:       "admin",
+			role:       model.RoleAdmin,
 			body:       `{"name":"test-project"}`,
 			wantStatus: http.StatusCreated,
 		},
 		{
 			name:       "non-admin gets 403",
-			role:       "member",
+			role:       model.RoleUser,
 			body:       `{"name":"test-project"}`,
 			wantStatus: http.StatusForbidden,
 		},
@@ -156,7 +156,7 @@ func TestCreateProject_Validation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, "/api/v1/projects", bytes.NewBufferString(tt.body))
 			req.Header.Set("Content-Type", "application/json")
-			ctx := middleware.SetUserContext(req.Context(), uuid.New(), "admin")
+			ctx := middleware.SetUserContext(req.Context(), uuid.New(), model.RoleAdmin)
 			req = req.WithContext(ctx)
 
 			rec := httptest.NewRecorder()
@@ -233,7 +233,7 @@ func TestUpdateProject_AdminOnly(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPut, "/api/v1/projects/"+id.String(),
 		bytes.NewBufferString(`{"name":"updated"}`))
 	req.Header.Set("Content-Type", "application/json")
-	ctx := middleware.SetUserContext(req.Context(), uuid.New(), "member")
+	ctx := middleware.SetUserContext(req.Context(), uuid.New(), model.RoleUser)
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 	h.UpdateProject(rec, req, id)
@@ -246,7 +246,7 @@ func TestUpdateProject_AdminOnly(t *testing.T) {
 	req = httptest.NewRequest(http.MethodPut, "/api/v1/projects/"+id.String(),
 		bytes.NewBufferString(`{"name":"updated"}`))
 	req.Header.Set("Content-Type", "application/json")
-	ctx = middleware.SetUserContext(req.Context(), uuid.New(), "admin")
+	ctx = middleware.SetUserContext(req.Context(), uuid.New(), model.RoleAdmin)
 	req = req.WithContext(ctx)
 	rec = httptest.NewRecorder()
 	h.UpdateProject(rec, req, id)
@@ -269,7 +269,7 @@ func TestDeleteProject_AdminOnly(t *testing.T) {
 
 	// Non-admin should get 403
 	req := httptest.NewRequest(http.MethodDelete, "/api/v1/projects/"+id.String(), nil)
-	ctx := middleware.SetUserContext(req.Context(), uuid.New(), "member")
+	ctx := middleware.SetUserContext(req.Context(), uuid.New(), model.RoleUser)
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 	h.DeleteProject(rec, req, id)
@@ -280,7 +280,7 @@ func TestDeleteProject_AdminOnly(t *testing.T) {
 
 	// Admin should succeed
 	req = httptest.NewRequest(http.MethodDelete, "/api/v1/projects/"+id.String(), nil)
-	ctx = middleware.SetUserContext(req.Context(), uuid.New(), "admin")
+	ctx = middleware.SetUserContext(req.Context(), uuid.New(), model.RoleAdmin)
 	req = req.WithContext(ctx)
 	rec = httptest.NewRecorder()
 	h.DeleteProject(rec, req, id)
