@@ -74,6 +74,22 @@ func toAPIProject(p *model.Project) Project {
 	return proj
 }
 
+// toAPIEpic converts a domain Epic to the API Epic type.
+func toAPIEpic(e *model.Epic) Epic {
+	epic := Epic{
+		Id:        e.ID,
+		ProjectId: e.ProjectID,
+		Name:      e.Name,
+		Status:    EpicStatus(e.Status),
+		CreatedAt: e.CreatedAt,
+		UpdatedAt: e.UpdatedAt,
+	}
+	if e.Description != nil {
+		epic.Description = e.Description
+	}
+	return epic
+}
+
 // toAPIUser converts a domain User to the API User type.
 func toAPIUser(u *model.User) User {
 	return User{

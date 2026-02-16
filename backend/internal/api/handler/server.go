@@ -9,11 +9,12 @@ type Server struct {
 	auth     *AuthHandler
 	projects *ProjectHandler
 	users    *UserHandler
+	epics    *EpicHandler
 }
 
 // NewServer creates a new Server with the given handlers.
-func NewServer(auth *AuthHandler, projects *ProjectHandler, users *UserHandler) *Server {
-	return &Server{auth: auth, projects: projects, users: users}
+func NewServer(auth *AuthHandler, projects *ProjectHandler, users *UserHandler, epics *EpicHandler) *Server {
+	return &Server{auth: auth, projects: projects, users: users, epics: epics}
 }
 
 // RegisterUser delegates to AuthHandler.
@@ -79,4 +80,29 @@ func (s *Server) UpdateUser(w http.ResponseWriter, r *http.Request, id IdPath) {
 // DeleteUser delegates to UserHandler.
 func (s *Server) DeleteUser(w http.ResponseWriter, r *http.Request, id IdPath) {
 	s.users.DeleteUser(w, r, id)
+}
+
+// ListEpics delegates to EpicHandler.
+func (s *Server) ListEpics(w http.ResponseWriter, r *http.Request, id IdPath, params ListEpicsParams) {
+	s.epics.ListEpics(w, r, id, params)
+}
+
+// CreateEpic delegates to EpicHandler.
+func (s *Server) CreateEpic(w http.ResponseWriter, r *http.Request, id IdPath) {
+	s.epics.CreateEpic(w, r, id)
+}
+
+// GetEpic delegates to EpicHandler.
+func (s *Server) GetEpic(w http.ResponseWriter, r *http.Request, id IdPath, epicID EpicIdPath) {
+	s.epics.GetEpic(w, r, id, epicID)
+}
+
+// UpdateEpic delegates to EpicHandler.
+func (s *Server) UpdateEpic(w http.ResponseWriter, r *http.Request, id IdPath, epicID EpicIdPath) {
+	s.epics.UpdateEpic(w, r, id, epicID)
+}
+
+// DeleteEpic delegates to EpicHandler.
+func (s *Server) DeleteEpic(w http.ResponseWriter, r *http.Request, id IdPath, epicID EpicIdPath) {
+	s.epics.DeleteEpic(w, r, id, epicID)
 }
