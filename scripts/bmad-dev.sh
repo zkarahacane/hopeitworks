@@ -74,16 +74,22 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Phase → BMAD workflow + model
-declare -A PHASE_WORKFLOW=(
-    [dev-story]="/bmad-bmm-dev-story"
-    [code-review]="/bmad-bmm-code-review"
-    [merge-story]="/bmad-bmm-merge-story"
-)
-declare -A PHASE_MODEL=(
-    [dev-story]="opus"
-    [code-review]="sonnet"
-    [merge-story]="sonnet"
-)
+get_workflow() {
+    case "$1" in
+        dev-story)    echo "/bmad-bmm-dev-story" ;;
+        code-review)  echo "/bmad-bmm-code-review" ;;
+        merge-story)  echo "/bmad-bmm-merge-story" ;;
+        *)            echo "" ;;
+    esac
+}
+get_model() {
+    case "$1" in
+        dev-story)    echo "opus" ;;
+        code-review)  echo "sonnet" ;;
+        merge-story)  echo "sonnet" ;;
+        *)            echo "opus" ;;
+    esac
+}
 
 # ============================================================
 # HELPERS
@@ -293,8 +299,8 @@ fi
 # --wave --phase: single phase on all stories
 if [[ -n "$WAVE_NUM" && -n "$PHASE" ]]; then
     WAVE_BRANCH="wave-${WAVE_NUM}"
-    WORKFLOW="${PHASE_WORKFLOW[$PHASE]:-}"
-    MODEL="${PHASE_MODEL[$PHASE]:-opus}"
+    WORKFLOW="$(get_workflow "$PHASE")"
+    MODEL="$(get_model "$PHASE")"
 
     if [[ -z "$WORKFLOW" ]]; then
         echo -e "${RED}Unknown phase: $PHASE${NC}"
@@ -346,8 +352,8 @@ fi
 if [[ -n "$STORY_NAME" && -n "$PHASE" ]]; then
     WAVE_BRANCH="${WAVE_NUM:+wave-${WAVE_NUM}}"
     WAVE_BRANCH="${WAVE_BRANCH:-main}"
-    WORKFLOW="${PHASE_WORKFLOW[$PHASE]:-}"
-    MODEL="${PHASE_MODEL[$PHASE]:-opus}"
+    WORKFLOW="$(get_workflow "$PHASE")"
+    MODEL="$(get_model "$PHASE")"
 
     if [[ -z "$WORKFLOW" ]]; then
         echo -e "${RED}Unknown phase: $PHASE${NC}"
