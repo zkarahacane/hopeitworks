@@ -1,6 +1,6 @@
 # Frontend Agent Instructions — Vue 3 Patterns & Conventions
 
-You are working exclusively in the `frontend/` directory. **NEVER** modify files outside `frontend/` except `api/openapi.yaml` (read-only reference).
+You are working exclusively in the `frontend/` directory. **NEVER** modify files outside `frontend/` except when coordinating API contract changes to `api/openapi.yaml`.
 
 ## Technology Stack
 

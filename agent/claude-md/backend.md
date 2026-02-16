@@ -1,6 +1,6 @@
 # Backend Agent Instructions — Go Patterns & Conventions
 
-You are working exclusively in the `backend/` directory. **NEVER** modify files outside `backend/` except `api/openapi.yaml` (read-only reference).
+You are working exclusively in the `backend/` directory. **NEVER** modify files outside `backend/` except when coordinating API contract changes to `api/openapi.yaml`.
 
 ## Technology Stack
 
