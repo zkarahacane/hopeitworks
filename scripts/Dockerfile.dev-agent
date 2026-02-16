@@ -38,9 +38,10 @@ RUN go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest \
 # Claude Code CLI
 RUN npm install -g @anthropic-ai/claude-code
 
-# Entrypoint handles clone-then-run
+# Entrypoint + pipeline scripts
 COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+COPY pipeline.sh /pipeline.sh
+RUN chmod +x /entrypoint.sh /pipeline.sh
 
 WORKDIR /workspace
 

@@ -3,35 +3,34 @@ set -euo pipefail
 
 # BMAD Dev Agent Launcher
 #
-# Pipeline per story:
-#   write-story (Sonnet) → dev-story (Opus) → code-review (Sonnet) → merge (Opus)
-#   End of sprint: release agent
-#
-# Branching: main → wave-X → story/1-1-xxx
+# Story lifecycle: dev-story (Opus) → code-review (Sonnet) → merge-story (Sonnet)
+# Branching: main → wave-X → feat/story-key
 #
 # Usage:
 #   # Interactive (mount mode)
 #   ./scripts/bmad-dev.sh
 #
-#   # Single story - each phase
-#   ./scripts/bmad-dev.sh --story 1-1 --phase dev-story
-#   ./scripts/bmad-dev.sh --story 1-1 --phase code-review
-#   ./scripts/bmad-dev.sh --story 1-1 --phase merge
+#   # Single story - one phase
+#   ./scripts/bmad-dev.sh --story 1-1 --wave 1 --phase dev-story
+#   ./scripts/bmad-dev.sh --story 1-1 --wave 1 --phase code-review
+#   ./scripts/bmad-dev.sh --story 1-1 --wave 1 --phase merge-story
 #
-#   # Full wave - launches all stories in parallel for a phase
+#   # Full wave - one phase on all stories
 #   ./scripts/bmad-dev.sh --wave 1 --phase dev-story
 #   ./scripts/bmad-dev.sh --wave 1 --phase code-review
-#   ./scripts/bmad-dev.sh --wave 1 --phase merge
+#   ./scripts/bmad-dev.sh --wave 1 --phase merge-story
 #
-#   # Setup wave branch (do this first)
+#   # Full pipeline per story (dev → review → merge) on entire wave
+#   ./scripts/bmad-dev.sh --wave 1 --pipeline
+#
+#   # Setup wave branch
 #   ./scripts/bmad-dev.sh --wave 1 --setup
 #
-#   # Sprint release
-#   ./scripts/bmad-dev.sh --release
+#   # Monitoring
+#   ./scripts/bmad-dev.sh --status
 #
-#   # Other
-#   ./scripts/bmad-dev.sh --build             # Force rebuild image
-#   ./scripts/bmad-dev.sh --status            # Show running containers
+#   # Force rebuild
+#   ./scripts/bmad-dev.sh --build
 #
 # Required env vars:
 #   CLAUDE_CODE_OAUTH_TOKEN - OAuth token for Claude Code
@@ -54,48 +53,37 @@ BUILD=false
 WAVE_NUM=""
 STORY_NAME=""
 PHASE=""
+PIPELINE=false
 SETUP=false
-RELEASE=false
 STATUS=false
 CLAUDE_ARGS=()
 
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --build)   BUILD=true; shift ;;
-        --wave)    WAVE_NUM="$2"; shift 2 ;;
-        --story)   STORY_NAME="$2"; shift 2 ;;
-        --phase)   PHASE="$2"; shift 2 ;;
-        --setup)   SETUP=true; shift ;;
-        --release) RELEASE=true; shift ;;
-        --status)  STATUS=true; shift ;;
+        --build)     BUILD=true; shift ;;
+        --wave)      WAVE_NUM="$2"; shift 2 ;;
+        --story)     STORY_NAME="$2"; shift 2 ;;
+        --phase)     PHASE="$2"; shift 2 ;;
+        --pipeline)  PIPELINE=true; shift ;;
+        --setup)     SETUP=true; shift ;;
+        --status)    STATUS=true; shift ;;
         -p|--prompt) CLAUDE_ARGS+=("-p" "$2"); shift 2 ;;
-        --model)   CLAUDE_ARGS+=("--model" "$2"); shift 2 ;;
-        *)         CLAUDE_ARGS+=("$1"); shift ;;
+        --model)     CLAUDE_ARGS+=("--model" "$2"); shift 2 ;;
+        *)           CLAUDE_ARGS+=("$1"); shift ;;
     esac
 done
 
-# Phase → BMAD workflow mapping + model
-# merge has no BMAD workflow - uses a direct prompt
+# Phase → BMAD workflow + model
 declare -A PHASE_WORKFLOW=(
-    [write-story]="/bmad-bmm-create-story"
     [dev-story]="/bmad-bmm-dev-story"
     [code-review]="/bmad-bmm-code-review"
-    [merge]="__merge_prompt__"
+    [merge-story]="/bmad-bmm-merge-story"
 )
 declare -A PHASE_MODEL=(
-    [write-story]="sonnet"
     [dev-story]="opus"
     [code-review]="sonnet"
-    [merge]="sonnet"
+    [merge-story]="sonnet"
 )
-
-# Direct prompt for merge phase (no BMAD workflow)
-MERGE_PROMPT='You are a merge agent. For the current story branch:
-1. Verify all code-review findings are addressed
-2. Run tests (make test or equivalent)
-3. If tests pass, push the branch and create a PR to the base branch
-4. Use "gh pr create" with a clear title and summary
-Do NOT merge the PR - just create it for human review.'
 
 # ============================================================
 # HELPERS
@@ -165,10 +153,11 @@ for w in data.get('parallel_waves', []):
 }
 
 # Run container in CLONE mode (detached)
+# Args: container_name base_branch story_key [claude_args...]
 run_clone() {
     local container_name="$1"
     local base_branch="$2"
-    local story_branch="$3"
+    local story_key="$3"
     shift 3
 
     local repo_url ssh_dir
@@ -178,6 +167,11 @@ run_clone() {
     if [[ -z "$repo_url" ]]; then
         echo -e "${RED}Error: No git remote 'origin'${NC}"
         return 1
+    fi
+
+    local extra_env=()
+    if [[ "${PIPELINE}" == "true" ]] || [[ "${_PIPELINE_MODE:-}" == "true" ]]; then
+        extra_env+=(-e "PIPELINE=true" -e "STORY_KEY=${story_key}")
     fi
 
     docker run \
@@ -192,7 +186,8 @@ run_clone() {
         -e "GH_TOKEN=${GITHUB_TOKEN:-}" \
         -e "REPO_URL=${repo_url}" \
         -e "BASE_BRANCH=${base_branch}" \
-        -e "STORY_BRANCH=${story_branch}" \
+        -e "STORY_BRANCH=${story_key}" \
+        "${extra_env[@]+"${extra_env[@]}"}" \
         "$IMAGE_NAME" \
         --dangerously-skip-permissions \
         "$@"
@@ -253,14 +248,49 @@ if $SETUP && [[ -n "$WAVE_NUM" ]]; then
     exit 0
 fi
 
-# --release: merge wave branches to main
-if $RELEASE; then
-    echo -e "${GREEN}TODO: Release agent - merge wave branches to main${NC}"
-    echo "Not yet implemented. Run manually or create a release workflow."
+# --wave --pipeline: full pipeline on all stories (dev → review → merge)
+if $PIPELINE && [[ -n "$WAVE_NUM" ]]; then
+    WAVE_BRANCH="wave-${WAVE_NUM}"
+
+    echo -e "${GREEN}=== Wave $WAVE_NUM | FULL PIPELINE (dev → review → merge) ===${NC}"
+    echo -e "  Base: $WAVE_BRANCH"
+    echo ""
+
+    mapfile -t STORIES < <(get_wave_stories "$WAVE_NUM")
+
+    if [[ ${#STORIES[@]} -eq 0 ]]; then
+        echo -e "${RED}No stories for wave $WAVE_NUM${NC}"
+        exit 1
+    fi
+
+    for s in "${STORIES[@]}"; do echo -e "  ${CYAN}$s${NC}"; done
+    echo ""
+    echo -e "${YELLOW}Launching ${#STORIES[@]} containers (each runs: dev-story → code-review → merge-story)${NC}"
+    read -rp "Continue? [y/N] " confirm
+    [[ "${confirm,,}" != "y" ]] && exit 0
+
+    _PIPELINE_MODE=true
+    for story in "${STORIES[@]}"; do
+        cname="bmad-dev-${story}-pipeline"
+        stop_container "$cname"
+        run_clone "$cname" "$WAVE_BRANCH" "$story" \
+            "${CLAUDE_ARGS[@]+"${CLAUDE_ARGS[@]}"}"
+        echo -e "  ${GREEN}✓ $cname${NC}"
+    done
+
+    echo ""
+    echo -e "${GREEN}=== ${#STORIES[@]} pipeline containers launched ===${NC}"
+    echo ""
+    echo "Monitor:"
+    echo "  ./scripts/bmad-dev.sh --status"
+    echo "  docker logs -f bmad-dev-<story>-pipeline"
+    echo ""
+    echo "Stop all:"
+    echo "  docker ps --filter 'name=bmad-dev-' -q | xargs docker stop"
     exit 0
 fi
 
-# --wave --phase: launch full wave for a specific phase
+# --wave --phase: single phase on all stories
 if [[ -n "$WAVE_NUM" && -n "$PHASE" ]]; then
     WAVE_BRANCH="wave-${WAVE_NUM}"
     WORKFLOW="${PHASE_WORKFLOW[$PHASE]:-}"
@@ -268,7 +298,7 @@ if [[ -n "$WAVE_NUM" && -n "$PHASE" ]]; then
 
     if [[ -z "$WORKFLOW" ]]; then
         echo -e "${RED}Unknown phase: $PHASE${NC}"
-        echo "Available: write-story, dev-story, code-review, merge"
+        echo "Available: dev-story, code-review, merge-story"
         exit 1
     fi
 
@@ -292,20 +322,11 @@ if [[ -n "$WAVE_NUM" && -n "$PHASE" ]]; then
 
     for story in "${STORIES[@]}"; do
         cname="bmad-dev-${story}-${PHASE}"
-        story_branch="story/${story}"
         stop_container "$cname"
-
-        if [[ "$WORKFLOW" == "__merge_prompt__" ]]; then
-            run_clone "$cname" "$WAVE_BRANCH" "$story_branch" \
-                --model "$MODEL" \
-                -p "$MERGE_PROMPT" \
-                "${CLAUDE_ARGS[@]+"${CLAUDE_ARGS[@]}"}"
-        else
-            run_clone "$cname" "$WAVE_BRANCH" "$story_branch" \
-                --model "$MODEL" \
-                -p "$WORKFLOW" \
-                "${CLAUDE_ARGS[@]+"${CLAUDE_ARGS[@]}"}"
-        fi
+        run_clone "$cname" "$WAVE_BRANCH" "$story" \
+            --model "$MODEL" \
+            -p "$WORKFLOW" \
+            "${CLAUDE_ARGS[@]+"${CLAUDE_ARGS[@]}"}"
         echo -e "  ${GREEN}✓ $cname${NC}"
     done
 
@@ -334,23 +355,35 @@ if [[ -n "$STORY_NAME" && -n "$PHASE" ]]; then
     fi
 
     cname="bmad-dev-${STORY_NAME}-${PHASE}"
-    story_branch="story/${STORY_NAME}"
     stop_container "$cname"
 
     echo -e "${GREEN}Launching: $STORY_NAME | Phase: $PHASE ($MODEL)${NC}"
-    echo -e "  Base: $WAVE_BRANCH → $story_branch"
+    echo -e "  Base: $WAVE_BRANCH → feat/$STORY_NAME"
 
-    if [[ "$WORKFLOW" == "__merge_prompt__" ]]; then
-        run_clone "$cname" "$WAVE_BRANCH" "$story_branch" \
-            --model "$MODEL" \
-            -p "$MERGE_PROMPT" \
-            "${CLAUDE_ARGS[@]+"${CLAUDE_ARGS[@]}"}"
-    else
-        run_clone "$cname" "$WAVE_BRANCH" "$story_branch" \
-            --model "$MODEL" \
-            -p "$WORKFLOW" \
-            "${CLAUDE_ARGS[@]+"${CLAUDE_ARGS[@]}"}"
-    fi
+    run_clone "$cname" "$WAVE_BRANCH" "$STORY_NAME" \
+        --model "$MODEL" \
+        -p "$WORKFLOW" \
+        "${CLAUDE_ARGS[@]+"${CLAUDE_ARGS[@]}"}"
+
+    echo -e "${GREEN}Container: $cname${NC}"
+    echo "  docker logs -f $cname"
+    exit 0
+fi
+
+# --story --pipeline: full pipeline on single story
+if [[ -n "$STORY_NAME" ]] && $PIPELINE; then
+    WAVE_BRANCH="${WAVE_NUM:+wave-${WAVE_NUM}}"
+    WAVE_BRANCH="${WAVE_BRANCH:-main}"
+
+    cname="bmad-dev-${STORY_NAME}-pipeline"
+    stop_container "$cname"
+
+    echo -e "${GREEN}Launching pipeline: $STORY_NAME (dev → review → merge)${NC}"
+    echo -e "  Base: $WAVE_BRANCH → feat/$STORY_NAME"
+
+    _PIPELINE_MODE=true
+    run_clone "$cname" "$WAVE_BRANCH" "$STORY_NAME" \
+        "${CLAUDE_ARGS[@]+"${CLAUDE_ARGS[@]}"}"
 
     echo -e "${GREEN}Container: $cname${NC}"
     echo "  docker logs -f $cname"
