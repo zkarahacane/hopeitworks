@@ -42,10 +42,33 @@ func SetUserContext(ctx context.Context, userID uuid.UUID, role model.Role) cont
 	return ctx
 }
 
+// publicPaths lists paths that do not require authentication.
+var publicPaths = []string{
+	"/healthz",
+	"/api/v1/auth/register",
+	"/api/v1/auth/login",
+}
+
+// isPublicPath checks if the request path is a public route.
+func isPublicPath(path string) bool {
+	for _, p := range publicPaths {
+		if path == p {
+			return true
+		}
+	}
+	return false
+}
+
 // Auth returns middleware that validates JWT tokens and injects user context.
+// Public paths (healthz, register, login) are skipped.
 func Auth(authService *service.AuthService) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if isPublicPath(r.URL.Path) {
+				next.ServeHTTP(w, r)
+				return
+			}
+
 			cookie, err := r.Cookie("token")
 			if err != nil {
 				writeUnauthorized(w)

@@ -6,13 +6,34 @@ import "net/http"
 // It embeds Unimplemented to satisfy methods that are not yet implemented.
 type Server struct {
 	Unimplemented
+	auth     *AuthHandler
 	projects *ProjectHandler
 	users    *UserHandler
 }
 
 // NewServer creates a new Server with the given handlers.
-func NewServer(projects *ProjectHandler, users *UserHandler) *Server {
-	return &Server{projects: projects, users: users}
+func NewServer(auth *AuthHandler, projects *ProjectHandler, users *UserHandler) *Server {
+	return &Server{auth: auth, projects: projects, users: users}
+}
+
+// RegisterUser delegates to AuthHandler.
+func (s *Server) RegisterUser(w http.ResponseWriter, r *http.Request) {
+	s.auth.Register(w, r)
+}
+
+// LoginUser delegates to AuthHandler.
+func (s *Server) LoginUser(w http.ResponseWriter, r *http.Request) {
+	s.auth.Login(w, r)
+}
+
+// LogoutUser delegates to AuthHandler.
+func (s *Server) LogoutUser(w http.ResponseWriter, r *http.Request) {
+	s.auth.Logout(w, r)
+}
+
+// GetCurrentUser delegates to AuthHandler.
+func (s *Server) GetCurrentUser(w http.ResponseWriter, r *http.Request) {
+	s.auth.Me(w, r)
 }
 
 // ListProjects delegates to ProjectHandler.
