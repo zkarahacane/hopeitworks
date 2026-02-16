@@ -1,6 +1,6 @@
 # Story 1.2: OpenAPI spec + code-gen pipeline
 
-Status: ready-for-dev
+Status: dev-complete
 
 ## Story
 
@@ -344,16 +344,31 @@ import (
 
 ### Agent Model Used
 
-_To be filled by implementation agent_
+Claude Opus 4.6 (claude-opus-4-6)
 
 ### Debug Log References
 
-_To be filled by implementation agent_
+- OpenAPI spec validated with `npx @redocly/cli lint` — 0 errors, 0 warnings
+- `make generate` produces `backend/internal/api/handler/gen_server.go` via oapi-codegen v2.5.1
+- `go build ./...` compiles successfully with generated code
+- sqlc config created but generation deferred to Story 1.3+ (no SQL queries yet)
 
 ### Completion Notes List
 
-_To be filled by implementation agent_
+- All 3 acceptance criteria met (AC1: spec structure, AC2: code generation, AC3: spec validation)
+- Used `oapi-codegen/oapi-codegen/v2` (v2.5.1) instead of `deepmap/oapi-codegen/v2` (the package was renamed/migrated)
+- Makefile help target updated from `column`-based to `grep/awk`-based pattern for portability
+- License field added to OpenAPI spec to satisfy redocly lint recommendations
+- Generated code uses chi/v5 router and oapi-codegen/runtime — deps added to go.mod
+- PR: https://github.com/zkarahacane/hopeitworks/pull/4
 
 ### File List
 
-_To be filled by implementation agent_
+- `api/openapi.yaml` — OpenAPI 3.0.3 specification (auth, user, project endpoints)
+- `backend/.oapi-codegen.yaml` — oapi-codegen configuration (chi-server + models)
+- `backend/sqlc.yaml` — sqlc configuration (pgx/v5, UUID/timestamp overrides)
+- `backend/tools.go` — Go tool dependency management
+- `backend/Makefile` — Updated with generate, lint-api, install-tools targets
+- `backend/.gitignore` — Updated with generated code exclusions
+- `backend/go.mod` — Updated with oapi-codegen, chi/v5, runtime dependencies
+- `backend/go.sum` — New file with dependency checksums

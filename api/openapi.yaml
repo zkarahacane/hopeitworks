@@ -1,0 +1,574 @@
+openapi: 3.0.3
+info:
+  title: HopeItWorks API
+  description: |
+    Backend API for the HopeItWorks project management platform.
+    This is the single source of truth for the API contract.
+  version: 0.1.0
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  contact:
+    name: HopeItWorks Team
+
+servers:
+  - url: /api/v1
+    description: API v1 base path
+
+security:
+  - cookieAuth: []
+
+tags:
+  - name: auth
+    description: Authentication endpoints
+  - name: users
+    description: User management endpoints
+  - name: projects
+    description: Project management endpoints
+
+paths:
+  # ── Auth ────────────────────────────────────────────────────────────────
+  /auth/register:
+    post:
+      operationId: registerUser
+      summary: Register a new user
+      tags: [auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: User registered successfully
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+              description: httpOnly JWT cookie
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /auth/login:
+    post:
+      operationId: loginUser
+      summary: Log in an existing user
+      tags: [auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Login successful
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+              description: httpOnly JWT cookie
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /auth/logout:
+    post:
+      operationId: logoutUser
+      summary: Log out the current user
+      tags: [auth]
+      responses:
+        "204":
+          description: Logged out successfully
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /auth/me:
+    get:
+      operationId: getCurrentUser
+      summary: Get the currently authenticated user
+      tags: [auth]
+      responses:
+        "200":
+          description: Current user details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ── Users ───────────────────────────────────────────────────────────────
+  /users:
+    get:
+      operationId: listUsers
+      summary: List all users
+      tags: [users]
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/PerPageParam"
+        - $ref: "#/components/parameters/SortByParam"
+      responses:
+        "200":
+          description: Paginated list of users
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /users/{id}:
+    get:
+      operationId: getUser
+      summary: Get a user by ID
+      tags: [users]
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: User details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    put:
+      operationId: updateUser
+      summary: Update a user
+      tags: [users]
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserRequest"
+      responses:
+        "200":
+          description: User updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    delete:
+      operationId: deleteUser
+      summary: Delete a user
+      tags: [users]
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "204":
+          description: User deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ── Projects ────────────────────────────────────────────────────────────
+  /projects:
+    get:
+      operationId: listProjects
+      summary: List all projects
+      tags: [projects]
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/PerPageParam"
+        - $ref: "#/components/parameters/SortByParam"
+      responses:
+        "200":
+          description: Paginated list of projects
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    post:
+      operationId: createProject
+      summary: Create a new project
+      tags: [projects]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProjectRequest"
+      responses:
+        "201":
+          description: Project created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /projects/{id}:
+    get:
+      operationId: getProject
+      summary: Get a project by ID
+      tags: [projects]
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Project details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    put:
+      operationId: updateProject
+      summary: Update a project
+      tags: [projects]
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProjectRequest"
+      responses:
+        "200":
+          description: Project updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    delete:
+      operationId: deleteProject
+      summary: Delete a project
+      tags: [projects]
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "204":
+          description: Project deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+# ── Components ──────────────────────────────────────────────────────────
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: token
+      description: JWT token sent as an httpOnly secure cookie
+
+  parameters:
+    IdPath:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Resource UUID
+
+    PageParam:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+      description: Page number
+
+    PerPageParam:
+      name: per_page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+      description: Items per page
+
+    SortByParam:
+      name: sort_by
+      in: query
+      required: false
+      schema:
+        type: string
+        default: created_at
+      description: Field to sort by
+
+  schemas:
+    # ── Auth request/response ──────────────────────────────────────────
+    RegisterRequest:
+      type: object
+      required:
+        - email
+        - password
+        - name
+      properties:
+        email:
+          type: string
+          format: email
+          example: user@example.com
+        password:
+          type: string
+          format: password
+          minLength: 8
+          example: secureP@ss1
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          example: Jane Doe
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          example: user@example.com
+        password:
+          type: string
+          format: password
+          example: secureP@ss1
+
+    # ── User ───────────────────────────────────────────────────────────
+    User:
+      type: object
+      required:
+        - id
+        - email
+        - name
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
+        email:
+          type: string
+          format: email
+          example: user@example.com
+        name:
+          type: string
+          example: Jane Doe
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-01-15T10:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2026-01-15T10:30:00Z"
+
+    UpdateUserRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          example: Jane Smith
+        email:
+          type: string
+          format: email
+          example: new-email@example.com
+
+    UserList:
+      type: object
+      required:
+        - data
+        - pagination
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/User"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+
+    # ── Project ────────────────────────────────────────────────────────
+    Project:
+      type: object
+      required:
+        - id
+        - name
+        - owner_id
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 660e8400-e29b-41d4-a716-446655440000
+        name:
+          type: string
+          example: My Project
+        description:
+          type: string
+          example: A sample project
+        owner_id:
+          type: string
+          format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-01-15T10:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2026-01-15T10:30:00Z"
+
+    CreateProjectRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          example: My Project
+        description:
+          type: string
+          maxLength: 1000
+          example: A sample project
+
+    UpdateProjectRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          example: Updated Project Name
+        description:
+          type: string
+          maxLength: 1000
+          example: Updated description
+
+    ProjectList:
+      type: object
+      required:
+        - data
+        - pagination
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Project"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+
+    # ── Shared ─────────────────────────────────────────────────────────
+    Pagination:
+      type: object
+      required:
+        - total
+        - page
+        - per_page
+      properties:
+        total:
+          type: integer
+          example: 42
+        page:
+          type: integer
+          example: 1
+        per_page:
+          type: integer
+          example: 20
+
+    Error:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              example: USER_NOT_FOUND
+            message:
+              type: string
+              example: "User with ID abc123 not found"
+            details:
+              type: object
+              additionalProperties: true
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Conflict:
+      description: Resource conflict (e.g. duplicate email)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"

@@ -1,0 +1,6 @@
+package: handler
+generate:
+  chi-server: true
+  models: true
+  embedded-spec: true
+output: internal/api/handler/gen_server.go
