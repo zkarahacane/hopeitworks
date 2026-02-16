@@ -6,9 +6,15 @@ help: ## Show this help message
 	@echo "Targets:"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
-generate: ## Generate code from OpenAPI spec
+generate: ## Generate code from OpenAPI spec and SQL queries
 	@echo "Generating API handlers and types from OpenAPI spec..."
 	go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen -config .oapi-codegen.yaml ../api/openapi.yaml
+	@echo "Generating database query functions from SQL..."
+	@if [ -n "$$(find queries -name '*.sql' 2>/dev/null)" ]; then \
+		sqlc generate; \
+	else \
+		echo "No SQL queries found, skipping sqlc generation"; \
+	fi
 	@echo "Code generation complete."
 
 lint-api: ## Validate OpenAPI spec
@@ -18,6 +24,7 @@ lint-api: ## Validate OpenAPI spec
 install-tools: ## Install code generation tool dependencies
 	@echo "Installing code generation tools..."
 	go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@latest
+	go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
 	@echo "Tools installed."
 
 build: ## Build the API binary
