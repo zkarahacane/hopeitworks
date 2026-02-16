@@ -144,18 +144,33 @@ stop_container() {
 
 get_wave_stories() {
     local wave="$1"
-    python3 -c "
-import yaml
-with open('$SPRINT_STATUS') as f:
-    data = yaml.safe_load(f)
-for w in data.get('parallel_waves', []):
-    if str(w.get('wave')) == '$wave':
-        for s in w.get('stories', []):
-            print(s['key'])
-        break
-" 2>/dev/null || {
-        awk "/^- wave: $wave\$/,/^- wave:/{/key:/{print \$NF}}" "$SPRINT_STATUS"
-    }
+    local in_wave=false
+    local in_stories=false
+    while IFS= read -r line; do
+        # Detect wave start: "  wave-N:"
+        if echo "$line" | grep -qE "^  wave-${wave}:"; then
+            in_wave=true
+            in_stories=false
+            continue
+        fi
+        # Detect next wave or end of parallel_waves
+        if $in_wave && echo "$line" | grep -qE "^  wave-[0-9]+:"; then
+            break
+        fi
+        # Detect stories section
+        if $in_wave && echo "$line" | grep -q "stories:"; then
+            in_stories=true
+            continue
+        fi
+        # Extract key values
+        if $in_wave && $in_stories && echo "$line" | grep -qE "^\s+- key:"; then
+            echo "$line" | sed 's/.*key: *//'
+        fi
+        # Stop stories section on non-indented or different section
+        if $in_wave && $in_stories && echo "$line" | grep -qE "^    [a-z]" && ! echo "$line" | grep -qE "^\s+-"; then
+            in_stories=false
+        fi
+    done < "$SPRINT_STATUS"
 }
 
 # Run container in CLONE mode (detached)
@@ -262,7 +277,10 @@ if $PIPELINE && [[ -n "$WAVE_NUM" ]]; then
     echo -e "  Base: $WAVE_BRANCH"
     echo ""
 
-    mapfile -t STORIES < <(get_wave_stories "$WAVE_NUM")
+    STORIES=()
+    while IFS= read -r line; do
+        [[ -n "$line" ]] && STORIES+=("$line")
+    done < <(get_wave_stories "$WAVE_NUM")
 
     if [[ ${#STORIES[@]} -eq 0 ]]; then
         echo -e "${RED}No stories for wave $WAVE_NUM${NC}"
@@ -313,7 +331,10 @@ if [[ -n "$WAVE_NUM" && -n "$PHASE" ]]; then
     echo -e "  Base:      $WAVE_BRANCH"
     echo ""
 
-    mapfile -t STORIES < <(get_wave_stories "$WAVE_NUM")
+    STORIES=()
+    while IFS= read -r line; do
+        [[ -n "$line" ]] && STORIES+=("$line")
+    done < <(get_wave_stories "$WAVE_NUM")
 
     if [[ ${#STORIES[@]} -eq 0 ]]; then
         echo -e "${RED}No stories for wave $WAVE_NUM${NC}"
