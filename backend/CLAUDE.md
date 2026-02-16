@@ -362,6 +362,11 @@ func (m *MockGitProvider) CreateBranch(ctx context.Context, repo, base, branch s
 }
 ```
 
+**Mock lint rules (golangci-lint revive):**
+- Rename unused parameters to `_` — e.g., `func (m *mock) GetByID(_ context.Context, id uuid.UUID)`
+- If a parameter is passed to a callback field (like `createFn`), it IS used — keep the name
+- Always check `errcheck`: use `_ = json.NewEncoder(w).Encode(...)` when ignoring return values
+
 ### Test Commands
 
 ```bash
