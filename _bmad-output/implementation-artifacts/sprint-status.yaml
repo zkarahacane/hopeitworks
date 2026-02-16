@@ -1,0 +1,588 @@
+# generated: 2026-02-16
+# project: hopeitworks
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: _bmad-output/implementation-artifacts
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog -> in-progress: Automatically when first story is created (via create-story)
+#   - in-progress -> done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - SM typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+
+generated: 2026-02-16
+project: hopeitworks
+project_key: NOKEY
+tracking_system: file-system
+story_location: _bmad-output/implementation-artifacts
+
+development_status:
+  # Epic 1: Project Foundation & Authentication
+  epic-1: backlog
+  1-1-go-project-scaffolding-docker-compose-dev-stack: backlog
+  1-2-openapi-spec-code-gen-pipeline: backlog
+  1-3-users-table-jwt-auth-api-register-login-auth-middleware: backlog
+  1-4-user-management-api-admin-crud: backlog
+  1-5-projects-table-project-crud-api: backlog
+  1-6-rbac-middleware-project-users-table: backlog
+  1-7-vue-scaffolding-primevue-tailwind-setup: backlog
+  1-8-app-shell-layout-header-sidebar-status-bar: backlog
+  1-9-login-page-auth-guard: backlog
+  1-10-project-list-page: backlog
+  1-11-project-creation-form: backlog
+  1-12-project-settings-page: backlog
+  1-13-user-management-page-admin-only: backlog
+  1-14-claude-md-files-for-agent-scoping: backlog
+  1-15-go-backend-services-wiring: backlog
+  1-16-vue-app-routing-state-tooling: backlog
+  epic-1-retrospective: optional
+
+  # Epic 2: Story Board & Management
+  epic-2: backlog
+  2-1-epics-table-epic-crud-api: backlog
+  2-2-stories-table-story-crud-api-status-filtering: backlog
+  2-3-story-markdown-import-frontmatter-parsing: backlog
+  2-4-story-board-page-epic-list-with-story-counts: backlog
+  2-5-epic-detail-split-focus-story-list-filters: backlog
+  2-6-story-detail-view-read-only: backlog
+  2-7-story-editor-create-edit-mode: backlog
+  2-8-story-import-from-markdown: backlog
+  epic-2-retrospective: optional
+
+  # Epic 3: Single Story Pipeline Execution
+  epic-3: backlog
+  3-1-runs-runsteps-tables-run-creation-api-state-machine: backlog
+  3-2-gitprovider-port-gh-cli-adapter-clone-branch-push: backlog
+  3-3-gitprovider-pr-operations-create-pr-merge-pr: backlog
+  3-4-docker-container-lifecycle-manager-create-start-stop-cleanup: backlog
+  3-5-ndjson-log-streaming-from-container: backlog
+  3-6-events-table-pgxlisten-event-bus: backlog
+  3-7-pipeline-executor-sequential-step-runner: backlog
+  3-8-agent-run-action-compose-claude-md-launch-container-stream-logs: backlog
+  3-9-container-timeout-enforcement-orphan-cleanup: backlog
+  3-10-run-launch-api-endpoint-single-story: backlog
+  3-11-run-launch-button-confirmation-dialog: backlog
+  3-12-run-status-display-on-story-card: backlog
+  epic-3-retrospective: optional
+
+  # Epic 4: Real-time Monitoring & Live Logs
+  epic-4: backlog
+  4-1-sse-streaming-endpoint: backlog
+  4-2-run-progress-tracking-api: backlog
+  4-3-logviewer-component-live-log-page: backlog
+  4-4-run-progress-timeline-display: backlog
+  epic-4-retrospective: optional
+
+  # Epic 5: HITL Gates & Approval Workflow
+  epic-5: backlog
+  5-1-hitl-gate-action-pending-state: backlog
+  5-2-hitl-approval-rejection-api: backlog
+  5-3-hitl-cli-approval-support-curl-based: backlog
+  5-4-hitl-approval-page-diffviewer: backlog
+  5-5-hitl-pending-list-notification-badge: backlog
+  epic-5-retrospective: optional
+
+  # Epic 6: Pipeline Configuration & Prompt Templates
+  epic-6: backlog
+  6-1-pipeline-configs-table-default-pipeline-seed-crud-api: backlog
+  6-2-prompt-templates-table-crud-api: backlog
+  6-3-handlebars-rendering-engine-default-template-seeding: backlog
+  6-4-pipeline-configuration-page: backlog
+  6-5-prompt-template-list-page: backlog
+  6-6-prompt-template-editor: backlog
+  epic-6-retrospective: optional
+
+  # Epic 7: Epic Batch Execution & DAG Scheduling
+  epic-7: backlog
+  7-1-dag-builder-topological-sort: backlog
+  7-2-epic-run-creation-parallel-group-executor: backlog
+  7-3-pause-resume-for-story-and-epic-runs: backlog
+  7-4-epic-launch-page-dag-visualization: backlog
+  7-5-epic-run-monitoring-dashboard: backlog
+  epic-7-retrospective: optional
+
+  # Epic 8: Retry, CI Polling & Resilience
+  epic-8: backlog
+  8-1-ci-polling-action-via-gitprovider: backlog
+  8-2-incremental-retry-action: backlog
+  8-3-full-retry-fallback-circuit-breaker: backlog
+  8-4-retry-status-display-circuit-breaker-indicator: backlog
+  epic-8-retrospective: optional
+
+  # Epic 9: Cost Tracking & Notifications
+  epic-9: backlog
+  9-1-cost-tracking-table-per-step-cost-recording: backlog
+  9-2-cost-aggregation-api: backlog
+  9-3-notification-dispatcher-discord-webhook: backlog
+  9-4-cost-dashboard-page: backlog
+  9-5-notification-settings-page: backlog
+  epic-9-retrospective: optional
+
+  # Epic 10: Reference Test Project & Validation
+  epic-10: backlog
+  10-1-todo-app-reference-project-structure: backlog
+  10-2-todo-app-ci-pipeline-seed-data: backlog
+  10-3-pipeline-validation-stories-integration-test: backlog
+  epic-10-retrospective: optional
+
+# PARALLEL EXECUTION WAVES
+# ========================
+# Stories in the same wave can run simultaneously in separate containers.
+# Each wave must complete (merged to main) before the next wave starts.
+# Domain tags: back=Backend, front=Frontend, shared=Shared
+#
+# DEPENDENCY MODEL: Explicit deps from epics + functional inter-epic coherence
+#   - Intra-epic: explicit depends_on from epic file only (no implicit sequential)
+#   - Inter-epic: functional ordering in 4 phases
+#
+# PHASES:
+#   Phase 1 (Waves 1-4):  Foundation - Epic 1 only
+#   Phase 2 (Waves 5-9):  Core Platform - Epics 2, 3, 6 in parallel
+#   Phase 3 (Waves 10-12): Extensions - Epics 4, 5, 7, 8, 9
+#   Phase 4 (Waves 13-15): Validation - Epic 10
+#
+# Launch a single story in a container:
+#   ./scripts/bmad-dev.sh -p "/bmad-bmm-dev-story"
+#
+# Launch all stories in a wave (parallel containers):
+#   for story in <wave-stories>; do
+#     ./scripts/bmad-dev.sh -p "/bmad-bmm-create-story $story && /bmad-bmm-dev-story" &
+#   done
+#
+# IMPORTANT: All stories in a wave must be MERGED to main before starting the next wave.
+
+parallel_waves:
+  # ============================================================
+  # PHASE 1: FOUNDATION (Epic 1 - Project scaffolding & auth)
+  # ============================================================
+
+  wave-1:
+    phase: 1-foundation
+    stories:
+      - key: 1-1-go-project-scaffolding-docker-compose-dev-stack
+        domain: back
+        status: backlog
+      - key: 1-2-openapi-spec-code-gen-pipeline
+        domain: back
+        status: backlog
+      - key: 1-7-vue-scaffolding-primevue-tailwind-setup
+        domain: front
+        status: backlog
+      - key: 1-14-claude-md-files-for-agent-scoping
+        domain: shared
+        status: backlog
+    container_count: 4
+    depends_on: []
+    notes: "Foundation: Go scaffold+Docker, OpenAPI pipeline, Vue+PrimeVue+Tailwind init, CLAUDE.md files (reduced scope - services wiring and Vue infra moved to wave 2)"
+
+  wave-2:
+    phase: 1-foundation
+    stories:
+      - key: 1-3-users-table-jwt-auth-api-register-login-auth-middleware
+        domain: back
+        status: backlog
+        explicit_deps: [1-2-openapi-spec-code-gen-pipeline]
+      - key: 1-5-projects-table-project-crud-api
+        domain: back
+        status: backlog
+        explicit_deps: [1-2-openapi-spec-code-gen-pipeline]
+      - key: 1-8-app-shell-layout-header-sidebar-status-bar
+        domain: front
+        status: backlog
+        explicit_deps: [1-7-vue-scaffolding-primevue-tailwind-setup]
+      - key: 1-9-login-page-auth-guard
+        domain: front
+        status: backlog
+        explicit_deps: [1-7-vue-scaffolding-primevue-tailwind-setup]
+      # Split stories from wave 1
+      - key: 1-15-go-backend-services-wiring
+        domain: back
+        status: backlog
+        explicit_deps: [1-1-go-project-scaffolding-docker-compose-dev-stack]
+      - key: 1-16-vue-app-routing-state-tooling
+        domain: front
+        status: backlog
+        explicit_deps: [1-7-vue-scaffolding-primevue-tailwind-setup]
+    container_count: 6
+    depends_on: [wave-1]
+    notes: "Auth + Projects backend, App shell + Login frontend, + split stories: Go services wiring (from 1-1) and Vue routing/state (from 1-7)"
+
+  wave-3:
+    phase: 1-foundation
+    stories:
+      - key: 1-4-user-management-api-admin-crud
+        domain: back
+        status: backlog
+        explicit_deps: [1-3-users-table-jwt-auth-api-register-login-auth-middleware]
+      - key: 1-6-rbac-middleware-project-users-table
+        domain: back
+        status: backlog
+        explicit_deps: [1-3-users-table-jwt-auth-api-register-login-auth-middleware, 1-5-projects-table-project-crud-api]
+      - key: 1-10-project-list-page
+        domain: front
+        status: backlog
+        explicit_deps: [1-8-app-shell-layout-header-sidebar-status-bar, 1-9-login-page-auth-guard]
+      - key: 1-13-user-management-page-admin-only
+        domain: front
+        status: backlog
+        explicit_deps: [1-9-login-page-auth-guard]
+    container_count: 4
+    depends_on: [wave-2]
+    notes: "User mgmt + RBAC backend, Project list + User mgmt frontend"
+
+  wave-4:
+    phase: 1-foundation
+    stories:
+      - key: 1-11-project-creation-form
+        domain: front
+        status: backlog
+        explicit_deps: [1-10-project-list-page]
+      - key: 1-12-project-settings-page
+        domain: front
+        status: backlog
+        explicit_deps: [1-10-project-list-page]
+    container_count: 2
+    depends_on: [wave-3]
+    notes: "Final E1 frontend pages - Epic 1 COMPLETE after this wave"
+
+  # ============================================================
+  # PHASE 2: CORE PLATFORM (Epics 2, 3, 6 in parallel)
+  # Requires: E1 foundation (auth, projects, RBAC, app shell)
+  # ============================================================
+
+  wave-5:
+    phase: 2-core-platform
+    stories:
+      # Epic 2 - Story Board
+      - key: 2-1-epics-table-epic-crud-api
+        domain: back
+        status: backlog
+        cross_epic_deps: [1-5-projects-table-project-crud-api]
+      - key: 2-4-story-board-page-epic-list-with-story-counts
+        domain: front
+        status: backlog
+        cross_epic_deps: [1-8-app-shell-layout-header-sidebar-status-bar, 1-9-login-page-auth-guard]
+      # Epic 3 - Pipeline Execution
+      - key: 3-1-runs-runsteps-tables-run-creation-api-state-machine
+        domain: back
+        status: backlog
+        cross_epic_deps: [1-5-projects-table-project-crud-api]
+      - key: 3-2-gitprovider-port-gh-cli-adapter-clone-branch-push
+        domain: back
+        status: backlog
+        cross_epic_deps: [1-1-go-project-scaffolding-docker-compose-dev-stack]
+      - key: 3-4-docker-container-lifecycle-manager-create-start-stop-cleanup
+        domain: back
+        status: backlog
+        cross_epic_deps: [1-1-go-project-scaffolding-docker-compose-dev-stack]
+      - key: 3-6-events-table-pgxlisten-event-bus
+        domain: back
+        status: backlog
+        cross_epic_deps: [1-1-go-project-scaffolding-docker-compose-dev-stack]
+      - key: 3-11-run-launch-button-confirmation-dialog
+        domain: front
+        status: backlog
+        cross_epic_deps: [1-8-app-shell-layout-header-sidebar-status-bar, 1-9-login-page-auth-guard]
+      # Epic 6 - Pipeline Config
+      - key: 6-1-pipeline-configs-table-default-pipeline-seed-crud-api
+        domain: back
+        status: backlog
+        cross_epic_deps: [1-5-projects-table-project-crud-api]
+      - key: 6-2-prompt-templates-table-crud-api
+        domain: back
+        status: backlog
+        cross_epic_deps: [1-1-go-project-scaffolding-docker-compose-dev-stack]
+      - key: 6-4-pipeline-configuration-page
+        domain: front
+        status: backlog
+        cross_epic_deps: [1-8-app-shell-layout-header-sidebar-status-bar, 1-9-login-page-auth-guard]
+      - key: 6-5-prompt-template-list-page
+        domain: front
+        status: backlog
+        cross_epic_deps: [1-8-app-shell-layout-header-sidebar-status-bar, 1-9-login-page-auth-guard]
+    container_count: 11
+    depends_on: [wave-4]
+    notes: "Core platform kickoff: E2 story board + E3 pipeline infra + E6 config - all in parallel"
+
+  wave-6:
+    phase: 2-core-platform
+    stories:
+      # Epic 2
+      - key: 2-2-stories-table-story-crud-api-status-filtering
+        domain: back
+        status: backlog
+        explicit_deps: [2-1-epics-table-epic-crud-api]
+      - key: 2-5-epic-detail-split-focus-story-list-filters
+        domain: front
+        status: backlog
+        explicit_deps: [2-4-story-board-page-epic-list-with-story-counts]
+      # Epic 3
+      - key: 3-3-gitprovider-pr-operations-create-pr-merge-pr
+        domain: back
+        status: backlog
+        explicit_deps: [3-2-gitprovider-port-gh-cli-adapter-clone-branch-push]
+      - key: 3-5-ndjson-log-streaming-from-container
+        domain: back
+        status: backlog
+        explicit_deps: [3-4-docker-container-lifecycle-manager-create-start-stop-cleanup]
+      - key: 3-7-pipeline-executor-sequential-step-runner
+        domain: back
+        status: backlog
+        explicit_deps: [3-1-runs-runsteps-tables-run-creation-api-state-machine]
+      - key: 3-9-container-timeout-enforcement-orphan-cleanup
+        domain: back
+        status: backlog
+        explicit_deps: [3-4-docker-container-lifecycle-manager-create-start-stop-cleanup]
+      - key: 3-12-run-status-display-on-story-card
+        domain: front
+        status: backlog
+        explicit_deps: [3-11-run-launch-button-confirmation-dialog]
+      # Epic 6
+      - key: 6-3-handlebars-rendering-engine-default-template-seeding
+        domain: back
+        status: backlog
+        explicit_deps: [6-2-prompt-templates-table-crud-api]
+      - key: 6-6-prompt-template-editor
+        domain: front
+        status: backlog
+        explicit_deps: [6-5-prompt-template-list-page]
+    container_count: 9
+    depends_on: [wave-5]
+    notes: "Second level deps across E2, E3, E6 - Epic 6 COMPLETE after this wave"
+
+  wave-7:
+    phase: 2-core-platform
+    stories:
+      # Epic 2
+      - key: 2-3-story-markdown-import-frontmatter-parsing
+        domain: back
+        status: backlog
+        explicit_deps: [2-2-stories-table-story-crud-api-status-filtering]
+      - key: 2-6-story-detail-view-read-only
+        domain: front
+        status: backlog
+        explicit_deps: [2-5-epic-detail-split-focus-story-list-filters]
+      # Epic 3
+      - key: 3-8-agent-run-action-compose-claude-md-launch-container-stream-logs
+        domain: back
+        status: backlog
+        explicit_deps: [3-4-docker-container-lifecycle-manager-create-start-stop-cleanup, 3-5-ndjson-log-streaming-from-container, 3-6-events-table-pgxlisten-event-bus, 3-7-pipeline-executor-sequential-step-runner]
+      - key: 3-10-run-launch-api-endpoint-single-story
+        domain: back
+        status: backlog
+        explicit_deps: [3-1-runs-runsteps-tables-run-creation-api-state-machine, 3-7-pipeline-executor-sequential-step-runner]
+    container_count: 4
+    depends_on: [wave-6]
+    notes: "E3 core pipeline COMPLETE (3-8 agent run + 3-10 launch API) - Epic 3 done after this wave"
+
+  wave-8:
+    phase: 2-core-platform
+    stories:
+      - key: 2-7-story-editor-create-edit-mode
+        domain: front
+        status: backlog
+        explicit_deps: [2-6-story-detail-view-read-only]
+    container_count: 1
+    depends_on: [wave-7]
+    notes: "E2 story editor"
+
+  wave-9:
+    phase: 2-core-platform
+    stories:
+      - key: 2-8-story-import-from-markdown
+        domain: front
+        status: backlog
+        explicit_deps: [2-7-story-editor-create-edit-mode]
+    container_count: 1
+    depends_on: [wave-8]
+    notes: "E2 markdown import - Epic 2 COMPLETE after this wave"
+
+  # ============================================================
+  # PHASE 3: EXTENSIONS (Epics 4, 5, 7, 8, 9)
+  # Requires: E3 pipeline functional (runs, executor, agent action)
+  # ============================================================
+
+  wave-10:
+    phase: 3-extensions
+    stories:
+      # Epic 4 - Real-time Monitoring
+      - key: 4-1-sse-streaming-endpoint
+        domain: back
+        status: backlog
+        cross_epic_deps: [3-1-runs-runsteps-tables-run-creation-api-state-machine]
+      - key: 4-2-run-progress-tracking-api
+        domain: back
+        status: backlog
+        cross_epic_deps: [3-1-runs-runsteps-tables-run-creation-api-state-machine]
+      - key: 4-3-logviewer-component-live-log-page
+        domain: front
+        status: backlog
+        cross_epic_deps: [1-8-app-shell-layout-header-sidebar-status-bar]
+      # Epic 5 - HITL Gates
+      - key: 5-1-hitl-gate-action-pending-state
+        domain: back
+        status: backlog
+        cross_epic_deps: [3-7-pipeline-executor-sequential-step-runner]
+      - key: 5-4-hitl-approval-page-diffviewer
+        domain: front
+        status: backlog
+        cross_epic_deps: [1-8-app-shell-layout-header-sidebar-status-bar]
+      # Epic 7 - DAG Scheduling
+      - key: 7-1-dag-builder-topological-sort
+        domain: back
+        status: backlog
+        cross_epic_deps: [3-1-runs-runsteps-tables-run-creation-api-state-machine, 3-7-pipeline-executor-sequential-step-runner]
+      - key: 7-4-epic-launch-page-dag-visualization
+        domain: front
+        status: backlog
+        cross_epic_deps: [1-8-app-shell-layout-header-sidebar-status-bar]
+      # Epic 8 - Retry & Resilience
+      - key: 8-1-ci-polling-action-via-gitprovider
+        domain: back
+        status: backlog
+        cross_epic_deps: [3-7-pipeline-executor-sequential-step-runner]
+      - key: 8-2-incremental-retry-action
+        domain: back
+        status: backlog
+        cross_epic_deps: [3-7-pipeline-executor-sequential-step-runner]
+      - key: 8-4-retry-status-display-circuit-breaker-indicator
+        domain: front
+        status: backlog
+        cross_epic_deps: [1-8-app-shell-layout-header-sidebar-status-bar]
+      # Epic 9 - Cost & Notifications
+      - key: 9-1-cost-tracking-table-per-step-cost-recording
+        domain: back
+        status: backlog
+        cross_epic_deps: [3-1-runs-runsteps-tables-run-creation-api-state-machine]
+      - key: 9-3-notification-dispatcher-discord-webhook
+        domain: back
+        status: backlog
+      - key: 9-4-cost-dashboard-page
+        domain: front
+        status: backlog
+        cross_epic_deps: [1-8-app-shell-layout-header-sidebar-status-bar]
+      - key: 9-5-notification-settings-page
+        domain: front
+        status: backlog
+        cross_epic_deps: [1-8-app-shell-layout-header-sidebar-status-bar]
+    container_count: 14
+    depends_on: [wave-7]
+    notes: "All extension epics kick off - E3 pipeline is functional, build monitoring/gates/dag/retry/cost"
+
+  wave-11:
+    phase: 3-extensions
+    stories:
+      # Epic 4
+      - key: 4-4-run-progress-timeline-display
+        domain: front
+        status: backlog
+        explicit_deps: [4-3-logviewer-component-live-log-page]
+      # Epic 5
+      - key: 5-2-hitl-approval-rejection-api
+        domain: back
+        status: backlog
+        explicit_deps: [5-1-hitl-gate-action-pending-state]
+      - key: 5-5-hitl-pending-list-notification-badge
+        domain: front
+        status: backlog
+        explicit_deps: [5-4-hitl-approval-page-diffviewer]
+      # Epic 7
+      - key: 7-2-epic-run-creation-parallel-group-executor
+        domain: back
+        status: backlog
+        explicit_deps: [7-1-dag-builder-topological-sort]
+      - key: 7-5-epic-run-monitoring-dashboard
+        domain: front
+        status: backlog
+        explicit_deps: [7-4-epic-launch-page-dag-visualization]
+      # Epic 8
+      - key: 8-3-full-retry-fallback-circuit-breaker
+        domain: back
+        status: backlog
+        explicit_deps: [8-2-incremental-retry-action]
+      # Epic 9
+      - key: 9-2-cost-aggregation-api
+        domain: back
+        status: backlog
+        explicit_deps: [9-1-cost-tracking-table-per-step-cost-recording]
+    container_count: 7
+    depends_on: [wave-10]
+    notes: "Second level of extensions - E4, E8, E9 COMPLETE after this wave"
+
+  wave-12:
+    phase: 3-extensions
+    stories:
+      # Epic 5
+      - key: 5-3-hitl-cli-approval-support-curl-based
+        domain: back
+        status: backlog
+        explicit_deps: [5-2-hitl-approval-rejection-api]
+      # Epic 7
+      - key: 7-3-pause-resume-for-story-and-epic-runs
+        domain: back
+        status: backlog
+        explicit_deps: [7-2-epic-run-creation-parallel-group-executor]
+    container_count: 2
+    depends_on: [wave-11]
+    notes: "Final extension stories - Epics 5, 7 COMPLETE after this wave"
+
+  # ============================================================
+  # PHASE 4: VALIDATION (Epic 10 - Reference test project)
+  # Requires: E3 pipeline + E6 config complete
+  # ============================================================
+
+  wave-13:
+    phase: 4-validation
+    stories:
+      - key: 10-1-todo-app-reference-project-structure
+        domain: shared
+        status: backlog
+        cross_epic_deps: [3-8-agent-run-action-compose-claude-md-launch-container-stream-logs, 6-1-pipeline-configs-table-default-pipeline-seed-crud-api]
+    container_count: 1
+    depends_on: [wave-7]
+    notes: "Reference project setup - needs working pipeline"
+
+  wave-14:
+    phase: 4-validation
+    stories:
+      - key: 10-2-todo-app-ci-pipeline-seed-data
+        domain: shared
+        status: backlog
+        explicit_deps: [10-1-todo-app-reference-project-structure]
+    container_count: 1
+    depends_on: [wave-13]
+    notes: "CI pipeline + seed data for reference project"
+
+  wave-15:
+    phase: 4-validation
+    stories:
+      - key: 10-3-pipeline-validation-stories-integration-test
+        domain: shared
+        status: backlog
+        explicit_deps: [10-2-todo-app-ci-pipeline-seed-data]
+    container_count: 1
+    depends_on: [wave-14]
+    notes: "Full pipeline validation - Epic 10 COMPLETE, PROJECT MVP DONE"

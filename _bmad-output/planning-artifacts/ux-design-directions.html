@@ -1,0 +1,1610 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>hopeitworks - UX Design Directions</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg: #0f172a;
+            --surface: #1e293b;
+            --card: #334155;
+            --border: rgba(71, 85, 105, 0.5);
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --accent: #14b8a6;
+            --accent-hover: #2dd4bf;
+            --success: #4ade80;
+            --active: #60a5fa;
+            --warning: #fbbf24;
+            --pending: #f59e0b;
+            --danger: #f87171;
+            --neutral: #6b7280;
+            --font-sans: Inter, system-ui, sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+        }
+
+        body {
+            font-family: var(--font-sans);
+            background: var(--bg);
+            color: var(--text-primary);
+            overflow: hidden;
+        }
+
+        .app-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        .header {
+            height: 48px;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+            gap: 16px;
+            flex-shrink: 0;
+        }
+
+        .logo {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--accent);
+            letter-spacing: -0.5px;
+        }
+
+        .project-dropdown {
+            background: var(--card);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-family: var(--font-mono);
+            cursor: pointer;
+        }
+
+        .search-input {
+            flex: 1;
+            max-width: 400px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+        }
+
+        .search-input::placeholder {
+            color: var(--text-muted);
+        }
+
+        .user-avatar {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--accent), var(--active));
+            margin-left: auto;
+        }
+
+        .main-wrapper {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .sidebar {
+            width: 240px;
+            background: var(--surface);
+            border-right: 1px solid var(--border);
+            padding: 16px 0;
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+
+        .sidebar-item {
+            padding: 8px 16px;
+            color: var(--text-secondary);
+            font-size: 13px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .sidebar-item:hover {
+            background: var(--card);
+            color: var(--text-primary);
+        }
+
+        .sidebar-item.active {
+            background: var(--card);
+            color: var(--accent);
+            border-left: 2px solid var(--accent);
+        }
+
+        .sidebar-item.nested {
+            padding-left: 32px;
+            font-size: 12px;
+        }
+
+        .sidebar-badge {
+            background: var(--danger);
+            color: white;
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-weight: 600;
+        }
+
+        .content {
+            flex: 1;
+            overflow-y: auto;
+            background: var(--bg);
+        }
+
+        .status-bar {
+            height: 24px;
+            background: var(--surface);
+            border-top: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+            gap: 16px;
+            font-size: 11px;
+            color: var(--text-muted);
+            flex-shrink: 0;
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--success);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.7); }
+            50% { opacity: 0.8; box-shadow: 0 0 0 4px rgba(74, 222, 128, 0); }
+        }
+
+        .direction-nav {
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            gap: 8px;
+            padding: 12px 16px;
+        }
+
+        .direction-btn {
+            background: var(--card);
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: var(--font-sans);
+        }
+
+        .direction-btn:hover {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+
+        .direction-btn.active {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+
+        .direction-view {
+            display: none;
+            padding: 24px;
+            height: calc(100vh - 48px - 24px - 53px);
+            overflow-y: auto;
+        }
+
+        .direction-view.active {
+            display: block;
+        }
+
+        /* Direction 1: Grid Monitor */
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 16px;
+        }
+
+        .story-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px;
+            border-left: 3px solid;
+            transition: all 0.2s;
+        }
+
+        .story-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .story-card.merged { border-left-color: var(--success); }
+        .story-card.running { border-left-color: var(--active); }
+        .story-card.waiting { border-left-color: var(--warning); }
+        .story-card.pending { border-left-color: var(--pending); }
+        .story-card.failed { border-left-color: var(--danger); }
+        .story-card.queued { border-left-color: var(--neutral); }
+
+        .story-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .story-key {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+
+        .story-title {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-primary);
+            margin-bottom: 12px;
+        }
+
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-badge.merged { background: var(--success); color: var(--bg); }
+        .status-badge.running { background: var(--active); color: var(--bg); }
+        .status-badge.waiting { background: var(--warning); color: var(--bg); }
+        .status-badge.pending { background: var(--pending); color: var(--bg); }
+        .status-badge.failed { background: var(--danger); color: var(--bg); }
+        .status-badge.queued { background: var(--neutral); color: var(--bg); }
+
+        .story-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 12px;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .step-indicator {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 8px;
+        }
+
+        .cost {
+            font-family: var(--font-mono);
+            color: var(--text-secondary);
+        }
+
+        /* Direction 2: Timeline Stream */
+        .timeline-container {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .timeline-row {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px;
+        }
+
+        .timeline-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .timeline-steps {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            position: relative;
+        }
+
+        .step-node {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: 600;
+            position: relative;
+            z-index: 2;
+        }
+
+        .step-node.complete {
+            background: var(--success);
+            color: var(--bg);
+        }
+
+        .step-node.active {
+            background: var(--active);
+            color: var(--bg);
+            animation: pulse-node 2s infinite;
+        }
+
+        @keyframes pulse-node {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(96, 165, 250, 0.7); }
+            50% { box-shadow: 0 0 0 8px rgba(96, 165, 250, 0); }
+        }
+
+        .step-node.pending {
+            background: var(--surface);
+            border: 2px solid var(--border);
+            color: var(--text-muted);
+        }
+
+        .step-node.failed {
+            background: var(--danger);
+            color: white;
+        }
+
+        .step-connector {
+            flex: 1;
+            height: 2px;
+            background: var(--border);
+            min-width: 40px;
+        }
+
+        .step-connector.complete {
+            background: var(--success);
+        }
+
+        .step-label {
+            position: absolute;
+            top: 38px;
+            font-size: 10px;
+            color: var(--text-muted);
+            white-space: nowrap;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .step-duration {
+            font-size: 10px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        /* Direction 3: Split Focus */
+        .split-container {
+            display: flex;
+            gap: 16px;
+            height: 100%;
+        }
+
+        .story-list {
+            width: 400px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow-y: auto;
+        }
+
+        .story-list-item {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .story-list-item:hover {
+            background: var(--surface);
+        }
+
+        .story-list-item.selected {
+            background: var(--surface);
+            border-left: 3px solid var(--accent);
+        }
+
+        .story-detail {
+            flex: 1;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 24px;
+            overflow-y: auto;
+        }
+
+        .detail-header {
+            margin-bottom: 24px;
+        }
+
+        .detail-title {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .log-preview {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 16px;
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 16px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .log-line {
+            margin-bottom: 4px;
+        }
+
+        /* Direction 4: Command Center */
+        .command-center {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 300px 1fr;
+            gap: 16px;
+            height: 100%;
+        }
+
+        .dag-panel {
+            grid-column: 1 / -1;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 24px;
+            position: relative;
+        }
+
+        .dag-canvas {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 40px;
+        }
+
+        .dag-node {
+            width: 80px;
+            height: 80px;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 600;
+            border: 2px solid;
+            position: relative;
+        }
+
+        .dag-node.merged {
+            background: rgba(74, 222, 128, 0.1);
+            border-color: var(--success);
+            color: var(--success);
+        }
+
+        .dag-node.running {
+            background: rgba(96, 165, 250, 0.1);
+            border-color: var(--active);
+            color: var(--active);
+        }
+
+        .dag-node.queued {
+            background: rgba(107, 114, 128, 0.1);
+            border-color: var(--neutral);
+            color: var(--neutral);
+        }
+
+        .activity-feed {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px;
+            overflow-y: auto;
+        }
+
+        .activity-item {
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border);
+            font-size: 12px;
+        }
+
+        .activity-time {
+            color: var(--text-muted);
+            font-size: 10px;
+        }
+
+        .epic-stats {
+            display: flex;
+            gap: 24px;
+            margin-bottom: 16px;
+        }
+
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .stat-label {
+            font-size: 11px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        .stat-value {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        /* Direction 5: Kanban Flow */
+        .kanban-container {
+            display: flex;
+            gap: 16px;
+            height: 100%;
+            overflow-x: auto;
+        }
+
+        .kanban-column {
+            min-width: 280px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .column-header {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .column-count {
+            background: var(--surface);
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+        }
+
+        .kanban-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 8px;
+        }
+
+        .kanban-card:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Direction 6: Minimal Zen */
+        .zen-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 48px 0;
+        }
+
+        .hero-metrics {
+            display: flex;
+            gap: 24px;
+            margin-bottom: 48px;
+            justify-content: center;
+        }
+
+        .metric-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            text-align: center;
+            min-width: 140px;
+        }
+
+        .metric-value {
+            font-size: 36px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .metric-value.success { color: var(--success); }
+        .metric-value.active { color: var(--active); }
+        .metric-value.danger { color: var(--danger); }
+
+        .metric-label {
+            font-size: 13px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        .progress-ring {
+            width: 200px;
+            height: 200px;
+            margin: 0 auto 48px;
+            position: relative;
+        }
+
+        .progress-svg {
+            transform: rotate(-90deg);
+        }
+
+        .progress-bg {
+            fill: none;
+            stroke: var(--surface);
+            stroke-width: 12;
+        }
+
+        .progress-bar {
+            fill: none;
+            stroke: var(--accent);
+            stroke-width: 12;
+            stroke-linecap: round;
+            transition: stroke-dashoffset 0.5s;
+        }
+
+        .progress-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }
+
+        .progress-percentage {
+            font-size: 32px;
+            font-weight: 700;
+        }
+
+        .progress-subtext {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .expandable-section {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin-bottom: 16px;
+            overflow: hidden;
+        }
+
+        .section-header {
+            padding: 16px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .section-header:hover {
+            background: var(--surface);
+        }
+
+        .section-content {
+            padding: 0 16px 16px;
+            border-top: 1px solid var(--border);
+        }
+
+        .section-title {
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .section-subtitle {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <div class="header">
+            <div class="logo">hopeitworks</div>
+            <select class="project-dropdown">
+                <option>hopeitworks / Epic 3</option>
+            </select>
+            <input type="text" class="search-input" placeholder="Search... (⌘K)">
+            <div class="user-avatar"></div>
+        </div>
+
+        <div class="main-wrapper">
+            <div class="sidebar">
+                <div class="sidebar-item">Dashboard</div>
+                <div class="sidebar-item">Projects</div>
+                <div class="sidebar-item nested active">hopeitworks</div>
+                <div class="sidebar-item nested" style="padding-left: 48px;">Epic 3</div>
+                <div class="sidebar-item">Active Runs</div>
+                <div class="sidebar-item">
+                    Approvals
+                    <span class="sidebar-badge">1</span>
+                </div>
+                <div class="sidebar-item">Pipeline Config</div>
+            </div>
+
+            <div class="content">
+                <div class="direction-nav">
+                    <button class="direction-btn active" onclick="showDirection(1)">Grid Monitor</button>
+                    <button class="direction-btn" onclick="showDirection(2)">Timeline Stream</button>
+                    <button class="direction-btn" onclick="showDirection(3)">Split Focus</button>
+                    <button class="direction-btn" onclick="showDirection(4)">Command Center</button>
+                    <button class="direction-btn" onclick="showDirection(5)">Kanban Flow</button>
+                    <button class="direction-btn" onclick="showDirection(6)">Minimal Zen</button>
+                </div>
+
+                <!-- Direction 1: Grid Monitor -->
+                <div id="direction-1" class="direction-view active">
+                    <div class="grid-container">
+                        <div class="story-card merged">
+                            <div class="story-header">
+                                <span class="story-key">S-01</span>
+                                <span class="status-badge merged">Merged</span>
+                            </div>
+                            <div class="story-title">Setup project scaffolding</div>
+                            <div class="step-indicator">✓ All steps complete</div>
+                            <div class="story-meta">
+                                <span class="cost">$1.20</span>
+                            </div>
+                        </div>
+
+                        <div class="story-card merged">
+                            <div class="story-header">
+                                <span class="story-key">S-02</span>
+                                <span class="status-badge merged">Merged</span>
+                            </div>
+                            <div class="story-title">Database schema + migrations</div>
+                            <div class="step-indicator">✓ All steps complete</div>
+                            <div class="story-meta">
+                                <span class="cost">$2.80</span>
+                            </div>
+                        </div>
+
+                        <div class="story-card merged">
+                            <div class="story-header">
+                                <span class="story-key">S-03</span>
+                                <span class="status-badge merged">Merged</span>
+                            </div>
+                            <div class="story-title">OpenAPI spec generation</div>
+                            <div class="step-indicator">✓ All steps complete</div>
+                            <div class="story-meta">
+                                <span class="cost">$1.50</span>
+                            </div>
+                        </div>
+
+                        <div class="story-card merged">
+                            <div class="story-header">
+                                <span class="story-key">S-04</span>
+                                <span class="status-badge merged">Merged</span>
+                            </div>
+                            <div class="story-title">Auth JWT middleware</div>
+                            <div class="step-indicator">✓ All steps complete</div>
+                            <div class="story-meta">
+                                <span class="cost">$3.10</span>
+                            </div>
+                        </div>
+
+                        <div class="story-card running">
+                            <div class="story-header">
+                                <span class="story-key">S-05</span>
+                                <span class="status-badge running">Running</span>
+                            </div>
+                            <div class="story-title">Pipeline state machine</div>
+                            <div class="step-indicator">→ Implement step (3/5)</div>
+                            <div class="story-meta">
+                                <span class="cost">$2.40</span>
+                            </div>
+                        </div>
+
+                        <div class="story-card running">
+                            <div class="story-header">
+                                <span class="story-key">S-06</span>
+                                <span class="status-badge running">Running</span>
+                            </div>
+                            <div class="story-title">DAG scheduler</div>
+                            <div class="step-indicator">→ CI step (4/5)</div>
+                            <div class="story-meta">
+                                <span class="cost">$1.80</span>
+                            </div>
+                        </div>
+
+                        <div class="story-card running">
+                            <div class="story-header">
+                                <span class="story-key">S-07</span>
+                                <span class="status-badge running">Running</span>
+                            </div>
+                            <div class="story-title">Container manager</div>
+                            <div class="step-indicator">→ Implement step (3/5)</div>
+                            <div class="story-meta">
+                                <span class="cost">$0.90</span>
+                            </div>
+                        </div>
+
+                        <div class="story-card waiting">
+                            <div class="story-header">
+                                <span class="story-key">S-08</span>
+                                <span class="status-badge waiting">Waiting</span>
+                            </div>
+                            <div class="story-title">SSE event streaming</div>
+                            <div class="step-indicator">⏳ Waiting for CI</div>
+                            <div class="story-meta">
+                                <span class="cost">$2.20</span>
+                            </div>
+                        </div>
+
+                        <div class="story-card pending">
+                            <div class="story-header">
+                                <span class="story-key">S-09</span>
+                                <span class="status-badge pending">Pending</span>
+                            </div>
+                            <div class="story-title">HITL approval flow</div>
+                            <div class="step-indicator">👤 Approval required</div>
+                            <div class="story-meta">
+                                <span class="cost">$1.90</span>
+                            </div>
+                        </div>
+
+                        <div class="story-card failed">
+                            <div class="story-header">
+                                <span class="story-key">S-10</span>
+                                <span class="status-badge failed">Failed</span>
+                            </div>
+                            <div class="story-title">Prompt renderer</div>
+                            <div class="step-indicator">✗ Failed at CI step</div>
+                            <div class="story-meta">
+                                <span class="cost">$3.40</span>
+                            </div>
+                        </div>
+
+                        <div class="story-card queued">
+                            <div class="story-header">
+                                <span class="story-key">S-11</span>
+                                <span class="status-badge queued">Queued</span>
+                            </div>
+                            <div class="story-title">Cost tracker service</div>
+                            <div class="step-indicator">⋯ Waiting to start</div>
+                            <div class="story-meta">
+                                <span class="cost">$0.00</span>
+                            </div>
+                        </div>
+
+                        <div class="story-card queued">
+                            <div class="story-header">
+                                <span class="story-key">S-12</span>
+                                <span class="status-badge queued">Queued</span>
+                            </div>
+                            <div class="story-title">Discord notifier</div>
+                            <div class="step-indicator">⋯ Depends on S-05</div>
+                            <div class="story-meta">
+                                <span class="cost">$0.00</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Direction 2: Timeline Stream -->
+                <div id="direction-2" class="direction-view">
+                    <div class="timeline-container">
+                        <div class="timeline-row">
+                            <div class="timeline-header">
+                                <span class="story-key">S-01</span>
+                                <span class="story-title" style="flex:1">Setup project scaffolding</span>
+                                <span class="status-badge merged">Merged</span>
+                                <span class="cost">$1.20</span>
+                            </div>
+                            <div class="timeline-steps">
+                                <div class="step-node complete">BR</div>
+                                <div class="step-connector complete"></div>
+                                <div class="step-node complete">IM</div>
+                                <div class="step-connector complete"></div>
+                                <div class="step-node complete">CI</div>
+                                <div class="step-connector complete"></div>
+                                <div class="step-node complete">RV</div>
+                                <div class="step-connector complete"></div>
+                                <div class="step-node complete">MG</div>
+                            </div>
+                        </div>
+
+                        <div class="timeline-row">
+                            <div class="timeline-header">
+                                <span class="story-key">S-02</span>
+                                <span class="story-title" style="flex:1">Database schema + migrations</span>
+                                <span class="status-badge merged">Merged</span>
+                                <span class="cost">$2.80</span>
+                            </div>
+                            <div class="timeline-steps">
+                                <div class="step-node complete">BR</div>
+                                <div class="step-connector complete"></div>
+                                <div class="step-node complete">IM</div>
+                                <div class="step-connector complete"></div>
+                                <div class="step-node complete">CI</div>
+                                <div class="step-connector complete"></div>
+                                <div class="step-node complete">RV</div>
+                                <div class="step-connector complete"></div>
+                                <div class="step-node complete">MG</div>
+                            </div>
+                        </div>
+
+                        <div class="timeline-row">
+                            <div class="timeline-header">
+                                <span class="story-key">S-05</span>
+                                <span class="story-title" style="flex:1">Pipeline state machine</span>
+                                <span class="status-badge running">Running</span>
+                                <span class="cost">$2.40</span>
+                            </div>
+                            <div class="timeline-steps">
+                                <div class="step-node complete">BR</div>
+                                <div class="step-connector complete"></div>
+                                <div class="step-node active">IM</div>
+                                <div class="step-connector"></div>
+                                <div class="step-node pending">CI</div>
+                                <div class="step-connector"></div>
+                                <div class="step-node pending">RV</div>
+                                <div class="step-connector"></div>
+                                <div class="step-node pending">MG</div>
+                            </div>
+                        </div>
+
+                        <div class="timeline-row">
+                            <div class="timeline-header">
+                                <span class="story-key">S-06</span>
+                                <span class="story-title" style="flex:1">DAG scheduler</span>
+                                <span class="status-badge running">Running</span>
+                                <span class="cost">$1.80</span>
+                            </div>
+                            <div class="timeline-steps">
+                                <div class="step-node complete">BR</div>
+                                <div class="step-connector complete"></div>
+                                <div class="step-node complete">IM</div>
+                                <div class="step-connector complete"></div>
+                                <div class="step-node active">CI</div>
+                                <div class="step-connector"></div>
+                                <div class="step-node pending">RV</div>
+                                <div class="step-connector"></div>
+                                <div class="step-node pending">MG</div>
+                            </div>
+                        </div>
+
+                        <div class="timeline-row">
+                            <div class="timeline-header">
+                                <span class="story-key">S-08</span>
+                                <span class="story-title" style="flex:1">SSE event streaming</span>
+                                <span class="status-badge waiting">Waiting</span>
+                                <span class="cost">$2.20</span>
+                            </div>
+                            <div class="timeline-steps">
+                                <div class="step-node complete">BR</div>
+                                <div class="step-connector complete"></div>
+                                <div class="step-node complete">IM</div>
+                                <div class="step-connector complete"></div>
+                                <div class="step-node active">CI</div>
+                                <div class="step-connector"></div>
+                                <div class="step-node pending">RV</div>
+                                <div class="step-connector"></div>
+                                <div class="step-node pending">MG</div>
+                            </div>
+                        </div>
+
+                        <div class="timeline-row">
+                            <div class="timeline-header">
+                                <span class="story-key">S-09</span>
+                                <span class="story-title" style="flex:1">HITL approval flow</span>
+                                <span class="status-badge pending">Pending</span>
+                                <span class="cost">$1.90</span>
+                            </div>
+                            <div class="timeline-steps">
+                                <div class="step-node complete">BR</div>
+                                <div class="step-connector complete"></div>
+                                <div class="step-node complete">IM</div>
+                                <div class="step-connector complete"></div>
+                                <div class="step-node complete">CI</div>
+                                <div class="step-connector complete"></div>
+                                <div class="step-node active">RV</div>
+                                <div class="step-connector"></div>
+                                <div class="step-node pending">MG</div>
+                            </div>
+                        </div>
+
+                        <div class="timeline-row">
+                            <div class="timeline-header">
+                                <span class="story-key">S-10</span>
+                                <span class="story-title" style="flex:1">Prompt renderer</span>
+                                <span class="status-badge failed">Failed</span>
+                                <span class="cost">$3.40</span>
+                            </div>
+                            <div class="timeline-steps">
+                                <div class="step-node complete">BR</div>
+                                <div class="step-connector complete"></div>
+                                <div class="step-node complete">IM</div>
+                                <div class="step-connector complete"></div>
+                                <div class="step-node failed">CI</div>
+                                <div class="step-connector"></div>
+                                <div class="step-node pending">RV</div>
+                                <div class="step-connector"></div>
+                                <div class="step-node pending">MG</div>
+                            </div>
+                        </div>
+
+                        <div class="timeline-row">
+                            <div class="timeline-header">
+                                <span class="story-key">S-11</span>
+                                <span class="story-title" style="flex:1">Cost tracker service</span>
+                                <span class="status-badge queued">Queued</span>
+                                <span class="cost">$0.00</span>
+                            </div>
+                            <div class="timeline-steps">
+                                <div class="step-node pending">BR</div>
+                                <div class="step-connector"></div>
+                                <div class="step-node pending">IM</div>
+                                <div class="step-connector"></div>
+                                <div class="step-node pending">CI</div>
+                                <div class="step-connector"></div>
+                                <div class="step-node pending">RV</div>
+                                <div class="step-connector"></div>
+                                <div class="step-node pending">MG</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Direction 3: Split Focus -->
+                <div id="direction-3" class="direction-view">
+                    <div class="split-container">
+                        <div class="story-list">
+                            <div class="story-list-item selected">
+                                <div class="story-header">
+                                    <span class="story-key">S-05</span>
+                                    <span class="status-badge running">Running</span>
+                                </div>
+                                <div class="story-title">Pipeline state machine</div>
+                            </div>
+                            <div class="story-list-item">
+                                <div class="story-header">
+                                    <span class="story-key">S-06</span>
+                                    <span class="status-badge running">Running</span>
+                                </div>
+                                <div class="story-title">DAG scheduler</div>
+                            </div>
+                            <div class="story-list-item">
+                                <div class="story-header">
+                                    <span class="story-key">S-07</span>
+                                    <span class="status-badge running">Running</span>
+                                </div>
+                                <div class="story-title">Container manager</div>
+                            </div>
+                            <div class="story-list-item">
+                                <div class="story-header">
+                                    <span class="story-key">S-08</span>
+                                    <span class="status-badge waiting">Waiting</span>
+                                </div>
+                                <div class="story-title">SSE event streaming</div>
+                            </div>
+                            <div class="story-list-item">
+                                <div class="story-header">
+                                    <span class="story-key">S-09</span>
+                                    <span class="status-badge pending">Pending</span>
+                                </div>
+                                <div class="story-title">HITL approval flow</div>
+                            </div>
+                            <div class="story-list-item">
+                                <div class="story-header">
+                                    <span class="story-key">S-10</span>
+                                    <span class="status-badge failed">Failed</span>
+                                </div>
+                                <div class="story-title">Prompt renderer</div>
+                            </div>
+                        </div>
+
+                        <div class="story-detail">
+                            <div class="detail-header">
+                                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                                    <span class="story-key">S-05</span>
+                                    <span class="status-badge running">Running</span>
+                                </div>
+                                <div class="detail-title">Pipeline state machine</div>
+                                <div style="color: var(--text-muted); font-size: 13px;">Cost: $2.40 • Started 14 minutes ago</div>
+                            </div>
+
+                            <div style="margin-bottom: 24px;">
+                                <h3 style="font-size: 14px; margin-bottom: 12px; color: var(--text-secondary);">Progress</h3>
+                                <div class="timeline-steps">
+                                    <div class="step-node complete" style="position: relative;">
+                                        BR
+                                        <span class="step-label">Branch</span>
+                                    </div>
+                                    <div class="step-connector complete"></div>
+                                    <div class="step-node active" style="position: relative;">
+                                        IM
+                                        <span class="step-label">Implement</span>
+                                    </div>
+                                    <div class="step-connector"></div>
+                                    <div class="step-node pending" style="position: relative;">
+                                        CI
+                                        <span class="step-label">CI</span>
+                                    </div>
+                                    <div class="step-connector"></div>
+                                    <div class="step-node pending" style="position: relative;">
+                                        RV
+                                        <span class="step-label">Review</span>
+                                    </div>
+                                    <div class="step-connector"></div>
+                                    <div class="step-node pending" style="position: relative;">
+                                        MG
+                                        <span class="step-label">Merge</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div>
+                                <h3 style="font-size: 14px; margin-bottom: 12px; color: var(--text-secondary);">Live Output</h3>
+                                <div class="log-preview">
+                                    <div class="log-line">[14:32:18] Creating state machine implementation...</div>
+                                    <div class="log-line">[14:32:22] Analyzing existing pipeline code...</div>
+                                    <div class="log-line">[14:32:35] Generating state transitions...</div>
+                                    <div class="log-line">[14:33:01] Writing src/core/state-machine.ts...</div>
+                                    <div class="log-line">[14:33:18] Adding unit tests...</div>
+                                    <div class="log-line" style="color: var(--active);">[14:33:42] Running type check... ▸</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Direction 4: Command Center -->
+                <div id="direction-4" class="direction-view">
+                    <div class="command-center">
+                        <div class="dag-panel">
+                            <div class="epic-stats">
+                                <div class="stat-item">
+                                    <div class="stat-label">Progress</div>
+                                    <div class="stat-value">4/12</div>
+                                </div>
+                                <div class="stat-item">
+                                    <div class="stat-label">Active</div>
+                                    <div class="stat-value" style="color: var(--active);">3</div>
+                                </div>
+                                <div class="stat-item">
+                                    <div class="stat-label">Total Cost</div>
+                                    <div class="stat-value" style="color: var(--accent);">$21.20</div>
+                                </div>
+                                <div class="stat-item">
+                                    <div class="stat-label">Agents</div>
+                                    <div class="stat-value">3</div>
+                                </div>
+                            </div>
+                            <div class="dag-canvas">
+                                <div class="dag-node merged">
+                                    <div>S-01</div>
+                                    <div style="font-size: 9px; margin-top: 4px;">Setup</div>
+                                </div>
+                                <div class="dag-node merged">
+                                    <div>S-02</div>
+                                    <div style="font-size: 9px; margin-top: 4px;">Database</div>
+                                </div>
+                                <div class="dag-node merged">
+                                    <div>S-03</div>
+                                    <div style="font-size: 9px; margin-top: 4px;">OpenAPI</div>
+                                </div>
+                                <div class="dag-node merged">
+                                    <div>S-04</div>
+                                    <div style="font-size: 9px; margin-top: 4px;">Auth</div>
+                                </div>
+                                <div class="dag-node running">
+                                    <div>S-05</div>
+                                    <div style="font-size: 9px; margin-top: 4px;">Pipeline</div>
+                                </div>
+                                <div class="dag-node running">
+                                    <div>S-06</div>
+                                    <div style="font-size: 9px; margin-top: 4px;">DAG</div>
+                                </div>
+                                <div class="dag-node queued">
+                                    <div>S-12</div>
+                                    <div style="font-size: 9px; margin-top: 4px;">Discord</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style="background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 16px; overflow-y: auto;">
+                            <h3 style="font-size: 14px; margin-bottom: 16px; color: var(--text-primary); font-weight: 600;">Stories</h3>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                                <div style="padding: 8px; background: var(--surface); border-radius: 4px; border-left: 3px solid var(--success);">
+                                    <div class="story-key">S-01</div>
+                                    <div style="font-size: 12px; margin-top: 4px;">Setup project</div>
+                                </div>
+                                <div style="padding: 8px; background: var(--surface); border-radius: 4px; border-left: 3px solid var(--success);">
+                                    <div class="story-key">S-02</div>
+                                    <div style="font-size: 12px; margin-top: 4px;">Database schema</div>
+                                </div>
+                                <div style="padding: 8px; background: var(--surface); border-radius: 4px; border-left: 3px solid var(--active);">
+                                    <div class="story-key">S-05</div>
+                                    <div style="font-size: 12px; margin-top: 4px;">Pipeline state</div>
+                                </div>
+                                <div style="padding: 8px; background: var(--surface); border-radius: 4px; border-left: 3px solid var(--active);">
+                                    <div class="story-key">S-06</div>
+                                    <div style="font-size: 12px; margin-top: 4px;">DAG scheduler</div>
+                                </div>
+                                <div style="padding: 8px; background: var(--surface); border-radius: 4px; border-left: 3px solid var(--danger);">
+                                    <div class="story-key">S-10</div>
+                                    <div style="font-size: 12px; margin-top: 4px;">Prompt renderer</div>
+                                </div>
+                                <div style="padding: 8px; background: var(--surface); border-radius: 4px; border-left: 3px solid var(--pending);">
+                                    <div class="story-key">S-09</div>
+                                    <div style="font-size: 12px; margin-top: 4px;">HITL approval</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="activity-feed">
+                            <h3 style="font-size: 14px; margin-bottom: 16px; color: var(--text-primary); font-weight: 600;">Activity</h3>
+                            <div class="activity-item">
+                                <div style="color: var(--text-primary);">S-06 entered CI step</div>
+                                <div class="activity-time">2 minutes ago</div>
+                            </div>
+                            <div class="activity-item">
+                                <div style="color: var(--text-primary);">S-07 implementation in progress</div>
+                                <div class="activity-time">5 minutes ago</div>
+                            </div>
+                            <div class="activity-item">
+                                <div style="color: var(--danger);">S-10 failed CI checks</div>
+                                <div class="activity-time">8 minutes ago</div>
+                            </div>
+                            <div class="activity-item">
+                                <div style="color: var(--pending);">S-09 waiting for approval</div>
+                                <div class="activity-time">12 minutes ago</div>
+                            </div>
+                            <div class="activity-item">
+                                <div style="color: var(--success);">S-04 merged to main</div>
+                                <div class="activity-time">18 minutes ago</div>
+                            </div>
+                            <div class="activity-item">
+                                <div style="color: var(--text-primary);">S-05 started implement step</div>
+                                <div class="activity-time">22 minutes ago</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Direction 5: Kanban Flow -->
+                <div id="direction-5" class="direction-view">
+                    <div class="kanban-container">
+                        <div class="kanban-column">
+                            <div class="column-header">
+                                Queued
+                                <span class="column-count">2</span>
+                            </div>
+                            <div class="kanban-card">
+                                <div class="story-header">
+                                    <span class="story-key">S-11</span>
+                                </div>
+                                <div class="story-title" style="font-size: 13px; margin-bottom: 8px;">Cost tracker service</div>
+                                <div class="cost">$0.00</div>
+                            </div>
+                            <div class="kanban-card">
+                                <div class="story-header">
+                                    <span class="story-key">S-12</span>
+                                </div>
+                                <div class="story-title" style="font-size: 13px; margin-bottom: 8px;">Discord notifier</div>
+                                <div style="font-size: 11px; color: var(--text-muted);">Depends on S-05</div>
+                            </div>
+                        </div>
+
+                        <div class="kanban-column">
+                            <div class="column-header">
+                                Running
+                                <span class="column-count">3</span>
+                            </div>
+                            <div class="kanban-card">
+                                <div class="story-header">
+                                    <span class="story-key">S-05</span>
+                                    <span class="status-badge running" style="font-size: 9px; padding: 2px 6px;">Implement</span>
+                                </div>
+                                <div class="story-title" style="font-size: 13px; margin-bottom: 8px;">Pipeline state machine</div>
+                                <div class="cost">$2.40</div>
+                            </div>
+                            <div class="kanban-card">
+                                <div class="story-header">
+                                    <span class="story-key">S-06</span>
+                                    <span class="status-badge running" style="font-size: 9px; padding: 2px 6px;">CI</span>
+                                </div>
+                                <div class="story-title" style="font-size: 13px; margin-bottom: 8px;">DAG scheduler</div>
+                                <div class="cost">$1.80</div>
+                            </div>
+                            <div class="kanban-card">
+                                <div class="story-header">
+                                    <span class="story-key">S-07</span>
+                                    <span class="status-badge running" style="font-size: 9px; padding: 2px 6px;">Implement</span>
+                                </div>
+                                <div class="story-title" style="font-size: 13px; margin-bottom: 8px;">Container manager</div>
+                                <div class="cost">$0.90</div>
+                            </div>
+                        </div>
+
+                        <div class="kanban-column">
+                            <div class="column-header">
+                                CI
+                                <span class="column-count">1</span>
+                            </div>
+                            <div class="kanban-card">
+                                <div class="story-header">
+                                    <span class="story-key">S-08</span>
+                                </div>
+                                <div class="story-title" style="font-size: 13px; margin-bottom: 8px;">SSE event streaming</div>
+                                <div class="cost">$2.20</div>
+                            </div>
+                        </div>
+
+                        <div class="kanban-column">
+                            <div class="column-header">
+                                Review
+                                <span class="column-count">1</span>
+                            </div>
+                            <div class="kanban-card">
+                                <div class="story-header">
+                                    <span class="story-key">S-09</span>
+                                </div>
+                                <div class="story-title" style="font-size: 13px; margin-bottom: 8px;">HITL approval flow</div>
+                                <div style="font-size: 11px; color: var(--pending); margin-top: 8px;">👤 Needs approval</div>
+                                <div class="cost">$1.90</div>
+                            </div>
+                        </div>
+
+                        <div class="kanban-column">
+                            <div class="column-header">
+                                Merged
+                                <span class="column-count">4</span>
+                            </div>
+                            <div class="kanban-card">
+                                <div class="story-header">
+                                    <span class="story-key">S-01</span>
+                                </div>
+                                <div class="story-title" style="font-size: 13px; margin-bottom: 8px;">Setup project</div>
+                                <div class="cost">$1.20</div>
+                            </div>
+                            <div class="kanban-card">
+                                <div class="story-header">
+                                    <span class="story-key">S-02</span>
+                                </div>
+                                <div class="story-title" style="font-size: 13px; margin-bottom: 8px;">Database schema</div>
+                                <div class="cost">$2.80</div>
+                            </div>
+                            <div class="kanban-card">
+                                <div class="story-header">
+                                    <span class="story-key">S-03</span>
+                                </div>
+                                <div class="story-title" style="font-size: 13px; margin-bottom: 8px;">OpenAPI spec</div>
+                                <div class="cost">$1.50</div>
+                            </div>
+                            <div class="kanban-card">
+                                <div class="story-header">
+                                    <span class="story-key">S-04</span>
+                                </div>
+                                <div class="story-title" style="font-size: 13px; margin-bottom: 8px;">Auth JWT</div>
+                                <div class="cost">$3.10</div>
+                            </div>
+                        </div>
+
+                        <div class="kanban-column">
+                            <div class="column-header">
+                                Failed
+                                <span class="column-count">1</span>
+                            </div>
+                            <div class="kanban-card" style="border: 1px solid var(--danger);">
+                                <div class="story-header">
+                                    <span class="story-key">S-10</span>
+                                </div>
+                                <div class="story-title" style="font-size: 13px; margin-bottom: 8px;">Prompt renderer</div>
+                                <div style="font-size: 11px; color: var(--danger); margin-top: 8px;">✗ CI failed</div>
+                                <div class="cost">$3.40</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Direction 6: Minimal Zen -->
+                <div id="direction-6" class="direction-view">
+                    <div class="zen-container">
+                        <div class="hero-metrics">
+                            <div class="metric-card">
+                                <div class="metric-value success">4</div>
+                                <div class="metric-label">Merged</div>
+                            </div>
+                            <div class="metric-card">
+                                <div class="metric-value active">3</div>
+                                <div class="metric-label">Running</div>
+                            </div>
+                            <div class="metric-card">
+                                <div class="metric-value danger">1</div>
+                                <div class="metric-label">Needs Attention</div>
+                            </div>
+                        </div>
+
+                        <div class="progress-ring">
+                            <svg class="progress-svg" width="200" height="200">
+                                <circle class="progress-bg" cx="100" cy="100" r="90"></circle>
+                                <circle class="progress-bar" cx="100" cy="100" r="90"
+                                    stroke-dasharray="565.48"
+                                    stroke-dashoffset="377.65"></circle>
+                            </svg>
+                            <div class="progress-text">
+                                <div class="progress-percentage">33%</div>
+                                <div class="progress-subtext">Complete</div>
+                            </div>
+                        </div>
+
+                        <div class="expandable-section">
+                            <div class="section-header">
+                                <div>
+                                    <div class="section-title">Active Stories (3)</div>
+                                    <div class="section-subtitle">Currently being worked on</div>
+                                </div>
+                            </div>
+                            <div class="section-content">
+                                <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 12px;">
+                                    <div style="padding: 12px; background: var(--surface); border-radius: 6px; border-left: 3px solid var(--active);">
+                                        <div style="display: flex; justify-content: space-between; align-items: start;">
+                                            <div>
+                                                <div class="story-key">S-05</div>
+                                                <div style="font-size: 14px; margin: 4px 0;">Pipeline state machine</div>
+                                                <div style="font-size: 12px; color: var(--text-muted);">Implement step • 14 min</div>
+                                            </div>
+                                            <div class="cost">$2.40</div>
+                                        </div>
+                                    </div>
+                                    <div style="padding: 12px; background: var(--surface); border-radius: 6px; border-left: 3px solid var(--active);">
+                                        <div style="display: flex; justify-content: space-between; align-items: start;">
+                                            <div>
+                                                <div class="story-key">S-06</div>
+                                                <div style="font-size: 14px; margin: 4px 0;">DAG scheduler</div>
+                                                <div style="font-size: 12px; color: var(--text-muted);">CI step • 11 min</div>
+                                            </div>
+                                            <div class="cost">$1.80</div>
+                                        </div>
+                                    </div>
+                                    <div style="padding: 12px; background: var(--surface); border-radius: 6px; border-left: 3px solid var(--active);">
+                                        <div style="display: flex; justify-content: space-between; align-items: start;">
+                                            <div>
+                                                <div class="story-key">S-07</div>
+                                                <div style="font-size: 14px; margin: 4px 0;">Container manager</div>
+                                                <div style="font-size: 12px; color: var(--text-muted);">Implement step • 8 min</div>
+                                            </div>
+                                            <div class="cost">$0.90</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="expandable-section">
+                            <div class="section-header">
+                                <div>
+                                    <div class="section-title" style="color: var(--danger);">Needs Attention (2)</div>
+                                    <div class="section-subtitle">Requires your action</div>
+                                </div>
+                            </div>
+                            <div class="section-content">
+                                <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 12px;">
+                                    <div style="padding: 12px; background: var(--surface); border-radius: 6px; border-left: 3px solid var(--danger);">
+                                        <div style="display: flex; justify-content: space-between; align-items: start;">
+                                            <div>
+                                                <div class="story-key">S-10</div>
+                                                <div style="font-size: 14px; margin: 4px 0;">Prompt renderer</div>
+                                                <div style="font-size: 12px; color: var(--danger);">✗ CI failed</div>
+                                            </div>
+                                            <div class="cost">$3.40</div>
+                                        </div>
+                                    </div>
+                                    <div style="padding: 12px; background: var(--surface); border-radius: 6px; border-left: 3px solid var(--pending);">
+                                        <div style="display: flex; justify-content: space-between; align-items: start;">
+                                            <div>
+                                                <div class="story-key">S-09</div>
+                                                <div style="font-size: 14px; margin: 4px 0;">HITL approval flow</div>
+                                                <div style="font-size: 12px; color: var(--pending);">👤 Waiting for approval</div>
+                                            </div>
+                                            <div class="cost">$1.90</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="expandable-section">
+                            <div class="section-header">
+                                <div>
+                                    <div class="section-title">Completed (4)</div>
+                                    <div class="section-subtitle">Successfully merged</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="expandable-section">
+                            <div class="section-header">
+                                <div>
+                                    <div class="section-title">Queued (2)</div>
+                                    <div class="section-subtitle">Waiting to start</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="status-bar">
+            <span class="status-item">Docker mode</span>
+            <span class="status-item">
+                <span class="status-dot"></span>
+                Connected
+            </span>
+            <span class="status-item">3 agents active</span>
+            <span class="status-item" style="margin-left: auto;">$21.20 spent</span>
+        </div>
+    </div>
+
+    <script>
+        function showDirection(num) {
+            // Hide all views
+            document.querySelectorAll('.direction-view').forEach(view => {
+                view.classList.remove('active');
+            });
+
+            // Remove active from all buttons
+            document.querySelectorAll('.direction-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+
+            // Show selected view
+            document.getElementById(`direction-${num}`).classList.add('active');
+
+            // Activate button
+            document.querySelectorAll('.direction-btn')[num - 1].classList.add('active');
+        }
+    </script>
+</body>
+</html>

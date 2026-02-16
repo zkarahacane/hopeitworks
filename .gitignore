@@ -1,0 +1,41 @@
+# Environment
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Dependencies
+node_modules/
+vendor/
+
+# Build outputs
+dist/
+build/
+tmp/
+*.exe
+*.out
+
+# Go
+backend/bin/
+backend/internal/api/handler/gen_*
+backend/internal/adapter/postgres/gen_*
+
+# Frontend
+frontend/.nuxt/
+frontend/.output/
+frontend/coverage/
+
+# Logs
+*.log
+
+# Docker
+docker-compose.override.yml
