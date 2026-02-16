@@ -72,28 +72,28 @@ func (m *mockProjectUserRepo) CountProjectsByUser(_ context.Context, userID uuid
 	return int64(len(m.projects[userID])), nil
 }
 
-// mockUserRepo is a mock implementation of port.UserRepository for service tests.
-type mockUserRepo struct {
+// mockProjectUserServiceUserRepo is a mock implementation of port.UserRepository for service tests.
+type mockProjectUserServiceUserRepo struct {
 	users map[uuid.UUID]*model.User
 }
 
-var _ port.UserRepository = (*mockUserRepo)(nil)
+var _ port.UserRepository = (*mockProjectUserServiceUserRepo)(nil)
 
-func newMockUserRepo() *mockUserRepo {
-	return &mockUserRepo{users: make(map[uuid.UUID]*model.User)}
+func newMockProjectUserServiceUserRepo() *mockProjectUserServiceUserRepo {
+	return &mockProjectUserServiceUserRepo{users: make(map[uuid.UUID]*model.User)}
 }
 
-func (m *mockUserRepo) Create(_ context.Context, user *model.User) (*model.User, error) {
+func (m *mockProjectUserServiceUserRepo) Create(_ context.Context, user *model.User) (*model.User, error) {
 	user.ID = uuid.New()
 	m.users[user.ID] = user
 	return user, nil
 }
 
-func (m *mockUserRepo) GetByEmail(_ context.Context, _ string) (*model.User, error) {
+func (m *mockProjectUserServiceUserRepo) GetByEmail(_ context.Context, _ string) (*model.User, error) {
 	return nil, errors.NewNotFound("user", "email")
 }
 
-func (m *mockUserRepo) GetByID(_ context.Context, id uuid.UUID) (*model.User, error) {
+func (m *mockProjectUserServiceUserRepo) GetByID(_ context.Context, id uuid.UUID) (*model.User, error) {
 	u, ok := m.users[id]
 	if !ok {
 		return nil, errors.NewNotFound("user", id)
@@ -101,18 +101,18 @@ func (m *mockUserRepo) GetByID(_ context.Context, id uuid.UUID) (*model.User, er
 	return u, nil
 }
 
-func (m *mockUserRepo) List(_ context.Context, _, _ int32) ([]*model.User, error) { return nil, nil }
-func (m *mockUserRepo) Count(_ context.Context) (int64, error)                    { return 0, nil }
-func (m *mockUserRepo) Update(_ context.Context, user *model.User) (*model.User, error) {
+func (m *mockProjectUserServiceUserRepo) List(_ context.Context, _, _ int32) ([]*model.User, error) { return nil, nil }
+func (m *mockProjectUserServiceUserRepo) Count(_ context.Context) (int64, error)                    { return 0, nil }
+func (m *mockProjectUserServiceUserRepo) Update(_ context.Context, user *model.User) (*model.User, error) {
 	return user, nil
 }
-func (m *mockUserRepo) Delete(_ context.Context, _ uuid.UUID) error { return nil }
+func (m *mockProjectUserServiceUserRepo) Delete(_ context.Context, _ uuid.UUID) error { return nil }
 
-func setupProjectUserService() (*ProjectUserService, *mockProjectUserRepo, *mockProjectRepo, *mockUserRepo) {
+func setupProjectUserService() (*ProjectUserService, *mockProjectUserRepo, *mockProjectRepo, *mockProjectUserServiceUserRepo) {
 	puRepo := newMockProjectUserRepo()
 	// Reuse mockProjectRepo from project_service_test.go
 	projectRepo := newMockProjectRepoForService()
-	userRepo := newMockUserRepo()
+	userRepo := newMockProjectUserServiceUserRepo()
 	svc := NewProjectUserService(puRepo, projectRepo, userRepo)
 	return svc, puRepo, projectRepo, userRepo
 }
