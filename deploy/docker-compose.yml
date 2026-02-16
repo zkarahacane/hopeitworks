@@ -1,0 +1,51 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: hopeitworks-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-hopeitworks_dev}
+      POSTGRES_USER: ${POSTGRES_USER:-hopeitworks}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hopeitworks_dev_password}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hopeitworks}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: on-failure
+    networks:
+      - hopeitworks
+
+  api:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: hopeitworks-api
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      LOG_LEVEL: ${LOG_LEVEL:-debug}
+      SERVER_PORT: ${SERVER_PORT:-8080}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB:-hopeitworks_dev}
+      DB_USER: ${POSTGRES_USER:-hopeitworks}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-hopeitworks_dev_password}
+      DB_SSLMODE: disable
+    ports:
+      - "${SERVER_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: on-failure
+    networks:
+      - hopeitworks
+
+volumes:
+  postgres_data:
+
+networks:
+  hopeitworks:
+    driver: bridge
