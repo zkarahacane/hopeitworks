@@ -1,5 +1,6 @@
 import { computed, ref } from 'vue'
 import { useProjectsStore, type FetchProjectsParams } from '@/stores/projects'
+import { useAsyncAction } from '@/composables/useAsyncAction'
 
 /**
  * Composable for project list operations.
@@ -20,6 +21,8 @@ export function useProjects() {
     await store.fetchProjects(lastParams.value)
   }
 
+  const createProject = useAsyncAction(store.createProject)
+
   return {
     projects: computed(() => store.items),
     pagination: computed(() => store.pagination),
@@ -27,5 +30,6 @@ export function useProjects() {
     error: computed(() => store.error),
     fetchProjects,
     retry,
+    createProject,
   }
 }

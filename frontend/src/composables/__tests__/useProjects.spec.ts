@@ -3,10 +3,12 @@ import { setActivePinia, createPinia } from 'pinia'
 import { useProjects } from '../useProjects'
 
 const mockGet = vi.fn()
+const mockPost = vi.fn()
 
 vi.mock('@/api/client', () => ({
   apiClient: {
     GET: (...args: unknown[]) => mockGet(...args),
+    POST: (...args: unknown[]) => mockPost(...args),
   },
 }))
 
@@ -14,6 +16,7 @@ describe('useProjects', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     mockGet.mockReset()
+    mockPost.mockReset()
   })
 
   it('exposes reactive computed properties from the store', () => {
@@ -97,5 +100,49 @@ describe('useProjects', () => {
     expect(mockGet).toHaveBeenCalledWith('/projects', {
       params: { query: { page: undefined, per_page: undefined, sort_by: undefined } },
     })
+  })
+
+  it('exposes createProject with execute, isLoading, and error', () => {
+    const { createProject } = useProjects()
+    expect(createProject.execute).toBeTypeOf('function')
+    expect(createProject.isLoading.value).toBe(false)
+    expect(createProject.error.value).toBeNull()
+  })
+
+  it('createProject.execute returns project on success', async () => {
+    const createdProject = {
+      id: 'p1',
+      name: 'New Project',
+      owner_id: 'u1',
+      created_at: '2026-02-16T10:00:00Z',
+      updated_at: '2026-02-16T10:00:00Z',
+    }
+
+    mockPost.mockResolvedValue({
+      data: createdProject,
+      error: undefined,
+    })
+
+    const { createProject } = useProjects()
+    const result = await createProject.execute({ name: 'New Project' })
+
+    expect(result).toEqual(createdProject)
+    expect(createProject.isLoading.value).toBe(false)
+    expect(createProject.error.value).toBeNull()
+  })
+
+  it('createProject.execute sets error on failure and returns null', async () => {
+    mockPost.mockResolvedValue({
+      data: undefined,
+      error: { error: { code: 'BAD_REQUEST', message: 'Name already exists' } },
+    })
+
+    const { createProject } = useProjects()
+    const result = await createProject.execute({ name: 'Dup' })
+
+    expect(result).toBeNull()
+    expect(createProject.isLoading.value).toBe(false)
+    expect(createProject.error.value).toBeInstanceOf(Error)
+    expect(createProject.error.value?.message).toBe('Name already exists')
   })
 })

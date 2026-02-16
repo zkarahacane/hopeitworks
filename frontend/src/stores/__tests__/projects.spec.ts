@@ -3,10 +3,12 @@ import { setActivePinia, createPinia } from 'pinia'
 import { useProjectsStore } from '../projects'
 
 const mockGet = vi.fn()
+const mockPost = vi.fn()
 
 vi.mock('@/api/client', () => ({
   apiClient: {
     GET: (...args: unknown[]) => mockGet(...args),
+    POST: (...args: unknown[]) => mockPost(...args),
   },
 }))
 
@@ -14,6 +16,7 @@ describe('useProjectsStore', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     mockGet.mockReset()
+    mockPost.mockReset()
   })
 
   it('starts with default state', () => {
@@ -141,5 +144,58 @@ describe('useProjectsStore', () => {
 
     await store.fetchProjects()
     expect(store.error).toBeNull()
+  })
+
+  it('createProject returns project on success', async () => {
+    const createdProject = {
+      id: 'p1',
+      name: 'New Project',
+      description: 'A description',
+      owner_id: 'u1',
+      created_at: '2026-02-16T10:00:00Z',
+      updated_at: '2026-02-16T10:00:00Z',
+    }
+
+    mockPost.mockResolvedValue({
+      data: createdProject,
+      error: undefined,
+    })
+
+    const store = useProjectsStore()
+    const result = await store.createProject({ name: 'New Project', description: 'A description' })
+
+    expect(result).toEqual(createdProject)
+    expect(mockPost).toHaveBeenCalledWith('/projects', {
+      body: { name: 'New Project', description: 'A description' },
+    })
+  })
+
+  it('createProject throws with API error message', async () => {
+    mockPost.mockResolvedValue({
+      data: undefined,
+      error: { error: { code: 'BAD_REQUEST', message: 'Name already exists' } },
+    })
+
+    const store = useProjectsStore()
+    await expect(store.createProject({ name: 'Dup' })).rejects.toThrow('Name already exists')
+  })
+
+  it('createProject throws fallback message when API error has no message', async () => {
+    mockPost.mockResolvedValue({
+      data: undefined,
+      error: { error: { code: 'INTERNAL' } },
+    })
+
+    const store = useProjectsStore()
+    await expect(store.createProject({ name: 'Test' })).rejects.toThrow(
+      'Failed to create project',
+    )
+  })
+
+  it('createProject propagates network errors', async () => {
+    mockPost.mockRejectedValue(new Error('Network failure'))
+
+    const store = useProjectsStore()
+    await expect(store.createProject({ name: 'Test' })).rejects.toThrow('Network failure')
   })
 })

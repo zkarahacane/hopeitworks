@@ -19,6 +19,12 @@ export interface Pagination {
   per_page: number
 }
 
+/** Payload for creating a new project */
+export interface CreateProjectPayload {
+  name: string
+  description?: string
+}
+
 /** Parameters for fetching paginated project lists */
 export interface FetchProjectsParams {
   page?: number
@@ -63,6 +69,20 @@ export const useProjectsStore = defineStore('projects', () => {
     }
   }
 
+  /** Create a new project via the API */
+  async function createProject(payload: CreateProjectPayload): Promise<Project> {
+    const { data, error: apiError } = await apiClient.POST('/projects', {
+      body: payload,
+    })
+    if (apiError) {
+      const message =
+        (apiError as { error?: { message?: string } })?.error?.message ??
+        'Failed to create project'
+      throw new Error(message)
+    }
+    return data as Project
+  }
+
   /** Reset store state to initial values */
   function reset() {
     items.value = []
@@ -70,5 +90,5 @@ export const useProjectsStore = defineStore('projects', () => {
     error.value = null
   }
 
-  return { items, pagination, isLoading, error, fetchProjects, reset }
+  return { items, pagination, isLoading, error, fetchProjects, createProject, reset }
 })
