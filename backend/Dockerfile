@@ -1,5 +1,5 @@
 # Stage 1: Builder
-FROM golang:1.23-alpine AS builder
+FROM golang:1.24-alpine AS builder
 
 WORKDIR /build
 
@@ -27,8 +27,9 @@ RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
 WORKDIR /app
 
-# Copy binary from builder
+# Copy binary and config from builder
 COPY --from=builder /build/api .
+COPY --from=builder /build/config.yaml .
 
 # Use non-root user
 USER appuser
