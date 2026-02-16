@@ -4,7 +4,7 @@ set -euo pipefail
 # BMAD Dev Agent Launcher
 #
 # Story lifecycle: dev-story (Opus) → code-review (Sonnet) → merge-story (Sonnet)
-# Branching: main → wave-X → feat/story-key
+# Branching: develop (clone) → feat/story-key (PR targets wave-X)
 #
 # Usage:
 #   # Interactive (mount mode)
@@ -174,10 +174,11 @@ get_wave_stories() {
 }
 
 # Run container in CLONE mode (detached)
-# Args: container_name base_branch story_key [claude_args...]
+# Args: container_name merge_target story_key [claude_args...]
+# Always clones develop, PRs target merge_target (wave-X)
 run_clone() {
     local container_name="$1"
-    local base_branch="$2"
+    local merge_target="$2"
     local story_key="$3"
     shift 3
 
@@ -206,7 +207,8 @@ run_clone() {
         -e "GITHUB_TOKEN=${GITHUB_TOKEN:-}" \
         -e "GH_TOKEN=${GITHUB_TOKEN:-}" \
         -e "REPO_URL=${repo_url}" \
-        -e "BASE_BRANCH=${base_branch}" \
+        -e "CLONE_BRANCH=develop" \
+        -e "BASE_BRANCH=${merge_target}" \
         -e "STORY_BRANCH=${story_key}" \
         "${extra_env[@]+"${extra_env[@]}"}" \
         "$IMAGE_NAME" \
@@ -253,7 +255,7 @@ fi
 check_token
 build_image
 
-# --wave --setup: create wave branch
+# --wave --setup: create wave branch from develop
 if $SETUP && [[ -n "$WAVE_NUM" ]]; then
     WAVE_BRANCH="wave-${WAVE_NUM}"
     cd "$PROJECT_ROOT"
@@ -261,8 +263,8 @@ if $SETUP && [[ -n "$WAVE_NUM" ]]; then
     if git show-ref --verify --quiet "refs/heads/$WAVE_BRANCH" 2>/dev/null; then
         echo -e "${YELLOW}Branch $WAVE_BRANCH already exists${NC}"
     else
-        echo -e "${GREEN}Creating branch: $WAVE_BRANCH from main${NC}"
-        git branch "$WAVE_BRANCH" main
+        echo -e "${GREEN}Creating branch: $WAVE_BRANCH from develop${NC}"
+        git branch "$WAVE_BRANCH" develop
         git push -u origin "$WAVE_BRANCH"
         echo -e "${GREEN}Done${NC}"
     fi
@@ -271,17 +273,17 @@ fi
 
 # --story --pipeline: full pipeline on single story (must be before wave pipeline)
 if [[ -n "$STORY_NAME" ]] && $PIPELINE; then
-    WAVE_BRANCH="${WAVE_NUM:+wave-${WAVE_NUM}}"
-    WAVE_BRANCH="${WAVE_BRANCH:-main}"
+    MERGE_TARGET="${WAVE_NUM:+wave-${WAVE_NUM}}"
+    MERGE_TARGET="${MERGE_TARGET:-develop}"
 
     cname="bmad-dev-${STORY_NAME}-pipeline"
     stop_container "$cname"
 
     echo -e "${GREEN}Launching pipeline: $STORY_NAME (dev → review → merge)${NC}"
-    echo -e "  Base: $WAVE_BRANCH → feat/$STORY_NAME"
+    echo -e "  Clone: develop → feat/$STORY_NAME | PR target: $MERGE_TARGET"
 
     _PIPELINE_MODE=true
-    run_clone "$cname" "$WAVE_BRANCH" "$STORY_NAME" \
+    run_clone "$cname" "$MERGE_TARGET" "$STORY_NAME" \
         "${CLAUDE_ARGS[@]+"${CLAUDE_ARGS[@]}"}"
 
     echo -e "${GREEN}Container: $cname${NC}"
@@ -291,10 +293,10 @@ fi
 
 # --wave --pipeline: full pipeline on all stories (dev → review → merge)
 if $PIPELINE && [[ -n "$WAVE_NUM" ]]; then
-    WAVE_BRANCH="wave-${WAVE_NUM}"
+    MERGE_TARGET="wave-${WAVE_NUM}"
 
     echo -e "${GREEN}=== Wave $WAVE_NUM | FULL PIPELINE (dev → review → merge) ===${NC}"
-    echo -e "  Base: $WAVE_BRANCH"
+    echo -e "  Clone: develop | PR target: $MERGE_TARGET"
     echo ""
 
     STORIES=()
@@ -317,7 +319,7 @@ if $PIPELINE && [[ -n "$WAVE_NUM" ]]; then
     for story in "${STORIES[@]}"; do
         cname="bmad-dev-${story}-pipeline"
         stop_container "$cname"
-        run_clone "$cname" "$WAVE_BRANCH" "$story" \
+        run_clone "$cname" "$MERGE_TARGET" "$story" \
             "${CLAUDE_ARGS[@]+"${CLAUDE_ARGS[@]}"}"
         echo -e "  ${GREEN}✓ $cname${NC}"
     done
@@ -336,7 +338,7 @@ fi
 
 # --wave --phase: single phase on all stories
 if [[ -n "$WAVE_NUM" && -n "$PHASE" ]]; then
-    WAVE_BRANCH="wave-${WAVE_NUM}"
+    MERGE_TARGET="wave-${WAVE_NUM}"
     WORKFLOW="$(get_workflow "$PHASE")"
     MODEL="$(get_model "$PHASE")"
 
@@ -348,7 +350,7 @@ if [[ -n "$WAVE_NUM" && -n "$PHASE" ]]; then
 
     echo -e "${GREEN}=== Wave $WAVE_NUM | Phase: $PHASE ($MODEL) ===${NC}"
     echo -e "  Workflow:  $WORKFLOW"
-    echo -e "  Base:      $WAVE_BRANCH"
+    echo -e "  Clone: develop | PR target: $MERGE_TARGET"
     echo ""
 
     STORIES=()
@@ -370,7 +372,7 @@ if [[ -n "$WAVE_NUM" && -n "$PHASE" ]]; then
     for story in "${STORIES[@]}"; do
         cname="bmad-dev-${story}-${PHASE}"
         stop_container "$cname"
-        run_clone "$cname" "$WAVE_BRANCH" "$story" \
+        run_clone "$cname" "$MERGE_TARGET" "$story" \
             --model "$MODEL" \
             "$WORKFLOW" \
             "${CLAUDE_ARGS[@]+"${CLAUDE_ARGS[@]}"}"
@@ -391,8 +393,8 @@ fi
 
 # --story --phase: single story, specific phase
 if [[ -n "$STORY_NAME" && -n "$PHASE" ]]; then
-    WAVE_BRANCH="${WAVE_NUM:+wave-${WAVE_NUM}}"
-    WAVE_BRANCH="${WAVE_BRANCH:-main}"
+    MERGE_TARGET="${WAVE_NUM:+wave-${WAVE_NUM}}"
+    MERGE_TARGET="${MERGE_TARGET:-develop}"
     WORKFLOW="$(get_workflow "$PHASE")"
     MODEL="$(get_model "$PHASE")"
 
@@ -405,9 +407,9 @@ if [[ -n "$STORY_NAME" && -n "$PHASE" ]]; then
     stop_container "$cname"
 
     echo -e "${GREEN}Launching: $STORY_NAME | Phase: $PHASE ($MODEL)${NC}"
-    echo -e "  Base: $WAVE_BRANCH → feat/$STORY_NAME"
+    echo -e "  Clone: develop → feat/$STORY_NAME | PR target: $MERGE_TARGET"
 
-    run_clone "$cname" "$WAVE_BRANCH" "$STORY_NAME" \
+    run_clone "$cname" "$MERGE_TARGET" "$STORY_NAME" \
         --model "$MODEL" \
         "$WORKFLOW" \
         "${CLAUDE_ARGS[@]+"${CLAUDE_ARGS[@]}"}"
