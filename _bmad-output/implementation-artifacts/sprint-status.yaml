@@ -44,20 +44,20 @@ development_status:
   epic-1: in-progress
   1-1-go-project-scaffolding-docker-compose-dev-stack: done
   1-2-openapi-spec-code-gen-pipeline: done
-  1-3-users-table-jwt-auth-api-register-login-auth-middleware: backlog
+  1-3-users-table-jwt-auth-api-register-login-auth-middleware: ready-for-dev
   1-4-user-management-api-admin-crud: backlog
-  1-5-projects-table-project-crud-api: backlog
+  1-5-projects-table-project-crud-api: ready-for-dev
   1-6-rbac-middleware-project-users-table: backlog
   1-7-vue-scaffolding-primevue-tailwind-setup: done
-  1-8-app-shell-layout-header-sidebar-status-bar: backlog
-  1-9-login-page-auth-guard: backlog
+  1-8-app-shell-layout-header-sidebar-status-bar: ready-for-dev
+  1-9-login-page-auth-guard: ready-for-dev
   1-10-project-list-page: backlog
   1-11-project-creation-form: backlog
   1-12-project-settings-page: backlog
   1-13-user-management-page-admin-only: backlog
   1-14-claude-md-files-for-agent-scoping: done
-  1-15-go-backend-services-wiring: backlog
-  1-16-vue-app-routing-state-tooling: backlog
+  1-15-go-backend-services-wiring: ready-for-dev
+  1-16-vue-app-routing-state-tooling: ready-for-dev
   1-17-github-actions-ci-pipeline: ready-for-dev
   epic-1-retrospective: optional
 
