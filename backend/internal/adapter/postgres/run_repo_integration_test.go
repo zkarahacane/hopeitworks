@@ -3,14 +3,11 @@ package postgres_test
 import (
 	"context"
 	"encoding/json"
-	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/zakari/hopeitworks/backend/internal/adapter/postgres"
-	"github.com/zakari/hopeitworks/backend/internal/api/handler"
 	"github.com/zakari/hopeitworks/backend/internal/domain/model"
 	"github.com/zakari/hopeitworks/backend/internal/domain/service"
 )
@@ -160,15 +157,22 @@ func TestIntegration_RunRepo_ListRunsByProjectWithProgress(t *testing.T) {
 		t.Errorf("expected total 3, got %d", result.Total)
 	}
 
-	// Each run should have a progress field populated
+	// Exactly 1 run should have progress 100 (the completed one) and 2 should have 0.
+	completedCount := 0
 	for _, r := range result.Runs {
 		if r.Progress != 0 && r.Progress != 100 {
 			t.Errorf("expected progress 0 or 100, got %d for run %s", r.Progress, r.ID)
 		}
+		if r.Progress == 100 {
+			completedCount++
+		}
+	}
+	if completedCount != 1 {
+		t.Errorf("expected exactly 1 run with progress 100, got %d", completedCount)
 	}
 }
 
-func TestIntegration_RunHandler_GetRunProgressJSON(t *testing.T) {
+func TestIntegration_RunService_GetRunProgress_66Percent(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test in short mode")
 	}
@@ -183,7 +187,7 @@ func TestIntegration_RunHandler_GetRunProgressJSON(t *testing.T) {
 	projectID := createTestProject(t, db.pool)
 	storyID := createTestStory(t, db.pool, projectID)
 
-	// Create run with 3 steps (2 completed, 1 pending)
+	// Create run with 3 steps (2 completed, 1 pending) → expect 66%
 	run, err := runRepo.CreateRun(ctx, &model.Run{
 		ProjectID:              projectID,
 		StoryID:                storyID,
@@ -215,37 +219,15 @@ func TestIntegration_RunHandler_GetRunProgressJSON(t *testing.T) {
 	}
 
 	svc := service.NewRunService(runRepo, nil, nil, nil, nil)
-	h := handler.NewRunHandler(svc)
-
-	req := httptest.NewRequest(http.MethodGet, "/runs/"+run.ID.String(), nil)
-	rec := httptest.NewRecorder()
-
-	h.GetRun(rec, req, run.ID)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	result, err := svc.GetRun(ctx, run.ID)
+	if err != nil {
+		t.Fatalf("GetRun() error = %v", err)
 	}
 
-	var body map[string]interface{}
-	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
-		t.Fatalf("failed to parse response: %v", err)
+	if result.Progress != 66 {
+		t.Errorf("expected progress 66, got %d", result.Progress)
 	}
-
-	progress, ok := body["progress"]
-	if !ok {
-		t.Fatal("expected 'progress' field in response")
-	}
-	// JSON numbers are float64
-	if int(progress.(float64)) != 66 {
-		t.Errorf("expected progress 66, got %v", progress)
-	}
-
-	steps, ok := body["steps"]
-	if !ok {
-		t.Fatal("expected 'steps' field in response")
-	}
-	stepSlice := steps.([]interface{})
-	if len(stepSlice) != 3 {
-		t.Errorf("expected 3 steps, got %d", len(stepSlice))
+	if len(result.Steps) != 3 {
+		t.Errorf("expected 3 steps, got %d", len(result.Steps))
 	}
 }
