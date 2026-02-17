@@ -57,7 +57,7 @@ describe('useEpicsStore', () => {
     expect(store.items).toEqual(epics)
     expect(store.isLoading).toBe(false)
     expect(store.error).toBeNull()
-    expect(mockGet).toHaveBeenCalledWith('/projects/{id}/epics', {
+    expect(mockGet).toHaveBeenCalledWith('/projects/{projectId}/epics', {
       params: { path: { id: 'p1' } },
     })
   })

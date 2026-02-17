@@ -73,7 +73,7 @@ describe('useEpics', () => {
     await fetchEpics()
 
     expect(mockGet).toHaveBeenCalledTimes(1)
-    expect(mockGet).toHaveBeenCalledWith('/projects/{id}/epics', {
+    expect(mockGet).toHaveBeenCalledWith('/projects/{projectId}/epics', {
       params: { path: { id: 'p1' } },
     })
 
@@ -81,7 +81,7 @@ describe('useEpics', () => {
     await retry()
 
     expect(mockGet).toHaveBeenCalledTimes(1)
-    expect(mockGet).toHaveBeenCalledWith('/projects/{id}/epics', {
+    expect(mockGet).toHaveBeenCalledWith('/projects/{projectId}/epics', {
       params: { path: { id: 'p1' } },
     })
   })
