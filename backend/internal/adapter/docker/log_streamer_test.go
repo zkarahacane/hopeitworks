@@ -2,16 +2,18 @@
 package docker
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
 	dockercontainer "github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/pkg/stdcopy"
 
 	apperrors "github.com/zakari/hopeitworks/backend/pkg/errors"
 )
@@ -47,6 +49,14 @@ func (m *mockLogStreamClient) ContainerWait(_ context.Context, _ string, _ docke
 	return statusCh, errCh
 }
 
+// stdcopyReader wraps lines as a multiplexed Docker log stream (stdout frames).
+func stdcopyReader(lines string) io.ReadCloser {
+	var buf bytes.Buffer
+	w := stdcopy.NewStdWriter(&buf, stdcopy.Stdout)
+	_, _ = io.WriteString(w, lines)
+	return io.NopCloser(&buf)
+}
+
 func newTestLogStreamer(mock logStreamClient) *DockerLogStreamer {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
 	return &DockerLogStreamer{client: mock, logger: logger, idleTimeout: DefaultIdleTimeout}
@@ -63,7 +73,7 @@ func TestStreamLogs_ValidNDJSON(t *testing.T) {
 {"level":"error","message":"failed"}
 `
 	mock := &mockLogStreamClient{
-		logsReader: io.NopCloser(strings.NewReader(lines)),
+		logsReader: stdcopyReader(lines),
 		waitStatus: dockercontainer.WaitResponse{StatusCode: 0},
 	}
 	streamer := newTestLogStreamer(mock)
@@ -113,7 +123,7 @@ plain text log line
 {"level":"debug","message":"also valid"}
 `
 	mock := &mockLogStreamClient{
-		logsReader: io.NopCloser(strings.NewReader(lines)),
+		logsReader: stdcopyReader(lines),
 		waitStatus: dockercontainer.WaitResponse{StatusCode: 0},
 	}
 	streamer := newTestLogStreamer(mock)
@@ -156,7 +166,7 @@ func TestStreamLogs_ContainerExit(t *testing.T) {
 	lines := `{"level":"info","message":"done"}
 `
 	mock := &mockLogStreamClient{
-		logsReader: io.NopCloser(strings.NewReader(lines)),
+		logsReader: stdcopyReader(lines),
 		waitStatus: dockercontainer.WaitResponse{StatusCode: 42},
 	}
 	streamer := newTestLogStreamer(mock)
@@ -183,8 +193,28 @@ func TestStreamLogs_ContextCancellation(t *testing.T) {
 	// Use a pipe so we can control when data arrives.
 	pr, pw := io.Pipe()
 
+	// Wrap the pipe in a stdcopy writer so the streamer can demultiplex it.
+	stdPR, stdPW := io.Pipe()
+	go func() {
+		w := stdcopy.NewStdWriter(stdPW, stdcopy.Stdout)
+		buf := make([]byte, 4096)
+		for {
+			n, readErr := pr.Read(buf)
+			if n > 0 {
+				if _, writeErr := w.Write(buf[:n]); writeErr != nil {
+					stdPW.CloseWithError(writeErr)
+					return
+				}
+			}
+			if readErr != nil {
+				stdPW.CloseWithError(readErr)
+				return
+			}
+		}
+	}()
+
 	mock := &mockLogStreamClient{
-		logsReader: pr,
+		logsReader: stdPR,
 		waitStatus: dockercontainer.WaitResponse{StatusCode: 0},
 	}
 	streamer := newTestLogStreamer(mock)
@@ -197,7 +227,8 @@ func TestStreamLogs_ContextCancellation(t *testing.T) {
 	}
 
 	// Write one line, then cancel.
-	_, _ = pw.Write([]byte(`{"level":"info","message":"before cancel"}` + "\n"))
+	line := `{"level":"info","message":"before cancel"}` + "\n"
+	_, _ = pw.Write([]byte(line))
 
 	// Read the first event.
 	event, ok := <-logCh
@@ -210,20 +241,15 @@ func TestStreamLogs_ContextCancellation(t *testing.T) {
 
 	// Cancel context.
 	cancel()
-	// Close the writer to unblock the scanner goroutine.
+	// Close the writer to unblock internal goroutines.
 	pw.Close()
 
 	// Wait for channels to close.
 	for range logCh {
 	}
 
-	// Done channel should be closed without exit code (context cancelled).
-	_, ok = <-doneCh
-	// On context cancellation, we should NOT receive an exit code.
-	if ok {
-		// It's possible the exit code was sent if the scanner finished before ctx cancel was processed.
-		// This is acceptable; the key requirement is that channels are closed.
-	}
+	// Done channel should be closed (with or without exit code — context cancel wins).
+	_, _ = <-doneCh
 }
 
 func TestStreamLogs_ContainerLogsError(t *testing.T) {
@@ -241,8 +267,8 @@ func TestStreamLogs_ContainerLogsError(t *testing.T) {
 	if !errors.As(err, &domainErr) {
 		t.Fatalf("expected DomainError, got %T", err)
 	}
-	if domainErr.Code != "CONTAINER_NOT_FOUND" {
-		t.Errorf("expected error code CONTAINER_NOT_FOUND, got %s", domainErr.Code)
+	if domainErr.Code != apperrors.ErrCodeLogStreamFailed {
+		t.Errorf("expected error code %s, got %s", apperrors.ErrCodeLogStreamFailed, domainErr.Code)
 	}
 	if domainErr.Details["container_id"] != testLogContainerID {
 		t.Errorf("expected container_id in details, got %v", domainErr.Details)
@@ -256,7 +282,7 @@ func TestStreamLogs_EmptyLinesSkipped(t *testing.T) {
 
 `
 	mock := &mockLogStreamClient{
-		logsReader: io.NopCloser(strings.NewReader(lines)),
+		logsReader: stdcopyReader(lines),
 		waitStatus: dockercontainer.WaitResponse{StatusCode: 0},
 	}
 	streamer := newTestLogStreamer(mock)
@@ -278,7 +304,7 @@ func TestStreamLogs_EmptyLinesSkipped(t *testing.T) {
 
 func TestStreamLogs_ChannelsClosed(t *testing.T) {
 	mock := &mockLogStreamClient{
-		logsReader: io.NopCloser(strings.NewReader("")),
+		logsReader: stdcopyReader(""),
 		waitStatus: dockercontainer.WaitResponse{StatusCode: 0},
 	}
 	streamer := newTestLogStreamer(mock)
@@ -288,30 +314,33 @@ func TestStreamLogs_ChannelsClosed(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	// Both channels should eventually close.
 	timeout := time.After(5 * time.Second)
 
-	// Drain logCh.
-	for {
+	// Drain logCh until closed.
+	logDrained := false
+	for !logDrained {
 		select {
 		case _, ok := <-logCh:
 			if !ok {
-				goto logDrained
+				logDrained = true
 			}
 		case <-timeout:
 			t.Fatal("timed out waiting for logCh to close")
 		}
 	}
-logDrained:
 
-	// Drain doneCh.
+	// doneCh should close after logCh (exit code may or may not be present).
 	select {
 	case _, ok := <-doneCh:
 		if ok {
-			// Got exit code, wait for close.
-			_, ok = <-doneCh
-			if ok {
-				t.Error("expected doneCh to be closed after exit code")
+			// Got exit code — wait for channel to close.
+			select {
+			case _, ok = <-doneCh:
+				if ok {
+					t.Error("expected doneCh to be closed after exit code")
+				}
+			case <-timeout:
+				t.Fatal("timed out waiting for doneCh to close after exit code")
 			}
 		}
 	case <-timeout:
@@ -323,17 +352,40 @@ func TestStreamLogs_IdleTimeout(t *testing.T) {
 	// Use a pipe so we can control when data arrives.
 	pr, pw := io.Pipe()
 
+	// Wrap the pipe in a stdcopy writer.
+	stdPR, stdPW := io.Pipe()
+	go func() {
+		w := stdcopy.NewStdWriter(stdPW, stdcopy.Stdout)
+		buf := make([]byte, 4096)
+		for {
+			n, readErr := pr.Read(buf)
+			if n > 0 {
+				if _, writeErr := w.Write(buf[:n]); writeErr != nil {
+					stdPW.CloseWithError(writeErr)
+					return
+				}
+			}
+			if readErr != nil {
+				stdPW.CloseWithError(readErr)
+				return
+			}
+		}
+	}()
+
 	mock := &mockLogStreamClient{
-		logsReader: pr,
+		logsReader: stdPR,
 		waitStatus: dockercontainer.WaitResponse{StatusCode: 0},
 	}
 	// Use a short idle timeout for testing (100ms).
-	streamer := newTestLogStreamerWithTimeout(mock, 100*time.Millisecond)
+	idleTimeout := 100 * time.Millisecond
+	streamer := newTestLogStreamerWithTimeout(mock, idleTimeout)
 
 	logCh, _, err := streamer.StreamLogs(context.Background(), testLogContainerID, testLogRunID, testLogStepID)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
+
+	expectedMsg := fmt.Sprintf("No log output for %s", idleTimeout)
 
 	// Wait for idle timeout warning (should arrive after ~100ms).
 	timeout := time.After(5 * time.Second)
@@ -342,8 +394,8 @@ func TestStreamLogs_IdleTimeout(t *testing.T) {
 		if event.Level != "warn" {
 			t.Errorf("expected Level=warn, got %s", event.Level)
 		}
-		if event.Message != "No log output for 60s" {
-			t.Errorf("expected idle timeout message, got %q", event.Message)
+		if event.Message != expectedMsg {
+			t.Errorf("expected idle timeout message %q, got %q", expectedMsg, event.Message)
 		}
 		if event.IsJSON {
 			t.Error("expected IsJSON=false for idle timeout warning")
@@ -353,7 +405,8 @@ func TestStreamLogs_IdleTimeout(t *testing.T) {
 	}
 
 	// After warning, streamer should continue. Write a line.
-	_, _ = pw.Write([]byte(`{"level":"info","message":"resumed"}` + "\n"))
+	line := `{"level":"info","message":"resumed"}` + "\n"
+	_, _ = pw.Write([]byte(line))
 
 	select {
 	case event := <-logCh:
@@ -374,8 +427,28 @@ func TestStreamLogs_IdleTimeoutResets(t *testing.T) {
 	// Use a pipe to control timing.
 	pr, pw := io.Pipe()
 
+	// Wrap the pipe in a stdcopy writer.
+	stdPR, stdPW := io.Pipe()
+	go func() {
+		w := stdcopy.NewStdWriter(stdPW, stdcopy.Stdout)
+		buf := make([]byte, 4096)
+		for {
+			n, readErr := pr.Read(buf)
+			if n > 0 {
+				if _, writeErr := w.Write(buf[:n]); writeErr != nil {
+					stdPW.CloseWithError(writeErr)
+					return
+				}
+			}
+			if readErr != nil {
+				stdPW.CloseWithError(readErr)
+				return
+			}
+		}
+	}()
+
 	mock := &mockLogStreamClient{
-		logsReader: pr,
+		logsReader: stdPR,
 		waitStatus: dockercontainer.WaitResponse{StatusCode: 0},
 	}
 	// Use 200ms idle timeout.
@@ -418,7 +491,7 @@ func TestStreamLogs_IdleTimeoutResets(t *testing.T) {
 
 func TestStreamLogs_WaitError(t *testing.T) {
 	mock := &mockLogStreamClient{
-		logsReader: io.NopCloser(strings.NewReader(`{"level":"info","message":"test"}` + "\n")),
+		logsReader: stdcopyReader(`{"level":"info","message":"test"}` + "\n"),
 		waitErr:    errors.New("wait failed"),
 	}
 	streamer := newTestLogStreamer(mock)

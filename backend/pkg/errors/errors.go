@@ -21,6 +21,11 @@ const (
 	ErrCodeInvalidInput       = "INVALID_INPUT"
 )
 
+// Error codes for container/log streaming operations.
+const (
+	ErrCodeLogStreamFailed = "LOG_STREAM_FAILED"
+)
+
 // DomainError represents a structured error from the domain layer.
 type DomainError struct {
 	Category ErrorCategory

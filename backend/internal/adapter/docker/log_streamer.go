@@ -9,6 +9,7 @@ import (
 	"time"
 
 	dockercontainer "github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/pkg/stdcopy"
 
 	"github.com/zakari/hopeitworks/backend/internal/domain/model"
 	"github.com/zakari/hopeitworks/backend/internal/domain/port"
@@ -52,7 +53,7 @@ func (s *DockerLogStreamer) StreamLogs(ctx context.Context, containerID string, 
 	})
 	if err != nil {
 		return nil, nil, apperrors.NewDomainError(
-			"CONTAINER_NOT_FOUND",
+			apperrors.ErrCodeLogStreamFailed,
 			fmt.Sprintf("failed to attach to container logs: %v", err),
 			map[string]any{"container_id": containerID},
 		)
@@ -83,7 +84,16 @@ func (s *DockerLogStreamer) streamLoop(ctx context.Context, reader io.ReadCloser
 		slog.String("step_id", stepID),
 	)
 
-	scanner := bufio.NewScanner(reader)
+	// Docker ContainerLogs returns a multiplexed stream (stdout/stderr frames with
+	// 8-byte headers). We must demultiplex it via stdcopy.StdCopy before scanning.
+	// We pipe both stdout and stderr into a single reader for line-by-line scanning.
+	pr, pw := io.Pipe()
+	go func() {
+		_, copyErr := stdcopy.StdCopy(pw, pw, reader)
+		pw.CloseWithError(copyErr)
+	}()
+
+	scanner := bufio.NewScanner(pr)
 	lineCh := make(chan scanResult)
 
 	// Goroutine that reads lines from the scanner and sends them on lineCh.
@@ -114,7 +124,7 @@ func (s *DockerLogStreamer) streamLoop(ctx context.Context, reader io.ReadCloser
 				StepID:    stepID,
 				Timestamp: time.Now(),
 				Level:     "warn",
-				Message:   "No log output for 60s",
+				Message:   fmt.Sprintf("No log output for %s", s.idleTimeout),
 				IsJSON:    false,
 			}
 			idleTimer.Reset(s.idleTimeout)
