@@ -64,7 +64,7 @@ development_status:
   epic-1-retrospective: optional
 
   # Epic 2: Story Board & Management
-  epic-2: in-progress
+  epic-2: done
   2-1-epics-table-epic-crud-api: done
   2-2-stories-table-story-crud-api-status-filtering: done
   2-3-story-markdown-import-frontmatter-parsing: done
@@ -72,7 +72,7 @@ development_status:
   2-5-epic-detail-split-focus-story-list-filters: done
   2-6-story-detail-view-read-only: done
   2-7-story-editor-create-edit-mode: done
-  2-8-story-import-from-markdown: backlog
+  2-8-story-import-from-markdown: done
   epic-2-retrospective: optional
 
   # Epic 3: Single Story Pipeline Execution
@@ -431,7 +431,7 @@ parallel_waves:
     stories:
       - key: 2-8-story-import-from-markdown
         domain: front
-        status: backlog
+        status: done
         explicit_deps: [2-7-story-editor-create-edit-mode]
     container_count: 1
     depends_on: [wave-8]
