@@ -15,6 +15,8 @@ require (
 	github.com/oapi-codegen/oapi-codegen/v2 v2.5.1
 	github.com/oapi-codegen/runtime v1.1.2
 	github.com/opencontainers/image-spec v1.1.1
+	github.com/riverqueue/river v0.30.2
+	github.com/riverqueue/river/riverdriver/riverpgxv5 v0.30.2
 	github.com/sqlc-dev/sqlc v1.30.0
 	github.com/testcontainers/testcontainers-go v0.40.0
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.40.0
@@ -89,9 +91,7 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/power-devops/perfstat v0.0.0-20210106213030-5aafc221ea8c // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
-	github.com/riverqueue/river v0.30.2 // indirect
 	github.com/riverqueue/river/riverdriver v0.30.2 // indirect
-	github.com/riverqueue/river/riverdriver/riverpgxv5 v0.30.2 // indirect
 	github.com/riverqueue/river/rivershared v0.30.2 // indirect
 	github.com/riverqueue/river/rivertype v0.30.2 // indirect
 	github.com/riza-io/grpc-go v0.2.0 // indirect

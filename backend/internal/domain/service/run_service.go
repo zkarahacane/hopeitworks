@@ -330,6 +330,9 @@ func (s *RunService) LaunchRun(ctx context.Context, projectID, storyID uuid.UUID
 	createdRun.Steps = steps
 
 	// 9. Enqueue River job (non-transactional for MVP)
+	if s.jobQueue == nil {
+		return nil, errors.NewInternal("enqueue execute_run job", fmt.Errorf("job queue unavailable"))
+	}
 	if err := s.jobQueue.EnqueueExecuteRun(ctx, createdRun.ID); err != nil {
 		return nil, errors.NewInternal("enqueue execute_run job", err)
 	}
