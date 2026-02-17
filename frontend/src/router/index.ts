@@ -7,6 +7,7 @@ import RunDetailView from '@/views/RunDetailView.vue'
 import StoryDetailView from '@/views/StoryDetailView.vue'
 import ApprovalsView from '@/views/ApprovalsView.vue'
 import PipelineConfigView from '@/views/PipelineConfigView.vue'
+import PromptTemplatesView from '@/views/PromptTemplatesView.vue'
 import { setupAuthGuard, setupAdminGuard } from './guards'
 
 const router = createRouter({
@@ -34,6 +35,12 @@ const router = createRouter({
       path: '/projects/:id',
       name: 'project-detail',
       component: ProjectDetailView,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/projects/:id/templates',
+      name: 'project-templates',
+      component: PromptTemplatesView,
       meta: { requiresAuth: true },
     },
     {
