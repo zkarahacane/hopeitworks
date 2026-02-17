@@ -3,6 +3,7 @@ package service_test
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -76,13 +77,22 @@ func (m *mockProjectRepo) Update(_ context.Context, p *model.Project) (*model.Pr
 func (m *mockProjectRepo) Delete(_ context.Context, _ uuid.UUID) error { return nil }
 
 type mockNotifier struct {
+	mu    sync.Mutex
 	calls int
 	err   error
 }
 
 func (m *mockNotifier) Send(_ context.Context, _ model.Event, _ map[string]string) error {
+	m.mu.Lock()
 	m.calls++
+	m.mu.Unlock()
 	return m.err
+}
+
+func (m *mockNotifier) Calls() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.calls
 }
 
 // --- Tests ---
@@ -134,8 +144,8 @@ func TestDispatcher_MatchingEvent_CallsNotifier(t *testing.T) {
 	cancel()
 	time.Sleep(10 * time.Millisecond)
 
-	if notifier.calls != 1 {
-		t.Errorf("expected notifier called 1 time, got %d", notifier.calls)
+	if notifier.Calls() != 1 {
+		t.Errorf("expected notifier called 1 time, got %d", notifier.Calls())
 	}
 }
 
@@ -184,8 +194,8 @@ func TestDispatcher_EventNotInFilter_DoesNotCallNotifier(t *testing.T) {
 	cancel()
 	time.Sleep(10 * time.Millisecond)
 
-	if notifier.calls != 0 {
-		t.Errorf("expected notifier NOT called, got %d calls", notifier.calls)
+	if notifier.Calls() != 0 {
+		t.Errorf("expected notifier NOT called, got %d calls", notifier.Calls())
 	}
 }
 
@@ -247,10 +257,10 @@ func TestDispatcher_NotifierError_DoesNotStopOtherDispatches(t *testing.T) {
 	cancel()
 	time.Sleep(10 * time.Millisecond)
 
-	if errorNotifier.calls != 1 {
-		t.Errorf("expected error notifier called once, got %d", errorNotifier.calls)
+	if errorNotifier.Calls() != 1 {
+		t.Errorf("expected error notifier called once, got %d", errorNotifier.Calls())
 	}
-	if okNotifier.calls != 1 {
-		t.Errorf("expected ok notifier called once, got %d", okNotifier.calls)
+	if okNotifier.Calls() != 1 {
+		t.Errorf("expected ok notifier called once, got %d", okNotifier.Calls())
 	}
 }
