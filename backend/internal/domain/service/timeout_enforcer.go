@@ -10,6 +10,9 @@ import (
 	"github.com/zakari/hopeitworks/backend/internal/domain/port"
 )
 
+// containerTimeoutReason is the error message set on run steps and runs when a container times out.
+const containerTimeoutReason = "container_timeout"
+
 // TimeoutEnforcer monitors running containers and enforces timeout limits.
 // Containers exceeding their configured timeout (project-specific or default)
 // are stopped and their associated run steps and runs are marked as failed.
@@ -130,12 +133,12 @@ func (t *TimeoutEnforcer) CheckTimeouts(ctx context.Context) error {
 		}
 
 		now := time.Now()
-		errMsg := "container_timeout"
+		errMsg := containerTimeoutReason
 		if _, err := t.runRepo.UpdateRunStepStatus(ctx, stepID, model.StepStatusFailed, nil, &now, &errMsg); err != nil {
 			t.logger.Error("failed to update run step status", "step_id", stepID, "error", err)
 		}
 
-		runErrMsg := "container_timeout"
+		runErrMsg := containerTimeoutReason
 		if _, err := t.runRepo.UpdateRunStatus(ctx, runID, model.RunStatusFailed, nil, &now, &runErrMsg); err != nil {
 			t.logger.Error("failed to update run status", "run_id", runID, "error", err)
 		}

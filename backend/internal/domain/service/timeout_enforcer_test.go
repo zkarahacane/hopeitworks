@@ -175,15 +175,15 @@ func TestCheckTimeouts_ContainerExceedsTimeout(t *testing.T) {
 	if updatedStepStatus != model.StepStatusFailed {
 		t.Errorf("expected step status failed, got %s", updatedStepStatus)
 	}
-	if updatedStepErr == nil || *updatedStepErr != "container_timeout" {
-		t.Errorf("expected step error 'container_timeout', got %v", updatedStepErr)
+	if updatedStepErr == nil || *updatedStepErr != containerTimeoutReason {
+		t.Errorf("expected step error %q, got %v", containerTimeoutReason, updatedStepErr)
 	}
 
 	if updatedRunStatus != model.RunStatusFailed {
 		t.Errorf("expected run status failed, got %s", updatedRunStatus)
 	}
-	if updatedRunErr == nil || *updatedRunErr != "container_timeout" {
-		t.Errorf("expected run error 'container_timeout', got %v", updatedRunErr)
+	if updatedRunErr == nil || *updatedRunErr != containerTimeoutReason {
+		t.Errorf("expected run error %q, got %v", containerTimeoutReason, updatedRunErr)
 	}
 }
 

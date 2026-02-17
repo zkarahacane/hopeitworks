@@ -8,7 +8,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/docker/docker/api/types"
 	dockercontainer "github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/network"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
@@ -47,7 +46,7 @@ type mockDockerClient struct {
 	removeErr      error
 	waitStatus     dockercontainer.WaitResponse
 	waitErr        error
-	listContainers []types.Container
+	listContainers []dockercontainer.Summary
 	listErr        error
 }
 
@@ -98,7 +97,7 @@ func (m *mockDockerClient) ContainerWait(_ context.Context, containerID string, 
 	return statusCh, errCh
 }
 
-func (m *mockDockerClient) ContainerList(_ context.Context, opts dockercontainer.ListOptions) ([]types.Container, error) {
+func (m *mockDockerClient) ContainerList(_ context.Context, opts dockercontainer.ListOptions) ([]dockercontainer.Summary, error) {
 	m.listOpts = opts
 	return m.listContainers, m.listErr
 }
@@ -514,7 +513,7 @@ func (m *blockingWaitMock) ContainerWait(_ context.Context, containerID string, 
 
 func TestListContainers_Success(t *testing.T) {
 	mock := &mockDockerClient{
-		listContainers: []types.Container{
+		listContainers: []dockercontainer.Summary{
 			{
 				ID:      "container-1",
 				Labels:  map[string]string{"managed_by": "hopeitworks", "run_id": "r1"},
@@ -554,7 +553,7 @@ func TestListContainers_Success(t *testing.T) {
 
 func TestListContainers_Empty(t *testing.T) {
 	mock := &mockDockerClient{
-		listContainers: []types.Container{},
+		listContainers: []dockercontainer.Summary{},
 	}
 	mgr := newTestManager(mock)
 

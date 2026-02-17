@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/docker/docker/api/types"
 	dockercontainer "github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/network"
@@ -26,7 +25,7 @@ type dockerClient interface {
 	ContainerStop(ctx context.Context, containerID string, options dockercontainer.StopOptions) error
 	ContainerRemove(ctx context.Context, containerID string, options dockercontainer.RemoveOptions) error
 	ContainerWait(ctx context.Context, containerID string, condition dockercontainer.WaitCondition) (<-chan dockercontainer.WaitResponse, <-chan error)
-	ContainerList(ctx context.Context, options dockercontainer.ListOptions) ([]types.Container, error)
+	ContainerList(ctx context.Context, options dockercontainer.ListOptions) ([]dockercontainer.Summary, error)
 }
 
 // Ensure ContainerManager implements port.ContainerManager at compile time.
