@@ -74,7 +74,7 @@ describe('useEpics', () => {
 
     expect(mockGet).toHaveBeenCalledTimes(1)
     expect(mockGet).toHaveBeenCalledWith('/projects/{projectId}/epics', {
-      params: { path: { id: 'p1' } },
+      params: { path: { projectId: 'p1' } },
     })
 
     mockGet.mockClear()
@@ -82,7 +82,7 @@ describe('useEpics', () => {
 
     expect(mockGet).toHaveBeenCalledTimes(1)
     expect(mockGet).toHaveBeenCalledWith('/projects/{projectId}/epics', {
-      params: { path: { id: 'p1' } },
+      params: { path: { projectId: 'p1' } },
     })
   })
 })
