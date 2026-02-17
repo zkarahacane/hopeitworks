@@ -54,6 +54,11 @@ const router = createRouter({
           component: () => import('@/views/EpicDetailView.vue'),
         },
         {
+          path: 'epics/:epicId/dag',
+          name: 'epic-dag',
+          component: () => import('@/views/EpicDagView.vue'),
+        },
+        {
           path: 'pipeline',
           name: 'project-pipeline',
           component: PipelineConfigView,

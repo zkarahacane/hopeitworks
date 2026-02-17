@@ -427,17 +427,18 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  # ── Epic DAG ────────────────────────────────────────────────────────
   /projects/{projectId}/epics/{epicId}/dag:
     get:
       operationId: getEpicDAG
-      summary: Get the DAG visualization for an epic's stories
+      summary: Get the dependency graph (DAG) for an epic
       tags: [epics]
       parameters:
         - $ref: "#/components/parameters/ProjectIdPath"
         - $ref: "#/components/parameters/EpicIdPath"
       responses:
         "200":
-          description: DAG nodes and edges
+          description: DAG with nodes and edges
           content:
             application/json:
               schema:
@@ -1376,6 +1377,7 @@ components:
         pagination:
           $ref: "#/components/schemas/Pagination"
 
+    # ── Epic DAG ─────────────────────────────────────────────────────
     EpicDAGNode:
       type: object
       required: [id, key, title, status, layer]
@@ -1385,13 +1387,17 @@ components:
           format: uuid
         key:
           type: string
+          example: S-01
         title:
           type: string
+          example: Implement login page
         status:
           type: string
+          example: backlog
         layer:
           type: integer
           description: Zero-based execution layer index
+          example: 0
 
     EpicDAGEdge:
       type: object
@@ -1400,9 +1406,11 @@ components:
         source:
           type: string
           description: Source story key (dependency)
+          example: S-01
         target:
           type: string
           description: Target story key (dependent)
+          example: S-02
 
     EpicDAGResponse:
       type: object
@@ -1424,11 +1432,14 @@ components:
         epic_run_id:
           type: string
           format: uuid
+          example: 990e8400-e29b-41d4-a716-446655440000
         status:
           type: string
           enum: [scheduling]
+          example: scheduling
         stories_count:
           type: integer
+          example: 5
 
     # ── Story ───────────────────────────────────────────────────────────
     Story:
