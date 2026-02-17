@@ -67,16 +67,16 @@ development_status:
   epic-2: in-progress
   2-1-epics-table-epic-crud-api: done
   2-2-stories-table-story-crud-api-status-filtering: done
-  2-3-story-markdown-import-frontmatter-parsing: backlog
+  2-3-story-markdown-import-frontmatter-parsing: done
   2-4-story-board-page-epic-list-with-story-counts: done
   2-5-epic-detail-split-focus-story-list-filters: done
-  2-6-story-detail-view-read-only: backlog
-  2-7-story-editor-create-edit-mode: backlog
+  2-6-story-detail-view-read-only: done
+  2-7-story-editor-create-edit-mode: done
   2-8-story-import-from-markdown: backlog
   epic-2-retrospective: optional
 
   # Epic 3: Single Story Pipeline Execution
-  epic-3: in-progress
+  epic-3: done
   3-1-runs-runsteps-tables-run-creation-api-state-machine: done
   3-2-gitprovider-port-gh-cli-adapter-clone-branch-push: done
   3-3-gitprovider-pr-operations-create-pr-merge-pr: done
@@ -86,7 +86,7 @@ development_status:
   3-7-pipeline-executor-sequential-step-runner: done
   3-8-agent-run-action-compose-claude-md-launch-container-stream-logs: done
   3-9-container-timeout-enforcement-orphan-cleanup: done
-  3-10-run-launch-api-endpoint-single-story: backlog
+  3-10-run-launch-api-endpoint-single-story: done
   3-11-run-launch-button-confirmation-dialog: done
   3-12-run-status-display-on-story-card: done
   epic-3-retrospective: optional
@@ -396,11 +396,11 @@ parallel_waves:
       # Epic 2
       - key: 2-3-story-markdown-import-frontmatter-parsing
         domain: back
-        status: backlog
+        status: done
         explicit_deps: [2-2-stories-table-story-crud-api-status-filtering]
       - key: 2-6-story-detail-view-read-only
         domain: front
-        status: backlog
+        status: done
         explicit_deps: [2-5-epic-detail-split-focus-story-list-filters]
       # Epic 3
       - key: 3-8-agent-run-action-compose-claude-md-launch-container-stream-logs
@@ -409,7 +409,7 @@ parallel_waves:
         explicit_deps: [3-4-docker-container-lifecycle-manager-create-start-stop-cleanup, 3-5-ndjson-log-streaming-from-container, 3-6-events-table-pgxlisten-event-bus, 3-7-pipeline-executor-sequential-step-runner]
       - key: 3-10-run-launch-api-endpoint-single-story
         domain: back
-        status: backlog
+        status: done
         explicit_deps: [3-1-runs-runsteps-tables-run-creation-api-state-machine, 3-7-pipeline-executor-sequential-step-runner]
     container_count: 4
     depends_on: [wave-6]
@@ -420,7 +420,7 @@ parallel_waves:
     stories:
       - key: 2-7-story-editor-create-edit-mode
         domain: front
-        status: backlog
+        status: done
         explicit_deps: [2-6-story-detail-view-read-only]
     container_count: 1
     depends_on: [wave-7]
