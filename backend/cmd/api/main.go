@@ -144,7 +144,10 @@ func run() error {
 		}()
 	}
 
-	runService := service.NewRunService(runRepo, projectRepo, storyRepo, pipelineConfigRepo, jobQueue)
+	// Event publisher (for persisting events to DB)
+	eventRepo := pgadapter.NewEventRepo(queries)
+
+	runService := service.NewRunService(runRepo, projectRepo, storyRepo, pipelineConfigRepo, jobQueue, eventRepo)
 	runHandler := handler.NewRunHandler(runService)
 
 	// Container manager (Docker adapter)
@@ -152,9 +155,6 @@ func run() error {
 	if err != nil {
 		logger.Warn("docker container manager unavailable, timeout enforcer and orphan cleaner disabled", "error", err)
 	}
-
-	// Event publisher (for persisting events to DB)
-	eventRepo := pgadapter.NewEventRepo(queries)
 
 	// Action registry
 	actionReg := service.NewActionRegistry()

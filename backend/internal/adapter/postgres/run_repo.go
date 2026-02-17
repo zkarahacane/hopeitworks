@@ -99,7 +99,7 @@ func (r *RunRepo) ListRunsByStory(ctx context.Context, storyID uuid.UUID, limit,
 	return runs, nil
 }
 
-func (r *RunRepo) UpdateRunStatus(ctx context.Context, id uuid.UUID, status model.RunStatus, startedAt, completedAt *time.Time, errorMsg *string) (*model.Run, error) {
+func (r *RunRepo) UpdateRunStatus(ctx context.Context, id uuid.UUID, status model.RunStatus, startedAt, completedAt, pausedAt *time.Time, errorMsg *string) (*model.Run, error) {
 	params := UpdateRunStatusParams{
 		ID:     id,
 		Status: string(status),
@@ -109,6 +109,9 @@ func (r *RunRepo) UpdateRunStatus(ctx context.Context, id uuid.UUID, status mode
 	}
 	if completedAt != nil {
 		params.CompletedAt = pgtype.Timestamptz{Time: *completedAt, Valid: true}
+	}
+	if pausedAt != nil {
+		params.PausedAt = pgtype.Timestamptz{Time: *pausedAt, Valid: true}
 	}
 	if errorMsg != nil {
 		params.ErrorMessage = pgtype.Text{String: *errorMsg, Valid: true}
@@ -239,6 +242,9 @@ func toDomainRun(r Run) *model.Run {
 	}
 	if r.CompletedAt.Valid {
 		run.CompletedAt = &r.CompletedAt.Time
+	}
+	if r.PausedAt.Valid {
+		run.PausedAt = &r.PausedAt.Time
 	}
 	if r.ErrorMessage.Valid {
 		run.ErrorMessage = &r.ErrorMessage.String

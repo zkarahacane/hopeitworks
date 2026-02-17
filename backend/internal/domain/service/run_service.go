@@ -21,6 +21,7 @@ type RunService struct {
 	storyRepo          port.StoryRepository
 	pipelineConfigRepo port.PipelineConfigRepository
 	jobQueue           port.JobQueue
+	eventPub           port.EventPublisher
 }
 
 // NewRunService creates a new RunService.
@@ -30,14 +31,19 @@ func NewRunService(
 	storyRepo port.StoryRepository,
 	pipelineConfigRepo port.PipelineConfigRepository,
 	jobQueue port.JobQueue,
+	eventPub ...port.EventPublisher,
 ) *RunService {
-	return &RunService{
+	svc := &RunService{
 		runRepo:            runRepo,
 		projectRepo:        projectRepo,
 		storyRepo:          storyRepo,
 		pipelineConfigRepo: pipelineConfigRepo,
 		jobQueue:           jobQueue,
 	}
+	if len(eventPub) > 0 {
+		svc.eventPub = eventPub[0]
+	}
+	return svc
 }
 
 // PipelineStepConfig represents a step in a pipeline configuration.
@@ -230,7 +236,12 @@ func (s *RunService) TransitionRun(ctx context.Context, runID uuid.UUID, newStat
 		completedAt = &now
 	}
 
-	return s.runRepo.UpdateRunStatus(ctx, runID, newStatus, startedAt, completedAt, nil)
+	var pausedAt *time.Time
+	if newStatus == model.RunStatusPaused {
+		pausedAt = &now
+	}
+
+	return s.runRepo.UpdateRunStatus(ctx, runID, newStatus, startedAt, completedAt, pausedAt, nil)
 }
 
 // LaunchRun validates the story, creates a pending run with steps, and enqueues
@@ -344,6 +355,111 @@ func (s *RunService) LaunchRun(ctx context.Context, projectID, storyID uuid.UUID
 func isNotFound(err error) bool {
 	domErr, ok := err.(*errors.DomainError)
 	return ok && domErr.Category == errors.CategoryNotFound
+}
+
+// PauseRun transitions a running run to paused status and publishes a run.paused event.
+// The currently executing step continues to completion, but no new steps are launched.
+func (s *RunService) PauseRun(ctx context.Context, projectID, runID uuid.UUID) (*model.Run, error) {
+	run, err := s.runRepo.GetRun(ctx, runID)
+	if err != nil {
+		return nil, err
+	}
+
+	if run.ProjectID != projectID {
+		return nil, errors.NewNotFound("run", runID)
+	}
+
+	if err := model.ValidateRunTransition(run.Status, model.RunStatusPaused); err != nil {
+		return nil, err
+	}
+
+	now := time.Now()
+	updated, err := s.runRepo.UpdateRunStatus(ctx, runID, model.RunStatusPaused, nil, nil, &now, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	s.publishRunEvent(ctx, updated.ProjectID, updated.ID, "paused", map[string]any{
+		"run_id":    runID.String(),
+		"status":    string(model.RunStatusPaused),
+		"paused_at": now.Format(time.RFC3339),
+	})
+
+	return updated, nil
+}
+
+// ResumeRun transitions a paused run back to running status, publishes a run.resumed event,
+// and re-enqueues the run for continued execution from the last completed step.
+func (s *RunService) ResumeRun(ctx context.Context, projectID, runID uuid.UUID) (*model.Run, error) {
+	run, err := s.runRepo.GetRun(ctx, runID)
+	if err != nil {
+		return nil, err
+	}
+
+	if run.ProjectID != projectID {
+		return nil, errors.NewNotFound("run", runID)
+	}
+
+	if run.Status != model.RunStatusPaused {
+		return nil, errors.NewInvalidState("INVALID_STATE_TRANSITION",
+			fmt.Sprintf("cannot resume run from status %s, must be paused", run.Status))
+	}
+
+	updated, err := s.runRepo.UpdateRunStatus(ctx, runID, model.RunStatusRunning, nil, nil, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	s.publishRunEvent(ctx, updated.ProjectID, updated.ID, "resumed", map[string]any{
+		"run_id": runID.String(),
+		"status": string(model.RunStatusRunning),
+	})
+
+	// Re-enqueue the run for continued execution
+	if s.jobQueue != nil {
+		if err := s.jobQueue.EnqueueExecuteRun(ctx, runID); err != nil {
+			return nil, errors.NewInternal("enqueue execute_run job for resume", err)
+		}
+	}
+
+	return updated, nil
+}
+
+// PauseEpicRun pauses an epic run. This is a placeholder that operates on the run
+// identified by the epicId/runId combination. When story 7-2 implements the epic run
+// model with parent/child relationships, this method will also pause pending child runs.
+func (s *RunService) PauseEpicRun(ctx context.Context, projectID, _ uuid.UUID, runID uuid.UUID) (*model.Run, error) {
+	return s.PauseRun(ctx, projectID, runID)
+}
+
+// ResumeEpicRun resumes a paused epic run. This is a placeholder that operates on the run
+// identified by the epicId/runId combination. When story 7-2 implements the epic run
+// model with parent/child relationships, this method will also resume paused child runs.
+func (s *RunService) ResumeEpicRun(ctx context.Context, projectID, _ uuid.UUID, runID uuid.UUID) (*model.Run, error) {
+	return s.ResumeRun(ctx, projectID, runID)
+}
+
+// publishRunEvent publishes an event for a run status change.
+func (s *RunService) publishRunEvent(ctx context.Context, projectID, runID uuid.UUID, action string, payload map[string]any) {
+	if s.eventPub == nil {
+		return
+	}
+
+	payloadJSON, err := json.Marshal(payload)
+	if err != nil {
+		return
+	}
+
+	event := model.Event{
+		ID:         uuid.New(),
+		ProjectID:  projectID,
+		EntityType: "run",
+		EntityID:   runID,
+		Action:     action,
+		Payload:    payloadJSON,
+	}
+
+	_ = s.eventPub.Publish(ctx, event)
 }
 
 // TransitionRunStep validates and transitions a run step to a new status.

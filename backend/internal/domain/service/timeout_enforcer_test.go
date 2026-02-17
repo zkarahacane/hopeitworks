@@ -145,7 +145,7 @@ func TestCheckTimeouts_ContainerExceedsTimeout(t *testing.T) {
 			updatedStepErr = errMsg
 			return &model.RunStep{ID: id, Status: status}, nil
 		},
-		updateRunStatusFn: func(_ context.Context, id uuid.UUID, status model.RunStatus, _ *time.Time, _ *time.Time, errMsg *string) (*model.Run, error) {
+		updateRunStatusFn: func(_ context.Context, id uuid.UUID, status model.RunStatus, _ *time.Time, _ *time.Time, _ *time.Time, errMsg *string) (*model.Run, error) {
 			updatedRunStatus = status
 			updatedRunErr = errMsg
 			return &model.Run{ID: id, Status: status}, nil
@@ -291,7 +291,7 @@ func TestCheckTimeouts_ProjectTimeoutOverridesDefault(t *testing.T) {
 		updateRunStepStatusFn: func(_ context.Context, id uuid.UUID, status model.StepStatus, _ *time.Time, _ *time.Time, _ *string) (*model.RunStep, error) {
 			return &model.RunStep{ID: id, Status: status}, nil
 		},
-		updateRunStatusFn: func(_ context.Context, id uuid.UUID, status model.RunStatus, _ *time.Time, _ *time.Time, _ *string) (*model.Run, error) {
+		updateRunStatusFn: func(_ context.Context, id uuid.UUID, status model.RunStatus, _, _, _ *time.Time, _ *string) (*model.Run, error) {
 			return &model.Run{ID: id, Status: status}, nil
 		},
 	}
@@ -430,7 +430,7 @@ func TestCheckTimeouts_MultipleContainers(t *testing.T) {
 		updateRunStepStatusFn: func(_ context.Context, id uuid.UUID, status model.StepStatus, _ *time.Time, _ *time.Time, _ *string) (*model.RunStep, error) {
 			return &model.RunStep{ID: id, Status: status}, nil
 		},
-		updateRunStatusFn: func(_ context.Context, id uuid.UUID, status model.RunStatus, _ *time.Time, _ *time.Time, _ *string) (*model.Run, error) {
+		updateRunStatusFn: func(_ context.Context, id uuid.UUID, status model.RunStatus, _, _, _ *time.Time, _ *string) (*model.Run, error) {
 			return &model.Run{ID: id, Status: status}, nil
 		},
 	}

@@ -15,6 +15,9 @@ import (
 	"github.com/zakari/hopeitworks/backend/internal/domain/port"
 )
 
+// ErrRunPaused is returned when a run is paused mid-execution.
+var ErrRunPaused = fmt.Errorf("run paused")
+
 // PipelineExecutor orchestrates sequential execution of pipeline steps.
 type PipelineExecutor struct {
 	runRepo   port.RunRepository
@@ -39,7 +42,7 @@ func NewPipelineExecutor(
 }
 
 // ExecuteRun executes all steps of a run sequentially.
-// Steps execute in step_order sequence. Execution stops on first failure or cancellation.
+// Steps execute in step_order sequence. Execution stops on first failure, cancellation, or pause.
 func (e *PipelineExecutor) ExecuteRun(ctx context.Context, runID uuid.UUID) error {
 	// 1. Verify run exists
 	if _, err := e.runRepo.GetRun(ctx, runID); err != nil {
@@ -58,7 +61,7 @@ func (e *PipelineExecutor) ExecuteRun(ctx context.Context, runID uuid.UUID) erro
 
 	// 2. Transition run to "running", publish run.started
 	now := time.Now()
-	run, err := e.runRepo.UpdateRunStatus(ctx, runID, model.RunStatusRunning, &now, nil, nil)
+	run, err := e.runRepo.UpdateRunStatus(ctx, runID, model.RunStatusRunning, &now, nil, nil, nil)
 	if err != nil {
 		return err
 	}
@@ -74,12 +77,26 @@ func (e *PipelineExecutor) ExecuteRun(ctx context.Context, runID uuid.UUID) erro
 	for i := range steps {
 		step := steps[i]
 
+		// Skip already-completed steps (supports resume from paused state)
+		if step.Status == model.StepStatusCompleted {
+			continue
+		}
+
 		// Check for cancellation before each step
 		select {
 		case <-ctx.Done():
 			e.handleCancellation(run, step)
 			return ctx.Err()
 		default:
+		}
+
+		// Check if the run has been paused (re-read status from DB)
+		currentRun, err := e.runRepo.GetRun(ctx, run.ID)
+		if err != nil {
+			e.logger.Error("failed to check run status for pause", "run_id", run.ID, "error", err)
+		} else if currentRun.Status == model.RunStatusPaused {
+			e.logger.Info("run paused, stopping execution", "run_id", run.ID)
+			return ErrRunPaused
 		}
 
 		if err := e.executeStep(ctx, run, step, metadata); err != nil {
@@ -90,7 +107,7 @@ func (e *PipelineExecutor) ExecuteRun(ctx context.Context, runID uuid.UUID) erro
 
 	// 4. All steps completed — mark run as completed
 	completedAt := time.Now()
-	if _, err := e.runRepo.UpdateRunStatus(ctx, runID, model.RunStatusCompleted, nil, &completedAt, nil); err != nil {
+	if _, err := e.runRepo.UpdateRunStatus(ctx, runID, model.RunStatusCompleted, nil, &completedAt, nil, nil); err != nil {
 		return err
 	}
 
@@ -180,7 +197,7 @@ func (e *PipelineExecutor) handleStepFailure(ctx context.Context, run *model.Run
 	})
 
 	// Mark run as failed
-	if _, err := e.runRepo.UpdateRunStatus(ctx, run.ID, model.RunStatusFailed, nil, &failedAt, &errMsg); err != nil {
+	if _, err := e.runRepo.UpdateRunStatus(ctx, run.ID, model.RunStatusFailed, nil, &failedAt, nil, &errMsg); err != nil {
 		e.logger.Error("failed to update run status to failed", "run_id", run.ID, "error", err)
 	}
 
@@ -213,7 +230,7 @@ func (e *PipelineExecutor) handleCancellation(run *model.Run, step *model.RunSte
 	})
 
 	// Mark run as cancelled
-	if _, err := e.runRepo.UpdateRunStatus(bgCtx, run.ID, model.RunStatusCancelled, nil, &cancelledAt, &cancelMsg); err != nil {
+	if _, err := e.runRepo.UpdateRunStatus(bgCtx, run.ID, model.RunStatusCancelled, nil, &cancelledAt, nil, &cancelMsg); err != nil {
 		e.logger.Error("failed to update run status to cancelled", "run_id", run.ID, "error", err)
 	}
 
