@@ -21,6 +21,16 @@ type Epic struct {
 	UpdatedAt   time.Time   `json:"updated_at"`
 }
 
+type Event struct {
+	ID         uuid.UUID `json:"id"`
+	ProjectID  uuid.UUID `json:"project_id"`
+	EntityType string    `json:"entity_type"`
+	EntityID   uuid.UUID `json:"entity_id"`
+	Action     string    `json:"action"`
+	Payload    []byte    `json:"payload"`
+	CreatedAt  time.Time `json:"created_at"`
+}
+
 type Project struct {
 	ID           uuid.UUID      `json:"id"`
 	Name         string         `json:"name"`
