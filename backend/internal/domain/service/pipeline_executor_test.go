@@ -736,7 +736,7 @@ func TestExecuteRun_StepSuspendedForApproval(t *testing.T) {
 	// transitioned to waiting_approval during execution
 	f.actionReg.Register(&mockAction{
 		name: f.steps[1].Action,
-		executeFn: func(_ context.Context, runCtx *model.RunContext) error {
+		executeFn: func(_ context.Context, _ *model.RunContext) error {
 			// Simulate what HITLGateAction does: update step status to waiting_approval
 			// The executor re-fetches step after Execute() returns nil
 			return nil

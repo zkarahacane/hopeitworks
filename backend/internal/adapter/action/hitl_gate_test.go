@@ -431,6 +431,46 @@ func TestHITLGateAction_Execute_HITLRepoCreateFails(t *testing.T) {
 	}
 }
 
+func TestHITLGateAction_Execute_UpdateStepStatusFails(t *testing.T) {
+	hitlRepo := &hitlMockHITLRepo{}
+	runRepo := &hitlMockRunRepo{
+		updateRunStepStatusFn: func(_ context.Context, _ uuid.UUID, _ model.StepStatus, _, _ *time.Time, _ *string) (*model.RunStep, error) {
+			return nil, fmt.Errorf("db write failed")
+		},
+	}
+	gitProvider := &hitlMockGitProvider{}
+	eventPub := &hitlMockEventPublisher{}
+	storyRepo := &hitlMockStoryRepo{
+		getByIDFn: func(_ context.Context, id uuid.UUID) (*model.Story, error) {
+			return defaultStory(id), nil
+		},
+	}
+
+	a := action.NewHITLGateAction(hitlRepo, runRepo, gitProvider, eventPub, storyRepo, testLogger())
+
+	runCtx := buildRunCtx(map[string]any{})
+
+	err := a.Execute(context.Background(), runCtx)
+	if err == nil {
+		t.Fatal("expected error when UpdateRunStepStatus fails")
+	}
+	if !strings.Contains(err.Error(), "update step to waiting_approval") {
+		t.Fatalf("expected error containing %q, got %q", "update step to waiting_approval", err.Error())
+	}
+
+	// HITL request was already created in DB — verify Create was called
+	created := hitlRepo.getCreated()
+	if len(created) != 1 {
+		t.Fatalf("expected 1 HITL request created before status update, got %d", len(created))
+	}
+
+	// No event should be published since we errored before publishing
+	events := eventPub.getEvents()
+	if len(events) != 0 {
+		t.Fatalf("expected no events when step status update fails, got %d", len(events))
+	}
+}
+
 func TestHITLGateAction_Execute_StoryFetchFails(t *testing.T) {
 	hitlRepo := &hitlMockHITLRepo{}
 	runRepo := &hitlMockRunRepo{}
