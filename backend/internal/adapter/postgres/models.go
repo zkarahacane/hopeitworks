@@ -43,6 +43,34 @@ type ProjectUser struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+type Run struct {
+	ID                     uuid.UUID          `json:"id"`
+	ProjectID              uuid.UUID          `json:"project_id"`
+	StoryID                uuid.UUID          `json:"story_id"`
+	Status                 string             `json:"status"`
+	PipelineConfigSnapshot []byte             `json:"pipeline_config_snapshot"`
+	StartedAt              pgtype.Timestamptz `json:"started_at"`
+	CompletedAt            pgtype.Timestamptz `json:"completed_at"`
+	ErrorMessage           pgtype.Text        `json:"error_message"`
+	CreatedAt              time.Time          `json:"created_at"`
+	UpdatedAt              time.Time          `json:"updated_at"`
+}
+
+type RunStep struct {
+	ID           uuid.UUID          `json:"id"`
+	RunID        uuid.UUID          `json:"run_id"`
+	StepName     string             `json:"step_name"`
+	StepOrder    int32              `json:"step_order"`
+	Action       string             `json:"action"`
+	Status       string             `json:"status"`
+	StartedAt    pgtype.Timestamptz `json:"started_at"`
+	CompletedAt  pgtype.Timestamptz `json:"completed_at"`
+	ErrorMessage pgtype.Text        `json:"error_message"`
+	ContainerID  pgtype.Text        `json:"container_id"`
+	LogTail      pgtype.Text        `json:"log_tail"`
+	CreatedAt    time.Time          `json:"created_at"`
+}
+
 type User struct {
 	ID           uuid.UUID          `json:"id"`
 	Email        string             `json:"email"`

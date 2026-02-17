@@ -10,11 +10,12 @@ type Server struct {
 	projects *ProjectHandler
 	users    *UserHandler
 	epics    *EpicHandler
+	runs     *RunHandler
 }
 
 // NewServer creates a new Server with the given handlers.
-func NewServer(auth *AuthHandler, projects *ProjectHandler, users *UserHandler, epics *EpicHandler) *Server {
-	return &Server{auth: auth, projects: projects, users: users, epics: epics}
+func NewServer(auth *AuthHandler, projects *ProjectHandler, users *UserHandler, epics *EpicHandler, runs *RunHandler) *Server {
+	return &Server{auth: auth, projects: projects, users: users, epics: epics, runs: runs}
 }
 
 // RegisterUser delegates to AuthHandler.
@@ -105,4 +106,24 @@ func (s *Server) UpdateEpic(w http.ResponseWriter, r *http.Request, projectID Pr
 // DeleteEpic delegates to EpicHandler.
 func (s *Server) DeleteEpic(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, epicID EpicIdPath) {
 	s.epics.DeleteEpic(w, r, projectID, epicID)
+}
+
+// ListRunsByProject delegates to RunHandler.
+func (s *Server) ListRunsByProject(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, params ListRunsByProjectParams) {
+	s.runs.ListRunsByProject(w, r, projectID, params)
+}
+
+// CreateRun delegates to RunHandler.
+func (s *Server) CreateRun(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath) {
+	s.runs.CreateRun(w, r, projectID)
+}
+
+// GetRun delegates to RunHandler.
+func (s *Server) GetRun(w http.ResponseWriter, r *http.Request, runID RunIdPath) {
+	s.runs.GetRun(w, r, runID)
+}
+
+// ListRunsByStory delegates to RunHandler.
+func (s *Server) ListRunsByStory(w http.ResponseWriter, r *http.Request, storyID StoryIdPath, params ListRunsByStoryParams) {
+	s.runs.ListRunsByStory(w, r, storyID, params)
 }

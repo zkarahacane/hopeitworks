@@ -27,6 +27,8 @@ tags:
     description: Project management endpoints
   - name: epics
     description: Epic management endpoints
+  - name: runs
+    description: Pipeline run management endpoints
 
 paths:
   # ── Auth ────────────────────────────────────────────────────────────────
@@ -416,6 +418,90 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  # ── Runs ─────────────────────────────────────────────────────────────
+  /projects/{projectId}/runs:
+    get:
+      operationId: listRunsByProject
+      summary: List runs for a project
+      tags: [runs]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/PerPageParam"
+      responses:
+        "200":
+          description: Paginated list of runs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    post:
+      operationId: createRun
+      summary: Create a new pipeline run for a project
+      tags: [runs]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRunRequest"
+      responses:
+        "201":
+          description: Run created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Run"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /stories/{storyId}/runs:
+    get:
+      operationId: listRunsByStory
+      summary: List runs for a story
+      tags: [runs]
+      parameters:
+        - $ref: "#/components/parameters/StoryIdPath"
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/PerPageParam"
+      responses:
+        "200":
+          description: Paginated list of runs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /runs/{runId}:
+    get:
+      operationId: getRun
+      summary: Get a run by ID with its steps
+      tags: [runs]
+      parameters:
+        - $ref: "#/components/parameters/RunIdPath"
+      responses:
+        "200":
+          description: Run details with steps
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunWithSteps"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
 # ── Components ──────────────────────────────────────────────────────────
 components:
   securitySchemes:
@@ -452,6 +538,24 @@ components:
         type: string
         format: uuid
       description: Epic UUID
+
+    RunIdPath:
+      name: runId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Run UUID
+
+    StoryIdPath:
+      name: storyId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Story UUID
 
     PageParam:
       name: page
@@ -743,6 +847,143 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Epic"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+
+    # ── Run ──────────────────────────────────────────────────────────
+    Run:
+      type: object
+      required:
+        - id
+        - project_id
+        - story_id
+        - status
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        story_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, running, completed, failed, cancelled]
+          example: pending
+        pipeline_config_snapshot:
+          type: object
+          additionalProperties: true
+        started_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+        error_message:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    RunStep:
+      type: object
+      required:
+        - id
+        - run_id
+        - step_name
+        - step_order
+        - action
+        - status
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        run_id:
+          type: string
+          format: uuid
+        step_name:
+          type: string
+        step_order:
+          type: integer
+        action:
+          type: string
+        status:
+          type: string
+          enum: [pending, running, completed, failed, cancelled]
+          example: pending
+        started_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+        error_message:
+          type: string
+        container_id:
+          type: string
+        log_tail:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    RunWithSteps:
+      allOf:
+        - $ref: "#/components/schemas/Run"
+        - type: object
+          required:
+            - steps
+          properties:
+            steps:
+              type: array
+              items:
+                $ref: "#/components/schemas/RunStep"
+
+    CreateRunRequest:
+      type: object
+      required:
+        - story_id
+        - pipeline_config
+      properties:
+        story_id:
+          type: string
+          format: uuid
+        pipeline_config:
+          type: object
+          required:
+            - steps
+          properties:
+            steps:
+              type: array
+              items:
+                type: object
+                required:
+                  - name
+                  - action
+                properties:
+                  name:
+                    type: string
+                  action:
+                    type: string
+
+    RunList:
+      type: object
+      required:
+        - data
+        - pagination
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Run"
         pagination:
           $ref: "#/components/schemas/Pagination"
 
