@@ -256,3 +256,20 @@ func (a *GhCliAdapter) GetCIStatus(ctx context.Context, workDir string) (string,
 
 	return "pass", nil
 }
+
+// GetPRDiff returns the diff content for the given pull request URL using gh CLI.
+func (a *GhCliAdapter) GetPRDiff(ctx context.Context, prURL string) (string, error) {
+	a.logger.DebugContext(ctx, "fetching PR diff",
+		"pr_url", prURL,
+	)
+
+	out, err := a.runner.Run(ctx, "", "gh", "pr", "diff", prURL)
+	if err != nil {
+		return "", errors.NewDomainError(
+			errors.ErrCodeGitOperationFailed,
+			fmt.Sprintf("failed to get PR diff for %s: %v", prURL, err),
+			map[string]any{"pr_url": prURL},
+		)
+	}
+	return out, nil
+}

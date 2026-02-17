@@ -35,6 +35,8 @@ tags:
     description: Story management endpoints
   - name: pipeline-configs
     description: Pipeline configuration endpoints
+  - name: hitl-requests
+    description: Human-in-the-loop approval request endpoints
 
 paths:
   # ── Auth ────────────────────────────────────────────────────────────────
@@ -906,6 +908,93 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  # ── HITL Requests ──────────────────────────────────────────────────────
+  /hitl-requests/{hitlRequestId}:
+    get:
+      operationId: getHITLRequest
+      summary: Get a HITL request by ID
+      tags: [hitl-requests]
+      parameters:
+        - name: hitlRequestId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: HITL request details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HITLRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /hitl-requests/{hitlRequestId}/approve:
+    post:
+      operationId: approveHITLRequest
+      summary: Approve a HITL request
+      tags: [hitl-requests]
+      parameters:
+        - name: hitlRequestId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: HITL request approved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HITLRequest"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /hitl-requests/{hitlRequestId}/reject:
+    post:
+      operationId: rejectHITLRequest
+      summary: Reject a HITL request
+      tags: [hitl-requests]
+      parameters:
+        - name: hitlRequestId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                rejection_reason:
+                  type: string
+                  description: Reason for rejection
+      responses:
+        "200":
+          description: HITL request rejected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HITLRequest"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
 # ── Components ──────────────────────────────────────────────────────────
 components:
   securitySchemes:
@@ -1761,7 +1850,7 @@ components:
           type: string
         status:
           type: string
-          enum: [pending, running, completed, failed, cancelled]
+          enum: [pending, running, completed, failed, cancelled, waiting_approval]
           example: pending
         started_at:
           type: string
@@ -1831,6 +1920,47 @@ components:
         pagination:
           $ref: "#/components/schemas/Pagination"
 
+
+    # ── HITL ──────────────────────────────────────────────────────────
+    HITLRequest:
+      type: object
+      required:
+        - id
+        - run_step_id
+        - gate_type
+        - status
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        run_step_id:
+          type: string
+          format: uuid
+        gate_type:
+          type: string
+          example: approval
+        diff_content:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [pending, approved, rejected]
+          example: pending
+        resolved_at:
+          type: string
+          format: date-time
+          nullable: true
+        resolved_by:
+          type: string
+          format: uuid
+          nullable: true
+        rejection_reason:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
 
     # ── Shared ─────────────────────────────────────────────────────────
     Pagination:

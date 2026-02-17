@@ -726,6 +726,85 @@ func TestExecuteRun_FailureEventOrder(t *testing.T) {
 }
 
 // TestActionRegistry tests the mock ActionRegistry behavior (AC #3, #9).
+func TestExecuteRun_StepSuspendedForApproval(t *testing.T) {
+	f := newExecutorTestFixture(3)
+
+	// step 0 succeeds normally
+	f.actionReg.Register(&mockAction{name: f.steps[0].Action})
+
+	// step 1 simulates hitl_gate: action returns nil, but the step is
+	// transitioned to waiting_approval during execution
+	f.actionReg.Register(&mockAction{
+		name: f.steps[1].Action,
+		executeFn: func(_ context.Context, _ *model.RunContext) error {
+			// Simulate what HITLGateAction does: update step status to waiting_approval
+			// The executor re-fetches step after Execute() returns nil
+			return nil
+		},
+	})
+
+	// Override GetRunStep to return waiting_approval for step 1
+	f.runRepo.getRunStepFn = func(_ context.Context, id uuid.UUID) (*model.RunStep, error) {
+		if id == f.steps[1].ID {
+			return &model.RunStep{
+				ID:     id,
+				RunID:  f.runID,
+				Status: model.StepStatusWaitingApproval,
+			}, nil
+		}
+		// For other steps, return normal status
+		for _, s := range f.steps {
+			if s.ID == id {
+				cp := *s
+				return &cp, nil
+			}
+		}
+		return nil, errors.NewNotFound("run_step", id)
+	}
+
+	var step2Executed bool
+	f.actionReg.Register(&mockAction{
+		name: f.steps[2].Action,
+		executeFn: func(_ context.Context, _ *model.RunContext) error {
+			step2Executed = true
+			return nil
+		},
+	})
+
+	err := f.executor.ExecuteRun(context.Background(), f.runID)
+	// ExecuteRun should return nil (suspension is not an error)
+	if err != nil {
+		t.Fatalf("expected nil error (suspension), got %v", err)
+	}
+
+	// Step 2 should NOT have been executed
+	if step2Executed {
+		t.Error("step 2 should not have been executed after step 1 was suspended")
+	}
+
+	// Run should NOT be marked as completed (it's still running, waiting for approval)
+	var runCompleted bool
+	for _, call := range f.runStatusCalls {
+		if call.Status == model.RunStatusCompleted {
+			runCompleted = true
+		}
+	}
+	if runCompleted {
+		t.Error("run should not be marked as completed when a step is suspended")
+	}
+
+	// Run should NOT be marked as failed
+	var runFailed bool
+	for _, call := range f.runStatusCalls {
+		if call.Status == model.RunStatusFailed {
+			runFailed = true
+		}
+	}
+	if runFailed {
+		t.Error("run should not be marked as failed when a step is suspended")
+	}
+}
+
 func TestActionRegistry_RegisterAndGet(t *testing.T) {
 	reg := newMockActionRegistry()
 
