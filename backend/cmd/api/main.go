@@ -203,6 +203,15 @@ func run() error {
 	actionReg.Register(hitlGateAction)
 	logger.Info("hitl_gate action registered")
 
+	// CI poll action (always available — polls CI status via GitProvider)
+	ciPollCfg := actionadapter.CIPollConfig{
+		DefaultPollInterval: 30 * time.Second,
+		DefaultTimeout:      15 * time.Minute,
+	}
+	ciPollAction := actionadapter.NewCIPollAction(gitProvider, eventRepo, ciPollCfg, logger)
+	actionReg.Register(ciPollAction)
+	logger.Info("ci_poll action registered")
+
 	// Orphan cleanup and timeout enforcement (requires Docker)
 	if containerMgr != nil {
 		orphanCleaner := service.NewOrphanCleaner(containerMgr, runRepo, logger)
