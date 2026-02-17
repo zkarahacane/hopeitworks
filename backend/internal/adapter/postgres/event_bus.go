@@ -38,6 +38,7 @@ type EventBus struct {
 	subscribers map[uuid.UUID][]chan<- model.Event
 	listening   bool
 	stopCh      chan struct{}
+	doneCh      chan struct{} // Closed when listenLoop exits
 	closed      bool
 }
 
@@ -54,6 +55,7 @@ func NewEventBus(ctx context.Context, connString string, logger *slog.Logger) (*
 		logger:      logger,
 		subscribers: make(map[uuid.UUID][]chan<- model.Event),
 		stopCh:      make(chan struct{}),
+		doneCh:      make(chan struct{}),
 	}
 
 	return bus, nil
@@ -102,18 +104,31 @@ func (b *EventBus) Close() error {
 	// Signal the listener goroutine to stop
 	close(b.stopCh)
 
+	// Wait for listenLoop to finish if it was started
+	wasListening := b.listening
+	b.mu.Unlock()
+
+	if wasListening {
+		// Wait for listenLoop goroutine to exit before closing the connection
+		<-b.doneCh
+	}
+
+	// Now safe to close the connection (no goroutine is using it)
+	b.mu.Lock()
+	conn := b.conn
+	b.mu.Unlock()
+
 	// Close all subscriber channels
+	b.mu.Lock()
 	for projectID, chans := range b.subscribers {
 		for _, ch := range chans {
 			close(ch)
 		}
 		delete(b.subscribers, projectID)
 	}
-
-	conn := b.conn
 	b.mu.Unlock()
 
-	// Close the Postgres connection outside the lock to avoid deadlock
+	// Close the Postgres connection
 	if conn != nil {
 		return conn.Close(context.Background())
 	}
@@ -135,6 +150,8 @@ func (b *EventBus) startListening(ctx context.Context) error {
 
 // listenLoop waits for notifications and dispatches them to subscribers.
 func (b *EventBus) listenLoop() {
+	defer close(b.doneCh) // Signal that we've exited
+
 	for {
 		select {
 		case <-b.stopCh:
