@@ -78,6 +78,16 @@ func TestValidateStepTransition(t *testing.T) {
 		{"running to completed", StepStatusRunning, StepStatusCompleted, false},
 		{"running to failed", StepStatusRunning, StepStatusFailed, false},
 		{"running to cancelled", StepStatusRunning, StepStatusCancelled, false},
+		{"running to waiting_approval", StepStatusRunning, StepStatusWaitingApproval, false},
+
+		// Valid transitions from waiting_approval
+		{"waiting_approval to running", StepStatusWaitingApproval, StepStatusRunning, false},
+		{"waiting_approval to failed", StepStatusWaitingApproval, StepStatusFailed, false},
+		{"waiting_approval to cancelled", StepStatusWaitingApproval, StepStatusCancelled, false},
+
+		// Invalid transitions from waiting_approval
+		{"waiting_approval to completed", StepStatusWaitingApproval, StepStatusCompleted, true},
+		{"waiting_approval to pending", StepStatusWaitingApproval, StepStatusPending, true},
 
 		// Invalid transitions from pending
 		{"pending to completed", StepStatusPending, StepStatusCompleted, true},

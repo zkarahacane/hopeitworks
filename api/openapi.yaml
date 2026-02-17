@@ -35,6 +35,8 @@ tags:
     description: Story management endpoints
   - name: pipeline-configs
     description: Pipeline configuration endpoints
+  - name: hitl
+    description: Human-in-the-loop approval endpoints
 
 paths:
   # ── Auth ────────────────────────────────────────────────────────────────
@@ -860,6 +862,104 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  # ── HITL ──────────────────────────────────────────────────────────────
+  /projects/{projectId}/hitl/pending:
+    get:
+      operationId: listPendingHITLRequests
+      summary: List pending HITL approval requests for a project
+      description: >
+        Returns all pipeline steps currently waiting for human approval.
+        Designed for curl-based CLI workflows — authenticate with a JWT cookie
+        and call this endpoint to see what needs review.
+      tags: [hitl]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+      responses:
+        "200":
+          description: List of pending HITL requests
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PendingHITLRequestList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /hitl-requests/{hitlRequestId}:
+    get:
+      operationId: getHITLRequest
+      summary: Get a HITL request by ID
+      tags: [hitl]
+      parameters:
+        - $ref: "#/components/parameters/HITLRequestIdPath"
+      responses:
+        "200":
+          description: HITL request details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HITLRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /hitl-requests/{hitlRequestId}/approve:
+    post:
+      operationId: approveHITLRequest
+      summary: Approve a pending HITL request
+      description: >
+        Approves the HITL gate, allowing the pipeline to continue.
+        curl example: curl -X POST -b cookies.txt /api/v1/hitl-requests/{id}/approve
+      tags: [hitl]
+      parameters:
+        - $ref: "#/components/parameters/HITLRequestIdPath"
+      responses:
+        "200":
+          description: HITL request approved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HITLRequest"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /hitl-requests/{hitlRequestId}/reject:
+    post:
+      operationId: rejectHITLRequest
+      summary: Reject a pending HITL request
+      description: >
+        Rejects the HITL gate with an optional reason.
+        curl example: curl -X POST -b cookies.txt -H "Content-Type: application/json"
+        -d '{"reason":"needs refactor"}' /api/v1/hitl-requests/{id}/reject
+      tags: [hitl]
+      parameters:
+        - $ref: "#/components/parameters/HITLRequestIdPath"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RejectHITLRequest"
+      responses:
+        "200":
+          description: HITL request rejected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HITLRequest"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
 # ── Components ──────────────────────────────────────────────────────────
 components:
   securitySchemes:
@@ -953,6 +1053,15 @@ components:
         type: string
         default: created_at
       description: Field to sort by
+
+    HITLRequestIdPath:
+      name: hitlRequestId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: HITL request UUID
 
   schemas:
     # ── Auth request/response ──────────────────────────────────────────
@@ -1655,7 +1764,7 @@ components:
           type: string
         status:
           type: string
-          enum: [pending, running, completed, failed, cancelled]
+          enum: [pending, running, completed, failed, cancelled, waiting_approval]
           example: pending
         started_at:
           type: string
@@ -1725,6 +1834,95 @@ components:
         pagination:
           $ref: "#/components/schemas/Pagination"
 
+
+    # ── HITL ──────────────────────────────────────────────────────────
+    HITLRequest:
+      type: object
+      required:
+        - id
+        - run_step_id
+        - gate_type
+        - status
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        run_step_id:
+          type: string
+          format: uuid
+        gate_type:
+          type: string
+          example: approval
+        diff_content:
+          type: string
+          description: PR diff content if available
+        status:
+          type: string
+          enum: [pending, approved, rejected]
+          example: pending
+        resolved_at:
+          type: string
+          format: date-time
+        resolved_by:
+          type: string
+          format: uuid
+        rejection_reason:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    PendingHITLRequestItem:
+      type: object
+      required:
+        - id
+        - run_id
+        - step_id
+        - story_key
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: HITL request ID
+        run_id:
+          type: string
+          format: uuid
+        step_id:
+          type: string
+          format: uuid
+        story_key:
+          type: string
+          example: S-01
+        diff_url:
+          type: string
+          description: URL to view the diff (if PR exists)
+        created_at:
+          type: string
+          format: date-time
+
+    PendingHITLRequestList:
+      type: object
+      required:
+        - data
+        - total
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/PendingHITLRequestItem"
+        total:
+          type: integer
+          example: 3
+
+    RejectHITLRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          description: Rejection reason
+          example: needs refactor
 
     # ── Shared ─────────────────────────────────────────────────────────
     Pagination:

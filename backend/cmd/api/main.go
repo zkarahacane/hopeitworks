@@ -202,7 +202,12 @@ func run() error {
 		}()
 	}
 
-	server := handler.NewServer(authHandler, projectHandler, userHandler, epicHandler, storyHandler, promptTemplateHandler, runHandler, pipelineConfigHandler)
+	// HITL service and handler
+	hitlRepo := pgadapter.NewHITLRepo(queries)
+	hitlService := service.NewHITLService(hitlRepo, runRepo, eventRepo, logger)
+	hitlHandler := handler.NewHITLHandler(hitlService)
+
+	server := handler.NewServer(authHandler, projectHandler, userHandler, epicHandler, storyHandler, promptTemplateHandler, runHandler, pipelineConfigHandler, hitlHandler)
 
 	// Project user handler
 	projectUserHandler := handler.NewProjectUserHandler(projectUserService)

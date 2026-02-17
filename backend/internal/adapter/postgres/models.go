@@ -31,6 +31,18 @@ type Event struct {
 	CreatedAt  time.Time `json:"created_at"`
 }
 
+type HitlRequest struct {
+	ID              uuid.UUID          `json:"id"`
+	RunStepID       uuid.UUID          `json:"run_step_id"`
+	GateType        string             `json:"gate_type"`
+	DiffContent     pgtype.Text        `json:"diff_content"`
+	Status          string             `json:"status"`
+	ResolvedAt      pgtype.Timestamptz `json:"resolved_at"`
+	ResolvedBy      pgtype.UUID        `json:"resolved_by"`
+	RejectionReason pgtype.Text        `json:"rejection_reason"`
+	CreatedAt       time.Time          `json:"created_at"`
+}
+
 type PipelineConfig struct {
 	ID         uuid.UUID `json:"id"`
 	ProjectID  uuid.UUID `json:"project_id"`

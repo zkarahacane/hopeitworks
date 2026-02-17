@@ -56,6 +56,13 @@ const (
 	EpicStatusInProgress EpicStatus = "in_progress"
 )
 
+// Defines values for HITLRequestStatus.
+const (
+	HITLRequestStatusApproved HITLRequestStatus = "approved"
+	HITLRequestStatusPending  HITLRequestStatus = "pending"
+	HITLRequestStatusRejected HITLRequestStatus = "rejected"
+)
+
 // Defines values for PipelineStepActionType.
 const (
 	PipelineStepActionTypeCustom    PipelineStepActionType = "custom"
@@ -99,11 +106,12 @@ const (
 
 // Defines values for RunStepStatus.
 const (
-	RunStepStatusCancelled RunStepStatus = "cancelled"
-	RunStepStatusCompleted RunStepStatus = "completed"
-	RunStepStatusFailed    RunStepStatus = "failed"
-	RunStepStatusPending   RunStepStatus = "pending"
-	RunStepStatusRunning   RunStepStatus = "running"
+	RunStepStatusCancelled       RunStepStatus = "cancelled"
+	RunStepStatusCompleted       RunStepStatus = "completed"
+	RunStepStatusFailed          RunStepStatus = "failed"
+	RunStepStatusPending         RunStepStatus = "pending"
+	RunStepStatusRunning         RunStepStatus = "running"
+	RunStepStatusWaitingApproval RunStepStatus = "waiting_approval"
 )
 
 // Defines values for RunWithStepsStatus.
@@ -132,9 +140,9 @@ const (
 
 // Defines values for UpdateEpicRequestStatus.
 const (
-	Backlog    UpdateEpicRequestStatus = "backlog"
-	Done       UpdateEpicRequestStatus = "done"
-	InProgress UpdateEpicRequestStatus = "in_progress"
+	UpdateEpicRequestStatusBacklog    UpdateEpicRequestStatus = "backlog"
+	UpdateEpicRequestStatusDone       UpdateEpicRequestStatus = "done"
+	UpdateEpicRequestStatusInProgress UpdateEpicRequestStatus = "in_progress"
 )
 
 // Defines values for UpdatePromptTemplateRequestType.
@@ -248,6 +256,24 @@ type Error struct {
 	} `json:"error"`
 }
 
+// HITLRequest defines model for HITLRequest.
+type HITLRequest struct {
+	CreatedAt time.Time `json:"created_at"`
+
+	// DiffContent PR diff content if available
+	DiffContent     *string             `json:"diff_content,omitempty"`
+	GateType        string              `json:"gate_type"`
+	Id              openapi_types.UUID  `json:"id"`
+	RejectionReason *string             `json:"rejection_reason,omitempty"`
+	ResolvedAt      *time.Time          `json:"resolved_at,omitempty"`
+	ResolvedBy      *openapi_types.UUID `json:"resolved_by,omitempty"`
+	RunStepId       openapi_types.UUID  `json:"run_step_id"`
+	Status          HITLRequestStatus   `json:"status"`
+}
+
+// HITLRequestStatus defines model for HITLRequest.Status.
+type HITLRequestStatus string
+
 // ImportStoriesRequest defines model for ImportStoriesRequest.
 type ImportStoriesRequest struct {
 	// Content Raw markdown content with YAML frontmatter story blocks
@@ -291,6 +317,26 @@ type Pagination struct {
 	Page    int `json:"page"`
 	PerPage int `json:"per_page"`
 	Total   int `json:"total"`
+}
+
+// PendingHITLRequestItem defines model for PendingHITLRequestItem.
+type PendingHITLRequestItem struct {
+	CreatedAt time.Time `json:"created_at"`
+
+	// DiffUrl URL to view the diff (if PR exists)
+	DiffUrl *string `json:"diff_url,omitempty"`
+
+	// Id HITL request ID
+	Id       openapi_types.UUID `json:"id"`
+	RunId    openapi_types.UUID `json:"run_id"`
+	StepId   openapi_types.UUID `json:"step_id"`
+	StoryKey string             `json:"story_key"`
+}
+
+// PendingHITLRequestList defines model for PendingHITLRequestList.
+type PendingHITLRequestList struct {
+	Data  []PendingHITLRequestItem `json:"data"`
+	Total int                      `json:"total"`
 }
 
 // PipelineConfig defines model for PipelineConfig.
@@ -357,6 +403,12 @@ type RegisterRequest struct {
 	Email    openapi_types.Email `json:"email"`
 	Name     string              `json:"name"`
 	Password string              `json:"password"`
+}
+
+// RejectHITLRequest defines model for RejectHITLRequest.
+type RejectHITLRequest struct {
+	// Reason Rejection reason
+	Reason *string `json:"reason,omitempty"`
 }
 
 // RetryPolicy defines model for RetryPolicy.
@@ -550,6 +602,9 @@ type UserList struct {
 // EpicIdPath defines model for EpicIdPath.
 type EpicIdPath = openapi_types.UUID
 
+// HITLRequestIdPath defines model for HITLRequestIdPath.
+type HITLRequestIdPath = openapi_types.UUID
+
 // IdPath defines model for IdPath.
 type IdPath = openapi_types.UUID
 
@@ -673,6 +728,9 @@ type LoginUserJSONRequestBody = LoginRequest
 // RegisterUserJSONRequestBody defines body for RegisterUser for application/json ContentType.
 type RegisterUserJSONRequestBody = RegisterRequest
 
+// RejectHITLRequestJSONRequestBody defines body for RejectHITLRequest for application/json ContentType.
+type RejectHITLRequestJSONRequestBody = RejectHITLRequest
+
 // CreateProjectJSONRequestBody defines body for CreateProject for application/json ContentType.
 type CreateProjectJSONRequestBody = CreateProjectRequest
 
@@ -785,6 +843,15 @@ type ServerInterface interface {
 	// Register a new user
 	// (POST /auth/register)
 	RegisterUser(w http.ResponseWriter, r *http.Request)
+	// Get a HITL request by ID
+	// (GET /hitl-requests/{hitlRequestId})
+	GetHITLRequest(w http.ResponseWriter, r *http.Request, hitlRequestId HITLRequestIdPath)
+	// Approve a pending HITL request
+	// (POST /hitl-requests/{hitlRequestId}/approve)
+	ApproveHITLRequest(w http.ResponseWriter, r *http.Request, hitlRequestId HITLRequestIdPath)
+	// Reject a pending HITL request
+	// (POST /hitl-requests/{hitlRequestId}/reject)
+	RejectHITLRequest(w http.ResponseWriter, r *http.Request, hitlRequestId HITLRequestIdPath)
 	// List all projects
 	// (GET /projects)
 	ListProjects(w http.ResponseWriter, r *http.Request, params ListProjectsParams)
@@ -815,6 +882,9 @@ type ServerInterface interface {
 	// Update an epic
 	// (PUT /projects/{projectId}/epics/{epicId})
 	UpdateEpic(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, epicId EpicIdPath)
+	// List pending HITL approval requests for a project
+	// (GET /projects/{projectId}/hitl/pending)
+	ListPendingHITLRequests(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath)
 	// Get the pipeline configuration for a project
 	// (GET /projects/{projectId}/pipeline)
 	GetPipelineConfig(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath)
@@ -911,6 +981,24 @@ func (_ Unimplemented) RegisterUser(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Get a HITL request by ID
+// (GET /hitl-requests/{hitlRequestId})
+func (_ Unimplemented) GetHITLRequest(w http.ResponseWriter, r *http.Request, hitlRequestId HITLRequestIdPath) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Approve a pending HITL request
+// (POST /hitl-requests/{hitlRequestId}/approve)
+func (_ Unimplemented) ApproveHITLRequest(w http.ResponseWriter, r *http.Request, hitlRequestId HITLRequestIdPath) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Reject a pending HITL request
+// (POST /hitl-requests/{hitlRequestId}/reject)
+func (_ Unimplemented) RejectHITLRequest(w http.ResponseWriter, r *http.Request, hitlRequestId HITLRequestIdPath) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // List all projects
 // (GET /projects)
 func (_ Unimplemented) ListProjects(w http.ResponseWriter, r *http.Request, params ListProjectsParams) {
@@ -968,6 +1056,12 @@ func (_ Unimplemented) GetEpic(w http.ResponseWriter, r *http.Request, projectId
 // Update an epic
 // (PUT /projects/{projectId}/epics/{epicId})
 func (_ Unimplemented) UpdateEpic(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, epicId EpicIdPath) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// List pending HITL approval requests for a project
+// (GET /projects/{projectId}/hitl/pending)
+func (_ Unimplemented) ListPendingHITLRequests(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1171,6 +1265,99 @@ func (siw *ServerInterfaceWrapper) RegisterUser(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RegisterUser(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetHITLRequest operation middleware
+func (siw *ServerInterfaceWrapper) GetHITLRequest(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "hitlRequestId" -------------
+	var hitlRequestId HITLRequestIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "hitlRequestId", chi.URLParam(r, "hitlRequestId"), &hitlRequestId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "hitlRequestId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetHITLRequest(w, r, hitlRequestId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ApproveHITLRequest operation middleware
+func (siw *ServerInterfaceWrapper) ApproveHITLRequest(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "hitlRequestId" -------------
+	var hitlRequestId HITLRequestIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "hitlRequestId", chi.URLParam(r, "hitlRequestId"), &hitlRequestId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "hitlRequestId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ApproveHITLRequest(w, r, hitlRequestId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RejectHITLRequest operation middleware
+func (siw *ServerInterfaceWrapper) RejectHITLRequest(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "hitlRequestId" -------------
+	var hitlRequestId HITLRequestIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "hitlRequestId", chi.URLParam(r, "hitlRequestId"), &hitlRequestId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "hitlRequestId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RejectHITLRequest(w, r, hitlRequestId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1542,6 +1729,37 @@ func (siw *ServerInterfaceWrapper) UpdateEpic(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateEpic(w, r, projectId, epicId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListPendingHITLRequests operation middleware
+func (siw *ServerInterfaceWrapper) ListPendingHITLRequests(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "projectId" -------------
+	var projectId ProjectIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectId", chi.URLParam(r, "projectId"), &projectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListPendingHITLRequests(w, r, projectId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2532,6 +2750,15 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/auth/register", wrapper.RegisterUser)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/hitl-requests/{hitlRequestId}", wrapper.GetHITLRequest)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/hitl-requests/{hitlRequestId}/approve", wrapper.ApproveHITLRequest)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/hitl-requests/{hitlRequestId}/reject", wrapper.RejectHITLRequest)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/projects", wrapper.ListProjects)
 	})
 	r.Group(func(r chi.Router) {
@@ -2560,6 +2787,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Put(options.BaseURL+"/projects/{projectId}/epics/{epicId}", wrapper.UpdateEpic)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/projects/{projectId}/hitl/pending", wrapper.ListPendingHITLRequests)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/projects/{projectId}/pipeline", wrapper.GetPipelineConfig)
@@ -2634,82 +2864,93 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
+	"H4sIAAAAAAAC/+w9aW8jt5J/hehdIAkgWbLHniT+9OZIXvx2MmP4QPbtjCHQ3SWJz91kD8m2R2sI2B+x",
+	"v3B/yYJH3+xDsg5PJp9sSWyyWDeLVdWPns+imFGgUninj16MOY5AAteffomJfxacYzlXnwIQPiexJIx6",
+	"p/o3dH199tYbeER9EathA4/iCLxTD/Sj3sDj8DkhHALvVPIEBp7w5xBhNd+U8QhL79RLEqJGykWsnhSS",
+	"EzrzlsuB99vZ1bsL+JyAkE1gqCGImzEt4MyJDLOZnghVEygXIFjCfWgBgzx17XM8g3NFo/ry6idEk+gW",
+	"eLr45wT4Il89xjPwiusFMMVJKL3Tw4EXEUqiJNL/23UJlTADbhYG3rL2mYRIoBg4sms4lwc+aQbhaDzw",
+	"IvzFwjAed0PE2b/Ab2QM+3MLMeJ0gifS5CKhjSyR0BYAuHrwiYtfMi5fLxrI8iuBMECSIcG4RLeLBsKo",
+	"Xyf6VwddPJ8DlhBMsHQDIBlfNO1f/9iCAWEefiIOriCKQyyhhRWiWCJph7XAI7OZngTSUj0sYkYFaD36",
+	"GgdW+ahPPqMSqP4Xx3FIfKzgHP1LKGAfC8v8O4epd+r92yjX0SPzqxj9wjnjZqnyZl/jINWH3nLgvWF0",
+	"GhJ/Bwtn6s+3S6Lv4WB2gILELAUIIkzCHxRUvzJ+S4IA6PbBypZCQ4SDiFCEfR+EQBl5lwPvPZO/soQG",
+	"O8QSZRJN9ZrLgXdNcSLnjJP/hh3AUFpN/WyfUBO+0dKujHuBY2POYuCSGG4uTfbowRccxSGkLsGUcaSm",
+	"Byot2GgKWCYchKc1/DugMyWlR2Ol5Cuik0picdprARy9Kk1ZmenkRFuL9POhY1ohsUxEWbPdYv8uZDNv",
+	"4AFVduZj4RtCJzFnMw5CgR0wCt6NS/fkSuKjAT0fxW6VedFCqJFqLdLqeH2FhP4XWYtV3v1hXzz+vkDn",
+	"rgm60bfyPqNYpkq5cbt1AN8ayqAz9TkCKpGZanVqp3p8UhCkfJ1/sgRhDoik6xA6Q9oUocdH/XdyB4vl",
+	"8uDgwOteSn/xmLFQNqm2IFLbWQ73BB7UXMC1/+MnQrJI4TCHqvhgD/w7Nmmfa6bMRUIbyRGTGEJC9WxT",
+	"MqsPEBJi/Q9Rzl79d+ynnNvIi722Zedx7cJ+gTnHi9rjBj7XY4akJOjnTZTntE8OavhpxrJ2ehrxrKxP",
+	"LDH1YeJzIoET7MRZADHQQEwMSjOcN/BfipOBPnj12+vAu4NFWTIuh+PDsrSduHSL2TG5BydEwmdlkVBa",
+	"FaiCYMo1q6p/xRwrJN+06uo286bRfGmGKjxgPgM5mZIQxGoYk0SGFU2Ua6CQzQhNTzVVLdTOPAq76ewu",
+	"blHmss4fBXe7BNLR+OjlcHw4PDy5Ohyfvhifjsf/pTCa0jjAEoaSGM1QZ6b1TXZtMsNc+Rw//jiGn47H",
+	"4yEc/Xw7PD4Mjof4x8OXw+Pjly9PTo6Px+PxuAhpEzf2tfy1B61ZnFQBe/lyM4Dl/NjXT8hhyEc6plXK",
+	"xWeJjb10MvsbM3Q58JI42DSTVJjX6LwcsYNUPVtkVMAflI+JBfiaOP8dcfpAWOKS9LY6uEqAHAId4xmh",
+	"OGX2thnO85FVBGhISnM5d6J97No2wP21z4Iqh1/+cjF5/+Fq8uuH6/dv3aIrMQmN6QgCoiDB4XlhWnM4",
+	"rUEWgRBKa9UF6oHIOTp7i/Ctf3j0onAQ6eIJDX4+cx0flfEGCy60FQJ7XRqwp4Ij02nR2asEAC6QGoDs",
+	"AESmCN9jEuLb0DnbTHlVmWOXYQ/HMWf3OGxWip2qhIO2nIxOOGDR4C5xECy8XxED2UO3i36QJHSiXKa+",
+	"vkJdCSr/RP04sIgBEzRRGzSGPcdcPrSH1ilCVqRFQfcUWMTFXmdRzLhUOpOAaOazJna5wA8owvwuYA80",
+	"4xktNf989fs7pJ2YCEsJ3J4abkPm34ke8mMW7AGy0CdUp1oRvfVjPufCxgLqunKKSWhiDmUcvNeBZMSm",
+	"eosEBJJzLJEZjiRThyfGC2eVLDQ78MxP7bNSeAgXyNIxXcM5m7UlbZPZIRmo39/BAuGQAw4WCL4QISH4",
+	"wXNGkUvcl8KdL5ohaJAiv514i1/aNX95B79jf04oDBWgShchvQayerbJXXeFWNWGv4/wAt0CgiiWC6Xj",
+	"1Jc+S8JA63j1yxfJsV9GRj59wWJU7liSCNMqkMUh/TzhdP6BwYYLke+Ut90osDp+WFbJiQD+N/vxwGdR",
+	"0dkxw13+IhbigfGKtyjATzic/02Iw+Is2eCuTabLZQ+4Nnheck0qJ/CquT50iUN2i1IceTR2DZVM4jK+",
+	"jo86hcA8NEgvi7LlnLsxar14TSch2qBFT3hYZ8fri3dKAd0TeEByDsa0f0+m6PzCCLv4odlCt9we6kuB",
+	"Xnazt8lcxbzasJPzQN7Taup/ctOZz9lpMeuU3IB/3sAeriN4jVNfdDKqddDNo8492YjNm4aA1vaPjdWA",
+	"WSuyLLSXEmIXitqPfEcbOPKVTnsG+M6TXAnqhpDgpD1EWgmNSqX6V46QDjycSDaxjmgJQ1McivyAdMtY",
+	"CJi64hg//bQZukcsgLC4Xz/ESQBDFidieDx8qXZnvhGMUpDD4+FJ/t0ck7tkeDx8Ud57fY4e8ZNWhOng",
+	"9CRmIfEXXcx5ocaem6FO7VOK3abuukFEhTSVhZ1MZW8p9hwbc1y7dMbCNqU7Om5v6hHZBwq8pslOTjYD",
+	"zY7CTZaJsr2sFlSy2NmE3bJ43m9oqXyNtiNh2JZOXOmyb+cB3k1eF+7lgnCvEeGme8iVxbfA7puR4qL8",
+	"7FeYL2BGhAS+9bNtXdD+gSmgtwxWv0Vf95xcmPanlU/Ng+b0ggsdW2yNHedR1WrajY27IjuiKFgUIBCI",
+	"wxT7knGnIDhgyT2iGhQR/jJRop3SNjuml1IcCxmOzuO78ZOq6oMyqo0kHU4xCROu3a7wAS9EWVuUBrTT",
+	"oAhuaVknERLqCm+pVVc94q8TFtDBp0khVLVuJL5ynz8RFMdizuTKFy1l49Qnjs5X3XRb7J0nlJr/MiIU",
+	"o5Y+pj6EYe+A/ErZElWzsxGrUsi5cMX7Ow3JRUI3YD0Um+/ZZCS07VTt5P015ZBRiUl+gHheghqy2URa",
+	"4/i0aNyeBG/gPWCinMZJdoHYXxYhnjRkT9lfGQ+AF35uvNyoBwmzG/1smiz7qv9d20VC/yByfpkGu3AY",
+	"fph6px/7iFd3ilnHHO5gWc/EsJs0e339JK21Ats7SOxaLf+rmh1MPidgDzgkUOedKbFpA4SmwRCT3D1A",
+	"l8Px4Q8lb8odsu5KGlvVin6rOWZbMbnFTLU1rW4xQakmTmkSVEeA3+ZPFUeduEbld9bZOLcDbTV0x51a",
+	"BT15xlau4QPjdNuFG/e/Ab/DKKT9eh7ZXj7wS0JnIbjOUzLhVKBsqE4iDNU/nxNQJ4kBYhwJ/bgZpUfc",
+	"wQKFjN0lsT7DQA9TkWNWGYweuMv0+uWKOf/d9M6l8FqLw3p1Etc2XaF8hb5WaYSdSadxvjfmfO3CiPWL",
+	"IGocZOAqX8A14mmT92S9c8IthOuWZHSS8HBVEqb1iutQcdm2wfVqMQpgRbFck7fa46rpElldnh21i7KL",
+	"3gj8epL5/6RJ+d059w2UuxarhVspPAz115uKuV5GRNeWrig0nIUlQumiReWACeB9WVcA39GF0abi1tu6",
+	"umyNh6+M+/Im93gPk+LRHuE13Ks57IpHNuCvalbbp7uqVBP4CSdycalmTAPS7I7Aq8RVDv6PP66QZHdA",
+	"kVCnLywQpmguZfyBhgtkrjeQmSCtEs8+pXXi6vGcUjgm/wELU2pL6JSl2cXYJDHYh35jMZzJPxi/E+gK",
+	"cOQ5are1Tkavzs+0tyzngIpPpWfvCFM8M2dHZTkVEx18oldzIhAR+inreNtaYzZFkidynk2qFlAAcuzL",
+	"g09qJyHxgQoogPv72ZXiIh56p57CjjgdjVgM1Mx5wPhsZB8SIzU2V9qlnb46P/MG3j1wYfY4Pjg8GGt7",
+	"FQPFMfFOvRcH44MXms5yrqk3womcj/SxWLMnM2yqmFSzwVngnZpc0WsjhjaF7zULFhsrny7loi7LrCl5",
+	"AtUi/6PxeGNrG6mqV25rmJBIdAX7NFEaYA44sO1aLkEO3xhOrTF9xt+K+zN2zqGptTBYDrzj8WEToNnO",
+	"R/ViciuN3unHm4EnkijCfGFgR4QqWdNJmoTOUKpE8UxobavE9UbNkTEAS2QrB7BEZixQosVxHQXv2GwG",
+	"AWKJLGAw1NpqzZ2W9qbmVbLlJ5wryezYnDFLM3Ds6+8g35hJ3HvbPp+9KewBpRVIG8DT36GEo3BRrDuE",
+	"oAtn3N6iN7NEes++Rb1QvcrvpRoOt04yXdqVIgiCMotvWU2Mu5mi0AJFP/Jz9yNZ65I2rZJSA2FE4aGF",
+	"geZEhkPLD2L0WGoItWwTxWK+waDUIKshcJUPGdUbWC1vtijORVAdLFLKdn+aVKuHjrsfyvqq1NUARiVw",
+	"bhcm/z6lnKJPH8qNCim/qUoo7/qVGWD8Ir3mDEsYIByG7EFZIfV9mg2AJNOOEaEJHCg1FSLrw5+aT8P/",
+	"ROcfLq/Q8NaKhziQXyQa4ZiM7g+rsJIcQO1llZnLQvYnZbCsKHBdFbFjprTUQBjZC9kSg67DmqYWspkz",
+	"TVJShTFNoSGmiMUmBcVmLK3CjcPf0CfvjSH48GoRwymq0vyTh4YB+u7xk02Z+uSdfqokQn3ylt+1MbbZ",
+	"noOv63lam2LrbVjzKqzLev+ufYlQVkz7lYiQQeZKEmSPtKLRAr8jQp6ng1blo7xlYdPdUXFwscVhj/HF",
+	"1ntb1brFzHYHy9gACgTm/o1NUYbUTRxt1Jw4DPNJczpmX90sBw0Oean11ZY8cmd7rR275VnNgIM+Nmpj",
+	"o3O7E+YSHQ2SrJtcqGipk7IollrTG8sVgqlCKNP3rf4+p+9q8tnssxw3d/Q0oAR70XBmu0rDtWFw0HiY",
+	"2Dyixrtk4f0fGtIQaPW8UFZFiQP7pRvfpxFg8yrMeR2946BjD/qnbRG+En/EYLVLWsv6LusKvBxBTPx2",
+	"x+QXPWJlr6TUubiPZ/KncGOyrk+9fBiNfHMYMqmIftb9aiMujZlftz7LlEp9tZxhDDN0OTq6JdUT+eFm",
+	"m15SMWNpxy6SaddVp71OXtq5c6QeetH9UN6peL2wpdv/UsykL0McmilltHa1NHo0HfZ7OGeb4MluNVJ4",
+	"V0A/d06T/em+3Oo0fLr3RzUBncqhyfF7DkQY70aU9+4kGvLUXMSCBm/2D/dEp215lCur+x3xyF4cyS2r",
+	"iqfZh9RXbdQtjfZgTmQ4SouIcm/VnbCtIznpZYdOjy1cxto6Je0VzZMIU5RWLB2gtyDIjEKgf/QTHg5v",
+	"sYAAvXl3hh4Yv5uG7EGg//uf/y1d6dpoduE6EWEaIF+BIedEIKBBzAiV+i0VAOhhjiVK49D3BB4OHAFm",
+	"HROsNRcSG3G8tnW4cjdYcuV4pEE8RwxV7Iz76w5zCZ6ULzLAyp50e6y3xL0pM7ZdwVY6OT1nMpchdZ10",
+	"UuEzdccJt6lvezKWpcvPEkiNFE2HD83w7pDL5qm3tQCMs2Jh13GYNXnoT2lUXTZyMzzbqJF4QtujPhcJ",
+	"Fa8X60YSdxn92aaqS+vse0VzNE43FbpRkzVSWq/UFaa5SOizjtIUXtSx4yCNLsx2vLYoofsJ0ayvLMoX",
+	"Xqm64AntYp1GxZB2KW7TDZdZJ+NnHROupHuyKMJDAeqJotSamh8QyjmfklACV4dqW/ltywQHtmryh6aX",
+	"y2XvC2hMIhw09zSWTJeLoiRG33N7hElz29WgplVNRXPzkttUjPXy2V4qMm1enZfN2ubiGhN7ESGtbVO4",
+	"HKHyLEXJENnyiO1lYYUqFZoulWyKd5+zUi6VAu5YLdvS5jofGVH5tqLntjWFO3ye81uXHh/ZFvaNyeSl",
+	"nvzPlDWdrzrY8YHF9e4CB6uaYYjrAUaBxMCHhpo2XV1Hh9Iu+Pl93/Nk6RKHvk7CO/tShFxlchblb5Jw",
+	"vkFiPc59tC9O7XH7sxG92uMWufAa2H73P0ZzfZ0XQEYFNVi5pijW86DEeFc2af+5Qpn/VLoGKjkkzVGr",
+	"vVFrW7Gt1d2XnbHKX7dBTbdBLYqmv5HIIlruMgTjW4lC2rY6JNtcGIgFCoCTewiMOdPBN7PYd6IahjPm",
+	"m35OIFETigX1EXwBP1FLHaD0Eup4/DMiU1OorBkgfVfP3BRjY93HQoExQMfjcXksEdnwgFFQI47LIxiv",
+	"wUVE/p4z540STqg/30BY6Mn6eaOhnLwzX3tMx9AtJVRKwb8EsnAU1gyiZKQeSSoe11cIJ6V9bzprHwod",
+	"fMQ3G2529AfvWwtRfPn/5qLQ1Ymb7x70wGEOQY9qiWLn8uccE3H3l9p97UWp07szf7lIq28sXlLh1KbI",
+	"iYNPu3XX6DH996xnocgGWbtbP11lwK1WaFLC11d6Rq2QvUsjtZSsPDOSjfeoOZ5FBUwJIkcljMPctFbE",
+	"7J++W6yoWdc+7ZPL/joQy5ZSnv5aTdkv5YaPHnlCO/p8rHP4u1Czbl9N9TnJWcVUOLfvUUeps5HWSwYc",
+	"IgVKXyjoOB01Byw6UnDWi9GVDuB/pd88Jf2m5cibCNtuqJGG13rEt1nSn3Vf7EU+g8v9pf7iMLQw5KQ2",
+	"nwu07lkqbjtzbbFO/No0LfsqffZK/6oUyc3e+YbROd5Nn7Kne9G7pI6xaboXXtXZzgnU4mE/nUbbco+L",
+	"PZKfSYtLzR/fSiZzo8BXWt6VG9p+vFFcIYDfp7xU6Xh2fobuD9EtFoBirHtQmzautpmTZiq7Yu3ZvHjH",
+	"3ASY8hyRp9bpnnr1nD1Nt0JjWseTqRlrauzR/nShqY2zlLT9aVNF5Vi7GM5vn8I6UV3Ros5dlA8pTdmP",
+	"7dOk14AtGyonxrtAqebE1yf7LYkwHRI6lHMYhozFeeGPY0Jd6rO8Wf5/AAAA//8PkZ+wVZwAAA==",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

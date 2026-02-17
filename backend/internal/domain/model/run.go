@@ -24,11 +24,12 @@ const (
 type StepStatus string
 
 const (
-	StepStatusPending   StepStatus = "pending"
-	StepStatusRunning   StepStatus = "running"
-	StepStatusCompleted StepStatus = "completed"
-	StepStatusFailed    StepStatus = "failed"
-	StepStatusCancelled StepStatus = "cancelled"
+	StepStatusPending         StepStatus = "pending"
+	StepStatusRunning         StepStatus = "running"
+	StepStatusCompleted       StepStatus = "completed"
+	StepStatusFailed          StepStatus = "failed"
+	StepStatusCancelled       StepStatus = "cancelled"
+	StepStatusWaitingApproval StepStatus = "waiting_approval"
 )
 
 // Run represents a pipeline execution run.
@@ -68,8 +69,9 @@ var validRunTransitions = map[RunStatus][]RunStatus{
 }
 
 var validStepTransitions = map[StepStatus][]StepStatus{
-	StepStatusPending: {StepStatusRunning, StepStatusCancelled},
-	StepStatusRunning: {StepStatusCompleted, StepStatusFailed, StepStatusCancelled},
+	StepStatusPending:         {StepStatusRunning, StepStatusCancelled},
+	StepStatusRunning:         {StepStatusCompleted, StepStatusFailed, StepStatusCancelled, StepStatusWaitingApproval},
+	StepStatusWaitingApproval: {StepStatusRunning, StepStatusFailed, StepStatusCancelled},
 }
 
 // ValidateRunTransition checks if a run status transition is valid.
