@@ -17,8 +17,8 @@ import (
 )
 
 const (
-	testCID     = "abc123"
-	testErrCode = "CONTAINER_OPERATION_FAILED"
+	testContainerID = "testContainerID"
+	testErrCode     = "CONTAINER_OPERATION_FAILED"
 )
 
 // mockDockerClient is a test double for the Docker SDK client.
@@ -99,7 +99,7 @@ func newTestManager(mock *mockDockerClient) *ContainerManager {
 
 func TestCreate_Success(t *testing.T) {
 	mock := &mockDockerClient{
-		createResp: dockercontainer.CreateResponse{ID: "testCID"},
+		createResp: dockercontainer.CreateResponse{ID: testContainerID},
 	}
 	mgr := newTestManager(mock)
 
@@ -116,8 +116,8 @@ func TestCreate_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
-	if id != "testCID" {
-		t.Fatalf("expected container ID testCID, got %s", id)
+	if id != testContainerID {
+		t.Fatalf("expected container ID %s, got %s", testContainerID, id)
 	}
 
 	// Verify container config.
@@ -305,12 +305,12 @@ func TestStart_Success(t *testing.T) {
 	mock := &mockDockerClient{}
 	mgr := newTestManager(mock)
 
-	err := mgr.Start(context.Background(), "testCID")
+	err := mgr.Start(context.Background(), testContainerID)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
-	if mock.startID != "testCID" {
-		t.Errorf("expected startID=testCID, got %s", mock.startID)
+	if mock.startID != testContainerID {
+		t.Errorf("expected startID=%s, got %s", testContainerID, mock.startID)
 	}
 }
 
@@ -338,12 +338,12 @@ func TestStop_Success(t *testing.T) {
 	mock := &mockDockerClient{}
 	mgr := newTestManager(mock)
 
-	err := mgr.Stop(context.Background(), "testCID")
+	err := mgr.Stop(context.Background(), testContainerID)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
-	if mock.stopID != "testCID" {
-		t.Errorf("expected stopID=testCID, got %s", mock.stopID)
+	if mock.stopID != testContainerID {
+		t.Errorf("expected stopID=%s, got %s", testContainerID, mock.stopID)
 	}
 
 	// Verify 10-second timeout is set.
@@ -361,7 +361,7 @@ func TestStop_Error(t *testing.T) {
 	}
 	mgr := newTestManager(mock)
 
-	err := mgr.Stop(context.Background(), "testCID")
+	err := mgr.Stop(context.Background(), testContainerID)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -376,12 +376,12 @@ func TestRemove_Success(t *testing.T) {
 	mock := &mockDockerClient{}
 	mgr := newTestManager(mock)
 
-	err := mgr.Remove(context.Background(), "testCID")
+	err := mgr.Remove(context.Background(), testContainerID)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
-	if mock.removeID != "testCID" {
-		t.Errorf("expected removeID=testCID, got %s", mock.removeID)
+	if mock.removeID != testContainerID {
+		t.Errorf("expected removeID=%s, got %s", testContainerID, mock.removeID)
 	}
 
 	// Verify force removal with volumes.
@@ -399,7 +399,7 @@ func TestRemove_Error(t *testing.T) {
 	}
 	mgr := newTestManager(mock)
 
-	err := mgr.Remove(context.Background(), "testCID")
+	err := mgr.Remove(context.Background(), testContainerID)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -416,15 +416,15 @@ func TestWait_SuccessExitZero(t *testing.T) {
 	}
 	mgr := newTestManager(mock)
 
-	exitCode, err := mgr.Wait(context.Background(), "testCID")
+	exitCode, err := mgr.Wait(context.Background(), testContainerID)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 	if exitCode != 0 {
 		t.Errorf("expected exit code 0, got %d", exitCode)
 	}
-	if mock.waitID != "testCID" {
-		t.Errorf("expected waitID=testCID, got %s", mock.waitID)
+	if mock.waitID != testContainerID {
+		t.Errorf("expected waitID=%s, got %s", testContainerID, mock.waitID)
 	}
 	if mock.waitCondition != dockercontainer.WaitConditionNotRunning {
 		t.Errorf("expected WaitConditionNotRunning, got %v", mock.waitCondition)
@@ -437,7 +437,7 @@ func TestWait_SuccessNonZeroExit(t *testing.T) {
 	}
 	mgr := newTestManager(mock)
 
-	exitCode, err := mgr.Wait(context.Background(), "testCID")
+	exitCode, err := mgr.Wait(context.Background(), testContainerID)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -452,7 +452,7 @@ func TestWait_Error(t *testing.T) {
 	}
 	mgr := newTestManager(mock)
 
-	_, err := mgr.Wait(context.Background(), "testCID")
+	_, err := mgr.Wait(context.Background(), testContainerID)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -479,7 +479,7 @@ func TestWait_ContextCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately.
 
-	_, err := mgr.Wait(ctx, "testCID")
+	_, err := mgr.Wait(ctx, testContainerID)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
