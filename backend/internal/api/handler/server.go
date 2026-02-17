@@ -111,6 +111,16 @@ func (s *Server) DeleteEpic(w http.ResponseWriter, r *http.Request, projectID Pr
 	s.epics.DeleteEpic(w, r, projectID, epicID)
 }
 
+// GetEpicDAG delegates to EpicHandler.
+func (s *Server) GetEpicDAG(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, epicID EpicIdPath) {
+	s.epics.GetEpicDAG(w, r, projectID, epicID)
+}
+
+// LaunchEpicRun delegates to EpicHandler (stub — not yet implemented).
+func (s *Server) LaunchEpicRun(w http.ResponseWriter, _ *http.Request, _ ProjectIdPath, _ EpicIdPath) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // ListStories delegates to StoryHandler.
 func (s *Server) ListStories(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, params ListStoriesParams) {
 	s.stories.ListStories(w, r, projectID, params)
