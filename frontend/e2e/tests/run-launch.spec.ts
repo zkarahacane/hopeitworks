@@ -78,9 +78,8 @@ test.describe('Run Launch', () => {
     // Success toast should appear
     await expect(page.getByText('Run launched')).toBeVisible()
 
-    // Button should change to "Running..." disabled state
-    await expect(page.getByRole('button', { name: 'Running...' })).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Running...' })).toBeDisabled()
+    // Dialog should close after successful launch
+    await expect(page.getByText('Launch Story Run')).not.toBeVisible()
   })
 
   test('409 conflict shows warning toast and keeps dialog open', async ({ page }) => {
