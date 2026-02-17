@@ -25,6 +25,8 @@ tags:
     description: User management endpoints
   - name: projects
     description: Project management endpoints
+  - name: epics
+    description: Epic management endpoints
 
 paths:
   # ── Auth ────────────────────────────────────────────────────────────────
@@ -298,6 +300,122 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  # ── Epics ──────────────────────────────────────────────────────────────
+  /projects/{projectId}/epics:
+    get:
+      operationId: listEpics
+      summary: List epics for a project
+      tags: [epics]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/PerPageParam"
+      responses:
+        "200":
+          description: Paginated list of epics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EpicList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    post:
+      operationId: createEpic
+      summary: Create a new epic in a project
+      tags: [epics]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEpicRequest"
+      responses:
+        "201":
+          description: Epic created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Epic"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /projects/{projectId}/epics/{epicId}:
+    get:
+      operationId: getEpic
+      summary: Get an epic by ID
+      tags: [epics]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/EpicIdPath"
+      responses:
+        "200":
+          description: Epic details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Epic"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    put:
+      operationId: updateEpic
+      summary: Update an epic
+      tags: [epics]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/EpicIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateEpicRequest"
+      responses:
+        "200":
+          description: Epic updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Epic"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+    delete:
+      operationId: deleteEpic
+      summary: Delete an epic
+      tags: [epics]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/EpicIdPath"
+      responses:
+        "204":
+          description: Epic deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
 # ── Components ──────────────────────────────────────────────────────────
 components:
   securitySchemes:
@@ -316,6 +434,24 @@ components:
         type: string
         format: uuid
       description: Resource UUID
+
+    ProjectIdPath:
+      name: projectId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Project UUID
+
+    EpicIdPath:
+      name: epicId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Epic UUID
 
     PageParam:
       name: page
@@ -521,6 +657,92 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Project"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+
+    # ── Epic ──────────────────────────────────────────────────────────
+    Epic:
+      type: object
+      required:
+        - id
+        - project_id
+        - name
+        - status
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 770e8400-e29b-41d4-a716-446655440000
+        project_id:
+          type: string
+          format: uuid
+          example: 660e8400-e29b-41d4-a716-446655440000
+        name:
+          type: string
+          example: User Authentication
+        description:
+          type: string
+          example: Epic for authentication features
+        status:
+          type: string
+          enum: [backlog, in_progress, done]
+          example: backlog
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-01-15T10:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2026-01-15T10:30:00Z"
+
+    CreateEpicRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          example: User Authentication
+        description:
+          type: string
+          maxLength: 2000
+          example: Epic for authentication features
+        status:
+          type: string
+          enum: [backlog, in_progress, done]
+          default: backlog
+
+    UpdateEpicRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          example: Updated Epic Name
+        description:
+          type: string
+          maxLength: 2000
+          example: Updated description
+        status:
+          type: string
+          enum: [backlog, in_progress, done]
+
+    EpicList:
+      type: object
+      required:
+        - data
+        - pagination
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Epic"
         pagination:
           $ref: "#/components/schemas/Pagination"
 

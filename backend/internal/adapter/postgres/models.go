@@ -11,6 +11,16 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type Epic struct {
+	ID          uuid.UUID   `json:"id"`
+	ProjectID   uuid.UUID   `json:"project_id"`
+	Name        string      `json:"name"`
+	Description pgtype.Text `json:"description"`
+	Status      string      `json:"status"`
+	CreatedAt   time.Time   `json:"created_at"`
+	UpdatedAt   time.Time   `json:"updated_at"`
+}
+
 type Project struct {
 	ID           uuid.UUID      `json:"id"`
 	Name         string         `json:"name"`
