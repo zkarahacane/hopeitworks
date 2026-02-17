@@ -310,6 +310,23 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /projects/{id}/circuit-breaker/reset:
+    post:
+      operationId: resetCircuitBreaker
+      summary: Reset circuit breaker for a project
+      tags: [projects]
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "204":
+          description: Circuit breaker reset successfully
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   # ── Epics ──────────────────────────────────────────────────────────────
   /projects/{projectId}/epics:
     get:
@@ -1239,6 +1256,10 @@ components:
           type: string
           format: uuid
           example: 550e8400-e29b-41d4-a716-446655440000
+        circuit_breaker_active:
+          type: boolean
+          description: Whether the circuit breaker is active, pausing all pipeline runs
+          example: false
         created_at:
           type: string
           format: date-time
@@ -1897,6 +1918,20 @@ components:
           type: string
         log_tail:
           type: string
+        parent_step_id:
+          type: string
+          format: uuid
+          description: ID of the original step this is a retry of; null for root steps
+          nullable: true
+        retry_count:
+          type: integer
+          description: Which retry attempt this is (1-based); null for root steps
+          nullable: true
+        retry_type:
+          type: string
+          enum: [incremental, full]
+          description: Retry strategy used for this attempt; null for root steps
+          nullable: true
         created_at:
           type: string
           format: date-time
