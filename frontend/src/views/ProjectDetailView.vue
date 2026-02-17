@@ -20,6 +20,7 @@ const tabs = [
   { label: 'Board', icon: 'pi pi-th-large', route: 'project-board' },
   { label: 'Pipeline', icon: 'pi pi-cog', route: 'project-pipeline' },
   { label: 'Templates', icon: 'pi pi-file', route: 'project-templates' },
+  { label: 'Costs', icon: 'pi pi-dollar', route: 'project-costs' },
 ]
 
 const activeIndex = computed(() => {

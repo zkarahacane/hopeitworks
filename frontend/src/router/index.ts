@@ -69,6 +69,11 @@ const router = createRouter({
           component: PromptTemplatesView,
         },
         {
+          path: 'costs',
+          name: 'project-costs',
+          component: () => import('@/views/CostDashboardView.vue'),
+        },
+        {
           path: 'templates/new',
           name: 'template-create',
           component: () => import('@/views/TemplateEditorView.vue'),
