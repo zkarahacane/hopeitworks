@@ -3,10 +3,14 @@ import { setActivePinia, createPinia } from 'pinia'
 import { useStoriesStore } from '../stories'
 
 const mockGet = vi.fn()
+const mockPut = vi.fn()
+const mockPost = vi.fn()
 
 vi.mock('@/api/client', () => ({
   apiClient: {
     GET: (...args: unknown[]) => mockGet(...args),
+    PUT: (...args: unknown[]) => mockPut(...args),
+    POST: (...args: unknown[]) => mockPost(...args),
   },
 }))
 
@@ -51,6 +55,8 @@ describe('useStoriesStore', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     mockGet.mockReset()
+    mockPut.mockReset()
+    mockPost.mockReset()
   })
 
   it('starts with default state', () => {
@@ -265,5 +271,102 @@ describe('useStoriesStore', () => {
     expect(store.filters).toEqual({ status: null, search: '' })
     expect(store.error).toBeNull()
     expect(store.isLoading).toBe(false)
+  })
+
+  describe('updateStory', () => {
+    it('updates item in-place on success', async () => {
+      mockGet.mockResolvedValue({
+        data: { data: mockStories },
+        error: undefined,
+      })
+
+      const store = useStoriesStore()
+      await store.fetchStoriesByEpic('p1', 'e1')
+
+      const updatedStory = { ...mockStories[1], title: 'Updated title' }
+      mockPut.mockResolvedValue({ data: updatedStory, error: undefined })
+
+      const result = await store.updateStory('p1', 's2', { title: 'Updated title' })
+
+      expect(result).toEqual(updatedStory)
+      expect(store.items[1]!.title).toBe('Updated title')
+      expect(store.error).toBeNull()
+    })
+
+    it('returns null and sets error on API error', async () => {
+      mockGet.mockResolvedValue({
+        data: { data: mockStories },
+        error: undefined,
+      })
+
+      const store = useStoriesStore()
+      await store.fetchStoriesByEpic('p1', 'e1')
+
+      mockPut.mockResolvedValue({
+        data: undefined,
+        error: { error: { code: 'NOT_FOUND', message: 'Story not found' } },
+      })
+
+      const result = await store.updateStory('p1', 's2', { title: 'Updated' })
+
+      expect(result).toBeNull()
+      expect(store.error).toBe('Story not found')
+    })
+
+    it('returns null and sets error on thrown exception', async () => {
+      const store = useStoriesStore()
+      mockPut.mockRejectedValue(new Error('Network error'))
+
+      const result = await store.updateStory('p1', 's1', { title: 'Updated' })
+
+      expect(result).toBeNull()
+      expect(store.error).toBe('Network error')
+    })
+  })
+
+  describe('createStory', () => {
+    it('pushes new story to items on success', async () => {
+      const store = useStoriesStore()
+      const newStory = {
+        id: 's4',
+        epic_id: 'e1',
+        project_id: 'p1',
+        key: 'S-04',
+        title: 'New story',
+        status: 'backlog',
+        created_at: '2026-01-18T10:00:00Z',
+        updated_at: '2026-01-18T10:00:00Z',
+      }
+      mockPost.mockResolvedValue({ data: newStory, error: undefined })
+
+      const result = await store.createStory('p1', { key: 'S-04', title: 'New story' })
+
+      expect(result).toEqual(newStory)
+      expect(store.items).toHaveLength(1)
+      expect(store.items[0]!.key).toBe('S-04')
+    })
+
+    it('returns null and sets error on API error', async () => {
+      const store = useStoriesStore()
+      mockPost.mockResolvedValue({
+        data: undefined,
+        error: { error: { code: 'CONFLICT', message: 'Key already exists' } },
+      })
+
+      const result = await store.createStory('p1', { key: 'S-01', title: 'Duplicate' })
+
+      expect(result).toBeNull()
+      expect(store.error).toBe('Key already exists')
+    })
+
+    it('returns null and sets error on thrown exception', async () => {
+      const store = useStoriesStore()
+      mockPost.mockRejectedValue(new Error('Network error'))
+
+      const result = await store.createStory('p1', { key: 'S-05', title: 'Story' })
+
+      expect(result).toBeNull()
+      expect(store.error).toBe('Network error')
+    })
   })
 })

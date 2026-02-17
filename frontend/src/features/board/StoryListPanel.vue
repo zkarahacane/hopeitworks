@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import Button from 'primevue/button'
 import type { Story, StoryFilters } from '@/stores/stories'
 import StoryStatusCard from './StoryStatusCard.vue'
 import StoryFilterBar from './StoryFilterBar.vue'
@@ -14,6 +15,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   select: [storyId: string]
   'update:filters': [filters: StoryFilters]
+  'create-story': []
 }>()
 
 const selectedIndex = ref(0)
@@ -74,7 +76,16 @@ function handleFilterUpdate(newFilters: StoryFilters) {
 
 <template>
   <div class="flex flex-col gap-3 h-full">
-    <StoryFilterBar :model-value="filters" @update:model-value="handleFilterUpdate" />
+    <div class="flex items-center justify-between">
+      <StoryFilterBar :model-value="filters" @update:model-value="handleFilterUpdate" class="flex-1" />
+      <Button
+        icon="pi pi-plus"
+        severity="secondary"
+        text
+        aria-label="Create story"
+        @click="emit('create-story')"
+      />
+    </div>
     <div
       class="flex flex-col gap-1 overflow-y-auto"
       style="flex: 1; min-height: 0"

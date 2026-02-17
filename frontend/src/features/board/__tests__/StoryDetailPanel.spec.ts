@@ -1,8 +1,17 @@
-import { describe, it, expect, afterEach } from 'vitest'
+import { describe, it, expect, afterEach, vi } from 'vitest'
 import { mount, type VueWrapper } from '@vue/test-utils'
+import { createPinia } from 'pinia'
 import PrimeVue from 'primevue/config'
 import StoryDetailPanel from '../StoryDetailPanel.vue'
 import type { Story } from '@/stores/stories'
+
+vi.mock('@/api/client', () => ({
+  apiClient: {
+    GET: vi.fn(),
+    PUT: vi.fn(),
+    POST: vi.fn(),
+  },
+}))
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let wrapper: VueWrapper<any>
@@ -34,11 +43,14 @@ function mountComponent(props: {
   wrapper = mount(StoryDetailPanel, {
     props,
     global: {
-      plugins: [PrimeVue],
+      plugins: [PrimeVue, createPinia()],
       stubs: {
         RunLaunchButton: {
           template: '<button data-testid="launch-btn">Launch</button>',
           emits: ['launchClick'],
+        },
+        StoryEditorForm: {
+          template: '<div data-testid="editor-form">Editor Form</div>',
         },
       },
     },

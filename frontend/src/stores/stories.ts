@@ -32,6 +32,29 @@ export interface Story {
   updated_at: string
 }
 
+/** Fields for updating an existing story */
+export interface UpdateStoryFields {
+  title?: string
+  objective?: string
+  acceptance_criteria?: string
+  target_files?: string[]
+  depends_on?: string[]
+  scope?: 'backend' | 'frontend' | 'shared'
+  status?: 'backlog' | 'running' | 'done' | 'failed'
+}
+
+/** Fields for creating a new story */
+export interface CreateStoryFields {
+  key: string
+  title: string
+  objective?: string
+  acceptance_criteria?: string
+  target_files?: string[]
+  depends_on?: string[]
+  scope?: 'backend' | 'frontend' | 'shared'
+  epic_id?: string
+}
+
 /** Filter state for the story list */
 export interface StoryFilters {
   status: string | null
@@ -115,6 +138,68 @@ export const useStoriesStore = defineStore('stories', () => {
     error.value = null
   }
 
+  /** Update an existing story via PUT API */
+  async function updateStory(
+    projectId: string,
+    storyId: string,
+    fields: UpdateStoryFields,
+  ): Promise<Story | null> {
+    try {
+      const { data, error: apiError } = await apiClient.PUT(
+        '/projects/{projectId}/stories/{storyId}',
+        {
+          params: { path: { projectId, storyId } },
+          body: fields,
+        },
+      )
+      if (apiError) {
+        const message =
+          (apiError as { error?: { message?: string } })?.error?.message ??
+          'Failed to update story'
+        error.value = message
+        return null
+      }
+      const updated = data as unknown as Story
+      const index = items.value.findIndex((s) => s.id === storyId)
+      if (index !== -1) {
+        items.value[index] = updated
+      }
+      return updated
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to update story'
+      return null
+    }
+  }
+
+  /** Create a new story via POST API */
+  async function createStory(
+    projectId: string,
+    fields: CreateStoryFields,
+  ): Promise<Story | null> {
+    try {
+      const { data, error: apiError } = await apiClient.POST(
+        '/projects/{projectId}/stories',
+        {
+          params: { path: { projectId } },
+          body: fields,
+        },
+      )
+      if (apiError) {
+        const message =
+          (apiError as { error?: { message?: string } })?.error?.message ??
+          'Failed to create story'
+        error.value = message
+        return null
+      }
+      const created = data as unknown as Story
+      items.value.push(created)
+      return created
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to create story'
+      return null
+    }
+  }
+
   /** Reset store state to initial values */
   function reset() {
     items.value = []
@@ -133,6 +218,8 @@ export const useStoriesStore = defineStore('stories', () => {
     filteredStories,
     selectedStory,
     fetchStoriesByEpic,
+    updateStory,
+    createStory,
     setSelectedStory,
     setFilters,
     clearError,

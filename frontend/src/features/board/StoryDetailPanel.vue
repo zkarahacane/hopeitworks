@@ -1,9 +1,13 @@
 <script setup lang="ts">
+import { computed, toRef } from 'vue'
 import Badge from 'primevue/badge'
 import Tag from 'primevue/tag'
+import Button from 'primevue/button'
 import type { Story } from '@/stores/stories'
 import { renderMarkdown } from '@/utils/renderMarkdown'
 import RunLaunchButton from '@/features/runs/RunLaunchButton.vue'
+import StoryEditorForm from './StoryEditorForm.vue'
+import { useStoryEditor } from '@/composables/useStoryEditor'
 
 const props = defineProps<{
   story: Story | null
@@ -15,7 +19,16 @@ const props = defineProps<{
 const emit = defineEmits<{
   'select-dependency': [storyId: string]
   'launch-click': []
+  'story-updated': [story: Story]
 }>()
+
+const storyRef = toRef(props, 'story')
+const { isEditing, draftFields, validationErrors, apiError, isSaving, startEdit, cancelEdit, saveEdit } =
+  useStoryEditor(props.projectId ?? '', storyRef)
+
+const canEdit = computed(() => {
+  return props.story?.status === 'backlog' || props.story?.status === 'failed'
+})
 
 const severityMap: Record<string, 'secondary' | 'info' | 'success' | 'danger'> = {
   backlog: 'secondary',
@@ -33,6 +46,14 @@ const scopeSeverityMap: Record<string, 'info' | 'warn' | 'secondary'> = {
 function handleDependencyClick(key: string) {
   const match = props.allStories?.find((s) => s.key === key)
   if (match) emit('select-dependency', match.id)
+}
+
+async function handleSave() {
+  if (!props.story) return
+  const updated = await saveEdit(props.story.id)
+  if (updated) {
+    emit('story-updated', updated)
+  }
 }
 </script>
 
@@ -67,116 +88,141 @@ function handleDependencyClick(key: string) {
             :severity="scopeSeverityMap[story.scope] ?? 'secondary'"
           />
         </div>
-        <RunLaunchButton
-          v-if="showLaunchButton"
-          :story-id="story.id"
-          :story-key="story.key"
-          :story-title="story.title"
-          :status="story.status"
-          @launch-click="emit('launch-click')"
-        />
+        <div class="flex items-center gap-2">
+          <Button
+            v-if="canEdit && !isEditing"
+            icon="pi pi-pencil"
+            severity="secondary"
+            text
+            aria-label="Edit story"
+            @click="startEdit"
+          />
+          <RunLaunchButton
+            v-if="showLaunchButton && !isEditing"
+            :story-id="story.id"
+            :story-key="story.key"
+            :story-title="story.title"
+            :status="story.status"
+            @launch-click="emit('launch-click')"
+          />
+        </div>
       </div>
 
-      <h2 class="m-0" style="font-size: 1.25rem; font-weight: 600">{{ story.title }}</h2>
+      <!-- Edit mode -->
+      <StoryEditorForm
+        v-if="isEditing"
+        :model-value="draftFields"
+        :errors="validationErrors"
+        :api-error="apiError"
+        :is-saving="isSaving"
+        @update:model-value="draftFields = $event"
+        @save="handleSave"
+        @cancel="cancelEdit"
+      />
 
-      <div v-if="story.objective" class="flex flex-col gap-1">
-        <h3
-          class="m-0"
-          style="
-            font-size: 0.85rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            color: var(--p-text-muted-color);
-          "
-        >
-          Objective
-        </h3>
-        <!-- eslint-disable-next-line vue/no-v-html -->
-        <div class="prose-content" v-html="renderMarkdown(story.objective)" />
-      </div>
+      <!-- Read mode -->
+      <template v-else>
+        <h2 class="m-0" style="font-size: 1.25rem; font-weight: 600">{{ story.title }}</h2>
 
-      <div v-if="story.acceptance_criteria" class="flex flex-col gap-1">
-        <h3
-          class="m-0"
-          style="
-            font-size: 0.85rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            color: var(--p-text-muted-color);
-          "
-        >
-          Acceptance Criteria
-        </h3>
-        <!-- eslint-disable-next-line vue/no-v-html -->
-        <div class="prose-content" v-html="renderMarkdown(story.acceptance_criteria)" />
-      </div>
-
-      <div
-        v-if="story.target_files && story.target_files.length > 0"
-        class="flex flex-col gap-1"
-      >
-        <h3
-          class="m-0"
-          style="
-            font-size: 0.85rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            color: var(--p-text-muted-color);
-          "
-        >
-          Target Files
-        </h3>
-        <ul class="m-0 pl-5">
-          <li
-            v-for="file in story.target_files"
-            :key="file"
-            style="font-family: monospace; font-size: 0.85rem"
+        <div v-if="story.objective" class="flex flex-col gap-1">
+          <h3
+            class="m-0"
+            style="
+              font-size: 0.85rem;
+              font-weight: 600;
+              text-transform: uppercase;
+              color: var(--p-text-muted-color);
+            "
           >
-            {{ file }}
-          </li>
-        </ul>
-      </div>
+            Objective
+          </h3>
+          <!-- eslint-disable-next-line vue/no-v-html -->
+          <div class="prose-content" v-html="renderMarkdown(story.objective)" />
+        </div>
 
-      <div
-        v-if="story.depends_on && story.depends_on.length > 0"
-        class="flex flex-col gap-1"
-      >
-        <h3
-          class="m-0"
-          style="
-            font-size: 0.85rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            color: var(--p-text-muted-color);
-          "
-        >
-          Dependencies
-        </h3>
-        <ul class="m-0 pl-5">
-          <li
-            v-for="dep in story.depends_on"
-            :key="dep"
-            style="font-family: monospace; font-size: 0.85rem"
+        <div v-if="story.acceptance_criteria" class="flex flex-col gap-1">
+          <h3
+            class="m-0"
+            style="
+              font-size: 0.85rem;
+              font-weight: 600;
+              text-transform: uppercase;
+              color: var(--p-text-muted-color);
+            "
           >
-            <button
-              type="button"
-              style="
-                background: none;
-                border: none;
-                padding: 0;
-                font-family: monospace;
-                font-size: 0.85rem;
-                color: var(--p-primary-color);
-                cursor: pointer;
-                text-decoration: underline;
-              "
-              @click="handleDependencyClick(dep)"
+            Acceptance Criteria
+          </h3>
+          <!-- eslint-disable-next-line vue/no-v-html -->
+          <div class="prose-content" v-html="renderMarkdown(story.acceptance_criteria)" />
+        </div>
+
+        <div
+          v-if="story.target_files && story.target_files.length > 0"
+          class="flex flex-col gap-1"
+        >
+          <h3
+            class="m-0"
+            style="
+              font-size: 0.85rem;
+              font-weight: 600;
+              text-transform: uppercase;
+              color: var(--p-text-muted-color);
+            "
+          >
+            Target Files
+          </h3>
+          <ul class="m-0 pl-5">
+            <li
+              v-for="file in story.target_files"
+              :key="file"
+              style="font-family: monospace; font-size: 0.85rem"
             >
-              {{ dep }}
-            </button>
-          </li>
-        </ul>
-      </div>
+              {{ file }}
+            </li>
+          </ul>
+        </div>
+
+        <div
+          v-if="story.depends_on && story.depends_on.length > 0"
+          class="flex flex-col gap-1"
+        >
+          <h3
+            class="m-0"
+            style="
+              font-size: 0.85rem;
+              font-weight: 600;
+              text-transform: uppercase;
+              color: var(--p-text-muted-color);
+            "
+          >
+            Dependencies
+          </h3>
+          <ul class="m-0 pl-5">
+            <li
+              v-for="dep in story.depends_on"
+              :key="dep"
+              style="font-family: monospace; font-size: 0.85rem"
+            >
+              <button
+                type="button"
+                style="
+                  background: none;
+                  border: none;
+                  padding: 0;
+                  font-family: monospace;
+                  font-size: 0.85rem;
+                  color: var(--p-primary-color);
+                  cursor: pointer;
+                  text-decoration: underline;
+                "
+                @click="handleDependencyClick(dep)"
+              >
+                {{ dep }}
+              </button>
+            </li>
+          </ul>
+        </div>
+      </template>
     </div>
   </div>
 </template>

@@ -8,6 +8,7 @@ import Skeleton from 'primevue/skeleton'
 import Toast from 'primevue/toast'
 import EpicDetailLayout from '@/features/board/EpicDetailLayout.vue'
 import RunLaunchConfirmDialog from '@/features/runs/RunLaunchConfirmDialog.vue'
+import CreateStoryDialog from '@/features/board/CreateStoryDialog.vue'
 import { useStories } from '@/composables/useStories'
 import { useRunLauncher, ALREADY_RUNNING_ERROR } from '@/composables/useRunLauncher'
 
@@ -33,10 +34,33 @@ const {
 } = useStories(projectId, epicId)
 
 const dialogVisible = ref(false)
+const createDialogVisible = ref(false)
 const { isLoading: launchLoading, error: launchError, launchRun } = useRunLauncher()
 
 function handleLaunchClick() {
   dialogVisible.value = true
+}
+
+function handleCreateStory() {
+  createDialogVisible.value = true
+}
+
+function handleStoryCreated() {
+  toast.add({
+    severity: 'success',
+    summary: 'Story created',
+    detail: 'New story has been created',
+    life: 3000,
+  })
+}
+
+function handleStoryUpdated() {
+  toast.add({
+    severity: 'success',
+    summary: 'Story updated',
+    detail: 'Story has been updated',
+    life: 3000,
+  })
 }
 
 async function handleConfirm() {
@@ -157,6 +181,8 @@ watch(
       @select="selectStory"
       @update:filters="setFilters"
       @launch-click="handleLaunchClick"
+      @create-story="handleCreateStory"
+      @story-updated="handleStoryUpdated"
     />
 
     <RunLaunchConfirmDialog
@@ -167,6 +193,13 @@ watch(
       :loading="launchLoading"
       @confirm="handleConfirm"
       @cancel="dialogVisible = false"
+    />
+
+    <CreateStoryDialog
+      v-model:visible="createDialogVisible"
+      :project-id="projectId"
+      :epic-id="epicId"
+      @created="handleStoryCreated"
     />
   </div>
 </template>
