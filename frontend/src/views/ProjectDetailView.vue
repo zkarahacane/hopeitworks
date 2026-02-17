@@ -6,9 +6,14 @@ import TabMenu from 'primevue/tabmenu'
 import Skeleton from 'primevue/skeleton'
 import Message from 'primevue/message'
 import { useProject } from '@/composables/useProject'
+import { useAuthStore } from '@/stores/auth'
+import { useRunsStore } from '@/stores/runs'
+import CircuitBreakerBanner from '@/features/projects/CircuitBreakerBanner.vue'
 
 const route = useRoute()
 const router = useRouter()
+const authStore = useAuthStore()
+const runsStore = useRunsStore()
 
 const projectId = route.params.id as string
 const { project, isLoading, error, retry } = useProject(projectId)
@@ -31,12 +36,31 @@ const activeIndex = computed(() => {
   return idx >= 0 ? idx : 0
 })
 
+/** Whether the circuit breaker banner should be shown */
+const showCircuitBreaker = computed(
+  () => project.value?.circuit_breaker_active || runsStore.circuitBreakerActive,
+)
+
+/** Whether the current user is an admin */
+const isAdmin = computed(() => authStore.user?.role === 'admin')
+
 function onTabChange(event: { index: number }) {
   const tab = tabs[event.index]
   if (tab) {
     router.push({ name: tab.route, params: { id: projectId } })
   }
 }
+
+/** Sync circuit breaker state from project data into the store */
+watch(
+  () => project.value?.circuit_breaker_active,
+  (active) => {
+    if (typeof active === 'boolean') {
+      runsStore.circuitBreakerActive = active
+    }
+  },
+  { immediate: true },
+)
 
 watch(
   () => route.params.id,
@@ -68,6 +92,16 @@ watch(
         {{ project.name }}
       </h1>
       <h1 v-else class="text-2xl font-bold text-surface-400">Project</h1>
+    </div>
+
+    <!-- Circuit breaker banner -->
+    <div v-if="showCircuitBreaker" class="px-6 pt-4">
+      <CircuitBreakerBanner
+        :project-id="projectId"
+        :is-admin="isAdmin"
+        data-testid="circuit-breaker-banner-wrapper"
+        @reset="runsStore.circuitBreakerActive = false"
+      />
     </div>
 
     <!-- Error state -->
