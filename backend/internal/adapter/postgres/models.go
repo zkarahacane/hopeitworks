@@ -43,6 +43,16 @@ type ProjectUser struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+type PromptTemplate struct {
+	ID              uuid.UUID `json:"id"`
+	ProjectID       uuid.UUID `json:"project_id"`
+	Name            string    `json:"name"`
+	TemplateContent string    `json:"template_content"`
+	Type            string    `json:"type"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
+}
+
 type User struct {
 	ID           uuid.UUID          `json:"id"`
 	Email        string             `json:"email"`
