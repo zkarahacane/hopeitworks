@@ -193,6 +193,25 @@ func (r *RunRepo) UpdateRunStepStatus(ctx context.Context, id uuid.UUID, status 
 	return toDomainRunStep(row), nil
 }
 
+func (r *RunRepo) UpdateRunStepContainerInfo(ctx context.Context, id uuid.UUID, containerID *string, logTail *string) (*model.RunStep, error) {
+	params := UpdateRunStepContainerInfoParams{ID: id}
+	if containerID != nil {
+		params.ContainerID = pgtype.Text{String: *containerID, Valid: true}
+	}
+	if logTail != nil {
+		params.LogTail = pgtype.Text{String: *logTail, Valid: true}
+	}
+
+	row, err := r.queries.UpdateRunStepContainerInfo(ctx, params)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, apperrors.NewNotFound("run step", id)
+		}
+		return nil, apperrors.NewInternal("failed to update run step container info", err)
+	}
+	return toDomainRunStep(row), nil
+}
+
 // toDomainRun maps a sqlc-generated Run to a domain Run.
 func toDomainRun(r Run) *model.Run {
 	run := &model.Run{

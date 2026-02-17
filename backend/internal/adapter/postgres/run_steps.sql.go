@@ -115,6 +115,40 @@ func (q *Queries) ListRunStepsByRun(ctx context.Context, runID uuid.UUID) ([]Run
 	return items, nil
 }
 
+const updateRunStepContainerInfo = `-- name: UpdateRunStepContainerInfo :one
+UPDATE run_steps
+SET container_id = COALESCE($2, container_id),
+    log_tail = COALESCE($3, log_tail)
+WHERE id = $1
+RETURNING id, run_id, step_name, step_order, action, status, started_at, completed_at, error_message, container_id, log_tail, created_at
+`
+
+type UpdateRunStepContainerInfoParams struct {
+	ID          uuid.UUID   `json:"id"`
+	ContainerID pgtype.Text `json:"container_id"`
+	LogTail     pgtype.Text `json:"log_tail"`
+}
+
+func (q *Queries) UpdateRunStepContainerInfo(ctx context.Context, arg UpdateRunStepContainerInfoParams) (RunStep, error) {
+	row := q.db.QueryRow(ctx, updateRunStepContainerInfo, arg.ID, arg.ContainerID, arg.LogTail)
+	var i RunStep
+	err := row.Scan(
+		&i.ID,
+		&i.RunID,
+		&i.StepName,
+		&i.StepOrder,
+		&i.Action,
+		&i.Status,
+		&i.StartedAt,
+		&i.CompletedAt,
+		&i.ErrorMessage,
+		&i.ContainerID,
+		&i.LogTail,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const updateRunStepStatus = `-- name: UpdateRunStepStatus :one
 UPDATE run_steps
 SET status = $2,

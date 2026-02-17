@@ -21,3 +21,10 @@ SET status = $2,
     log_tail = COALESCE(sqlc.narg('log_tail'), log_tail)
 WHERE id = $1
 RETURNING *;
+
+-- name: UpdateRunStepContainerInfo :one
+UPDATE run_steps
+SET container_id = COALESCE(sqlc.narg('container_id'), container_id),
+    log_tail = COALESCE(sqlc.narg('log_tail'), log_tail)
+WHERE id = $1
+RETURNING *;
