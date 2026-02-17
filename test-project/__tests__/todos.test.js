@@ -1,20 +1,12 @@
+// Set DB_PATH to in-memory before requiring modules
+process.env.DB_PATH = ':memory:';
+
 const request = require('supertest');
 const app = require('../src/app');
-const { getDb, closeDb } = require('../src/db');
+const { closeDb } = require('../src/db');
 
 beforeEach(() => {
-  process.env.DB_PATH = ':memory:';
   closeDb();
-  const db = getDb();
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS todos (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      title TEXT NOT NULL,
-      completed INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-    )
-  `);
 });
 
 afterEach(() => {
