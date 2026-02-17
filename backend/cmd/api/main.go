@@ -11,8 +11,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
-	actionadapter "github.com/zakari/hopeitworks/backend/internal/adapter/action"
 	"github.com/riverqueue/river"
+	actionadapter "github.com/zakari/hopeitworks/backend/internal/adapter/action"
 	dockeradapter "github.com/zakari/hopeitworks/backend/internal/adapter/docker"
 	hbadapter "github.com/zakari/hopeitworks/backend/internal/adapter/handlebars"
 	pgadapter "github.com/zakari/hopeitworks/backend/internal/adapter/postgres"

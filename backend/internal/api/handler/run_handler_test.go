@@ -76,6 +76,9 @@ func (m *runHandlerRunRepo) ListRunStepsByRun(_ context.Context, _ uuid.UUID) ([
 func (m *runHandlerRunRepo) UpdateRunStepStatus(_ context.Context, _ uuid.UUID, _ model.StepStatus, _, _ *time.Time, _ *string) (*model.RunStep, error) {
 	return nil, nil
 }
+func (m *runHandlerRunRepo) UpdateRunStepContainerInfo(_ context.Context, _ uuid.UUID, _ *string, _ *string) (*model.RunStep, error) {
+	return nil, nil
+}
 
 // runHandlerStoryRepo is a minimal mock of port.StoryRepository for handler tests.
 type runHandlerStoryRepo struct {
