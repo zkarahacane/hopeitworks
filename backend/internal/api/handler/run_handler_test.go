@@ -80,6 +80,14 @@ func (m *runHandlerRunRepo) UpdateRunStepContainerInfo(_ context.Context, _ uuid
 	return nil, nil
 }
 
+func (m *runHandlerRunRepo) CreateRetryRunStep(_ context.Context, step *model.RunStep) (*model.RunStep, error) {
+	return step, nil
+}
+
+func (m *runHandlerRunRepo) ListRetryStepsByParent(_ context.Context, _ uuid.UUID) ([]*model.RunStep, error) {
+	return nil, nil
+}
+
 // runHandlerStoryRepo is a minimal mock of port.StoryRepository for handler tests.
 type runHandlerStoryRepo struct {
 	getByIDFn func(ctx context.Context, id uuid.UUID) (*model.Story, error)
