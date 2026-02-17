@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import Button from 'primevue/button'
 import Message from 'primevue/message'
 import Skeleton from 'primevue/skeleton'
 import EpicCardGrid from '@/features/board/EpicCardGrid.vue'
 import BoardEmptyState from '@/features/board/BoardEmptyState.vue'
+import StoryImportDialog from '@/features/board/StoryImportDialog.vue'
 import { useEpics } from '@/composables/useEpics'
 import { useAuthStore } from '@/stores/auth'
 
@@ -17,9 +18,14 @@ const projectId = route.params.id as string
 const { epics, isLoading, error, retry } = useEpics(projectId)
 
 const isAdmin = computed(() => authStore.user?.role === 'admin')
+const importDialogVisible = ref(false)
 
 function handleEpicClick(epicId: string) {
   router.push({ name: 'epic-detail', params: { id: projectId, epicId } })
+}
+
+function handleImported() {
+  retry()
 }
 </script>
 
@@ -27,7 +33,19 @@ function handleEpicClick(epicId: string) {
   <div class="flex flex-col gap-6 p-6">
     <div class="flex items-center justify-between">
       <h1 class="text-2xl font-bold">Story Board</h1>
+      <Button
+        label="Import Stories"
+        icon="pi pi-upload"
+        severity="secondary"
+        @click="importDialogVisible = true"
+      />
     </div>
+
+    <StoryImportDialog
+      v-model:visible="importDialogVisible"
+      :project-id="projectId"
+      @imported="handleImported"
+    />
 
     <div v-if="isLoading && epics.length === 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       <div v-for="n in 6" :key="n" class="flex flex-col gap-3 p-4">
