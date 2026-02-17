@@ -23,6 +23,17 @@ const mockEpics = [
   },
 ]
 
+const mockProjects = [
+  {
+    id: 'p1',
+    name: 'Test Project',
+    description: 'A test project',
+    owner_id: 'u1',
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+  },
+]
+
 test.describe('Board Page', () => {
   test.beforeEach(async ({ page }) => {
     await page.route('**/api/v1/auth/me', async (route) => {
@@ -34,6 +45,17 @@ test.describe('Board Page', () => {
           email: 'test@test.com',
           name: 'Test User',
           role: 'admin',
+        }),
+      })
+    })
+
+    await page.route('**/api/v1/projects?*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: mockProjects,
+          pagination: { total: 1, page: 1, per_page: 20 },
         }),
       })
     })
