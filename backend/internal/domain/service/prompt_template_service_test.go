@@ -38,6 +38,15 @@ func (m *mockPromptTemplateRepo) GetByID(_ context.Context, id uuid.UUID) (*mode
 	return t, nil
 }
 
+func (m *mockPromptTemplateRepo) GetByProjectAndName(_ context.Context, projectID uuid.UUID, name string) (*model.PromptTemplate, error) {
+	for _, t := range m.templates {
+		if t.ProjectID == projectID && t.Name == name {
+			return t, nil
+		}
+	}
+	return nil, errors.NewNotFound("prompt_template", name)
+}
+
 func (m *mockPromptTemplateRepo) ListByProject(_ context.Context, projectID uuid.UUID, limit, offset int32) ([]*model.PromptTemplate, error) {
 	result := make([]*model.PromptTemplate, 0)
 	i := int32(0)

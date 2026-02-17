@@ -84,6 +84,31 @@ func (q *Queries) GetPromptTemplate(ctx context.Context, id uuid.UUID) (PromptTe
 	return i, err
 }
 
+const getPromptTemplateByProjectAndName = `-- name: GetPromptTemplateByProjectAndName :one
+SELECT id, project_id, name, template_content, type, created_at, updated_at FROM prompt_templates
+WHERE project_id = $1 AND name = $2
+`
+
+type GetPromptTemplateByProjectAndNameParams struct {
+	ProjectID uuid.UUID `json:"project_id"`
+	Name      string    `json:"name"`
+}
+
+func (q *Queries) GetPromptTemplateByProjectAndName(ctx context.Context, arg GetPromptTemplateByProjectAndNameParams) (PromptTemplate, error) {
+	row := q.db.QueryRow(ctx, getPromptTemplateByProjectAndName, arg.ProjectID, arg.Name)
+	var i PromptTemplate
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.Name,
+		&i.TemplateContent,
+		&i.Type,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const listPromptTemplatesByProject = `-- name: ListPromptTemplatesByProject :many
 SELECT id, project_id, name, template_content, type, created_at, updated_at FROM prompt_templates
 WHERE project_id = $1

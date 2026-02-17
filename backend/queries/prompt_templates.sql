@@ -6,6 +6,10 @@ RETURNING *;
 -- name: GetPromptTemplate :one
 SELECT * FROM prompt_templates WHERE id = $1;
 
+-- name: GetPromptTemplateByProjectAndName :one
+SELECT * FROM prompt_templates
+WHERE project_id = $1 AND name = $2;
+
 -- name: ListPromptTemplatesByProject :many
 SELECT * FROM prompt_templates
 WHERE project_id = $1
