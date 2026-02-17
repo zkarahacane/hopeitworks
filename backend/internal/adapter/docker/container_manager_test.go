@@ -35,14 +35,19 @@ type mockDockerClient struct {
 	waitID           string
 	waitCondition    dockercontainer.WaitCondition
 
+	// List captured args.
+	listOpts dockercontainer.ListOptions
+
 	// Configurable return values.
-	createResp dockercontainer.CreateResponse
-	createErr  error
-	startErr   error
-	stopErr    error
-	removeErr  error
-	waitStatus dockercontainer.WaitResponse
-	waitErr    error
+	createResp     dockercontainer.CreateResponse
+	createErr      error
+	startErr       error
+	stopErr        error
+	removeErr      error
+	waitStatus     dockercontainer.WaitResponse
+	waitErr        error
+	listContainers []dockercontainer.Summary
+	listErr        error
 }
 
 func (m *mockDockerClient) ContainerCreate(
@@ -90,6 +95,11 @@ func (m *mockDockerClient) ContainerWait(_ context.Context, containerID string, 
 	}
 
 	return statusCh, errCh
+}
+
+func (m *mockDockerClient) ContainerList(_ context.Context, opts dockercontainer.ListOptions) ([]dockercontainer.Summary, error) {
+	m.listOpts = opts
+	return m.listContainers, m.listErr
 }
 
 func newTestManager(mock *mockDockerClient) *ContainerManager {
@@ -499,4 +509,79 @@ func (m *blockingWaitMock) ContainerWait(_ context.Context, containerID string, 
 	m.waitID = containerID
 	m.waitCondition = condition
 	return make(chan dockercontainer.WaitResponse), make(chan error)
+}
+
+func TestListContainers_Success(t *testing.T) {
+	mock := &mockDockerClient{
+		listContainers: []dockercontainer.Summary{
+			{
+				ID:      "container-1",
+				Labels:  map[string]string{"managed_by": "hopeitworks", "run_id": "r1"},
+				Created: 1700000000,
+			},
+			{
+				ID:      "container-2",
+				Labels:  map[string]string{"managed_by": "hopeitworks", "run_id": "r2"},
+				Created: 1700001000,
+			},
+		},
+	}
+	mgr := newTestManager(mock)
+
+	result, err := mgr.ListContainers(context.Background(), map[string]string{"managed_by": "hopeitworks"})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(result) != 2 {
+		t.Fatalf("expected 2 containers, got %d", len(result))
+	}
+	if result[0].ID != "container-1" {
+		t.Errorf("expected ID container-1, got %s", result[0].ID)
+	}
+	if result[0].Labels["run_id"] != "r1" {
+		t.Errorf("expected run_id=r1, got %s", result[0].Labels["run_id"])
+	}
+	if result[1].ID != "container-2" {
+		t.Errorf("expected ID container-2, got %s", result[1].ID)
+	}
+
+	// Verify All=true is set.
+	if !mock.listOpts.All {
+		t.Error("expected ListOptions.All=true")
+	}
+}
+
+func TestListContainers_Empty(t *testing.T) {
+	mock := &mockDockerClient{
+		listContainers: []dockercontainer.Summary{},
+	}
+	mgr := newTestManager(mock)
+
+	result, err := mgr.ListContainers(context.Background(), map[string]string{"managed_by": "hopeitworks"})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(result) != 0 {
+		t.Errorf("expected 0 containers, got %d", len(result))
+	}
+}
+
+func TestListContainers_Error(t *testing.T) {
+	mock := &mockDockerClient{
+		listErr: errors.New("docker daemon unreachable"),
+	}
+	mgr := newTestManager(mock)
+
+	_, err := mgr.ListContainers(context.Background(), map[string]string{"managed_by": "hopeitworks"})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+
+	var domainErr *apperrors.DomainError
+	if !errors.As(err, &domainErr) {
+		t.Fatalf("expected DomainError, got %T", err)
+	}
+	if domainErr.Code != testErrCode {
+		t.Errorf("expected error code %s, got %s", testErrCode, domainErr.Code)
+	}
 }

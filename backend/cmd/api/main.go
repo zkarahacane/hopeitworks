@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
+	dockeradapter "github.com/zakari/hopeitworks/backend/internal/adapter/docker"
 	pgadapter "github.com/zakari/hopeitworks/backend/internal/adapter/postgres"
 	"github.com/zakari/hopeitworks/backend/internal/api/handler"
 	authmw "github.com/zakari/hopeitworks/backend/internal/api/middleware"
@@ -113,6 +114,33 @@ func run() error {
 	runService := service.NewRunService(runRepo, projectRepo)
 	runHandler := handler.NewRunHandler(runService)
 
+	// Container manager (Docker adapter)
+	containerMgr, err := dockeradapter.NewDockerContainerManager(cfg.Docker.Host, logger)
+	if err != nil {
+		logger.Warn("docker container manager unavailable, timeout enforcer and orphan cleaner disabled", "error", err)
+	}
+
+	// Orphan cleanup and timeout enforcement (requires Docker)
+	appCtx, appCancel := context.WithCancel(ctx)
+	defer appCancel()
+	if containerMgr != nil {
+		orphanCleaner := service.NewOrphanCleaner(containerMgr, runRepo, logger)
+		if err := orphanCleaner.CleanupOrphans(appCtx); err != nil {
+			logger.Error("orphan cleanup failed on startup", "error", err)
+		}
+
+		timeoutEnforcer := service.NewTimeoutEnforcer(
+			containerMgr, runRepo, projectRepo, logger,
+			30*time.Minute, // default container timeout
+			30*time.Second, // check interval
+		)
+		go func() {
+			if err := timeoutEnforcer.Start(appCtx); err != nil && err != context.Canceled {
+				logger.Error("timeout enforcer failed", "error", err)
+			}
+		}()
+	}
+
 	server := handler.NewServer(authHandler, projectHandler, userHandler, epicHandler, storyHandler, promptTemplateHandler, runHandler, pipelineConfigHandler)
 
 	// Project user handler
@@ -168,6 +196,9 @@ func run() error {
 		return fmt.Errorf("server error: %w", err)
 	case sig := <-shutdownCh:
 		logger.Info("shutting down gracefully", "signal", sig.String())
+
+		// Stop background services (timeout enforcer)
+		appCancel()
 
 		shutdownCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()

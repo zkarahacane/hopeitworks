@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	dockercontainer "github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
@@ -23,6 +25,7 @@ type dockerClient interface {
 	ContainerStop(ctx context.Context, containerID string, options dockercontainer.StopOptions) error
 	ContainerRemove(ctx context.Context, containerID string, options dockercontainer.RemoveOptions) error
 	ContainerWait(ctx context.Context, containerID string, condition dockercontainer.WaitCondition) (<-chan dockercontainer.WaitResponse, <-chan error)
+	ContainerList(ctx context.Context, options dockercontainer.ListOptions) ([]dockercontainer.Summary, error)
 }
 
 // Ensure ContainerManager implements port.ContainerManager at compile time.
@@ -174,4 +177,38 @@ func (m *ContainerManager) Wait(ctx context.Context, containerID string) (int, e
 	}
 
 	return 0, nil
+}
+
+// ListContainers lists all containers matching the specified labels.
+func (m *ContainerManager) ListContainers(ctx context.Context, labels map[string]string) ([]port.ContainerInfo, error) {
+	filterArgs := filters.NewArgs()
+	for key, value := range labels {
+		filterArgs.Add("label", key+"="+value)
+	}
+
+	containers, err := m.client.ContainerList(ctx, dockercontainer.ListOptions{
+		All:     true,
+		Filters: filterArgs,
+	})
+	if err != nil {
+		return nil, apperrors.NewContainerError(
+			fmt.Sprintf("failed to list containers: %v", err),
+			err,
+		)
+	}
+
+	result := make([]port.ContainerInfo, 0, len(containers))
+	for _, c := range containers {
+		result = append(result, port.ContainerInfo{
+			ID:        c.ID,
+			Labels:    c.Labels,
+			CreatedAt: time.Unix(c.Created, 0),
+		})
+	}
+
+	m.logger.Debug("containers listed",
+		slog.Int("count", len(result)),
+	)
+
+	return result, nil
 }
