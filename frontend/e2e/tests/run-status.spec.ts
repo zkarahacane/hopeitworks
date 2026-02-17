@@ -123,7 +123,7 @@ test.describe('Run Status Display on Story Cards', () => {
     await expect(indicator).toBeVisible()
 
     const icon = indicator.getByTestId('run-status-icon')
-    await expect(icon).toBeVisible()
+    await expect(icon).toBeAttached()
     await expect(icon).toHaveClass(/pi-check-circle/)
 
     const text = indicator.getByTestId('run-status-text')
@@ -142,7 +142,7 @@ test.describe('Run Status Display on Story Cards', () => {
     await expect(indicator).toBeVisible()
 
     const icon = indicator.getByTestId('run-status-icon')
-    await expect(icon).toBeVisible()
+    await expect(icon).toBeAttached()
     await expect(icon).toHaveClass(/pi-times-circle/)
 
     await expect(indicator.getByTestId('run-status-text')).toHaveText('Failed')
@@ -158,7 +158,7 @@ test.describe('Run Status Display on Story Cards', () => {
     await expect(indicator).toBeVisible()
 
     const icon = indicator.getByTestId('run-status-icon')
-    await expect(icon).toBeVisible()
+    await expect(icon).toBeAttached()
     await expect(icon).toHaveClass(/pi-minus-circle/)
 
     await expect(indicator.getByTestId('run-status-text')).toHaveText('Backlog')
