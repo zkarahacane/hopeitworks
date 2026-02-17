@@ -6,6 +6,7 @@ import "time"
 type Config struct {
 	Server   ServerConfig   `yaml:"server"`
 	Database DatabaseConfig `yaml:"database"`
+	Docker   DockerConfig   `yaml:"docker"`
 	Log      LogConfig      `yaml:"logging"`
 }
 
@@ -27,6 +28,14 @@ type DatabaseConfig struct {
 	MaxConns        int32  `yaml:"max_conns"`
 	MinConns        int32  `yaml:"min_conns"`
 	MaxConnLifetime string `yaml:"max_conn_lifetime"`
+}
+
+// DockerConfig holds Docker connection settings.
+type DockerConfig struct {
+	// Host is the Docker API endpoint (e.g., "tcp://socket-proxy:2375").
+	Host string `yaml:"host"`
+	// AgentNetwork is the Docker network for agent containers.
+	AgentNetwork string `yaml:"agent_network"`
 }
 
 // LogConfig holds logging settings.

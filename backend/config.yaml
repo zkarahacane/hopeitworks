@@ -14,5 +14,9 @@ database:
   min_conns: 5
   max_conn_lifetime: 1h
 
+docker:
+  host: tcp://localhost:2375
+  agent_network: agent-network
+
 logging:
   level: debug

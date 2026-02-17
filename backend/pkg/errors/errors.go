@@ -105,6 +105,16 @@ func NewDomainError(code string, message string, details map[string]any) *Domain
 	}
 }
 
+// NewContainerError creates an error for container lifecycle operations.
+func NewContainerError(message string, cause error) *DomainError {
+	return &DomainError{
+		Category: CategoryInternal,
+		Code:     "CONTAINER_OPERATION_FAILED",
+		Message:  message,
+		Cause:    cause,
+	}
+}
+
 func toUpperSnake(s string) string {
 	result := make([]byte, 0, len(s)+4)
 	for i, c := range s {
