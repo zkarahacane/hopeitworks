@@ -76,7 +76,7 @@ function formatDuration(step: RunStep): string | null {
       <!-- Header: Run ID + Status -->
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-3">
-          <h1 class="text-xl font-bold">Run</h1>
+          <h1 class="text-xl font-bold">Run Detail</h1>
           <code class="text-sm bg-surface-100 dark:bg-surface-800 px-2 py-1 rounded font-mono">
             {{ run.id }}
           </code>
