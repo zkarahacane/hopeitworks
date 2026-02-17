@@ -35,8 +35,8 @@ tags:
     description: Story management endpoints
   - name: pipeline-configs
     description: Pipeline configuration endpoints
-  - name: hitl-requests
-    description: Human-in-the-loop approval request endpoints
+  - name: hitl
+    description: Human-in-the-loop approval endpoints
 
 paths:
   # ── Auth ────────────────────────────────────────────────────────────────
@@ -909,19 +909,33 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
-  # ── HITL Requests ──────────────────────────────────────────────────────
+  # ── HITL Requests ───────────────────────────────────────────────────
+  /hitl-requests/by-step/{stepId}:
+    get:
+      operationId: getHITLRequestByStep
+      summary: Get the HITL request for a run step
+      tags: [hitl]
+      parameters:
+        - $ref: "#/components/parameters/StepIdPath"
+      responses:
+        "200":
+          description: HITL request details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HITLRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /hitl-requests/{hitlRequestId}:
     get:
       operationId: getHITLRequest
       summary: Get a HITL request by ID
-      tags: [hitl-requests]
+      tags: [hitl]
       parameters:
-        - name: hitlRequestId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
+        - $ref: "#/components/parameters/HITLRequestIdPath"
       responses:
         "200":
           description: HITL request details
@@ -938,14 +952,9 @@ paths:
     post:
       operationId: approveHITLRequest
       summary: Approve a HITL request
-      tags: [hitl-requests]
+      tags: [hitl]
       parameters:
-        - name: hitlRequestId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
+        - $ref: "#/components/parameters/HITLRequestIdPath"
       responses:
         "200":
           description: HITL request approved
@@ -959,29 +968,22 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
 
   /hitl-requests/{hitlRequestId}/reject:
     post:
       operationId: rejectHITLRequest
       summary: Reject a HITL request
-      tags: [hitl-requests]
+      tags: [hitl]
       parameters:
-        - name: hitlRequestId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
+        - $ref: "#/components/parameters/HITLRequestIdPath"
       requestBody:
-        required: false
+        required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                rejection_reason:
-                  type: string
-                  description: Reason for rejection
+              $ref: "#/components/schemas/RejectHITLRequest"
       responses:
         "200":
           description: HITL request rejected
@@ -995,6 +997,8 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
 
 # ── Components ──────────────────────────────────────────────────────────
 components:
@@ -1059,6 +1063,24 @@ components:
         type: string
         format: uuid
       description: Story UUID
+
+    StepIdPath:
+      name: stepId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Run step UUID
+
+    HITLRequestIdPath:
+      name: hitlRequestId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: HITL request UUID
 
     PageParam:
       name: page
@@ -1932,12 +1954,15 @@ components:
           $ref: "#/components/schemas/Pagination"
 
 
-    # ── HITL ──────────────────────────────────────────────────────────
+    # ── HITL Request ──────────────────────────────────────────────────
     HITLRequest:
       type: object
       required:
         - id
         - run_step_id
+        - step_id
+        - story_key
+        - story_title
         - gate_type
         - status
         - created_at
@@ -1948,30 +1973,63 @@ components:
         run_step_id:
           type: string
           format: uuid
+        step_id:
+          type: string
+          format: uuid
+        run_id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
         gate_type:
           type: string
           example: approval
-        diff_content:
-          type: string
-          nullable: true
         status:
           type: string
           enum: [pending, approved, rejected]
           example: pending
-        resolved_at:
+        story_key:
           type: string
-          format: date-time
+          example: S-01
+        story_title:
+          type: string
+          example: Implement login page
+        story_objective:
+          type: string
+        diff_content:
+          type: string
+          description: Unified diff content from the agent run
           nullable: true
-        resolved_by:
+        reviewer_id:
           type: string
           format: uuid
           nullable: true
         rejection_reason:
           type: string
           nullable: true
+        resolved_at:
+          type: string
+          format: date-time
+          nullable: true
+        reviewed_at:
+          type: string
+          format: date-time
+          nullable: true
         created_at:
           type: string
           format: date-time
+
+    RejectHITLRequest:
+      type: object
+      required:
+        - reason
+      properties:
+        reason:
+          type: string
+          minLength: 10
+          description: Reason for rejecting the HITL request
+
 
     # ── Shared ─────────────────────────────────────────────────────────
     Pagination:
