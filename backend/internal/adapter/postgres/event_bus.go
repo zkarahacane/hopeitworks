@@ -92,9 +92,9 @@ func (b *EventBus) Subscribe(ctx context.Context, projectID uuid.UUID) (<-chan m
 // Close gracefully shuts down all subscriptions and the Postgres connection.
 func (b *EventBus) Close() error {
 	b.mu.Lock()
-	defer b.mu.Unlock()
 
 	if b.closed {
+		b.mu.Unlock()
 		return nil
 	}
 	b.closed = true
@@ -110,9 +110,12 @@ func (b *EventBus) Close() error {
 		delete(b.subscribers, projectID)
 	}
 
-	// Close the Postgres connection
-	if b.conn != nil {
-		return b.conn.Close(context.Background())
+	conn := b.conn
+	b.mu.Unlock()
+
+	// Close the Postgres connection outside the lock to avoid deadlock
+	if conn != nil {
+		return conn.Close(context.Background())
 	}
 	return nil
 }
@@ -139,9 +142,18 @@ func (b *EventBus) listenLoop() {
 		default:
 		}
 
+		// Get connection safely
+		b.mu.Lock()
+		conn := b.conn
+		b.mu.Unlock()
+
+		if conn == nil {
+			return
+		}
+
 		// Use a timeout context so we periodically check for stop signal
 		waitCtx, cancel := context.WithTimeout(context.Background(), waitTimeout)
-		notification, err := b.conn.WaitForNotification(waitCtx)
+		notification, err := conn.WaitForNotification(waitCtx)
 		cancel()
 
 		if err != nil {
