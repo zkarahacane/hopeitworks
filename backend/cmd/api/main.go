@@ -12,9 +12,11 @@ import (
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	actionadapter "github.com/zakari/hopeitworks/backend/internal/adapter/action"
+	"github.com/riverqueue/river"
 	dockeradapter "github.com/zakari/hopeitworks/backend/internal/adapter/docker"
 	hbadapter "github.com/zakari/hopeitworks/backend/internal/adapter/handlebars"
 	pgadapter "github.com/zakari/hopeitworks/backend/internal/adapter/postgres"
+	riveradapter "github.com/zakari/hopeitworks/backend/internal/adapter/river"
 	"github.com/zakari/hopeitworks/backend/internal/api/handler"
 	authmw "github.com/zakari/hopeitworks/backend/internal/api/middleware"
 	internalconfig "github.com/zakari/hopeitworks/backend/internal/config"
@@ -115,9 +117,34 @@ func run() error {
 	userService := service.NewUserService(userRepo)
 	userHandler := handler.NewUserHandler(userService)
 
-	// Run service
+	// Application-wide context for background services
+	appCtx, appCancel := context.WithCancel(ctx)
+	defer appCancel()
+
+	// Run service and job queue
 	runRepo := pgadapter.NewRunRepo(queries)
-	runService := service.NewRunService(runRepo, projectRepo)
+
+	// Pipeline executor (will be used by River workers)
+	// NOTE: event publisher and action registry wiring deferred to later story
+	pipelineExecutor := service.NewPipelineExecutor(runRepo, nil, nil, logger)
+
+	// River job queue for async pipeline execution
+	workers := river.NewWorkers()
+	river.AddWorker(workers, riveradapter.NewExecuteRunWorker(pipelineExecutor))
+
+	jobQueue, err := riveradapter.NewJobQueue(pool, workers)
+	if err != nil {
+		logger.Warn("river job queue unavailable, run launching disabled", "error", err)
+	}
+	if jobQueue != nil {
+		go func() {
+			if startErr := jobQueue.Client().Start(appCtx); startErr != nil && startErr != context.Canceled {
+				logger.Error("river client failed", "error", startErr)
+			}
+		}()
+	}
+
+	runService := service.NewRunService(runRepo, projectRepo, storyRepo, pipelineConfigRepo, jobQueue)
 	runHandler := handler.NewRunHandler(runService)
 
 	// Container manager (Docker adapter)
@@ -157,8 +184,6 @@ func run() error {
 	}
 
 	// Orphan cleanup and timeout enforcement (requires Docker)
-	appCtx, appCancel := context.WithCancel(ctx)
-	defer appCancel()
 	if containerMgr != nil {
 		orphanCleaner := service.NewOrphanCleaner(containerMgr, runRepo, logger)
 		if err := orphanCleaner.CleanupOrphans(appCtx); err != nil {

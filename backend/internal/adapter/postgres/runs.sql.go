@@ -70,6 +70,31 @@ func (q *Queries) CreateRun(ctx context.Context, arg CreateRunParams) (Run, erro
 	return i, err
 }
 
+const getActiveRunByStory = `-- name: GetActiveRunByStory :one
+SELECT id, project_id, story_id, status, pipeline_config_snapshot, started_at, completed_at, error_message, created_at, updated_at FROM runs
+WHERE story_id = $1 AND status IN ('pending', 'running')
+ORDER BY created_at DESC
+LIMIT 1
+`
+
+func (q *Queries) GetActiveRunByStory(ctx context.Context, storyID uuid.UUID) (Run, error) {
+	row := q.db.QueryRow(ctx, getActiveRunByStory, storyID)
+	var i Run
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.StoryID,
+		&i.Status,
+		&i.PipelineConfigSnapshot,
+		&i.StartedAt,
+		&i.CompletedAt,
+		&i.ErrorMessage,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getRun = `-- name: GetRun :one
 SELECT id, project_id, story_id, status, pipeline_config_snapshot, started_at, completed_at, error_message, created_at, updated_at FROM runs WHERE id = $1
 `

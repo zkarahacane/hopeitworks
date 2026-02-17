@@ -24,6 +24,12 @@ SELECT COUNT(*) FROM runs WHERE project_id = $1;
 -- name: CountRunsByStory :one
 SELECT COUNT(*) FROM runs WHERE story_id = $1;
 
+-- name: GetActiveRunByStory :one
+SELECT * FROM runs
+WHERE story_id = $1 AND status IN ('pending', 'running')
+ORDER BY created_at DESC
+LIMIT 1;
+
 -- name: UpdateRunStatus :one
 UPDATE runs
 SET status = $2,

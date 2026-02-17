@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 type mockRunRepo struct {
 	createRunFn           func(ctx context.Context, run *model.Run) (*model.Run, error)
 	getRunFn              func(ctx context.Context, id uuid.UUID) (*model.Run, error)
+	getActiveRunByStoryFn func(ctx context.Context, storyID uuid.UUID) (*model.Run, error)
 	listRunsByProjectFn   func(ctx context.Context, projectID uuid.UUID, limit, offset int32) ([]*model.Run, error)
 	listRunsByStoryFn     func(ctx context.Context, storyID uuid.UUID, limit, offset int32) ([]*model.Run, error)
 	updateRunStatusFn     func(ctx context.Context, id uuid.UUID, status model.RunStatus, startedAt, completedAt *time.Time, errorMsg *string) (*model.Run, error)
@@ -37,6 +39,12 @@ func (m *mockRunRepo) GetRun(ctx context.Context, id uuid.UUID) (*model.Run, err
 		return m.getRunFn(ctx, id)
 	}
 	return nil, errors.NewNotFound("run", id)
+}
+func (m *mockRunRepo) GetActiveRunByStory(_ context.Context, storyID uuid.UUID) (*model.Run, error) {
+	if m.getActiveRunByStoryFn != nil {
+		return m.getActiveRunByStoryFn(context.Background(), storyID)
+	}
+	return nil, nil
 }
 func (m *mockRunRepo) ListRunsByProject(ctx context.Context, projectID uuid.UUID, limit, offset int32) ([]*model.Run, error) {
 	if m.listRunsByProjectFn != nil {
@@ -97,11 +105,82 @@ func (m *mockRunRepo) UpdateRunStepContainerInfo(_ context.Context, id uuid.UUID
 	return &model.RunStep{ID: id}, nil
 }
 
+// mockStoryRepoForRun implements port.StoryRepository for testing.
+type mockStoryRepoForRun struct {
+	getByIDFn func(ctx context.Context, id uuid.UUID) (*model.Story, error)
+}
+
+func (m *mockStoryRepoForRun) Create(_ context.Context, _ *model.Story) (*model.Story, error) {
+	return nil, nil
+}
+func (m *mockStoryRepoForRun) GetByID(ctx context.Context, id uuid.UUID) (*model.Story, error) {
+	if m.getByIDFn != nil {
+		return m.getByIDFn(ctx, id)
+	}
+	return nil, errors.NewNotFound("story", id)
+}
+func (m *mockStoryRepoForRun) GetByKey(_ context.Context, _ uuid.UUID, _ string) (*model.Story, error) {
+	return nil, nil
+}
+func (m *mockStoryRepoForRun) ListByProject(_ context.Context, _ uuid.UUID, _, _ int32) ([]*model.Story, error) {
+	return nil, nil
+}
+func (m *mockStoryRepoForRun) ListByStatus(_ context.Context, _ uuid.UUID, _ []string, _, _ int32) ([]*model.Story, error) {
+	return nil, nil
+}
+func (m *mockStoryRepoForRun) ListByEpic(_ context.Context, _ uuid.UUID, _, _ int32) ([]*model.Story, error) {
+	return nil, nil
+}
+func (m *mockStoryRepoForRun) CountByProject(_ context.Context, _ uuid.UUID) (int64, error) {
+	return 0, nil
+}
+func (m *mockStoryRepoForRun) CountByStatus(_ context.Context, _ uuid.UUID, _ []string) (int64, error) {
+	return 0, nil
+}
+func (m *mockStoryRepoForRun) Update(_ context.Context, _ *model.Story) (*model.Story, error) {
+	return nil, nil
+}
+func (m *mockStoryRepoForRun) Delete(_ context.Context, _ uuid.UUID) error {
+	return nil
+}
+
+// mockPipelineConfigRepoForRun implements port.PipelineConfigRepository for testing.
+type mockPipelineConfigRepoForRun struct {
+	getByProjectIDFn func(ctx context.Context, projectID uuid.UUID) (*model.PipelineConfig, error)
+}
+
+func (m *mockPipelineConfigRepoForRun) GetByProjectID(ctx context.Context, projectID uuid.UUID) (*model.PipelineConfig, error) {
+	if m.getByProjectIDFn != nil {
+		return m.getByProjectIDFn(ctx, projectID)
+	}
+	return nil, errors.NewNotFound("pipeline_config", projectID)
+}
+func (m *mockPipelineConfigRepoForRun) Upsert(_ context.Context, _ *model.PipelineConfig) (*model.PipelineConfig, error) {
+	return nil, nil
+}
+
+// mockJobQueue implements port.JobQueue for testing.
+type mockJobQueue struct {
+	enqueueExecuteRunFn func(ctx context.Context, runID uuid.UUID) error
+}
+
+func (m *mockJobQueue) EnqueueExecuteRun(ctx context.Context, runID uuid.UUID) error {
+	if m.enqueueExecuteRunFn != nil {
+		return m.enqueueExecuteRunFn(ctx, runID)
+	}
+	return nil
+}
+
 // newMockProjectRepoWithProject creates a mockProjectRepo preloaded with a project.
 func newMockProjectRepoWithProject(project *model.Project) *mockProjectRepo {
 	repo := newMockProjectRepoForService()
 	repo.projects[project.ID] = project
 	return repo
+}
+
+// newRunServiceForTest creates a RunService with all dependencies for existing tests that don't need LaunchRun.
+func newRunServiceForTest(runRepo *mockRunRepo, projectRepo *mockProjectRepo) *RunService {
+	return NewRunService(runRepo, projectRepo, nil, nil, nil)
 }
 
 func TestCreateRun_Success(t *testing.T) {
@@ -130,7 +209,7 @@ func TestCreateRun_Success(t *testing.T) {
 		Name: "test-project",
 	})
 
-	svc := NewRunService(runRepo, projectRepo)
+	svc := newRunServiceForTest(runRepo, projectRepo)
 	run, err := svc.CreateRun(context.Background(), CreateRunParams{
 		ProjectID:      projectID,
 		StoryID:        storyID,
@@ -174,10 +253,9 @@ func TestCreateRun_MissingProject(t *testing.T) {
 	config := json.RawMessage(`{"steps":[{"name":"dev","action":"code"}]}`)
 
 	runRepo := &mockRunRepo{}
-	// Empty project repo — project not found
 	projectRepo := newMockProjectRepoForService()
 
-	svc := NewRunService(runRepo, projectRepo)
+	svc := newRunServiceForTest(runRepo, projectRepo)
 	_, err := svc.CreateRun(context.Background(), CreateRunParams{
 		ProjectID:      projectID,
 		StoryID:        storyID,
@@ -217,7 +295,7 @@ func TestCreateRun_InvalidConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			svc := NewRunService(&mockRunRepo{}, projectRepo)
+			svc := newRunServiceForTest(&mockRunRepo{}, projectRepo)
 			_, err := svc.CreateRun(context.Background(), CreateRunParams{
 				ProjectID:      projectID,
 				StoryID:        storyID,
@@ -238,9 +316,8 @@ func TestCreateRun_InvalidConfig(t *testing.T) {
 }
 
 func TestCreateRun_MissingRequiredFields(t *testing.T) {
-	svc := NewRunService(&mockRunRepo{}, newMockProjectRepoForService())
+	svc := newRunServiceForTest(&mockRunRepo{}, newMockProjectRepoForService())
 
-	// Missing project_id
 	_, err := svc.CreateRun(context.Background(), CreateRunParams{
 		StoryID:        uuid.New(),
 		PipelineConfig: json.RawMessage(`{"steps":[{"name":"dev","action":"code"}]}`),
@@ -249,7 +326,6 @@ func TestCreateRun_MissingRequiredFields(t *testing.T) {
 		t.Fatal("expected error for missing project_id")
 	}
 
-	// Missing story_id
 	_, err = svc.CreateRun(context.Background(), CreateRunParams{
 		ProjectID:      uuid.New(),
 		PipelineConfig: json.RawMessage(`{"steps":[{"name":"dev","action":"code"}]}`),
@@ -297,7 +373,7 @@ func TestTransitionRun_ValidTransitions(t *testing.T) {
 					return run, nil
 				},
 			}
-			svc := NewRunService(runRepo, newMockProjectRepoForService())
+			svc := newRunServiceForTest(runRepo, newMockProjectRepoForService())
 
 			result, err := svc.TransitionRun(context.Background(), runID, tt.toStatus)
 			if err != nil {
@@ -326,7 +402,7 @@ func TestTransitionRun_InvalidTransition(t *testing.T) {
 			}, nil
 		},
 	}
-	svc := NewRunService(runRepo, newMockProjectRepoForService())
+	svc := newRunServiceForTest(runRepo, newMockProjectRepoForService())
 
 	_, err := svc.TransitionRun(context.Background(), runID, model.RunStatusRunning)
 	if err == nil {
@@ -377,7 +453,7 @@ func TestTransitionRunStep_ValidTransitions(t *testing.T) {
 					return step, nil
 				},
 			}
-			svc := NewRunService(runRepo, newMockProjectRepoForService())
+			svc := newRunServiceForTest(runRepo, newMockProjectRepoForService())
 
 			result, err := svc.TransitionRunStep(context.Background(), stepID, tt.toStatus)
 			if err != nil {
@@ -400,7 +476,7 @@ func TestTransitionRunStep_InvalidTransition(t *testing.T) {
 			}, nil
 		},
 	}
-	svc := NewRunService(runRepo, newMockProjectRepoForService())
+	svc := newRunServiceForTest(runRepo, newMockProjectRepoForService())
 
 	_, err := svc.TransitionRunStep(context.Background(), stepID, model.StepStatusPending)
 	if err == nil {
@@ -412,5 +488,373 @@ func TestTransitionRunStep_InvalidTransition(t *testing.T) {
 	}
 	if domainErr.Code != "INVALID_STATE_TRANSITION" {
 		t.Errorf("expected INVALID_STATE_TRANSITION code, got %s", domainErr.Code)
+	}
+}
+
+// ── LaunchRun Tests ──────────────────────────────────────────────────────────
+
+const testPipelineYAML = `steps:
+  - id: "step-1"
+    name: "implement"
+    action_type: "implement"
+    model: "claude-opus-4-6"
+    auto_approve: false
+    retry_policy:
+      max_retries: 0
+      retry_type: "none"
+  - id: "step-2"
+    name: "review"
+    action_type: "review"
+    model: "claude-sonnet-4-5"
+    auto_approve: true
+    retry_policy:
+      max_retries: 1
+      retry_type: "on-failure"
+  - id: "step-3"
+    name: "merge"
+    action_type: "merge"
+    model: "claude-sonnet-4-5"
+    auto_approve: true
+    retry_policy:
+      max_retries: 0
+      retry_type: "none"
+`
+
+func TestLaunchRun_Success(t *testing.T) {
+	projectID := uuid.New()
+	storyID := uuid.New()
+
+	storyRepo := &mockStoryRepoForRun{
+		getByIDFn: func(_ context.Context, id uuid.UUID) (*model.Story, error) {
+			return &model.Story{
+				ID:        id,
+				ProjectID: projectID,
+				Key:       "S-01",
+				Status:    model.StoryStatusBacklog,
+			}, nil
+		},
+	}
+
+	pipelineConfigRepo := &mockPipelineConfigRepoForRun{
+		getByProjectIDFn: func(_ context.Context, _ uuid.UUID) (*model.PipelineConfig, error) {
+			return &model.PipelineConfig{
+				ID:         uuid.New(),
+				ProjectID:  projectID,
+				ConfigYAML: testPipelineYAML,
+				Version:    1,
+			}, nil
+		},
+	}
+
+	var enqueuedRunID uuid.UUID
+	jobQueue := &mockJobQueue{
+		enqueueExecuteRunFn: func(_ context.Context, runID uuid.UUID) error {
+			enqueuedRunID = runID
+			return nil
+		},
+	}
+
+	runRepo := &mockRunRepo{
+		createRunFn: func(_ context.Context, run *model.Run) (*model.Run, error) {
+			run.ID = uuid.New()
+			run.CreatedAt = time.Now()
+			run.UpdatedAt = time.Now()
+			return run, nil
+		},
+		createRunStepFn: func(_ context.Context, step *model.RunStep) (*model.RunStep, error) {
+			step.ID = uuid.New()
+			step.CreatedAt = time.Now()
+			return step, nil
+		},
+	}
+
+	svc := NewRunService(runRepo, newMockProjectRepoForService(), storyRepo, pipelineConfigRepo, jobQueue)
+	run, err := svc.LaunchRun(context.Background(), projectID, storyID)
+
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if run == nil {
+		t.Fatal("expected run, got nil")
+	}
+	if run.Status != model.RunStatusPending {
+		t.Errorf("expected status pending, got %s", run.Status)
+	}
+	if run.ProjectID != projectID {
+		t.Errorf("expected project_id %s, got %s", projectID, run.ProjectID)
+	}
+	if run.StoryID != storyID {
+		t.Errorf("expected story_id %s, got %s", storyID, run.StoryID)
+	}
+	if len(run.Steps) != 3 {
+		t.Fatalf("expected 3 steps, got %d", len(run.Steps))
+	}
+	expectedNames := []string{"implement", "review", "merge"}
+	expectedActions := []string{"implement", "review", "merge"}
+	for i, step := range run.Steps {
+		if step.StepName != expectedNames[i] {
+			t.Errorf("step %d: expected name %q, got %q", i, expectedNames[i], step.StepName)
+		}
+		if step.Action != expectedActions[i] {
+			t.Errorf("step %d: expected action %q, got %q", i, expectedActions[i], step.Action)
+		}
+		if step.StepOrder != i {
+			t.Errorf("step %d: expected order %d, got %d", i, i, step.StepOrder)
+		}
+		if step.Status != model.StepStatusPending {
+			t.Errorf("step %d: expected status pending, got %s", i, step.Status)
+		}
+	}
+	if enqueuedRunID != run.ID {
+		t.Errorf("expected enqueued run ID %s, got %s", run.ID, enqueuedRunID)
+	}
+}
+
+func TestLaunchRun_StoryNotFound(t *testing.T) {
+	projectID := uuid.New()
+	storyID := uuid.New()
+
+	svc := NewRunService(
+		&mockRunRepo{},
+		newMockProjectRepoForService(),
+		&mockStoryRepoForRun{},
+		&mockPipelineConfigRepoForRun{},
+		&mockJobQueue{},
+	)
+
+	_, err := svc.LaunchRun(context.Background(), projectID, storyID)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	domainErr, ok := err.(*errors.DomainError)
+	if !ok {
+		t.Fatalf("expected *errors.DomainError, got %T", err)
+	}
+	if domainErr.Category != errors.CategoryNotFound {
+		t.Errorf("expected not_found category, got %s", domainErr.Category)
+	}
+}
+
+func TestLaunchRun_StoryWrongProject(t *testing.T) {
+	projectID := uuid.New()
+	storyID := uuid.New()
+	otherProjectID := uuid.New()
+
+	storyRepo := &mockStoryRepoForRun{
+		getByIDFn: func(_ context.Context, id uuid.UUID) (*model.Story, error) {
+			return &model.Story{
+				ID:        id,
+				ProjectID: otherProjectID,
+				Key:       "S-01",
+				Status:    model.StoryStatusBacklog,
+			}, nil
+		},
+	}
+
+	svc := NewRunService(
+		&mockRunRepo{},
+		newMockProjectRepoForService(),
+		storyRepo,
+		&mockPipelineConfigRepoForRun{},
+		&mockJobQueue{},
+	)
+
+	_, err := svc.LaunchRun(context.Background(), projectID, storyID)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	domainErr, ok := err.(*errors.DomainError)
+	if !ok {
+		t.Fatalf("expected *errors.DomainError, got %T", err)
+	}
+	if domainErr.Category != errors.CategoryNotFound {
+		t.Errorf("expected not_found category, got %s", domainErr.Category)
+	}
+}
+
+func TestLaunchRun_StoryAlreadyCompleted(t *testing.T) {
+	projectID := uuid.New()
+	storyID := uuid.New()
+
+	storyRepo := &mockStoryRepoForRun{
+		getByIDFn: func(_ context.Context, id uuid.UUID) (*model.Story, error) {
+			return &model.Story{
+				ID:        id,
+				ProjectID: projectID,
+				Key:       "S-01",
+				Status:    model.StoryStatusDone,
+			}, nil
+		},
+	}
+
+	svc := NewRunService(
+		&mockRunRepo{},
+		newMockProjectRepoForService(),
+		storyRepo,
+		&mockPipelineConfigRepoForRun{},
+		&mockJobQueue{},
+	)
+
+	_, err := svc.LaunchRun(context.Background(), projectID, storyID)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	domainErr, ok := err.(*errors.DomainError)
+	if !ok {
+		t.Fatalf("expected *errors.DomainError, got %T", err)
+	}
+	if domainErr.Code != "STORY_ALREADY_COMPLETED" {
+		t.Errorf("expected STORY_ALREADY_COMPLETED code, got %s", domainErr.Code)
+	}
+	if domainErr.Category != errors.CategoryValidation {
+		t.Errorf("expected validation category, got %s", domainErr.Category)
+	}
+}
+
+func TestLaunchRun_StoryAlreadyRunning(t *testing.T) {
+	projectID := uuid.New()
+	storyID := uuid.New()
+	activeRunID := uuid.New()
+
+	storyRepo := &mockStoryRepoForRun{
+		getByIDFn: func(_ context.Context, id uuid.UUID) (*model.Story, error) {
+			return &model.Story{
+				ID:        id,
+				ProjectID: projectID,
+				Key:       "S-01",
+				Status:    model.StoryStatusRunning,
+			}, nil
+		},
+	}
+
+	runRepo := &mockRunRepo{
+		getActiveRunByStoryFn: func(_ context.Context, _ uuid.UUID) (*model.Run, error) {
+			return &model.Run{
+				ID:     activeRunID,
+				Status: model.RunStatusRunning,
+			}, nil
+		},
+	}
+
+	svc := NewRunService(
+		runRepo,
+		newMockProjectRepoForService(),
+		storyRepo,
+		&mockPipelineConfigRepoForRun{},
+		&mockJobQueue{},
+	)
+
+	_, err := svc.LaunchRun(context.Background(), projectID, storyID)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	domainErr, ok := err.(*errors.DomainError)
+	if !ok {
+		t.Fatalf("expected *errors.DomainError, got %T", err)
+	}
+	if domainErr.Code != "STORY_ALREADY_RUNNING" {
+		t.Errorf("expected STORY_ALREADY_RUNNING code, got %s", domainErr.Code)
+	}
+	if domainErr.Category != errors.CategoryConflict {
+		t.Errorf("expected conflict category, got %s", domainErr.Category)
+	}
+}
+
+func TestLaunchRun_NoPipelineConfig(t *testing.T) {
+	projectID := uuid.New()
+	storyID := uuid.New()
+
+	storyRepo := &mockStoryRepoForRun{
+		getByIDFn: func(_ context.Context, id uuid.UUID) (*model.Story, error) {
+			return &model.Story{
+				ID:        id,
+				ProjectID: projectID,
+				Key:       "S-01",
+				Status:    model.StoryStatusBacklog,
+			}, nil
+		},
+	}
+
+	svc := NewRunService(
+		&mockRunRepo{},
+		newMockProjectRepoForService(),
+		storyRepo,
+		&mockPipelineConfigRepoForRun{},
+		&mockJobQueue{},
+	)
+
+	_, err := svc.LaunchRun(context.Background(), projectID, storyID)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	domainErr, ok := err.(*errors.DomainError)
+	if !ok {
+		t.Fatalf("expected *errors.DomainError, got %T", err)
+	}
+	if domainErr.Code != "PIPELINE_CONFIG_NOT_FOUND" {
+		t.Errorf("expected PIPELINE_CONFIG_NOT_FOUND code, got %s", domainErr.Code)
+	}
+	if domainErr.Category != errors.CategoryNotFound {
+		t.Errorf("expected not_found category, got %s", domainErr.Category)
+	}
+}
+
+func TestLaunchRun_JobEnqueueFails(t *testing.T) {
+	projectID := uuid.New()
+	storyID := uuid.New()
+
+	storyRepo := &mockStoryRepoForRun{
+		getByIDFn: func(_ context.Context, id uuid.UUID) (*model.Story, error) {
+			return &model.Story{
+				ID:        id,
+				ProjectID: projectID,
+				Key:       "S-01",
+				Status:    model.StoryStatusBacklog,
+			}, nil
+		},
+	}
+
+	pipelineConfigRepo := &mockPipelineConfigRepoForRun{
+		getByProjectIDFn: func(_ context.Context, _ uuid.UUID) (*model.PipelineConfig, error) {
+			return &model.PipelineConfig{
+				ID:         uuid.New(),
+				ProjectID:  projectID,
+				ConfigYAML: testPipelineYAML,
+				Version:    1,
+			}, nil
+		},
+	}
+
+	jobQueue := &mockJobQueue{
+		enqueueExecuteRunFn: func(_ context.Context, _ uuid.UUID) error {
+			return fmt.Errorf("connection refused")
+		},
+	}
+
+	runRepo := &mockRunRepo{
+		createRunFn: func(_ context.Context, run *model.Run) (*model.Run, error) {
+			run.ID = uuid.New()
+			run.CreatedAt = time.Now()
+			run.UpdatedAt = time.Now()
+			return run, nil
+		},
+		createRunStepFn: func(_ context.Context, step *model.RunStep) (*model.RunStep, error) {
+			step.ID = uuid.New()
+			step.CreatedAt = time.Now()
+			return step, nil
+		},
+	}
+
+	svc := NewRunService(runRepo, newMockProjectRepoForService(), storyRepo, pipelineConfigRepo, jobQueue)
+	_, err := svc.LaunchRun(context.Background(), projectID, storyID)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	domainErr, ok := err.(*errors.DomainError)
+	if !ok {
+		t.Fatalf("expected *errors.DomainError, got %T", err)
+	}
+	if domainErr.Category != errors.CategoryInternal {
+		t.Errorf("expected internal category, got %s", domainErr.Category)
 	}
 }

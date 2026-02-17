@@ -181,6 +181,11 @@ func (s *Server) GetRun(w http.ResponseWriter, r *http.Request, runID RunIdPath)
 	s.runs.GetRun(w, r, runID)
 }
 
+// LaunchRun delegates to RunHandler.
+func (s *Server) LaunchRun(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, storyID StoryIdPath) {
+	s.runs.LaunchRun(w, r, projectID, storyID)
+}
+
 // ListRunsByStory delegates to RunHandler.
 func (s *Server) ListRunsByStory(w http.ResponseWriter, r *http.Request, storyID StoryIdPath, params ListRunsByStoryParams) {
 	s.runs.ListRunsByStory(w, r, storyID, params)

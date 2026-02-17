@@ -628,6 +628,36 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /projects/{projectId}/stories/{storyId}/runs:
+    post:
+      operationId: launchRun
+      summary: Launch a pipeline run for a single story
+      description: >
+        Creates a pending run with steps derived from the project's pipeline config
+        and enqueues async execution. Returns 409 if the story already has an active run,
+        400 if the story is already done, 404 if the story or pipeline config is not found.
+      tags: [runs]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/StoryIdPath"
+      responses:
+        "201":
+          description: Run created and execution enqueued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunWithSteps"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
   /stories/{storyId}/runs:
     get:
       operationId: listRunsByStory
