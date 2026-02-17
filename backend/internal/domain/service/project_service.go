@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/zakari/hopeitworks/backend/internal/domain/model"
@@ -11,12 +12,18 @@ import (
 
 // ProjectService provides business logic for project operations.
 type ProjectService struct {
-	repo port.ProjectRepository
+	repo                  port.ProjectRepository
+	pipelineConfigService *PipelineConfigService
 }
 
 // NewProjectService creates a new ProjectService.
 func NewProjectService(repo port.ProjectRepository) *ProjectService {
 	return &ProjectService{repo: repo}
+}
+
+// SetPipelineConfigService sets the pipeline config service for seeding on project creation.
+func (s *ProjectService) SetPipelineConfigService(pcs *PipelineConfigService) {
+	s.pipelineConfigService = pcs
 }
 
 // CreateParams holds parameters for creating a project.
@@ -46,7 +53,19 @@ func (s *ProjectService) Create(ctx context.Context, params CreateProjectParams)
 		AgentRuntime: "docker",
 	}
 
-	return s.repo.Create(ctx, project)
+	created, err := s.repo.Create(ctx, project)
+	if err != nil {
+		return nil, err
+	}
+
+	// Seed default pipeline config for the new project
+	if s.pipelineConfigService != nil {
+		if _, err := s.pipelineConfigService.SeedDefault(ctx, created.ID); err != nil {
+			return nil, fmt.Errorf("seeding default pipeline config: %w", err)
+		}
+	}
+
+	return created, nil
 }
 
 // GetByID retrieves a project by ID.
