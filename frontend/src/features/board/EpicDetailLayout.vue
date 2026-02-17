@@ -16,6 +16,8 @@ const emit = defineEmits<{
   select: [storyId: string]
   'update:filters': [filters: StoryFilters]
   'launch-click': []
+  'create-story': []
+  'story-updated': [story: Story]
 }>()
 </script>
 
@@ -28,6 +30,7 @@ const emit = defineEmits<{
         :filters="filters"
         @select="emit('select', $event)"
         @update:filters="emit('update:filters', $event)"
+        @create-story="emit('create-story')"
       />
     </div>
     <div class="flex-1 overflow-y-auto border-l border-surface-200">
@@ -38,6 +41,7 @@ const emit = defineEmits<{
         :show-launch-button="true"
         @select-dependency="emit('select', $event)"
         @launch-click="emit('launch-click')"
+        @story-updated="emit('story-updated', $event)"
       />
     </div>
   </div>
