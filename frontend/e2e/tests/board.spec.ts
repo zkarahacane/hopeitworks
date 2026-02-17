@@ -78,7 +78,7 @@ test.describe('Board Page', () => {
     await page.goto('/projects/p1/board')
 
     await expect(page.getByText('No epics found for this project')).toBeVisible()
-    await expect(page.getByText('Create Epic')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Create Epic' })).toBeVisible()
   })
 
   test('navigates to epic detail when clicking an epic card', async ({ page }) => {
@@ -95,7 +95,7 @@ test.describe('Board Page', () => {
 
     await page.goto('/projects/p1/board')
 
-    await page.getByText('User Authentication').click()
+    await page.getByRole('heading', { name: 'User Authentication' }).click()
 
     await expect(page).toHaveURL('/projects/p1/epics/e1')
   })
@@ -127,11 +127,11 @@ test.describe('Board Page', () => {
     await page.goto('/projects/p1/board')
 
     await expect(page.getByText('Failed to load epics')).toBeVisible()
-    await expect(page.getByText('Retry')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible()
 
-    await page.getByText('Retry').click()
+    await page.getByRole('button', { name: 'Retry' }).click()
 
-    await expect(page.getByText('User Authentication')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'User Authentication' })).toBeVisible()
   })
 
   test('shows informational text for non-admin when no epics', async ({ page }) => {
@@ -162,6 +162,6 @@ test.describe('Board Page', () => {
     await page.goto('/projects/p1/board')
 
     await expect(page.getByText('Contact an administrator')).toBeVisible()
-    await expect(page.getByText('Create Epic')).not.toBeVisible()
+    await expect(page.getByRole('button', { name: 'Create Epic' })).not.toBeVisible()
   })
 })
