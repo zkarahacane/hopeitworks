@@ -61,11 +61,14 @@ func mapCategoryToStatus(cat errors.ErrorCategory) int {
 // toAPIProject converts a domain Project to the API Project type.
 func toAPIProject(p *model.Project) Project {
 	proj := Project{
-		Id:        p.ID,
-		Name:      p.Name,
-		OwnerId:   uuid.Nil,
-		CreatedAt: p.CreatedAt,
-		UpdatedAt: p.UpdatedAt,
+		Id:                   p.ID,
+		Name:                 p.Name,
+		OwnerId:              uuid.Nil,
+		CircuitBreakerCount:  p.CircuitBreakerCount,
+		CircuitBreakerActive: p.CircuitBreakerActive,
+		CircuitBreakerMax:    p.CircuitBreakerMax,
+		CreatedAt:            p.CreatedAt,
+		UpdatedAt:            p.UpdatedAt,
 	}
 	if p.Description != nil {
 		proj.Description = p.Description

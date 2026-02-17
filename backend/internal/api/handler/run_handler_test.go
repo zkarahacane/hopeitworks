@@ -157,6 +157,12 @@ func (m *runHandlerProjectRepo) Update(_ context.Context, p *model.Project) (*mo
 	return p, nil
 }
 func (m *runHandlerProjectRepo) Delete(_ context.Context, _ uuid.UUID) error { return nil }
+func (m *runHandlerProjectRepo) IncrementCircuitBreakerCount(_ context.Context, _ uuid.UUID) (*model.Project, error) {
+	return &model.Project{}, nil
+}
+func (m *runHandlerProjectRepo) ResetCircuitBreaker(_ context.Context, _ uuid.UUID) (*model.Project, error) {
+	return &model.Project{}, nil
+}
 
 // runHandlerJobQueue is a minimal mock of port.JobQueue.
 type runHandlerJobQueue struct {

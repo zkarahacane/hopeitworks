@@ -812,6 +812,27 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  # ── Circuit Breaker ─────────────────────────────────────────────────
+  /projects/{id}/circuit-breaker/reset:
+    post:
+      operationId: resetCircuitBreaker
+      summary: Reset the circuit breaker for a project
+      description: >
+        Resets the circuit breaker state (count=0, active=false) so that
+        pipeline runs can be attempted again. Admin-only endpoint.
+      tags: [projects]
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "204":
+          description: Circuit breaker reset successfully
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   # ── Pipeline Configs ─────────────────────────────────────────────────
   /projects/{projectId}/pipeline:
     get:
@@ -1064,6 +1085,9 @@ components:
         - id
         - name
         - owner_id
+        - circuit_breaker_count
+        - circuit_breaker_active
+        - circuit_breaker_max
         - created_at
         - updated_at
       properties:
@@ -1081,6 +1105,18 @@ components:
           type: string
           format: uuid
           example: 550e8400-e29b-41d4-a716-446655440000
+        circuit_breaker_count:
+          type: integer
+          description: Number of consecutive pipeline failures
+          example: 0
+        circuit_breaker_active:
+          type: boolean
+          description: Whether the circuit breaker is currently tripped
+          example: false
+        circuit_breaker_max:
+          type: integer
+          description: Threshold for consecutive failures before tripping
+          example: 3
         created_at:
           type: string
           format: date-time

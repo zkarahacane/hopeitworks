@@ -89,7 +89,14 @@ func run() error {
 	// Project service (with pipeline config seeding on creation)
 	projectService := service.NewProjectService(projectRepo)
 	projectService.SetPipelineConfigService(pipelineConfigService)
-	projectHandler := handler.NewProjectHandler(projectService, projectUserService)
+
+	// Event publisher (for persisting events to DB) — needed by circuit breaker
+	eventRepo := pgadapter.NewEventRepo(queries)
+
+	// Circuit breaker service
+	circuitBreakerService := service.NewCircuitBreakerService(projectRepo, eventRepo, logger)
+
+	projectHandler := handler.NewProjectHandler(projectService, projectUserService, circuitBreakerService)
 
 	// Epic service
 	epicRepo := pgadapter.NewEpicRepo(queries)
@@ -127,6 +134,7 @@ func run() error {
 	// Pipeline executor (will be used by River workers)
 	// NOTE: event publisher and action registry wiring deferred to later story
 	pipelineExecutor := service.NewPipelineExecutor(runRepo, nil, nil, logger)
+	pipelineExecutor.SetCircuitBreaker(circuitBreakerService)
 
 	// River job queue for async pipeline execution
 	workers := river.NewWorkers()
@@ -152,9 +160,6 @@ func run() error {
 	if err != nil {
 		logger.Warn("docker container manager unavailable, timeout enforcer and orphan cleaner disabled", "error", err)
 	}
-
-	// Event publisher (for persisting events to DB)
-	eventRepo := pgadapter.NewEventRepo(queries)
 
 	// Action registry
 	actionReg := service.NewActionRegistry()

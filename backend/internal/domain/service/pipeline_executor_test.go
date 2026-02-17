@@ -788,3 +788,103 @@ func TestActionRegistry_RegisterOverwrites(t *testing.T) {
 		t.Errorf("expected action2 error, got %v", execErr)
 	}
 }
+
+func TestExecuteRun_CircuitBreakerBlocksExecution(t *testing.T) {
+	f := newExecutorTestFixture(1)
+	f.registerSuccessActions()
+
+	// Set up circuit breaker that is already open
+	cbRepo := newCBMockProjectRepo()
+	p := &model.Project{
+		ID:                   f.projectID,
+		CircuitBreakerCount:  3,
+		CircuitBreakerActive: true,
+		CircuitBreakerMax:    3,
+	}
+	cbRepo.projects[f.projectID] = p
+
+	cbEventPub := newCBMockEventPublisher()
+	cbSvc := NewCircuitBreakerService(cbRepo, cbEventPub, testLogger())
+	f.executor.SetCircuitBreaker(cbSvc)
+
+	err := f.executor.ExecuteRun(context.Background(), f.runID)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+
+	domainErr, ok := err.(*errors.DomainError)
+	if !ok {
+		t.Fatalf("expected *errors.DomainError, got %T", err)
+	}
+	if domainErr.Code != circuitBreakerOpenCode {
+		t.Errorf("expected code CIRCUIT_BREAKER_OPEN, got %s", domainErr.Code)
+	}
+
+	// Run should be marked as failed
+	if len(f.runStatusCalls) != 1 {
+		t.Fatalf("expected 1 run status update, got %d", len(f.runStatusCalls))
+	}
+	if f.runStatusCalls[0].Status != model.RunStatusFailed {
+		t.Errorf("expected run status failed, got %s", f.runStatusCalls[0].Status)
+	}
+}
+
+func TestExecuteRun_CircuitBreakerRecordsFailure(t *testing.T) {
+	f := newExecutorTestFixture(1)
+
+	// Register action that fails
+	f.actionReg.Register(&mockAction{
+		name: f.steps[0].Action,
+		executeFn: func(_ context.Context, _ *model.RunContext) error {
+			return fmt.Errorf("build failed")
+		},
+	})
+
+	cbRepo := newCBMockProjectRepo()
+	p := &model.Project{
+		ID:                   f.projectID,
+		CircuitBreakerCount:  0,
+		CircuitBreakerActive: false,
+		CircuitBreakerMax:    3,
+	}
+	cbRepo.projects[f.projectID] = p
+
+	cbEventPub := newCBMockEventPublisher()
+	cbSvc := NewCircuitBreakerService(cbRepo, cbEventPub, testLogger())
+	f.executor.SetCircuitBreaker(cbSvc)
+
+	_ = f.executor.ExecuteRun(context.Background(), f.runID)
+
+	// Verify circuit breaker count was incremented
+	if cbRepo.projects[f.projectID].CircuitBreakerCount != 1 {
+		t.Errorf("expected circuit breaker count 1, got %d", cbRepo.projects[f.projectID].CircuitBreakerCount)
+	}
+}
+
+func TestExecuteRun_CircuitBreakerRecordsSuccess(t *testing.T) {
+	f := newExecutorTestFixture(1)
+	f.registerSuccessActions()
+
+	cbRepo := newCBMockProjectRepo()
+	p := &model.Project{
+		ID:                   f.projectID,
+		CircuitBreakerCount:  2,
+		CircuitBreakerActive: false,
+		CircuitBreakerMax:    3,
+	}
+	cbRepo.projects[f.projectID] = p
+
+	cbEventPub := newCBMockEventPublisher()
+	cbSvc := NewCircuitBreakerService(cbRepo, cbEventPub, testLogger())
+	f.executor.SetCircuitBreaker(cbSvc)
+
+	err := f.executor.ExecuteRun(context.Background(), f.runID)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	// Verify circuit breaker count was reset to 0
+	if cbRepo.projects[f.projectID].CircuitBreakerCount != 0 {
+		t.Errorf("expected circuit breaker count 0, got %d", cbRepo.projects[f.projectID].CircuitBreakerCount)
+	}
+}
