@@ -6,18 +6,21 @@ import (
 
 	"github.com/zakari/hopeitworks/backend/internal/api/middleware"
 	"github.com/zakari/hopeitworks/backend/internal/domain/model"
+	"github.com/zakari/hopeitworks/backend/internal/domain/port"
 	"github.com/zakari/hopeitworks/backend/internal/domain/service"
 	"github.com/zakari/hopeitworks/backend/pkg/errors"
 )
 
 // EpicHandler implements epic-related HTTP handlers.
 type EpicHandler struct {
-	service *service.EpicService
+	service   *service.EpicService
+	scheduler *service.SchedulerService
+	storyRepo port.StoryRepository
 }
 
 // NewEpicHandler creates a new EpicHandler.
-func NewEpicHandler(svc *service.EpicService) *EpicHandler {
-	return &EpicHandler{service: svc}
+func NewEpicHandler(svc *service.EpicService, scheduler *service.SchedulerService, storyRepo port.StoryRepository) *EpicHandler {
+	return &EpicHandler{service: svc, scheduler: scheduler, storyRepo: storyRepo}
 }
 
 // ListEpics handles GET /projects/{projectId}/epics.
@@ -142,6 +145,51 @@ func (h *EpicHandler) DeleteEpic(w http.ResponseWriter, r *http.Request, _ Proje
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// GetEpicDAG handles GET /projects/{projectId}/epics/{epicId}/dag.
+func (h *EpicHandler) GetEpicDAG(w http.ResponseWriter, r *http.Request, _ ProjectIdPath, epicID EpicIdPath) {
+	stories, err := h.storyRepo.ListByEpic(r.Context(), epicID, 500, 0)
+	if err != nil {
+		writeErrorResponse(w, err)
+		return
+	}
+
+	storyValues := make([]model.Story, len(stories))
+	for i, s := range stories {
+		storyValues[i] = *s
+	}
+
+	dag, err := h.scheduler.BuildDAG(storyValues)
+	if err != nil {
+		writeErrorResponse(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, toEpicDAGResponse(dag))
+}
+
+// toEpicDAGResponse converts a DAGResult to the API EpicDAGResponse type.
+func toEpicDAGResponse(dag model.DAGResult) EpicDAGResponse {
+	nodes := make([]EpicDAGNode, 0)
+	edges := make([]EpicDAGEdge, 0)
+
+	for layer, group := range dag.Groups {
+		for _, s := range group {
+			nodes = append(nodes, EpicDAGNode{
+				Id:     s.ID,
+				Key:    s.Key,
+				Title:  s.Title,
+				Status: s.Status,
+				Layer:  layer,
+			})
+			for _, dep := range s.DependsOn {
+				edges = append(edges, EpicDAGEdge{Source: dep, Target: s.Key})
+			}
+		}
+	}
+
+	return EpicDAGResponse{Nodes: nodes, Edges: edges}
 }
 
 // toAPIEpic converts a domain Epic to the API Epic type.

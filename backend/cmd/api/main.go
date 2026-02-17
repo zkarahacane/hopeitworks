@@ -94,12 +94,15 @@ func run() error {
 	// Epic service
 	epicRepo := pgadapter.NewEpicRepo(queries)
 	epicService := service.NewEpicService(epicRepo)
-	epicHandler := handler.NewEpicHandler(epicService)
 
 	// Story service
 	storyRepo := pgadapter.NewStoryRepo(queries)
 	storyService := service.NewStoryService(storyRepo)
 	storyHandler := handler.NewStoryHandler(storyService)
+
+	// Scheduler service (DAG computation, pure domain service)
+	schedulerService := service.NewSchedulerService()
+	epicHandler := handler.NewEpicHandler(epicService, schedulerService, storyRepo)
 
 	// Prompt template service
 	promptTemplateRepo := pgadapter.NewPromptTemplateRepo(queries)

@@ -425,6 +425,52 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /projects/{projectId}/epics/{epicId}/dag:
+    get:
+      operationId: getEpicDAG
+      summary: Get the DAG visualization for an epic's stories
+      tags: [epics]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/EpicIdPath"
+      responses:
+        "200":
+          description: DAG nodes and edges
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EpicDAGResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          description: Cycle detected in story dependencies
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /projects/{projectId}/epics/{epicId}/runs:
+    post:
+      operationId: launchEpicRun
+      summary: Launch a batch run for all stories in an epic (async)
+      tags: [epics]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/EpicIdPath"
+      responses:
+        "202":
+          description: Epic run scheduling accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EpicRunAccepted"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   # ── Stories ──────────────────────────────────────────────────────────
   /projects/{projectId}/stories:
     get:
@@ -1240,6 +1286,60 @@ components:
             $ref: "#/components/schemas/Epic"
         pagination:
           $ref: "#/components/schemas/Pagination"
+
+    EpicDAGNode:
+      type: object
+      required: [id, key, title, status, layer]
+      properties:
+        id:
+          type: string
+          format: uuid
+        key:
+          type: string
+        title:
+          type: string
+        status:
+          type: string
+        layer:
+          type: integer
+          description: Zero-based execution layer index
+
+    EpicDAGEdge:
+      type: object
+      required: [source, target]
+      properties:
+        source:
+          type: string
+          description: Source story key (dependency)
+        target:
+          type: string
+          description: Target story key (dependent)
+
+    EpicDAGResponse:
+      type: object
+      required: [nodes, edges]
+      properties:
+        nodes:
+          type: array
+          items:
+            $ref: "#/components/schemas/EpicDAGNode"
+        edges:
+          type: array
+          items:
+            $ref: "#/components/schemas/EpicDAGEdge"
+
+    EpicRunAccepted:
+      type: object
+      required: [epic_run_id, status, stories_count]
+      properties:
+        epic_run_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [scheduling]
+        stories_count:
+          type: integer
 
     # ── Story ───────────────────────────────────────────────────────────
     Story:
