@@ -26,7 +26,10 @@ const (
 
 // Error codes for container/log streaming operations.
 const (
-	ErrCodeLogStreamFailed = "LOG_STREAM_FAILED"
+	ErrCodeLogStreamFailed          = "LOG_STREAM_FAILED"
+	ErrCodeContainerTimeout         = "CONTAINER_TIMEOUT"
+	ErrCodeContainerOperationFailed = "CONTAINER_OPERATION_FAILED"
+	ErrCodeOrphanCleanupFailed      = "ORPHAN_CLEANUP_FAILED"
 )
 
 // DomainError represents a structured error from the domain layer.
