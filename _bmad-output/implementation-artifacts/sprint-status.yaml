@@ -41,7 +41,7 @@ story_location: _bmad-output/implementation-artifacts
 
 development_status:
   # Epic 1: Project Foundation & Authentication
-  epic-1: in-progress
+  epic-1: done
   1-1-go-project-scaffolding-docker-compose-dev-stack: done
   1-2-openapi-spec-code-gen-pipeline: done
   1-3-users-table-jwt-auth-api-register-login-auth-middleware: done
@@ -52,22 +52,23 @@ development_status:
   1-8-app-shell-layout-header-sidebar-status-bar: done
   1-9-login-page-auth-guard: done
   1-10-project-list-page: done
-  1-11-project-creation-form: in-progress
-  1-12-project-settings-page: in-progress
+  1-11-project-creation-form: done
+  1-12-project-settings-page: done
   1-13-user-management-page-admin-only: done
   1-14-claude-md-files-for-agent-scoping: done
   1-15-go-backend-services-wiring: done
   1-16-vue-app-routing-state-tooling: done
   1-17-github-actions-ci-pipeline: done
   1-18-dev-seed-data-fixtures: done
+  1-19-project-detail-tabbed-navigation: backlog
   epic-1-retrospective: optional
 
   # Epic 2: Story Board & Management
-  epic-2: backlog
-  2-1-epics-table-epic-crud-api: backlog
+  epic-2: in-progress
+  2-1-epics-table-epic-crud-api: done
   2-2-stories-table-story-crud-api-status-filtering: backlog
   2-3-story-markdown-import-frontmatter-parsing: backlog
-  2-4-story-board-page-epic-list-with-story-counts: backlog
+  2-4-story-board-page-epic-list-with-story-counts: done
   2-5-epic-detail-split-focus-story-list-filters: backlog
   2-6-story-detail-view-read-only: backlog
   2-7-story-editor-create-edit-mode: backlog
@@ -75,18 +76,18 @@ development_status:
   epic-2-retrospective: optional
 
   # Epic 3: Single Story Pipeline Execution
-  epic-3: backlog
-  3-1-runs-runsteps-tables-run-creation-api-state-machine: backlog
-  3-2-gitprovider-port-gh-cli-adapter-clone-branch-push: backlog
+  epic-3: in-progress
+  3-1-runs-runsteps-tables-run-creation-api-state-machine: done
+  3-2-gitprovider-port-gh-cli-adapter-clone-branch-push: done
   3-3-gitprovider-pr-operations-create-pr-merge-pr: backlog
-  3-4-docker-container-lifecycle-manager-create-start-stop-cleanup: backlog
+  3-4-docker-container-lifecycle-manager-create-start-stop-cleanup: done
   3-5-ndjson-log-streaming-from-container: backlog
-  3-6-events-table-pgxlisten-event-bus: backlog
+  3-6-events-table-pgxlisten-event-bus: done
   3-7-pipeline-executor-sequential-step-runner: backlog
   3-8-agent-run-action-compose-claude-md-launch-container-stream-logs: backlog
   3-9-container-timeout-enforcement-orphan-cleanup: backlog
   3-10-run-launch-api-endpoint-single-story: backlog
-  3-11-run-launch-button-confirmation-dialog: backlog
+  3-11-run-launch-button-confirmation-dialog: done
   3-12-run-status-display-on-story-card: backlog
   epic-3-retrospective: optional
 
@@ -108,12 +109,12 @@ development_status:
   epic-5-retrospective: optional
 
   # Epic 6: Pipeline Configuration & Prompt Templates
-  epic-6: backlog
-  6-1-pipeline-configs-table-default-pipeline-seed-crud-api: backlog
-  6-2-prompt-templates-table-crud-api: backlog
+  epic-6: in-progress
+  6-1-pipeline-configs-table-default-pipeline-seed-crud-api: done
+  6-2-prompt-templates-table-crud-api: done
   6-3-handlebars-rendering-engine-default-template-seeding: backlog
-  6-4-pipeline-configuration-page: backlog
-  6-5-prompt-template-list-page: backlog
+  6-4-pipeline-configuration-page: done
+  6-5-prompt-template-list-page: done
   6-6-prompt-template-editor: backlog
   epic-6-retrospective: optional
 
@@ -265,11 +266,11 @@ parallel_waves:
     stories:
       - key: 1-11-project-creation-form
         domain: front
-        status: in-progress
+        status: done
         explicit_deps: [1-10-project-list-page]
       - key: 1-12-project-settings-page
         domain: front
-        status: in-progress
+        status: done
         explicit_deps: [1-10-project-list-page]
       - key: 1-18-dev-seed-data-fixtures
         domain: back
@@ -290,49 +291,49 @@ parallel_waves:
       # Epic 2 - Story Board
       - key: 2-1-epics-table-epic-crud-api
         domain: back
-        status: backlog
+        status: done
         cross_epic_deps: [1-5-projects-table-project-crud-api]
       - key: 2-4-story-board-page-epic-list-with-story-counts
         domain: front
-        status: backlog
+        status: done
         cross_epic_deps: [1-8-app-shell-layout-header-sidebar-status-bar, 1-9-login-page-auth-guard]
       # Epic 3 - Pipeline Execution
       - key: 3-1-runs-runsteps-tables-run-creation-api-state-machine
         domain: back
-        status: backlog
+        status: done
         cross_epic_deps: [1-5-projects-table-project-crud-api]
       - key: 3-2-gitprovider-port-gh-cli-adapter-clone-branch-push
         domain: back
-        status: backlog
+        status: done
         cross_epic_deps: [1-1-go-project-scaffolding-docker-compose-dev-stack]
       - key: 3-4-docker-container-lifecycle-manager-create-start-stop-cleanup
         domain: back
-        status: backlog
+        status: done
         cross_epic_deps: [1-1-go-project-scaffolding-docker-compose-dev-stack]
       - key: 3-6-events-table-pgxlisten-event-bus
         domain: back
-        status: backlog
+        status: done
         cross_epic_deps: [1-1-go-project-scaffolding-docker-compose-dev-stack]
       - key: 3-11-run-launch-button-confirmation-dialog
         domain: front
-        status: backlog
+        status: done
         cross_epic_deps: [1-8-app-shell-layout-header-sidebar-status-bar, 1-9-login-page-auth-guard]
       # Epic 6 - Pipeline Config
       - key: 6-1-pipeline-configs-table-default-pipeline-seed-crud-api
         domain: back
-        status: backlog
+        status: done
         cross_epic_deps: [1-5-projects-table-project-crud-api]
       - key: 6-2-prompt-templates-table-crud-api
         domain: back
-        status: backlog
+        status: done
         cross_epic_deps: [1-1-go-project-scaffolding-docker-compose-dev-stack]
       - key: 6-4-pipeline-configuration-page
         domain: front
-        status: backlog
+        status: done
         cross_epic_deps: [1-8-app-shell-layout-header-sidebar-status-bar, 1-9-login-page-auth-guard]
       - key: 6-5-prompt-template-list-page
         domain: front
-        status: backlog
+        status: done
         cross_epic_deps: [1-8-app-shell-layout-header-sidebar-status-bar, 1-9-login-page-auth-guard]
     container_count: 11
     depends_on: [wave-4]
@@ -350,6 +351,11 @@ parallel_waves:
         domain: front
         status: backlog
         explicit_deps: [2-4-story-board-page-epic-list-with-story-counts]
+      # Epic 1 - Integration fix
+      - key: 1-19-project-detail-tabbed-navigation
+        domain: front
+        status: backlog
+        cross_epic_deps: [2-4-story-board-page-epic-list-with-story-counts, 6-4-pipeline-configuration-page, 6-5-prompt-template-list-page]
       # Epic 3
       - key: 3-3-gitprovider-pr-operations-create-pr-merge-pr
         domain: back
