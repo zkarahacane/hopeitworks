@@ -9,6 +9,7 @@ import ApprovalsView from '@/views/ApprovalsView.vue'
 import PipelineConfigView from '@/views/PipelineConfigView.vue'
 import PromptTemplatesView from '@/views/PromptTemplatesView.vue'
 import BoardView from '@/views/BoardView.vue'
+import EpicDetailView from '@/views/EpicDetailView.vue'
 import { setupAuthGuard, setupAdminGuard } from './guards'
 
 const router = createRouter({
@@ -47,7 +48,7 @@ const router = createRouter({
     {
       path: '/projects/:id/epics/:epicId',
       name: 'epic-detail',
-      component: () => import('@/views/ProjectDetailView.vue'),
+      component: EpicDetailView,
       meta: { requiresAuth: true },
     },
     {
