@@ -25,26 +25,26 @@ type logStreamClient interface {
 // DefaultIdleTimeout is how long to wait without log output before emitting a warning.
 const DefaultIdleTimeout = 60 * time.Second
 
-// Ensure DockerLogStreamer implements port.LogStreamer at compile time.
-var _ port.LogStreamer = (*DockerLogStreamer)(nil)
+// Ensure LogStreamer implements port.LogStreamer at compile time.
+var _ port.LogStreamer = (*LogStreamer)(nil)
 
-// DockerLogStreamer implements port.LogStreamer using the Docker SDK.
-type DockerLogStreamer struct {
+// LogStreamer implements port.LogStreamer using the Docker SDK.
+type LogStreamer struct {
 	client      logStreamClient
 	logger      *slog.Logger
 	idleTimeout time.Duration
 }
 
-// NewDockerLogStreamer creates a DockerLogStreamer with an existing Docker client.
-func NewDockerLogStreamer(client logStreamClient, logger *slog.Logger) *DockerLogStreamer {
-	return &DockerLogStreamer{client: client, logger: logger, idleTimeout: DefaultIdleTimeout}
+// NewDockerLogStreamer creates a LogStreamer with an existing Docker client.
+func NewDockerLogStreamer(client logStreamClient, logger *slog.Logger) *LogStreamer {
+	return &LogStreamer{client: client, logger: logger, idleTimeout: DefaultIdleTimeout}
 }
 
 // StreamLogs streams log events from a container.
 // The returned log channel receives LogEvent structs as they are parsed.
 // The returned done channel receives the container exit code when streaming ends.
 // Both channels are closed when the container exits or context is cancelled.
-func (s *DockerLogStreamer) StreamLogs(ctx context.Context, containerID string, runID string, stepID string) (<-chan model.LogEvent, <-chan int, error) {
+func (s *LogStreamer) StreamLogs(ctx context.Context, containerID string, runID string, stepID string) (<-chan model.LogEvent, <-chan int, error) {
 	logReader, err := s.client.ContainerLogs(ctx, containerID, dockercontainer.LogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,
@@ -73,7 +73,7 @@ type scanResult struct {
 	ok   bool
 }
 
-func (s *DockerLogStreamer) streamLoop(ctx context.Context, reader io.ReadCloser, containerID string, runID string, stepID string, logCh chan model.LogEvent, doneCh chan int) {
+func (s *LogStreamer) streamLoop(ctx context.Context, reader io.ReadCloser, containerID string, runID string, stepID string, logCh chan model.LogEvent, doneCh chan int) {
 	defer close(logCh)
 	defer close(doneCh)
 	defer reader.Close()
@@ -155,7 +155,7 @@ func (s *DockerLogStreamer) streamLoop(ctx context.Context, reader io.ReadCloser
 	}
 }
 
-func (s *DockerLogStreamer) handleContainerExit(ctx context.Context, containerID string, runID string, stepID string, scanner *bufio.Scanner, logCh chan model.LogEvent, doneCh chan int) {
+func (s *LogStreamer) handleContainerExit(_ context.Context, containerID string, runID string, stepID string, scanner *bufio.Scanner, logCh chan model.LogEvent, doneCh chan int) {
 	if err := scanner.Err(); err != nil {
 		logCh <- model.LogEvent{
 			RunID:     runID,

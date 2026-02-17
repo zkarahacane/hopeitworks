@@ -57,14 +57,14 @@ func stdcopyReader(lines string) io.ReadCloser {
 	return io.NopCloser(&buf)
 }
 
-func newTestLogStreamer(mock logStreamClient) *DockerLogStreamer {
+func newTestLogStreamer(mock logStreamClient) *LogStreamer {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
-	return &DockerLogStreamer{client: mock, logger: logger, idleTimeout: DefaultIdleTimeout}
+	return &LogStreamer{client: mock, logger: logger, idleTimeout: DefaultIdleTimeout}
 }
 
-func newTestLogStreamerWithTimeout(mock logStreamClient, timeout time.Duration) *DockerLogStreamer {
+func newTestLogStreamerWithTimeout(mock logStreamClient, timeout time.Duration) *LogStreamer {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
-	return &DockerLogStreamer{client: mock, logger: logger, idleTimeout: timeout}
+	return &LogStreamer{client: mock, logger: logger, idleTimeout: timeout}
 }
 
 func TestStreamLogs_ValidNDJSON(t *testing.T) {
@@ -177,7 +177,8 @@ func TestStreamLogs_ContainerExit(t *testing.T) {
 	}
 
 	// Drain log channel.
-	for range logCh {
+	for e := range logCh {
+		_ = e
 	}
 
 	exitCode, ok := <-doneCh
@@ -245,11 +246,12 @@ func TestStreamLogs_ContextCancellation(t *testing.T) {
 	pw.Close()
 
 	// Wait for channels to close.
-	for range logCh {
+	for e := range logCh {
+		_ = e
 	}
 
 	// Done channel should be closed (with or without exit code — context cancel wins).
-	_, _ = <-doneCh
+	<-doneCh
 }
 
 func TestStreamLogs_ContainerLogsError(t *testing.T) {
@@ -419,7 +421,8 @@ func TestStreamLogs_IdleTimeout(t *testing.T) {
 
 	// Close pipe to end streaming.
 	pw.Close()
-	for range logCh {
+	for e := range logCh {
+		_ = e
 	}
 }
 
@@ -485,7 +488,8 @@ func TestStreamLogs_IdleTimeoutResets(t *testing.T) {
 	}
 
 	pw.Close()
-	for range logCh {
+	for e := range logCh {
+		_ = e
 	}
 }
 
@@ -502,7 +506,8 @@ func TestStreamLogs_WaitError(t *testing.T) {
 	}
 
 	// Drain log channel.
-	for range logCh {
+	for e := range logCh {
+		_ = e
 	}
 
 	// Done channel should be closed without exit code since wait failed.
