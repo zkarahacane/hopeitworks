@@ -48,8 +48,24 @@ func run() error {
 	defer pool.Close()
 	logger.Info("database connected")
 
+	// Build event bus (dedicated connection for LISTEN/NOTIFY)
+	dsn := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s",
+		cfg.Database.User, cfg.Database.Password,
+		cfg.Database.Host, cfg.Database.Port,
+		cfg.Database.Name, cfg.Database.SSLMode,
+	)
+	eventBus, err := pgadapter.NewEventBus(ctx, dsn, logger)
+	if err != nil {
+		return fmt.Errorf("creating event bus: %w", err)
+	}
+	defer func() { _ = eventBus.Close() }()
+	logger.Info("event bus connected")
+
 	// Build dependency graph
 	queries := pgadapter.New(pool)
+
+	// Event publisher
+	_ = pgadapter.NewEventRepo(queries) // EventPublisher available for services
 
 	// Auth service and middleware
 	userRepo := pgadapter.NewUserRepository(pool)
@@ -143,6 +159,9 @@ func run() error {
 			return fmt.Errorf("server shutdown: %w", err)
 		}
 
+		if closeErr := eventBus.Close(); closeErr != nil {
+			logger.Error("failed to close event bus", "error", closeErr)
+		}
 		pool.Close()
 		logger.Info("server stopped")
 	}
