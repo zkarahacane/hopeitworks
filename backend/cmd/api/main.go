@@ -13,14 +13,18 @@ import (
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/riverqueue/river"
 	actionadapter "github.com/zakari/hopeitworks/backend/internal/adapter/action"
+	discordadapter "github.com/zakari/hopeitworks/backend/internal/adapter/discord"
 	dockeradapter "github.com/zakari/hopeitworks/backend/internal/adapter/docker"
 	gitadapter "github.com/zakari/hopeitworks/backend/internal/adapter/git"
 	hbadapter "github.com/zakari/hopeitworks/backend/internal/adapter/handlebars"
 	pgadapter "github.com/zakari/hopeitworks/backend/internal/adapter/postgres"
 	riveradapter "github.com/zakari/hopeitworks/backend/internal/adapter/river"
+	webhookadapter "github.com/zakari/hopeitworks/backend/internal/adapter/webhook"
 	"github.com/zakari/hopeitworks/backend/internal/api/handler"
 	authmw "github.com/zakari/hopeitworks/backend/internal/api/middleware"
 	internalconfig "github.com/zakari/hopeitworks/backend/internal/config"
+	"github.com/zakari/hopeitworks/backend/internal/domain/model"
+	"github.com/zakari/hopeitworks/backend/internal/domain/port"
 	"github.com/zakari/hopeitworks/backend/internal/domain/service"
 	pkgexec "github.com/zakari/hopeitworks/backend/pkg/exec"
 	pkglog "github.com/zakari/hopeitworks/backend/pkg/log"
@@ -231,10 +235,24 @@ func run() error {
 		}()
 	}
 
+	// Notification configs
+	notificationConfigRepo := pgadapter.NewNotificationConfigRepository(queries)
+	notificationConfigService := service.NewNotificationConfigService(notificationConfigRepo)
+	notificationHandler := handler.NewNotificationHandler(notificationConfigService)
+
+	// Notification dispatcher (background goroutine)
+	notifiers := map[string]port.Notifier{
+		model.ChannelTypeDiscord: discordadapter.NewNotifier(),
+		model.ChannelTypeWebhook: webhookadapter.NewNotifier(),
+	}
+	notificationDispatcher := service.NewNotificationDispatcher(eventBus, notificationConfigRepo, projectRepo, notifiers)
+	notificationDispatcher.Start(appCtx)
+	logger.Info("notification dispatcher started")
+
 	// SSE handler for real-time event streaming
 	sseHandler := handler.NewSSEHandler(eventBus, eventRepo, projectUserRepo, logger)
 
-	server := handler.NewServer(authHandler, projectHandler, userHandler, epicHandler, storyHandler, promptTemplateHandler, runHandler, pipelineConfigHandler)
+	server := handler.NewServer(authHandler, projectHandler, userHandler, epicHandler, storyHandler, promptTemplateHandler, runHandler, pipelineConfigHandler, notificationHandler)
 
 	// Project user handler
 	projectUserHandler := handler.NewProjectUserHandler(projectUserService)
