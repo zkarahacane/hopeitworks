@@ -1,10 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
-import { ref } from 'vue'
+import { ref, nextTick } from 'vue'
+import { mount } from '@vue/test-utils'
 import { usePipelineConfig } from '../usePipelineConfig'
 import type { PipelineStep } from '@/stores/pipelineConfig'
-
- 
 
 const mockGet = vi.fn()
 const mockPut = vi.fn()
@@ -44,28 +43,49 @@ describe('usePipelineConfig', () => {
     mockPut.mockReset()
   })
 
-  it('exposes reactive computed properties from the store', () => {
+  it('exposes reactive computed properties from the store', async () => {
     mockGet.mockResolvedValue({ data: mockConfig, error: undefined })
 
-    const projectId = ref('proj-1')
-    const { config, steps, isLoading, isSaving, error, isDirty } =
-      usePipelineConfig(projectId)
+    let composableResult: ReturnType<typeof usePipelineConfig> | undefined
 
-    expect(config.value).toBeNull()
-    expect(steps.value).toEqual([])
-    expect(isLoading.value).toBe(false)
-    expect(isSaving.value).toBe(false)
-    expect(error.value).toBeNull()
-    expect(isDirty.value).toBe(false)
+    mount({
+      setup() {
+        const projectId = ref('proj-1')
+        composableResult = usePipelineConfig(projectId)
+        return {}
+      },
+      template: '<div></div>',
+    })
+
+    expect(composableResult).toBeDefined()
+
+    // onMounted triggers fetch automatically, wait for it to complete
+    await nextTick()
+
+    expect(composableResult!.config.value).toEqual(mockConfig)
+    expect(composableResult!.steps.value).toHaveLength(2)
+    expect(composableResult!.isLoading.value).toBe(false)
+    expect(composableResult!.isSaving.value).toBe(false)
+    expect(composableResult!.error.value).toBeNull()
+    expect(composableResult!.isDirty.value).toBe(false)
   })
 
   it('provides retry that re-fetches with the same project ID', async () => {
     mockGet.mockResolvedValue({ data: mockConfig, error: undefined })
 
-    const projectId = ref('proj-1')
-    const { retry } = usePipelineConfig(projectId)
+    let composableResult: ReturnType<typeof usePipelineConfig> | undefined
 
-    await retry()
+    mount({
+      setup() {
+        const projectId = ref('proj-1')
+        composableResult = usePipelineConfig(projectId)
+        return {}
+      },
+      template: '<div></div>',
+    })
+
+    await nextTick()
+    await composableResult!.retry()
 
     expect(mockGet).toHaveBeenCalledWith('/projects/{projectId}/pipeline', {
       params: { path: { projectId: 'proj-1' } },
@@ -76,14 +96,22 @@ describe('usePipelineConfig', () => {
     mockGet.mockResolvedValue({ data: mockConfig, error: undefined })
     mockPut.mockResolvedValue({ data: mockConfig, error: undefined })
 
-    const projectId = ref('proj-1')
-    const { saveConfig, addStep, retry } = usePipelineConfig(projectId)
+    let composableResult: ReturnType<typeof usePipelineConfig> | undefined
 
-    // Explicitly fetch config so it is populated
-    await retry()
+    mount({
+      setup() {
+        const projectId = ref('proj-1')
+        composableResult = usePipelineConfig(projectId)
+        return {}
+      },
+      template: '<div></div>',
+    })
 
-    addStep(makeStep({ id: 's3', name: 'test' }))
-    const result = await saveConfig()
+    await nextTick()
+    await composableResult!.retry()
+
+    composableResult!.addStep(makeStep({ id: 's3', name: 'test' }))
+    const result = await composableResult!.saveConfig()
 
     expect(result).toBe(true)
     expect(mockPut).toHaveBeenCalledWith('/projects/{projectId}/pipeline', {
@@ -95,58 +123,94 @@ describe('usePipelineConfig', () => {
   it('addStep adds step to the store', async () => {
     mockGet.mockResolvedValue({ data: mockConfig, error: undefined })
 
-    const projectId = ref('proj-1')
-    const { steps, addStep, retry } = usePipelineConfig(projectId)
+    let composableResult: ReturnType<typeof usePipelineConfig> | undefined
 
-    await retry()
+    mount({
+      setup() {
+        const projectId = ref('proj-1')
+        composableResult = usePipelineConfig(projectId)
+        return {}
+      },
+      template: '<div></div>',
+    })
+
+    await nextTick()
+    await composableResult!.retry()
 
     const newStep = makeStep({ id: 's3', name: 'test' })
-    addStep(newStep)
+    composableResult!.addStep(newStep)
 
-    expect(steps.value).toHaveLength(3)
-    expect(steps.value[2]!.id).toBe('s3')
+    expect(composableResult!.steps.value).toHaveLength(3)
+    expect(composableResult!.steps.value[2]!.id).toBe('s3')
   })
 
   it('removeStep removes step from the store', async () => {
     mockGet.mockResolvedValue({ data: mockConfig, error: undefined })
 
-    const projectId = ref('proj-1')
-    const { steps, removeStep, retry } = usePipelineConfig(projectId)
+    let composableResult: ReturnType<typeof usePipelineConfig> | undefined
 
-    await retry()
+    mount({
+      setup() {
+        const projectId = ref('proj-1')
+        composableResult = usePipelineConfig(projectId)
+        return {}
+      },
+      template: '<div></div>',
+    })
 
-    removeStep(0)
+    await nextTick()
+    await composableResult!.retry()
 
-    expect(steps.value).toHaveLength(1)
-    expect(steps.value[0]!.id).toBe('s2')
+    composableResult!.removeStep(0)
+
+    expect(composableResult!.steps.value).toHaveLength(1)
+    expect(composableResult!.steps.value[0]!.id).toBe('s2')
   })
 
   it('reorderSteps swaps steps in the store', async () => {
     mockGet.mockResolvedValue({ data: mockConfig, error: undefined })
 
-    const projectId = ref('proj-1')
-    const { steps, reorderSteps, retry } = usePipelineConfig(projectId)
+    let composableResult: ReturnType<typeof usePipelineConfig> | undefined
 
-    await retry()
+    mount({
+      setup() {
+        const projectId = ref('proj-1')
+        composableResult = usePipelineConfig(projectId)
+        return {}
+      },
+      template: '<div></div>',
+    })
 
-    reorderSteps(0, 1)
+    await nextTick()
+    await composableResult!.retry()
 
-    expect(steps.value[0]!.id).toBe('s2')
-    expect(steps.value[1]!.id).toBe('s1')
+    composableResult!.reorderSteps(0, 1)
+
+    expect(composableResult!.steps.value[0]!.id).toBe('s2')
+    expect(composableResult!.steps.value[1]!.id).toBe('s1')
   })
 
   it('updateStep updates a step in the store', async () => {
     mockGet.mockResolvedValue({ data: mockConfig, error: undefined })
 
-    const projectId = ref('proj-1')
-    const { steps, updateStep, retry } = usePipelineConfig(projectId)
+    let composableResult: ReturnType<typeof usePipelineConfig> | undefined
 
-    await retry()
+    mount({
+      setup() {
+        const projectId = ref('proj-1')
+        composableResult = usePipelineConfig(projectId)
+        return {}
+      },
+      template: '<div></div>',
+    })
 
-    const step = steps.value[0]!
+    await nextTick()
+    await composableResult!.retry()
+
+    const step = composableResult!.steps.value[0]!
     const updated: PipelineStep = { ...step, model: 'claude-haiku-4-3' }
-    updateStep(0, updated)
+    composableResult!.updateStep(0, updated)
 
-    expect(steps.value[0]!.model).toBe('claude-haiku-4-3')
+    expect(composableResult!.steps.value[0]!.model).toBe('claude-haiku-4-3')
   })
 })
