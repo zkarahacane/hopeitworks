@@ -202,6 +202,9 @@ func run() error {
 		}()
 	}
 
+	// SSE handler for real-time event streaming
+	sseHandler := handler.NewSSEHandler(eventBus, eventRepo, projectUserRepo, logger)
+
 	server := handler.NewServer(authHandler, projectHandler, userHandler, epicHandler, storyHandler, promptTemplateHandler, runHandler, pipelineConfigHandler)
 
 	// Project user handler
@@ -221,6 +224,10 @@ func run() error {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
 	})
+
+	// SSE endpoint — registered before oapi-codegen mux to avoid route conflicts.
+	// Auth is applied globally via the Auth middleware on the router.
+	r.Get("/api/v1/events/stream", sseHandler.ServeHTTP)
 
 	handler.HandlerFromMuxWithBaseURL(server, r, "/api/v1")
 

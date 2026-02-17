@@ -90,6 +90,49 @@ func (q *Queries) GetEventsByEntityID(ctx context.Context, arg GetEventsByEntity
 	return items, nil
 }
 
+const getEventsSince = `-- name: GetEventsSince :many
+SELECT e.id, e.project_id, e.entity_type, e.entity_id, e.action, e.payload, e.created_at
+FROM events e
+WHERE e.project_id = $1
+  AND e.created_at > (
+      SELECT anchor.created_at FROM events anchor WHERE anchor.id = $2
+  )
+ORDER BY e.created_at ASC
+`
+
+type GetEventsSinceParams struct {
+	ProjectID uuid.UUID `json:"project_id"`
+	ID        uuid.UUID `json:"id"`
+}
+
+func (q *Queries) GetEventsSince(ctx context.Context, arg GetEventsSinceParams) ([]Event, error) {
+	rows, err := q.db.Query(ctx, getEventsSince, arg.ProjectID, arg.ID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Event{}
+	for rows.Next() {
+		var i Event
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProjectID,
+			&i.EntityType,
+			&i.EntityID,
+			&i.Action,
+			&i.Payload,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listEventsByProject = `-- name: ListEventsByProject :many
 SELECT id, project_id, entity_type, entity_id, action, payload, created_at FROM events
 WHERE project_id = $1
