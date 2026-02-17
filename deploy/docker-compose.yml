@@ -52,3 +52,7 @@ volumes:
 networks:
   hopeitworks:
     driver: bridge
+  # Isolated network for agent containers spawned by the pipeline engine.
+  # Not internal — agents need internet access for git clone, API calls, etc.
+  agent-network:
+    driver: bridge

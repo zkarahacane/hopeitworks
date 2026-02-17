@@ -1,0 +1,23 @@
+-- name: CreateRunStep :one
+INSERT INTO run_steps (run_id, step_name, step_order, action, status)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING *;
+
+-- name: GetRunStep :one
+SELECT * FROM run_steps WHERE id = $1;
+
+-- name: ListRunStepsByRun :many
+SELECT * FROM run_steps
+WHERE run_id = $1
+ORDER BY step_order ASC;
+
+-- name: UpdateRunStepStatus :one
+UPDATE run_steps
+SET status = $2,
+    started_at = COALESCE(sqlc.narg('started_at'), started_at),
+    completed_at = COALESCE(sqlc.narg('completed_at'), completed_at),
+    error_message = COALESCE(sqlc.narg('error_message'), error_message),
+    container_id = COALESCE(sqlc.narg('container_id'), container_id),
+    log_tail = COALESCE(sqlc.narg('log_tail'), log_tail)
+WHERE id = $1
+RETURNING *;

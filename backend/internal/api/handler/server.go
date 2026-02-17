@@ -6,15 +6,17 @@ import "net/http"
 // It embeds Unimplemented to satisfy methods that are not yet implemented.
 type Server struct {
 	Unimplemented
-	auth     *AuthHandler
-	projects *ProjectHandler
-	users    *UserHandler
-	epics    *EpicHandler
+	auth            *AuthHandler
+	projects        *ProjectHandler
+	users           *UserHandler
+	epics           *EpicHandler
+	promptTemplates *PromptTemplateHandler
+	runs            *RunHandler
 }
 
 // NewServer creates a new Server with the given handlers.
-func NewServer(auth *AuthHandler, projects *ProjectHandler, users *UserHandler, epics *EpicHandler) *Server {
-	return &Server{auth: auth, projects: projects, users: users, epics: epics}
+func NewServer(auth *AuthHandler, projects *ProjectHandler, users *UserHandler, epics *EpicHandler, promptTemplates *PromptTemplateHandler, runs *RunHandler) *Server {
+	return &Server{auth: auth, projects: projects, users: users, epics: epics, promptTemplates: promptTemplates, runs: runs}
 }
 
 // RegisterUser delegates to AuthHandler.
@@ -105,4 +107,49 @@ func (s *Server) UpdateEpic(w http.ResponseWriter, r *http.Request, projectID Pr
 // DeleteEpic delegates to EpicHandler.
 func (s *Server) DeleteEpic(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, epicID EpicIdPath) {
 	s.epics.DeleteEpic(w, r, projectID, epicID)
+}
+
+// ListPromptTemplates delegates to PromptTemplateHandler.
+func (s *Server) ListPromptTemplates(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, params ListPromptTemplatesParams) {
+	s.promptTemplates.ListPromptTemplates(w, r, projectID, params)
+}
+
+// CreatePromptTemplate delegates to PromptTemplateHandler.
+func (s *Server) CreatePromptTemplate(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath) {
+	s.promptTemplates.CreatePromptTemplate(w, r, projectID)
+}
+
+// GetPromptTemplate delegates to PromptTemplateHandler.
+func (s *Server) GetPromptTemplate(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, templateID TemplateIdPath) {
+	s.promptTemplates.GetPromptTemplate(w, r, projectID, templateID)
+}
+
+// UpdatePromptTemplate delegates to PromptTemplateHandler.
+func (s *Server) UpdatePromptTemplate(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, templateID TemplateIdPath) {
+	s.promptTemplates.UpdatePromptTemplate(w, r, projectID, templateID)
+}
+
+// DeletePromptTemplate delegates to PromptTemplateHandler.
+func (s *Server) DeletePromptTemplate(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, templateID TemplateIdPath) {
+	s.promptTemplates.DeletePromptTemplate(w, r, projectID, templateID)
+}
+
+// ListRunsByProject delegates to RunHandler.
+func (s *Server) ListRunsByProject(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, params ListRunsByProjectParams) {
+	s.runs.ListRunsByProject(w, r, projectID, params)
+}
+
+// CreateRun delegates to RunHandler.
+func (s *Server) CreateRun(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath) {
+	s.runs.CreateRun(w, r, projectID)
+}
+
+// GetRun delegates to RunHandler.
+func (s *Server) GetRun(w http.ResponseWriter, r *http.Request, runID RunIdPath) {
+	s.runs.GetRun(w, r, runID)
+}
+
+// ListRunsByStory delegates to RunHandler.
+func (s *Server) ListRunsByStory(w http.ResponseWriter, r *http.Request, storyID StoryIdPath, params ListRunsByStoryParams) {
+	s.runs.ListRunsByStory(w, r, storyID, params)
 }

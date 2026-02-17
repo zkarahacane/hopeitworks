@@ -65,6 +65,7 @@ while [[ $# -gt 0 ]]; do
         --story)     STORY_NAME="$2"; shift 2 ;;
         --phase)     PHASE="$2"; shift 2 ;;
         --pipeline)  PIPELINE=true; shift ;;
+        --no-merge)  SKIP_MERGE=true; shift ;;
         --setup)     SETUP=true; shift ;;
         --status)    STATUS=true; shift ;;
         -p|--prompt) CLAUDE_ARGS+=("-p" "$2"); shift 2 ;;
@@ -194,6 +195,9 @@ run_clone() {
     local extra_env=()
     if [[ "${PIPELINE}" == "true" ]] || [[ "${_PIPELINE_MODE:-}" == "true" ]]; then
         extra_env+=(-e "PIPELINE=true" -e "STORY_KEY=${story_key}")
+    fi
+    if [[ "${SKIP_MERGE:-false}" == "true" ]]; then
+        extra_env+=(-e "SKIP_MERGE=true")
     fi
 
     docker run \
