@@ -165,6 +165,13 @@ const (
 	UserRoleUser  UserRole = "user"
 )
 
+// Defines values for GetProjectCostsParamsPeriod.
+const (
+	N30d GetProjectCostsParamsPeriod = "30d"
+	N7d  GetProjectCostsParamsPeriod = "7d"
+	N90d GetProjectCostsParamsPeriod = "90d"
+)
+
 // CreateEpicRequest defines model for CreateEpicRequest.
 type CreateEpicRequest struct {
 	Description *string                  `json:"description,omitempty"`
@@ -286,6 +293,14 @@ type LoginRequest struct {
 	Password string              `json:"password"`
 }
 
+// ModelCostBreakdown defines model for ModelCostBreakdown.
+type ModelCostBreakdown struct {
+	Model        string  `json:"model"`
+	TokensInput  int64   `json:"tokens_input"`
+	TokensOutput int64   `json:"tokens_output"`
+	TotalCost    float64 `json:"total_cost"`
+}
+
 // Pagination defines model for Pagination.
 type Pagination struct {
 	Page    int `json:"page"`
@@ -321,9 +336,31 @@ type Project struct {
 	CreatedAt   time.Time          `json:"created_at"`
 	Description *string            `json:"description,omitempty"`
 	Id          openapi_types.UUID `json:"id"`
-	Name        string             `json:"name"`
-	OwnerId     openapi_types.UUID `json:"owner_id"`
-	UpdatedAt   time.Time          `json:"updated_at"`
+
+	// MaxBudget Maximum budget for the project in USD (informational only)
+	MaxBudget *float64           `json:"max_budget"`
+	Name      string             `json:"name"`
+	OwnerId   openapi_types.UUID `json:"owner_id"`
+	UpdatedAt time.Time          `json:"updated_at"`
+}
+
+// ProjectCostSummary defines model for ProjectCostSummary.
+type ProjectCostSummary struct {
+	ByModel []ModelCostBreakdown `json:"by_model"`
+	ByRun   []RunCostBreakdown   `json:"by_run"`
+	ByStory []StoryCostBreakdown `json:"by_story"`
+
+	// MaxBudget Project budget limit in USD (informational only)
+	MaxBudget *float64 `json:"max_budget"`
+
+	// TotalCost Total cost in USD for the period
+	TotalCost float64 `json:"total_cost"`
+
+	// TotalInput Total input tokens for the period
+	TotalInput int64 `json:"total_input"`
+
+	// TotalOutput Total output tokens for the period
+	TotalOutput int64 `json:"total_output"`
 }
 
 // ProjectList defines model for ProjectList.
@@ -385,6 +422,22 @@ type Run struct {
 // RunStatus defines model for Run.Status.
 type RunStatus string
 
+// RunCostBreakdown defines model for RunCostBreakdown.
+type RunCostBreakdown struct {
+	CreatedAt time.Time          `json:"created_at"`
+	RunId     openapi_types.UUID `json:"run_id"`
+	Status    string             `json:"status"`
+	StoryKey  string             `json:"story_key"`
+	TotalCost float64            `json:"total_cost"`
+}
+
+// RunCostDetail defines model for RunCostDetail.
+type RunCostDetail struct {
+	RunId     openapi_types.UUID  `json:"run_id"`
+	Steps     []StepCostBreakdown `json:"steps"`
+	TotalCost float64             `json:"total_cost"`
+}
+
 // RunList defines model for RunList.
 type RunList struct {
 	Data       []Run      `json:"data"`
@@ -428,6 +481,16 @@ type RunWithSteps struct {
 // RunWithStepsStatus defines model for RunWithSteps.Status.
 type RunWithStepsStatus string
 
+// StepCostBreakdown defines model for StepCostBreakdown.
+type StepCostBreakdown struct {
+	CostUsd      float64            `json:"cost_usd"`
+	Model        string             `json:"model"`
+	StepId       openapi_types.UUID `json:"step_id"`
+	StepName     string             `json:"step_name"`
+	TokensInput  int64              `json:"tokens_input"`
+	TokensOutput int64              `json:"tokens_output"`
+}
+
 // Story defines model for Story.
 type Story struct {
 	AcceptanceCriteria *string             `json:"acceptance_criteria,omitempty"`
@@ -449,6 +512,23 @@ type Story struct {
 
 // StoryScope defines model for Story.Scope.
 type StoryScope string
+
+// StoryCostBreakdown defines model for StoryCostBreakdown.
+type StoryCostBreakdown struct {
+	StoryId   openapi_types.UUID `json:"story_id"`
+	StoryKey  string             `json:"story_key"`
+	TotalCost float64            `json:"total_cost"`
+}
+
+// StoryCostSummary defines model for StoryCostSummary.
+type StoryCostSummary struct {
+	// RunCount Number of distinct runs that incurred costs
+	RunCount    int                `json:"run_count"`
+	StoryId     openapi_types.UUID `json:"story_id"`
+	TotalCost   float64            `json:"total_cost"`
+	TotalInput  int64              `json:"total_input"`
+	TotalOutput int64              `json:"total_output"`
+}
 
 // StoryCounts defines model for StoryCounts.
 type StoryCounts struct {
@@ -490,7 +570,10 @@ type UpdatePipelineConfigRequest struct {
 // UpdateProjectRequest defines model for UpdateProjectRequest.
 type UpdateProjectRequest struct {
 	Description *string `json:"description,omitempty"`
-	Name        *string `json:"name,omitempty"`
+
+	// MaxBudget Maximum budget for the project in USD (informational only)
+	MaxBudget *float64 `json:"max_budget"`
+	Name      *string  `json:"name,omitempty"`
 }
 
 // UpdatePromptTemplateRequest defines model for UpdatePromptTemplateRequest.
@@ -600,6 +683,15 @@ type ListProjectsParams struct {
 	// SortBy Field to sort by
 	SortBy *SortByParam `form:"sort_by,omitempty" json:"sort_by,omitempty"`
 }
+
+// GetProjectCostsParams defines parameters for GetProjectCosts.
+type GetProjectCostsParams struct {
+	// Period Time period for aggregation
+	Period *GetProjectCostsParamsPeriod `form:"period,omitempty" json:"period,omitempty"`
+}
+
+// GetProjectCostsParamsPeriod defines parameters for GetProjectCosts.
+type GetProjectCostsParamsPeriod string
 
 // ListEpicsParams defines parameters for ListEpics.
 type ListEpicsParams struct {
@@ -800,6 +892,9 @@ type ServerInterface interface {
 	// Update a project
 	// (PUT /projects/{id})
 	UpdateProject(w http.ResponseWriter, r *http.Request, id IdPath)
+	// Get aggregated cost data for a project
+	// (GET /projects/{projectId}/costs)
+	GetProjectCosts(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, params GetProjectCostsParams)
 	// List epics for a project with story counts
 	// (GET /projects/{projectId}/epics)
 	ListEpics(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, params ListEpicsParams)
@@ -827,6 +922,9 @@ type ServerInterface interface {
 	// Create a new pipeline run for a project
 	// (POST /projects/{projectId}/runs)
 	CreateRun(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath)
+	// Get total costs for a run with per-step breakdown
+	// (GET /projects/{projectId}/runs/{runId}/costs)
+	GetRunCosts(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, runId RunIdPath)
 	// List stories for a project with optional status filtering
 	// (GET /projects/{projectId}/stories)
 	ListStories(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, params ListStoriesParams)
@@ -845,6 +943,9 @@ type ServerInterface interface {
 	// Update a story
 	// (PUT /projects/{projectId}/stories/{storyId})
 	UpdateStory(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, storyId StoryIdPath)
+	// Get total costs for a story across all runs
+	// (GET /projects/{projectId}/stories/{storyId}/costs)
+	GetStoryCosts(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, storyId StoryIdPath)
 	// Launch a pipeline run for a single story
 	// (POST /projects/{projectId}/stories/{storyId}/runs)
 	LaunchRun(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, storyId StoryIdPath)
@@ -941,6 +1042,12 @@ func (_ Unimplemented) UpdateProject(w http.ResponseWriter, r *http.Request, id 
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Get aggregated cost data for a project
+// (GET /projects/{projectId}/costs)
+func (_ Unimplemented) GetProjectCosts(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, params GetProjectCostsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // List epics for a project with story counts
 // (GET /projects/{projectId}/epics)
 func (_ Unimplemented) ListEpics(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, params ListEpicsParams) {
@@ -995,6 +1102,12 @@ func (_ Unimplemented) CreateRun(w http.ResponseWriter, r *http.Request, project
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Get total costs for a run with per-step breakdown
+// (GET /projects/{projectId}/runs/{runId}/costs)
+func (_ Unimplemented) GetRunCosts(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, runId RunIdPath) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // List stories for a project with optional status filtering
 // (GET /projects/{projectId}/stories)
 func (_ Unimplemented) ListStories(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, params ListStoriesParams) {
@@ -1028,6 +1141,12 @@ func (_ Unimplemented) GetStory(w http.ResponseWriter, r *http.Request, projectI
 // Update a story
 // (PUT /projects/{projectId}/stories/{storyId})
 func (_ Unimplemented) UpdateStory(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, storyId StoryIdPath) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Get total costs for a story across all runs
+// (GET /projects/{projectId}/stories/{storyId}/costs)
+func (_ Unimplemented) GetStoryCosts(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, storyId StoryIdPath) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1333,6 +1452,48 @@ func (siw *ServerInterfaceWrapper) UpdateProject(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateProject(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetProjectCosts operation middleware
+func (siw *ServerInterfaceWrapper) GetProjectCosts(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "projectId" -------------
+	var projectId ProjectIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectId", chi.URLParam(r, "projectId"), &projectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetProjectCostsParams
+
+	// ------------- Optional query parameter "period" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "period", r.URL.Query(), &params.Period)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "period", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetProjectCosts(w, r, projectId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1694,6 +1855,46 @@ func (siw *ServerInterfaceWrapper) CreateRun(w http.ResponseWriter, r *http.Requ
 	handler.ServeHTTP(w, r)
 }
 
+// GetRunCosts operation middleware
+func (siw *ServerInterfaceWrapper) GetRunCosts(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "projectId" -------------
+	var projectId ProjectIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectId", chi.URLParam(r, "projectId"), &projectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "runId" -------------
+	var runId RunIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "runId", chi.URLParam(r, "runId"), &runId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "runId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetRunCosts(w, r, projectId, runId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListStories operation middleware
 func (siw *ServerInterfaceWrapper) ListStories(w http.ResponseWriter, r *http.Request) {
 
@@ -1933,6 +2134,46 @@ func (siw *ServerInterfaceWrapper) UpdateStory(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateStory(w, r, projectId, storyId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetStoryCosts operation middleware
+func (siw *ServerInterfaceWrapper) GetStoryCosts(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "projectId" -------------
+	var projectId ProjectIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectId", chi.URLParam(r, "projectId"), &projectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "storyId" -------------
+	var storyId StoryIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "storyId", chi.URLParam(r, "storyId"), &storyId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "storyId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetStoryCosts(w, r, projectId, storyId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2547,6 +2788,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Put(options.BaseURL+"/projects/{id}", wrapper.UpdateProject)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/projects/{projectId}/costs", wrapper.GetProjectCosts)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/projects/{projectId}/epics", wrapper.ListEpics)
 	})
 	r.Group(func(r chi.Router) {
@@ -2574,6 +2818,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/projects/{projectId}/runs", wrapper.CreateRun)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/projects/{projectId}/runs/{runId}/costs", wrapper.GetRunCosts)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/projects/{projectId}/stories", wrapper.ListStories)
 	})
 	r.Group(func(r chi.Router) {
@@ -2590,6 +2837,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Put(options.BaseURL+"/projects/{projectId}/stories/{storyId}", wrapper.UpdateStory)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/projects/{projectId}/stories/{storyId}/costs", wrapper.GetStoryCosts)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/projects/{projectId}/stories/{storyId}/runs", wrapper.LaunchRun)
@@ -2634,82 +2884,96 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
+	"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",
+	"oAAA",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

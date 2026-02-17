@@ -147,6 +147,11 @@ func run() error {
 	runService := service.NewRunService(runRepo, projectRepo, storyRepo, pipelineConfigRepo, jobQueue)
 	runHandler := handler.NewRunHandler(runService)
 
+	// Cost service
+	costRepo := pgadapter.NewCostRepo(queries)
+	costService := service.NewCostService(costRepo, projectRepo, storyRepo, runRepo, logger)
+	costHandler := handler.NewCostHandler(costService)
+
 	// Container manager (Docker adapter)
 	containerMgr, err := dockeradapter.NewDockerContainerManager(cfg.Docker.Host, logger)
 	if err != nil {
@@ -202,7 +207,7 @@ func run() error {
 		}()
 	}
 
-	server := handler.NewServer(authHandler, projectHandler, userHandler, epicHandler, storyHandler, promptTemplateHandler, runHandler, pipelineConfigHandler)
+	server := handler.NewServer(authHandler, projectHandler, userHandler, epicHandler, storyHandler, promptTemplateHandler, runHandler, pipelineConfigHandler, costHandler)
 
 	// Project user handler
 	projectUserHandler := handler.NewProjectUserHandler(projectUserService)

@@ -147,6 +147,8 @@ func (h *ProjectHandler) UpdateProject(w http.ResponseWriter, r *http.Request, i
 		ID:          id,
 		Name:        req.Name,
 		Description: req.Description,
+		MaxBudget:   req.MaxBudget,
+		SetBudget:   req.MaxBudget != nil,
 	}
 
 	project, err := h.service.Update(r.Context(), params)
