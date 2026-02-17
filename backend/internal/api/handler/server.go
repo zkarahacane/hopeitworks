@@ -12,11 +12,12 @@ type Server struct {
 	epics           *EpicHandler
 	promptTemplates *PromptTemplateHandler
 	runs            *RunHandler
+	pipelineConfig  *PipelineConfigHandler
 }
 
 // NewServer creates a new Server with the given handlers.
-func NewServer(auth *AuthHandler, projects *ProjectHandler, users *UserHandler, epics *EpicHandler, promptTemplates *PromptTemplateHandler, runs *RunHandler) *Server {
-	return &Server{auth: auth, projects: projects, users: users, epics: epics, promptTemplates: promptTemplates, runs: runs}
+func NewServer(auth *AuthHandler, projects *ProjectHandler, users *UserHandler, epics *EpicHandler, promptTemplates *PromptTemplateHandler, runs *RunHandler, pipelineConfig *PipelineConfigHandler) *Server {
+	return &Server{auth: auth, projects: projects, users: users, epics: epics, promptTemplates: promptTemplates, runs: runs, pipelineConfig: pipelineConfig}
 }
 
 // RegisterUser delegates to AuthHandler.
@@ -152,4 +153,14 @@ func (s *Server) GetRun(w http.ResponseWriter, r *http.Request, runID RunIdPath)
 // ListRunsByStory delegates to RunHandler.
 func (s *Server) ListRunsByStory(w http.ResponseWriter, r *http.Request, storyID StoryIdPath, params ListRunsByStoryParams) {
 	s.runs.ListRunsByStory(w, r, storyID, params)
+}
+
+// GetPipelineConfig delegates to PipelineConfigHandler.
+func (s *Server) GetPipelineConfig(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath) {
+	s.pipelineConfig.GetPipelineConfig(w, r, projectID)
+}
+
+// UpdatePipelineConfig delegates to PipelineConfigHandler.
+func (s *Server) UpdatePipelineConfig(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath) {
+	s.pipelineConfig.UpdatePipelineConfig(w, r, projectID)
 }

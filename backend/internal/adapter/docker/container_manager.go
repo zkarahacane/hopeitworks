@@ -34,9 +34,9 @@ type ContainerManager struct {
 	logger *slog.Logger
 }
 
-// NewContainerManager creates a ContainerManager that connects to Docker
+// NewDockerContainerManager creates a ContainerManager that connects to Docker
 // via the specified host URL (e.g., "tcp://socket-proxy:2375").
-func NewContainerManager(dockerHost string, logger *slog.Logger) (*ContainerManager, error) {
+func NewDockerContainerManager(dockerHost string, logger *slog.Logger) (*ContainerManager, error) {
 	cli, err := client.NewClientWithOpts(
 		client.WithHost(dockerHost),
 		client.WithAPIVersionNegotiation(),

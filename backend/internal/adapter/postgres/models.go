@@ -31,6 +31,15 @@ type Event struct {
 	CreatedAt  time.Time `json:"created_at"`
 }
 
+type PipelineConfig struct {
+	ID         uuid.UUID `json:"id"`
+	ProjectID  uuid.UUID `json:"project_id"`
+	ConfigYaml string    `json:"config_yaml"`
+	Version    int32     `json:"version"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
+}
+
 type Project struct {
 	ID           uuid.UUID      `json:"id"`
 	Name         string         `json:"name"`

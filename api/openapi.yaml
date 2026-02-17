@@ -506,8 +506,7 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
-
-    # ── Prompt Templates ──────────────────────────────────────────────────
+  # ── Prompt Templates ──────────────────────────────────────────────────
   /projects/{projectId}/templates:
     get:
       operationId: listPromptTemplates
@@ -1332,8 +1331,7 @@ components:
         pagination:
           $ref: "#/components/schemas/Pagination"
 
-
-        # ── Shared ─────────────────────────────────────────────────────────
+    # ── Shared ─────────────────────────────────────────────────────────
     Pagination:
       type: object
       required:

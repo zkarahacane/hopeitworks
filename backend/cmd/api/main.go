@@ -72,12 +72,18 @@ func run() error {
 	// Project repository (shared)
 	projectRepo := pgadapter.NewProjectRepo(queries)
 
+	// Pipeline config service
+	pipelineConfigRepo := pgadapter.NewPipelineConfigRepo(queries)
+	pipelineConfigService := service.NewPipelineConfigService(pipelineConfigRepo)
+	pipelineConfigHandler := handler.NewPipelineConfigHandler(pipelineConfigService)
+
 	// Project user service
 	projectUserRepo := pgadapter.NewProjectUserRepo(queries)
 	projectUserService := service.NewProjectUserService(projectUserRepo, projectRepo, userRepo)
 
-	// Project service
+	// Project service (with pipeline config seeding on creation)
 	projectService := service.NewProjectService(projectRepo)
+	projectService.SetPipelineConfigService(pipelineConfigService)
 	projectHandler := handler.NewProjectHandler(projectService, projectUserService)
 
 	// Epic service
@@ -102,7 +108,7 @@ func run() error {
 	runService := service.NewRunService(runRepo, projectRepo)
 	runHandler := handler.NewRunHandler(runService)
 
-	server := handler.NewServer(authHandler, projectHandler, userHandler, epicHandler, promptTemplateHandler, runHandler)
+	server := handler.NewServer(authHandler, projectHandler, userHandler, epicHandler, promptTemplateHandler, runHandler, pipelineConfigHandler)
 
 	// Project user handler
 	projectUserHandler := handler.NewProjectUserHandler(projectUserService)
