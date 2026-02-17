@@ -40,7 +40,12 @@ export function useTemplateEditor(projectId: string, templateId: string) {
 
   const isNewTemplate = computed(() => templateId === 'new')
   const isDirty = computed(() => content.value !== originalContent.value)
-  const canSave = computed(() => isDirty.value && content.value.trim() !== '')
+  const canSave = computed(
+    () =>
+      isDirty.value &&
+      content.value.trim() !== '' &&
+      (!isNewTemplate.value || name.value.trim() !== ''),
+  )
 
   /** Fetch an existing template from the API */
   async function fetchTemplate() {

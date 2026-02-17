@@ -160,6 +160,29 @@ describe('useTemplateEditor', () => {
     expect(result!.canSave.value).toBe(false)
   })
 
+  it('canSave requires non-empty name for new templates', async () => {
+    let result: ReturnType<typeof useTemplateEditor> | undefined
+
+    mount({
+      setup() {
+        result = useTemplateEditor('p1', 'new')
+        return {}
+      },
+      template: '<div></div>',
+    })
+
+    await nextTick()
+
+    result!.content.value = 'some content'
+    expect(result!.canSave.value).toBe(false)
+
+    result!.name.value = 'My Template'
+    expect(result!.canSave.value).toBe(true)
+
+    result!.name.value = '   '
+    expect(result!.canSave.value).toBe(false)
+  })
+
   it('saves existing template with PUT', async () => {
     mockGet.mockResolvedValue({ data: mockTemplate, error: undefined })
     mockPut.mockResolvedValue({ data: { ...mockTemplate, template_content: 'updated' }, error: undefined })

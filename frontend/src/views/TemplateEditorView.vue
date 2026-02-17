@@ -22,6 +22,8 @@ const isAdmin = computed(() => user.value?.role === 'admin')
 
 const {
   content,
+  name,
+  type,
   loading,
   saving,
   error,
@@ -97,11 +99,16 @@ async function handlePreview() {
     :is-dirty="isDirty"
     :is-saving="saving"
     :can-save="canSave"
+    :is-new-template="isNewTemplate"
+    :template-name="name"
+    :template-type="type"
     :preview-visible="previewVisible"
     :preview-content="previewContent"
     :preview-loading="previewLoading"
     :preview-error="previewError"
     @update:content="content = $event"
+    @update:template-name="name = $event"
+    @update:template-type="type = $event"
     @update:preview-visible="previewVisible = $event"
     @save="handleSave"
     @cancel="handleCancel"
