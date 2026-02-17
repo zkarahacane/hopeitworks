@@ -310,15 +310,16 @@ paths:
   /projects/{projectId}/epics:
     get:
       operationId: listEpics
-      summary: List epics for a project
+      summary: List epics for a project with story counts
       tags: [epics]
       parameters:
         - $ref: "#/components/parameters/ProjectIdPath"
         - $ref: "#/components/parameters/PageParam"
         - $ref: "#/components/parameters/PerPageParam"
+        - $ref: "#/components/parameters/SortByParam"
       responses:
         "200":
-          description: Paginated list of epics
+          description: Paginated list of epics with story counts
           content:
             application/json:
               schema:
@@ -949,6 +950,7 @@ components:
         - project_id
         - name
         - status
+        - story_counts
         - created_at
         - updated_at
       properties:
@@ -970,6 +972,8 @@ components:
           type: string
           enum: [backlog, in_progress, done]
           example: backlog
+        story_counts:
+          $ref: "#/components/schemas/StoryCounts"
         created_at:
           type: string
           format: date-time
@@ -978,6 +982,27 @@ components:
           type: string
           format: date-time
           example: "2026-01-15T10:30:00Z"
+
+    StoryCounts:
+      type: object
+      required:
+        - backlog
+        - running
+        - done
+        - failed
+      properties:
+        backlog:
+          type: integer
+          example: 3
+        running:
+          type: integer
+          example: 1
+        done:
+          type: integer
+          example: 5
+        failed:
+          type: integer
+          example: 0
 
     CreateEpicRequest:
       type: object
@@ -1330,6 +1355,7 @@ components:
             $ref: "#/components/schemas/Run"
         pagination:
           $ref: "#/components/schemas/Pagination"
+
 
     # ── Shared ─────────────────────────────────────────────────────────
     Pagination:
