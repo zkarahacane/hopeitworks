@@ -1,3 +1,4 @@
+//nolint:goconst // Test file with many repeated test IDs and error codes
 package docker
 
 import (
@@ -16,7 +17,7 @@ import (
 )
 
 const (
-	testCID    = "abc123"
+	testCID     = "abc123"
 	testErrCode = "CONTAINER_OPERATION_FAILED"
 )
 
