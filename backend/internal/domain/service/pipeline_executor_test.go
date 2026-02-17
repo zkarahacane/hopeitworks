@@ -381,7 +381,6 @@ func TestExecuteRun_StepFailure(t *testing.T) {
 			return stepErr
 		},
 	})
-	f.actionReg.Register(&mockAction{name: f.steps[2].Action})
 
 	var step2Executed bool
 	f.actionReg.Register(&mockAction{

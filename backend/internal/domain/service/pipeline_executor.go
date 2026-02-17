@@ -1,11 +1,12 @@
 package service
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"sort"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -51,8 +52,8 @@ func (e *PipelineExecutor) ExecuteRun(ctx context.Context, runID uuid.UUID) erro
 	}
 
 	// Sort steps by step_order
-	sort.Slice(steps, func(i, j int) bool {
-		return steps[i].StepOrder < steps[j].StepOrder
+	slices.SortFunc(steps, func(a, b *model.RunStep) int {
+		return cmp.Compare(a.StepOrder, b.StepOrder)
 	})
 
 	// 2. Transition run to "running", publish run.started
@@ -76,7 +77,7 @@ func (e *PipelineExecutor) ExecuteRun(ctx context.Context, runID uuid.UUID) erro
 		// Check for cancellation before each step
 		select {
 		case <-ctx.Done():
-			e.handleCancellation(ctx, run, step)
+			e.handleCancellation(run, step)
 			return ctx.Err()
 		default:
 		}
@@ -191,7 +192,8 @@ func (e *PipelineExecutor) handleStepFailure(ctx context.Context, run *model.Run
 }
 
 // handleCancellation marks step and run as cancelled, publishes events.
-func (e *PipelineExecutor) handleCancellation(_ context.Context, run *model.Run, step *model.RunStep) {
+// Uses a background context since the caller's context is already cancelled.
+func (e *PipelineExecutor) handleCancellation(run *model.Run, step *model.RunStep) {
 	cancelledAt := time.Now()
 	cancelMsg := "execution cancelled"
 
