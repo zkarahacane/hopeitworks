@@ -16,4 +16,21 @@ type GitProvider interface {
 	// Push stages all changes, commits with the given message, and pushes to origin.
 	// commitMsg must follow conventional commit format: type(scope): message.
 	Push(ctx context.Context, workDir string, commitMsg string) error
+
+	// CreatePR creates a pull request and returns the PR URL.
+	// title: PR title (should follow conventional commit format for squash merge).
+	// body: PR description/body.
+	// baseBranch: target branch (typically "main" or "develop").
+	// Returns: PR URL (e.g., "https://github.com/owner/repo/pull/123").
+	CreatePR(ctx context.Context, workDir string, title string, body string, baseBranch string) (prURL string, err error)
+
+	// MergePR squash-merges a pull request and deletes the source branch.
+	// prIdentifier: PR number (e.g., "123") or PR URL.
+	// Performs squash merge to maintain clean commit history.
+	MergePR(ctx context.Context, workDir string, prIdentifier string) error
+
+	// GetCIStatus returns the CI check status for the current branch's PR.
+	// Returns: "pass" (all checks successful), "fail" (any check failed),
+	//          "pending" (checks running), "no_checks" (no CI configured).
+	GetCIStatus(ctx context.Context, workDir string) (status string, err error)
 }
