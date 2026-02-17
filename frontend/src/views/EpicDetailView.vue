@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useToast } from 'primevue/usetoast'
 import Button from 'primevue/button'
 import Message from 'primevue/message'
 import Skeleton from 'primevue/skeleton'
 import Toast from 'primevue/toast'
 import EpicDetailLayout from '@/features/board/EpicDetailLayout.vue'
+import RunLaunchConfirmDialog from '@/features/runs/RunLaunchConfirmDialog.vue'
 import { useStories } from '@/composables/useStories'
+import { useRunLauncher, ALREADY_RUNNING_ERROR } from '@/composables/useRunLauncher'
 
 const route = useRoute()
 const router = useRouter()
@@ -14,8 +17,11 @@ const router = useRouter()
 const projectId = route.params.id as string
 const epicId = route.params.epicId as string
 
+const toast = useToast()
+
 const {
   stories,
+  allStories,
   selectedStory,
   selectedStoryId,
   filters,
@@ -25,6 +31,48 @@ const {
   setFilters,
   selectStory,
 } = useStories(projectId, epicId)
+
+const dialogVisible = ref(false)
+const { isLoading: launchLoading, error: launchError, launchRun } = useRunLauncher()
+
+function handleLaunchClick() {
+  dialogVisible.value = true
+}
+
+async function handleConfirm() {
+  if (!selectedStory.value) return
+
+  const result = await launchRun(projectId, selectedStory.value.id)
+
+  if (result !== null) {
+    toast.add({
+      severity: 'success',
+      summary: 'Run launched',
+      detail: `Run started for ${selectedStory.value.key}`,
+      life: 3000,
+    })
+    dialogVisible.value = false
+    return
+  }
+
+  if (launchError.value?.message === ALREADY_RUNNING_ERROR) {
+    toast.add({
+      severity: 'warn',
+      summary: 'Already running',
+      detail: 'This story already has a run in progress',
+      life: 5000,
+    })
+    return
+  }
+
+  toast.add({
+    severity: 'error',
+    summary: 'Launch failed',
+    detail: launchError.value?.message ?? 'An unexpected error occurred',
+    life: 5000,
+  })
+  dialogVisible.value = false
+}
 
 /** Initialize filters from URL query params */
 const initialStatus = (route.query.status as string) || null
@@ -101,11 +149,24 @@ watch(
       v-else
       class="flex-1 min-h-0"
       :stories="stories"
+      :all-stories="allStories"
       :selected-story="selectedStory"
       :selected-story-id="selectedStoryId"
       :filters="filters"
+      :project-id="projectId"
       @select="selectStory"
       @update:filters="setFilters"
+      @launch-click="handleLaunchClick"
+    />
+
+    <RunLaunchConfirmDialog
+      v-if="selectedStory"
+      v-model:visible="dialogVisible"
+      :story-key="selectedStory.key"
+      :story-title="selectedStory.title"
+      :loading="launchLoading"
+      @confirm="handleConfirm"
+      @cancel="dialogVisible = false"
     />
   </div>
 </template>

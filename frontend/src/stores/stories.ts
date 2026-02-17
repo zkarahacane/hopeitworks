@@ -26,6 +26,7 @@ export interface Story {
   acceptance_criteria?: string
   target_files?: string[]
   depends_on?: string[]
+  scope?: 'backend' | 'frontend' | 'shared'
   latest_run?: LatestRun
   created_at: string
   updated_at: string

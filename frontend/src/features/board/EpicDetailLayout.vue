@@ -5,14 +5,17 @@ import StoryDetailPanel from './StoryDetailPanel.vue'
 
 defineProps<{
   stories: Story[]
+  allStories: Story[]
   selectedStory: Story | null
   selectedStoryId: string | null
   filters: StoryFilters
+  projectId: string
 }>()
 
 const emit = defineEmits<{
   select: [storyId: string]
   'update:filters': [filters: StoryFilters]
+  'launch-click': []
 }>()
 </script>
 
@@ -28,7 +31,14 @@ const emit = defineEmits<{
       />
     </div>
     <div class="flex-1 overflow-y-auto border-l border-surface-200">
-      <StoryDetailPanel :story="selectedStory" />
+      <StoryDetailPanel
+        :story="selectedStory"
+        :all-stories="allStories"
+        :project-id="projectId"
+        :show-launch-button="true"
+        @select-dependency="emit('select', $event)"
+        @launch-click="emit('launch-click')"
+      />
     </div>
   </div>
 </template>
