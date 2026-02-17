@@ -9,7 +9,10 @@ import (
 	"github.com/zakari/hopeitworks/backend/pkg/errors"
 )
 
-const gitCommand = "git"
+const (
+	gitCommand  = "git"
+	testWorkDir = "/work"
+)
 
 // commandInvocation records a single command call.
 type commandInvocation struct {
@@ -112,7 +115,7 @@ func TestCreateBranch_ValidNames(t *testing.T) {
 			runner := newMockCommandRunner(mockResult{stdout: ""})
 			adapter := NewGhCliAdapter(runner, testLogger())
 
-			err := adapter.CreateBranch(context.Background(), "/work", tt.branchName)
+			err := adapter.CreateBranch(context.Background(), testWorkDir, tt.branchName)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -122,8 +125,8 @@ func TestCreateBranch_ValidNames(t *testing.T) {
 			}
 
 			inv := runner.invocations[0]
-			if inv.WorkDir != "/work" {
-				t.Errorf("expected workDir '/work', got %q", inv.WorkDir)
+			if inv.WorkDir != testWorkDir {
+				t.Errorf("expected workDir %q, got %q", testWorkDir, inv.WorkDir)
 			}
 			if inv.Name != gitCommand {
 				t.Errorf("expected command %q, got %q", gitCommand, inv.Name)
@@ -152,7 +155,7 @@ func TestCreateBranch_InvalidNames(t *testing.T) {
 			runner := newMockCommandRunner()
 			adapter := NewGhCliAdapter(runner, testLogger())
 
-			err := adapter.CreateBranch(context.Background(), "/work", tt.branchName)
+			err := adapter.CreateBranch(context.Background(), testWorkDir, tt.branchName)
 			if err == nil {
 				t.Fatal("expected error for invalid branch name, got nil")
 			}
@@ -176,7 +179,7 @@ func TestCreateBranch_GitError(t *testing.T) {
 	runner := newMockCommandRunner(mockResult{err: fmt.Errorf("branch already exists")})
 	adapter := NewGhCliAdapter(runner, testLogger())
 
-	err := adapter.CreateBranch(context.Background(), "/work", "feat/1-2-slug")
+	err := adapter.CreateBranch(context.Background(), testWorkDir, "feat/1-2-slug")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -198,7 +201,7 @@ func TestPush_Success(t *testing.T) {
 	)
 	adapter := NewGhCliAdapter(runner, testLogger())
 
-	err := adapter.Push(context.Background(), "/work", "feat(git): add clone support")
+	err := adapter.Push(context.Background(), testWorkDir, "feat(git): add clone support")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -213,8 +216,8 @@ func TestPush_Success(t *testing.T) {
 		t.Errorf("invocation 0: expected %q, got %q", gitCommand, inv0.Name)
 	}
 	assertArgs(t, inv0.Args, []string{"add", "."})
-	if inv0.WorkDir != "/work" {
-		t.Errorf("invocation 0: expected workDir '/work', got %q", inv0.WorkDir)
+	if inv0.WorkDir != testWorkDir {
+		t.Errorf("invocation 0: expected workDir %q, got %q", testWorkDir, inv0.WorkDir)
 	}
 
 	// Verify git commit -m
@@ -236,7 +239,7 @@ func TestPush_AddError(t *testing.T) {
 	runner := newMockCommandRunner(mockResult{err: fmt.Errorf("add failed")})
 	adapter := NewGhCliAdapter(runner, testLogger())
 
-	err := adapter.Push(context.Background(), "/work", "feat(git): test")
+	err := adapter.Push(context.Background(), testWorkDir, "feat(git): test")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -262,7 +265,7 @@ func TestPush_CommitError(t *testing.T) {
 	)
 	adapter := NewGhCliAdapter(runner, testLogger())
 
-	err := adapter.Push(context.Background(), "/work", "feat(git): test")
+	err := adapter.Push(context.Background(), testWorkDir, "feat(git): test")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -289,7 +292,7 @@ func TestPush_PushError(t *testing.T) {
 	)
 	adapter := NewGhCliAdapter(runner, testLogger())
 
-	err := adapter.Push(context.Background(), "/work", "feat(git): test")
+	err := adapter.Push(context.Background(), testWorkDir, "feat(git): test")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -328,7 +331,7 @@ func TestCreatePR_Success(t *testing.T) {
 	runner := newMockCommandRunner(mockResult{stdout: prURL + "\n"})
 	adapter := NewGhCliAdapter(runner, testLogger())
 
-	url, err := adapter.CreatePR(context.Background(), "/work", "feat(api): add endpoint", "PR body here", "develop")
+	url, err := adapter.CreatePR(context.Background(), testWorkDir, "feat(api): add endpoint", "PR body here", "develop")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -341,8 +344,8 @@ func TestCreatePR_Success(t *testing.T) {
 	}
 
 	inv := runner.invocations[0]
-	if inv.WorkDir != "/work" {
-		t.Errorf("expected workDir '/work', got %q", inv.WorkDir)
+	if inv.WorkDir != testWorkDir {
+		t.Errorf("expected workDir %q, got %q", testWorkDir, inv.WorkDir)
 	}
 	if inv.Name != "gh" {
 		t.Errorf("expected command 'gh', got %q", inv.Name)
@@ -356,7 +359,7 @@ func TestCreatePR_MultiLineOutput(t *testing.T) {
 	runner := newMockCommandRunner(mockResult{stdout: output})
 	adapter := NewGhCliAdapter(runner, testLogger())
 
-	url, err := adapter.CreatePR(context.Background(), "/work", "title", "body", "main")
+	url, err := adapter.CreatePR(context.Background(), testWorkDir, "title", "body", "main")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -372,7 +375,7 @@ func TestCreatePR_AuthFailure(t *testing.T) {
 	})
 	adapter := NewGhCliAdapter(runner, testLogger())
 
-	_, err := adapter.CreatePR(context.Background(), "/work", "title", "body", "main")
+	_, err := adapter.CreatePR(context.Background(), testWorkDir, "title", "body", "main")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -393,7 +396,7 @@ func TestCreatePR_LoginRequired(t *testing.T) {
 	})
 	adapter := NewGhCliAdapter(runner, testLogger())
 
-	_, err := adapter.CreatePR(context.Background(), "/work", "title", "body", "main")
+	_, err := adapter.CreatePR(context.Background(), testWorkDir, "title", "body", "main")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -414,7 +417,7 @@ func TestCreatePR_GenericError(t *testing.T) {
 	})
 	adapter := NewGhCliAdapter(runner, testLogger())
 
-	_, err := adapter.CreatePR(context.Background(), "/work", "title", "body", "main")
+	_, err := adapter.CreatePR(context.Background(), testWorkDir, "title", "body", "main")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -432,7 +435,7 @@ func TestCreatePR_InvalidURLOutput(t *testing.T) {
 	runner := newMockCommandRunner(mockResult{stdout: "not a URL at all\n"})
 	adapter := NewGhCliAdapter(runner, testLogger())
 
-	_, err := adapter.CreatePR(context.Background(), "/work", "title", "body", "main")
+	_, err := adapter.CreatePR(context.Background(), testWorkDir, "title", "body", "main")
 	if err == nil {
 		t.Fatal("expected error for invalid URL output, got nil")
 	}
@@ -452,7 +455,7 @@ func TestMergePR_Success(t *testing.T) {
 	runner := newMockCommandRunner(mockResult{stdout: "Merged pull request #42\n"})
 	adapter := NewGhCliAdapter(runner, testLogger())
 
-	err := adapter.MergePR(context.Background(), "/work", "42")
+	err := adapter.MergePR(context.Background(), testWorkDir, "42")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -462,8 +465,8 @@ func TestMergePR_Success(t *testing.T) {
 	}
 
 	inv := runner.invocations[0]
-	if inv.WorkDir != "/work" {
-		t.Errorf("expected workDir '/work', got %q", inv.WorkDir)
+	if inv.WorkDir != testWorkDir {
+		t.Errorf("expected workDir %q, got %q", testWorkDir, inv.WorkDir)
 	}
 	if inv.Name != "gh" {
 		t.Errorf("expected command 'gh', got %q", inv.Name)
@@ -476,7 +479,7 @@ func TestMergePR_WithURL(t *testing.T) {
 	adapter := NewGhCliAdapter(runner, testLogger())
 
 	prURL := "https://github.com/owner/repo/pull/42"
-	err := adapter.MergePR(context.Background(), "/work", prURL)
+	err := adapter.MergePR(context.Background(), testWorkDir, prURL)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -492,7 +495,7 @@ func TestMergePR_MergeConflict(t *testing.T) {
 	})
 	adapter := NewGhCliAdapter(runner, testLogger())
 
-	err := adapter.MergePR(context.Background(), "/work", "42")
+	err := adapter.MergePR(context.Background(), testWorkDir, "42")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -513,7 +516,7 @@ func TestMergePR_Conflicts(t *testing.T) {
 	})
 	adapter := NewGhCliAdapter(runner, testLogger())
 
-	err := adapter.MergePR(context.Background(), "/work", "42")
+	err := adapter.MergePR(context.Background(), testWorkDir, "42")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -534,7 +537,7 @@ func TestMergePR_PRNotFound(t *testing.T) {
 	})
 	adapter := NewGhCliAdapter(runner, testLogger())
 
-	err := adapter.MergePR(context.Background(), "/work", "999")
+	err := adapter.MergePR(context.Background(), testWorkDir, "999")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -555,7 +558,7 @@ func TestMergePR_NotFoundMessage(t *testing.T) {
 	})
 	adapter := NewGhCliAdapter(runner, testLogger())
 
-	err := adapter.MergePR(context.Background(), "/work", "999")
+	err := adapter.MergePR(context.Background(), testWorkDir, "999")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -576,7 +579,7 @@ func TestMergePR_GenericError(t *testing.T) {
 	})
 	adapter := NewGhCliAdapter(runner, testLogger())
 
-	err := adapter.MergePR(context.Background(), "/work", "42")
+	err := adapter.MergePR(context.Background(), testWorkDir, "42")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -597,7 +600,7 @@ func TestGetCIStatus_AllPass(t *testing.T) {
 	runner := newMockCommandRunner(mockResult{stdout: checksJSON})
 	adapter := NewGhCliAdapter(runner, testLogger())
 
-	status, err := adapter.GetCIStatus(context.Background(), "/work")
+	status, err := adapter.GetCIStatus(context.Background(), testWorkDir)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -617,12 +620,12 @@ func TestGetCIStatus_Fail(t *testing.T) {
 	runner := newMockCommandRunner(mockResult{stdout: checksJSON})
 	adapter := NewGhCliAdapter(runner, testLogger())
 
-	status, err := adapter.GetCIStatus(context.Background(), "/work")
+	status, err := adapter.GetCIStatus(context.Background(), testWorkDir)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if status != "fail" {
-		t.Errorf("expected status 'fail', got %q", status)
+	if status != ciStatusFail {
+		t.Errorf("expected status %q, got %q", ciStatusFail, status)
 	}
 }
 
@@ -631,12 +634,12 @@ func TestGetCIStatus_TimedOut(t *testing.T) {
 	runner := newMockCommandRunner(mockResult{stdout: checksJSON})
 	adapter := NewGhCliAdapter(runner, testLogger())
 
-	status, err := adapter.GetCIStatus(context.Background(), "/work")
+	status, err := adapter.GetCIStatus(context.Background(), testWorkDir)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if status != "fail" {
-		t.Errorf("expected status 'fail', got %q", status)
+	if status != ciStatusFail {
+		t.Errorf("expected status %q, got %q", ciStatusFail, status)
 	}
 }
 
@@ -645,12 +648,12 @@ func TestGetCIStatus_ActionRequired(t *testing.T) {
 	runner := newMockCommandRunner(mockResult{stdout: checksJSON})
 	adapter := NewGhCliAdapter(runner, testLogger())
 
-	status, err := adapter.GetCIStatus(context.Background(), "/work")
+	status, err := adapter.GetCIStatus(context.Background(), testWorkDir)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if status != "fail" {
-		t.Errorf("expected status 'fail', got %q", status)
+	if status != ciStatusFail {
+		t.Errorf("expected status %q, got %q", ciStatusFail, status)
 	}
 }
 
@@ -659,12 +662,12 @@ func TestGetCIStatus_Pending(t *testing.T) {
 	runner := newMockCommandRunner(mockResult{stdout: checksJSON})
 	adapter := NewGhCliAdapter(runner, testLogger())
 
-	status, err := adapter.GetCIStatus(context.Background(), "/work")
+	status, err := adapter.GetCIStatus(context.Background(), testWorkDir)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if status != "pending" {
-		t.Errorf("expected status 'pending', got %q", status)
+	if status != ciStatusPending {
+		t.Errorf("expected status %q, got %q", ciStatusPending, status)
 	}
 }
 
@@ -673,12 +676,12 @@ func TestGetCIStatus_Queued(t *testing.T) {
 	runner := newMockCommandRunner(mockResult{stdout: checksJSON})
 	adapter := NewGhCliAdapter(runner, testLogger())
 
-	status, err := adapter.GetCIStatus(context.Background(), "/work")
+	status, err := adapter.GetCIStatus(context.Background(), testWorkDir)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if status != "pending" {
-		t.Errorf("expected status 'pending', got %q", status)
+	if status != ciStatusPending {
+		t.Errorf("expected status %q, got %q", ciStatusPending, status)
 	}
 }
 
@@ -687,12 +690,12 @@ func TestGetCIStatus_InProgress(t *testing.T) {
 	runner := newMockCommandRunner(mockResult{stdout: checksJSON})
 	adapter := NewGhCliAdapter(runner, testLogger())
 
-	status, err := adapter.GetCIStatus(context.Background(), "/work")
+	status, err := adapter.GetCIStatus(context.Background(), testWorkDir)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if status != "pending" {
-		t.Errorf("expected status 'pending', got %q", status)
+	if status != ciStatusPending {
+		t.Errorf("expected status %q, got %q", ciStatusPending, status)
 	}
 }
 
@@ -700,7 +703,7 @@ func TestGetCIStatus_NoChecks(t *testing.T) {
 	runner := newMockCommandRunner(mockResult{stdout: "[]"})
 	adapter := NewGhCliAdapter(runner, testLogger())
 
-	status, err := adapter.GetCIStatus(context.Background(), "/work")
+	status, err := adapter.GetCIStatus(context.Background(), testWorkDir)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -716,7 +719,7 @@ func TestGetCIStatus_PRNotFound(t *testing.T) {
 	})
 	adapter := NewGhCliAdapter(runner, testLogger())
 
-	_, err := adapter.GetCIStatus(context.Background(), "/work")
+	_, err := adapter.GetCIStatus(context.Background(), testWorkDir)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -737,7 +740,7 @@ func TestGetCIStatus_GenericError(t *testing.T) {
 	})
 	adapter := NewGhCliAdapter(runner, testLogger())
 
-	_, err := adapter.GetCIStatus(context.Background(), "/work")
+	_, err := adapter.GetCIStatus(context.Background(), testWorkDir)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -755,7 +758,7 @@ func TestGetCIStatus_InvalidJSON(t *testing.T) {
 	runner := newMockCommandRunner(mockResult{stdout: "not json at all"})
 	adapter := NewGhCliAdapter(runner, testLogger())
 
-	_, err := adapter.GetCIStatus(context.Background(), "/work")
+	_, err := adapter.GetCIStatus(context.Background(), testWorkDir)
 	if err == nil {
 		t.Fatal("expected error for invalid JSON, got nil")
 	}
@@ -775,12 +778,12 @@ func TestGetCIStatus_FailBeforePending(t *testing.T) {
 	runner := newMockCommandRunner(mockResult{stdout: checksJSON})
 	adapter := NewGhCliAdapter(runner, testLogger())
 
-	status, err := adapter.GetCIStatus(context.Background(), "/work")
+	status, err := adapter.GetCIStatus(context.Background(), testWorkDir)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if status != "fail" {
-		t.Errorf("expected status 'fail', got %q", status)
+	if status != ciStatusFail {
+		t.Errorf("expected status %q, got %q", ciStatusFail, status)
 	}
 }
 

@@ -12,6 +12,12 @@ import (
 	"github.com/zakari/hopeitworks/backend/pkg/errors"
 )
 
+// CI check state and conclusion constants used when interpreting gh pr checks output.
+const (
+	ciStatusPending = "pending"
+	ciStatusFail    = "fail"
+)
+
 // branchNamePattern validates conventional branch naming: feat/{key}-{slug} or fix/{key}-{slug}.
 var branchNamePattern = regexp.MustCompile(`^(feat|fix)/[a-zA-Z0-9]+-[a-zA-Z0-9-]+$`)
 
@@ -234,18 +240,18 @@ func (a *GhCliAdapter) GetCIStatus(ctx context.Context, workDir string) (string,
 
 	hasPending := false
 	for _, check := range checks {
-		if check.State == "pending" || check.State == "queued" || check.State == "in_progress" {
+		if check.State == ciStatusPending || check.State == "queued" || check.State == "in_progress" {
 			hasPending = true
 			continue
 		}
 
 		if check.Conclusion == "failure" || check.Conclusion == "timed_out" || check.Conclusion == "action_required" {
-			return "fail", nil
+			return ciStatusFail, nil
 		}
 	}
 
 	if hasPending {
-		return "pending", nil
+		return ciStatusPending, nil
 	}
 
 	return "pass", nil
