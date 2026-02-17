@@ -57,6 +57,39 @@ func setupPipelineConfigHandler() (*PipelineConfigHandler, *mockPipelineConfigRe
 	return h, repo
 }
 
+// validStepsYAML returns a YAML string using the new step format (action_type).
+func validStepsYAML() string {
+	return "steps:\n" +
+		"  - id: 880e8400-e29b-41d4-a716-446655440001\n" +
+		"    name: implement\n" +
+		"    action_type: implement\n" +
+		"    model: claude-opus-4-6\n" +
+		"    auto_approve: false\n" +
+		"    retry_policy:\n" +
+		"      max_retries: 2\n" +
+		"      retry_type: on-failure\n"
+}
+
+// validStepsRequest returns a valid UpdatePipelineConfigRequest using the new API shape.
+func validStepsRequest() UpdatePipelineConfigRequest {
+	stepID := uuid.MustParse("880e8400-e29b-41d4-a716-446655440001")
+	return UpdatePipelineConfigRequest{
+		Steps: []PipelineStep{
+			{
+				Id:          stepID,
+				Name:        "implement",
+				ActionType:  PipelineStepActionTypeImplement,
+				Model:       ClaudeOpus46,
+				AutoApprove: false,
+				RetryPolicy: RetryPolicy{
+					MaxRetries: 2,
+					RetryType:  OnFailure,
+				},
+			},
+		},
+	}
+}
+
 func TestGetPipelineConfig_Found(t *testing.T) {
 	h, repo := setupPipelineConfigHandler()
 	projectID := uuid.New()
@@ -64,7 +97,7 @@ func TestGetPipelineConfig_Found(t *testing.T) {
 	repo.configs[projectID] = &model.PipelineConfig{
 		ID:         uuid.New(),
 		ProjectID:  projectID,
-		ConfigYAML: "steps:\n  - name: agent_run\n    action: agent_run\n",
+		ConfigYAML: validStepsYAML(),
 		Version:    1,
 	}
 
@@ -86,8 +119,8 @@ func TestGetPipelineConfig_Found(t *testing.T) {
 	if resp.ProjectId != projectID {
 		t.Errorf("expected project_id %v, got %v", projectID, resp.ProjectId)
 	}
-	if resp.Version != 1 {
-		t.Errorf("expected version 1, got %d", resp.Version)
+	if len(resp.Steps) != 1 {
+		t.Errorf("expected 1 step, got %d", len(resp.Steps))
 	}
 }
 
@@ -114,7 +147,7 @@ func TestGetPipelineConfig_NonAdminCanRead(t *testing.T) {
 	repo.configs[projectID] = &model.PipelineConfig{
 		ID:         uuid.New(),
 		ProjectID:  projectID,
-		ConfigYAML: "steps:\n  - name: agent_run\n    action: agent_run\n",
+		ConfigYAML: validStepsYAML(),
 		Version:    1,
 	}
 
@@ -134,7 +167,7 @@ func TestUpdatePipelineConfig_AdminOnly(t *testing.T) {
 	h, _ := setupPipelineConfigHandler()
 	projectID := uuid.New()
 
-	validYAML := `{"config_yaml":"steps:\n  - name: agent_run\n    action: agent_run\n"}`
+	validBody, _ := json.Marshal(validStepsRequest())
 
 	tests := []struct {
 		name       string
@@ -145,19 +178,19 @@ func TestUpdatePipelineConfig_AdminOnly(t *testing.T) {
 		{
 			name:       "admin can update",
 			role:       model.RoleAdmin,
-			body:       validYAML,
+			body:       string(validBody),
 			wantStatus: http.StatusOK,
 		},
 		{
 			name:       "non-admin gets 403",
 			role:       model.RoleUser,
-			body:       validYAML,
+			body:       string(validBody),
 			wantStatus: http.StatusForbidden,
 		},
 		{
 			name:       "no role gets 403",
 			role:       "",
-			body:       validYAML,
+			body:       string(validBody),
 			wantStatus: http.StatusForbidden,
 		},
 	}
@@ -183,24 +216,6 @@ func TestUpdatePipelineConfig_AdminOnly(t *testing.T) {
 	}
 }
 
-func TestUpdatePipelineConfig_InvalidYAML(t *testing.T) {
-	h, _ := setupPipelineConfigHandler()
-	projectID := uuid.New()
-
-	req := httptest.NewRequest(http.MethodPut, "/api/v1/projects/"+projectID.String()+"/pipeline",
-		bytes.NewBufferString(`{"config_yaml":"steps:\n  - name: bad\n    action: invalid_action\n"}`))
-	req.Header.Set("Content-Type", "application/json")
-	ctx := middleware.SetUserContext(req.Context(), uuid.New(), model.RoleAdmin)
-	req = req.WithContext(ctx)
-	rec := httptest.NewRecorder()
-
-	h.UpdatePipelineConfig(rec, req, projectID)
-
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("expected 400, got %d. Body: %s", rec.Code, rec.Body.String())
-	}
-}
-
 func TestUpdatePipelineConfig_InvalidJSON(t *testing.T) {
 	h, _ := setupPipelineConfigHandler()
 	projectID := uuid.New()
@@ -219,21 +234,19 @@ func TestUpdatePipelineConfig_InvalidJSON(t *testing.T) {
 	}
 }
 
-func TestUpdatePipelineConfig_VersionIncrement(t *testing.T) {
+func TestUpdatePipelineConfig_RoundTrip(t *testing.T) {
 	h, repo := setupPipelineConfigHandler()
 	projectID := uuid.New()
-
-	configYAML := "steps:\n  - name: agent_run\n    action: agent_run\n"
 
 	// Seed an existing config
 	repo.configs[projectID] = &model.PipelineConfig{
 		ID:         uuid.New(),
 		ProjectID:  projectID,
-		ConfigYAML: configYAML,
+		ConfigYAML: validStepsYAML(),
 		Version:    1,
 	}
 
-	body, _ := json.Marshal(UpdatePipelineConfigRequest{ConfigYaml: configYAML})
+	body, _ := json.Marshal(validStepsRequest())
 	req := httptest.NewRequest(http.MethodPut, "/api/v1/projects/"+projectID.String()+"/pipeline",
 		bytes.NewBuffer(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -251,7 +264,13 @@ func TestUpdatePipelineConfig_VersionIncrement(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
-	if resp.Version != 2 {
-		t.Errorf("expected version 2, got %d", resp.Version)
+	if resp.ProjectId != projectID {
+		t.Errorf("expected project_id %v, got %v", projectID, resp.ProjectId)
+	}
+	if len(resp.Steps) != 1 {
+		t.Errorf("expected 1 step in response, got %d", len(resp.Steps))
+	}
+	if resp.Steps[0].ActionType != PipelineStepActionTypeImplement {
+		t.Errorf("expected action_type 'implement', got %s", resp.Steps[0].ActionType)
 	}
 }

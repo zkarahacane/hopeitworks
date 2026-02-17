@@ -17,19 +17,20 @@ type PipelineConfig struct {
 }
 
 // PipelineStep represents a single step in the pipeline YAML.
+// The ActionType field uses the same values as the API enum (implement, review, merge, test, custom).
 type PipelineStep struct {
-	Name        string                 `yaml:"name"`
-	Action      string                 `yaml:"action"`
-	Model       *string                `yaml:"model,omitempty"`
-	AutoApprove *bool                  `yaml:"auto_approve,omitempty"`
-	RetryPolicy *RetryPolicy           `yaml:"retry_policy,omitempty"`
-	Params      map[string]interface{} `yaml:"params,omitempty"`
+	ID          string      `yaml:"id"`
+	Name        string      `yaml:"name"`
+	ActionType  string      `yaml:"action_type"`
+	Model       string      `yaml:"model,omitempty"`
+	AutoApprove bool        `yaml:"auto_approve"`
+	RetryPolicy RetryPolicy `yaml:"retry_policy"`
 }
 
 // RetryPolicy defines retry behavior for a pipeline step.
 type RetryPolicy struct {
 	MaxRetries int    `yaml:"max_retries"`
-	Strategy   string `yaml:"strategy"` // fixed, exponential
+	RetryType  string `yaml:"retry_type"` // none, on-failure, always
 }
 
 // PipelineConfigYAML represents the parsed YAML structure.
@@ -37,11 +38,12 @@ type PipelineConfigYAML struct {
 	Steps []PipelineStep `yaml:"steps"`
 }
 
-// ValidActions defines the set of valid pipeline step action names.
-// TODO(S-3-3): Replace with ActionRegistry once implemented.
-var ValidActions = map[string]bool{
-	"agent_run":     true,
-	"hitl_gate":     true,
-	"git_create_pr": true,
-	"git_merge":     true,
+// ValidActionTypes defines the set of valid pipeline step action_type values.
+// These match the PipelineStepActionType enum in the OpenAPI spec.
+var ValidActionTypes = map[string]bool{
+	"implement": true,
+	"review":    true,
+	"merge":     true,
+	"test":      true,
+	"custom":    true,
 }

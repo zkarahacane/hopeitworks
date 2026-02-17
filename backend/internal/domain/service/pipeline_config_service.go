@@ -13,20 +13,32 @@ import (
 )
 
 // DefaultPipelineConfigYAML is the default pipeline configuration seeded on project creation.
+// Uses the action_type enum values matching the OpenAPI spec.
 const DefaultPipelineConfigYAML = `steps:
-  - name: agent_run
-    action: agent_run
+  - id: 880e8400-e29b-41d4-a716-446655440001
+    name: implement
+    action_type: implement
     model: claude-opus-4-6
+    auto_approve: false
     retry_policy:
       max_retries: 3
-      strategy: exponential
-  - name: hitl_gate
-    action: hitl_gate
+      retry_type: on-failure
+  - id: 880e8400-e29b-41d4-a716-446655440002
+    name: review
+    action_type: review
+    model: claude-sonnet-4-5
     auto_approve: false
-  - name: git_create_pr
-    action: git_create_pr
-  - name: git_merge
-    action: git_merge
+    retry_policy:
+      max_retries: 2
+      retry_type: on-failure
+  - id: 880e8400-e29b-41d4-a716-446655440003
+    name: merge
+    action_type: merge
+    model: claude-sonnet-4-5
+    auto_approve: true
+    retry_policy:
+      max_retries: 1
+      retry_type: on-failure
 `
 
 // PipelineConfigService provides business logic for pipeline config operations.
@@ -97,19 +109,19 @@ func validatePipelineConfigYAML(configYAML string) error {
 				Message:  "each step must have a name",
 			}
 		}
-		if step.Action == "" {
+		if step.ActionType == "" {
 			return &errors.DomainError{
 				Category: errors.CategoryValidation,
 				Code:     "INVALID_PIPELINE_CONFIG",
-				Message:  fmt.Sprintf("step '%s' must have an action", step.Name),
+				Message:  fmt.Sprintf("step '%s' must have an action_type", step.Name),
 			}
 		}
 		// TODO(S-3-3): Replace with ActionRegistry validation once implemented.
-		if !model.ValidActions[step.Action] {
+		if !model.ValidActionTypes[step.ActionType] {
 			return &errors.DomainError{
 				Category: errors.CategoryValidation,
 				Code:     "INVALID_PIPELINE_CONFIG",
-				Message:  fmt.Sprintf("invalid action name: %s", step.Action),
+				Message:  fmt.Sprintf("invalid action_type: %s", step.ActionType),
 			}
 		}
 	}

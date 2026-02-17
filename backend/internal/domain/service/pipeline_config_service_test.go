@@ -41,17 +41,26 @@ func (m *mockPipelineConfigRepo) Upsert(_ context.Context, config *model.Pipelin
 	return config, nil
 }
 
+// validConfigYAML returns a minimal valid pipeline config in the new format.
+func validConfigYAML() string {
+	return `steps:
+  - id: 880e8400-e29b-41d4-a716-446655440001
+    name: implement
+    action_type: implement
+    model: claude-opus-4-6
+    auto_approve: false
+    retry_policy:
+      max_retries: 2
+      retry_type: on-failure
+`
+}
+
 func TestPipelineConfigService_Upsert_ValidConfig(t *testing.T) {
 	repo := newMockPipelineConfigRepo()
 	svc := NewPipelineConfigService(repo)
 
 	projectID := uuid.New()
-	configYAML := `steps:
-  - name: agent_run
-    action: agent_run
-  - name: hitl_gate
-    action: hitl_gate
-`
+	configYAML := validConfigYAML()
 
 	result, err := svc.Upsert(context.Background(), projectID, configYAML)
 	if err != nil {
@@ -73,10 +82,7 @@ func TestPipelineConfigService_Upsert_VersionIncrement(t *testing.T) {
 	svc := NewPipelineConfigService(repo)
 
 	projectID := uuid.New()
-	configYAML := `steps:
-  - name: agent_run
-    action: agent_run
-`
+	configYAML := validConfigYAML()
 
 	// First upsert
 	result, err := svc.Upsert(context.Background(), projectID, configYAML)
@@ -126,22 +132,22 @@ func TestPipelineConfigService_Upsert_InvalidYAML(t *testing.T) {
 		{
 			name: "step without name",
 			yaml: `steps:
-  - action: agent_run
+  - action_type: implement
 `,
 			errCode: "INVALID_PIPELINE_CONFIG",
 		},
 		{
-			name: "step without action",
+			name: "step without action_type",
 			yaml: `steps:
   - name: my_step
 `,
 			errCode: "INVALID_PIPELINE_CONFIG",
 		},
 		{
-			name: "invalid action name",
+			name: "invalid action_type value",
 			yaml: `steps:
   - name: my_step
-    action: invalid_action
+    action_type: invalid_action
 `,
 			errCode: "INVALID_PIPELINE_CONFIG",
 		},
@@ -164,20 +170,22 @@ func TestPipelineConfigService_Upsert_InvalidYAML(t *testing.T) {
 	}
 }
 
-func TestPipelineConfigService_Upsert_AllValidActions(t *testing.T) {
+func TestPipelineConfigService_Upsert_AllValidActionTypes(t *testing.T) {
 	repo := newMockPipelineConfigRepo()
 	svc := NewPipelineConfigService(repo)
 
 	projectID := uuid.New()
 	configYAML := `steps:
   - name: step1
-    action: agent_run
+    action_type: implement
   - name: step2
-    action: hitl_gate
+    action_type: review
   - name: step3
-    action: git_create_pr
+    action_type: merge
   - name: step4
-    action: git_merge
+    action_type: test
+  - name: step5
+    action_type: custom
 `
 
 	result, err := svc.Upsert(context.Background(), projectID, configYAML)
