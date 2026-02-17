@@ -29,6 +29,8 @@ tags:
     description: Epic management endpoints
   - name: prompt-templates
     description: Prompt template management endpoints
+  - name: pipeline-configs
+    description: Pipeline configuration endpoints
 
 paths:
   # ── Auth ────────────────────────────────────────────────────────────────
@@ -534,6 +536,54 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  # ── Pipeline Configs ─────────────────────────────────────────────────
+  /projects/{projectId}/pipeline:
+    get:
+      operationId: getPipelineConfig
+      summary: Get the pipeline configuration for a project
+      tags: [pipeline-configs]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+      responses:
+        "200":
+          description: Pipeline configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PipelineConfig"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    put:
+      operationId: updatePipelineConfig
+      summary: Update the pipeline configuration for a project
+      tags: [pipeline-configs]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePipelineConfigRequest"
+      responses:
+        "200":
+          description: Pipeline configuration updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PipelineConfig"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
 # ── Components ──────────────────────────────────────────────────────────
 components:
   securitySchemes:
@@ -961,6 +1011,84 @@ components:
             $ref: "#/components/schemas/PromptTemplate"
         pagination:
           $ref: "#/components/schemas/Pagination"
+
+    # ── Pipeline Config ──────────────────────────────────────────────
+    PipelineStep:
+      type: object
+      required:
+        - id
+        - name
+        - action_type
+        - model
+        - auto_approve
+        - retry_policy
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 880e8400-e29b-41d4-a716-446655440000
+        name:
+          type: string
+          example: implement
+        action_type:
+          type: string
+          enum: [implement, review, merge, test, custom]
+          example: implement
+        model:
+          type: string
+          enum: [claude-opus-4-6, claude-sonnet-4-5, claude-haiku-4-3]
+          example: claude-opus-4-6
+        auto_approve:
+          type: boolean
+          example: false
+        retry_policy:
+          $ref: "#/components/schemas/RetryPolicy"
+
+    RetryPolicy:
+      type: object
+      required:
+        - max_retries
+        - retry_type
+      properties:
+        max_retries:
+          type: integer
+          minimum: 0
+          maximum: 10
+          example: 2
+        retry_type:
+          type: string
+          enum: [none, on-failure, always]
+          example: on-failure
+
+    PipelineConfig:
+      type: object
+      required:
+        - project_id
+        - steps
+        - updated_at
+      properties:
+        project_id:
+          type: string
+          format: uuid
+          example: 660e8400-e29b-41d4-a716-446655440000
+        steps:
+          type: array
+          items:
+            $ref: "#/components/schemas/PipelineStep"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2026-02-15T10:30:00Z"
+
+    UpdatePipelineConfigRequest:
+      type: object
+      required:
+        - steps
+      properties:
+        steps:
+          type: array
+          items:
+            $ref: "#/components/schemas/PipelineStep"
 
     # ── Shared ─────────────────────────────────────────────────────────
     Pagination:
