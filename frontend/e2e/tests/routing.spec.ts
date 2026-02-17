@@ -32,9 +32,30 @@ test.describe('Application Routing', () => {
     })
 
     test('should render Project Detail view at /projects/123', async ({ page }) => {
+      await page.route('**/api/v1/projects/123', async (route) => {
+        if (
+          route.request().url().includes('/epics') ||
+          route.request().url().includes('/pipeline') ||
+          route.request().url().includes('/templates')
+        ) {
+          return route.fallback()
+        }
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            id: '123',
+            name: 'My Project',
+            owner_id: 'u1',
+            created_at: '2026-01-01T00:00:00Z',
+            updated_at: '2026-01-01T00:00:00Z',
+          }),
+        })
+      })
+
       await page.goto('/projects/123')
 
-      await expect(page.locator('h1')).toHaveText('Project Detail')
+      await expect(page.getByTestId('project-name')).toHaveText('My Project')
       await expect(page).toHaveURL('/projects/123')
     })
 

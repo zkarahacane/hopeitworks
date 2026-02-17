@@ -189,7 +189,7 @@ describe('ProjectsView', () => {
     await flushPromises()
 
     expect(mockPush).toHaveBeenCalledWith({
-      name: 'project-detail',
+      name: 'project-overview',
       params: { id: 'p1' },
     })
   })

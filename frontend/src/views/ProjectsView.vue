@@ -32,7 +32,7 @@ function handlePage(event: DataTablePageEvent) {
 }
 
 function handleRowClick(project: Project) {
-  router.push({ name: 'project-detail', params: { id: project.id } })
+  router.push({ name: 'project-overview', params: { id: project.id } })
 }
 
 function handleCreated(project: Project) {
@@ -42,7 +42,7 @@ function handleCreated(project: Project) {
     detail: `"${project.name}" has been created successfully`,
     life: 3000,
   })
-  router.push({ name: 'project-detail', params: { id: project.id } })
+  router.push({ name: 'project-overview', params: { id: project.id } })
 }
 </script>
 

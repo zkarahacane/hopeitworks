@@ -49,18 +49,14 @@ test.describe('Board Page', () => {
       })
     })
 
-    await page.route('**/api/v1/projects*', async (route) => {
-      // Only mock the projects list endpoint, not sub-paths like /projects/p1/epics
+    await page.route('**/api/v1/projects/p1', async (route) => {
       if (route.request().url().includes('/epics')) {
         return route.fallback()
       }
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({
-          data: mockProjects,
-          pagination: { total: 1, page: 1, per_page: 20 },
-        }),
+        body: JSON.stringify(mockProjects[0]),
       })
     })
   })
@@ -79,7 +75,7 @@ test.describe('Board Page', () => {
 
     await page.goto('/projects/p1/board')
 
-    await expect(page.locator('h1')).toHaveText('Story Board')
+    await expect(page.getByRole('heading', { name: 'Story Board' })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'User Authentication' })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Pipeline Execution' })).toBeVisible()
 

@@ -47,6 +47,21 @@ test.describe('Prompt Template List Page', () => {
           }),
         })
       })
+
+      await page.route(`**/api/v1/projects/${PROJECT_ID}`, async (route) => {
+        if (route.request().url().includes('/templates')) return route.fallback()
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            id: PROJECT_ID,
+            name: 'Test Project',
+            owner_id: 'u1',
+            created_at: '2026-01-01T00:00:00Z',
+            updated_at: '2026-01-01T00:00:00Z',
+          }),
+        })
+      })
     })
 
     test('displays template list in DataTable when API returns templates', async ({ page }) => {
@@ -63,7 +78,7 @@ test.describe('Prompt Template List Page', () => {
 
       await page.goto(`/projects/${PROJECT_ID}/templates`)
 
-      await expect(page.locator('h1')).toHaveText('Prompt Templates')
+      await expect(page.getByRole('heading', { name: 'Prompt Templates' })).toBeVisible()
       await expect(page.getByText('Implement Feature')).toBeVisible()
       await expect(page.getByText('Code Review')).toBeVisible()
       await expect(page.getByText('Merge Strategy')).toBeVisible()
@@ -202,6 +217,21 @@ test.describe('Prompt Template List Page', () => {
             email: 'admin@test.com',
             name: 'Admin User',
             role: 'admin',
+          }),
+        })
+      })
+
+      await page.route(`**/api/v1/projects/${PROJECT_ID}`, async (route) => {
+        if (route.request().url().includes('/templates')) return route.fallback()
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            id: PROJECT_ID,
+            name: 'Test Project',
+            owner_id: 'u1',
+            created_at: '2026-01-01T00:00:00Z',
+            updated_at: '2026-01-01T00:00:00Z',
           }),
         })
       })
