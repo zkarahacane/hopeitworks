@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/zakari/hopeitworks/backend/internal/domain/model"
@@ -236,8 +237,16 @@ func (a *AgentRunAction) streamAndWait(
 		}
 	}()
 
-	// Wait for container exit
+	// Wait for container exit.
+	// When the context is cancelled, the LogStreamer closes doneCh without sending
+	// a value, so exitCode will be 0 (zero value). Check ctx.Err() to distinguish
+	// a clean exit code 0 from a cancellation.
 	exitCode := <-doneCh
+	if err := ctx.Err(); err != nil {
+		// Context was cancelled or deadline exceeded; propagate the context error.
+		wg.Wait()
+		return -1, err
+	}
 
 	// Wait for log goroutine to finish
 	wg.Wait()
@@ -252,8 +261,10 @@ func (a *AgentRunAction) streamAndWait(
 }
 
 // cleanupContainer stops and removes the container, logging errors without failing.
+// It uses a dedicated timeout context to ensure cleanup never hangs indefinitely.
 func (a *AgentRunAction) cleanupContainer(containerID string) {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 
 	if err := a.containerMgr.Stop(ctx, containerID); err != nil {
 		a.logger.Warn("failed to stop container during cleanup",

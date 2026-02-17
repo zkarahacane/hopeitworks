@@ -194,19 +194,7 @@ func (r *RunRepo) UpdateRunStepStatus(ctx context.Context, id uuid.UUID, status 
 }
 
 func (r *RunRepo) UpdateRunStepContainerInfo(ctx context.Context, id uuid.UUID, containerID *string, logTail *string) (*model.RunStep, error) {
-	// Fetch current step to preserve its status.
-	step, err := r.queries.GetRunStep(ctx, id)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, apperrors.NewNotFound("run step", id)
-		}
-		return nil, apperrors.NewInternal("failed to get run step for container info update", err)
-	}
-
-	params := UpdateRunStepStatusParams{
-		ID:     id,
-		Status: step.Status,
-	}
+	params := UpdateRunStepContainerInfoParams{ID: id}
 	if containerID != nil {
 		params.ContainerID = pgtype.Text{String: *containerID, Valid: true}
 	}
@@ -214,7 +202,7 @@ func (r *RunRepo) UpdateRunStepContainerInfo(ctx context.Context, id uuid.UUID, 
 		params.LogTail = pgtype.Text{String: *logTail, Valid: true}
 	}
 
-	row, err := r.queries.UpdateRunStepStatus(ctx, params)
+	row, err := r.queries.UpdateRunStepContainerInfo(ctx, params)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, apperrors.NewNotFound("run step", id)

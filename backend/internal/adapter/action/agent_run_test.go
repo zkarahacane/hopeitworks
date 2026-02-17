@@ -759,14 +759,16 @@ func TestAgentRunAction_ContainerCreateFailure(t *testing.T) {
 func TestAgentRunAction_ContextCancellation(t *testing.T) {
 	f := newAgentRunFixture(t)
 
-	// Configure wait to block until context is cancelled
+	// Configure wait to block until context is cancelled.
+	// This simulates the real LogStreamer behavior: when context is cancelled,
+	// the done channel is closed without sending a value (zero value = 0).
 	f.logStreamer.streamLogsFn = func(ctx context.Context, _, _, _ string) (<-chan model.LogEvent, <-chan int, error) {
 		logCh := make(chan model.LogEvent)
 		doneCh := make(chan int, 1)
 		go func() {
 			<-ctx.Done()
 			close(logCh)
-			doneCh <- -1
+			close(doneCh) // no value — mimics real LogStreamer on cancellation
 		}()
 		return logCh, doneCh, nil
 	}
@@ -783,6 +785,9 @@ func TestAgentRunAction_ContextCancellation(t *testing.T) {
 	err := f.action.Execute(ctx, runCtx)
 	if err == nil {
 		t.Fatal("expected error for context cancellation, got nil")
+	}
+	if !strings.Contains(err.Error(), "context canceled") {
+		t.Errorf("expected context canceled error, got: %v", err)
 	}
 
 	// Verify container was cleaned up
