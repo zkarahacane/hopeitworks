@@ -114,7 +114,6 @@ SELECT
     rs.run_id,
     rs.id AS step_id,
     s.key AS story_key,
-    hr.diff_content,
     hr.created_at
 FROM hitl_requests hr
 JOIN run_steps rs ON rs.id = hr.run_step_id
@@ -126,12 +125,11 @@ ORDER BY hr.created_at DESC
 `
 
 type ListPendingHITLRequestsByProjectRow struct {
-	ID          uuid.UUID   `json:"id"`
-	RunID       uuid.UUID   `json:"run_id"`
-	StepID      uuid.UUID   `json:"step_id"`
-	StoryKey    string      `json:"story_key"`
-	DiffContent pgtype.Text `json:"diff_content"`
-	CreatedAt   time.Time   `json:"created_at"`
+	ID        uuid.UUID `json:"id"`
+	RunID     uuid.UUID `json:"run_id"`
+	StepID    uuid.UUID `json:"step_id"`
+	StoryKey  string    `json:"story_key"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 func (q *Queries) ListPendingHITLRequestsByProject(ctx context.Context, projectID uuid.UUID) ([]ListPendingHITLRequestsByProjectRow, error) {
@@ -148,7 +146,6 @@ func (q *Queries) ListPendingHITLRequestsByProject(ctx context.Context, projectI
 			&i.RunID,
 			&i.StepID,
 			&i.StoryKey,
-			&i.DiffContent,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
