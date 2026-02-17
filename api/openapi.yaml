@@ -1596,6 +1596,7 @@ components:
         - project_id
         - story_id
         - status
+        - progress
         - created_at
         - updated_at
       properties:
@@ -1612,6 +1613,11 @@ components:
           type: string
           enum: [pending, running, completed, failed, cancelled]
           example: pending
+        progress:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: Percentage of completed steps (0–100), computed at query time.
         pipeline_config_snapshot:
           type: object
           additionalProperties: true

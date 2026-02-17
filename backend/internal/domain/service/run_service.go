@@ -137,6 +137,7 @@ func (s *RunService) GetRun(ctx context.Context, id uuid.UUID) (*model.Run, erro
 	for i, step := range steps {
 		run.Steps[i] = *step
 	}
+	run.Progress = run.ComputeProgress(run.Steps)
 
 	return run, nil
 }
@@ -165,6 +166,19 @@ func (s *RunService) ListRunsByProject(ctx context.Context, projectID uuid.UUID,
 	runs, err := s.runRepo.ListRunsByProject(ctx, projectID, limit, offset)
 	if err != nil {
 		return nil, err
+	}
+
+	// TODO(perf): batch fetch steps in single query for large lists (S-4-2)
+	for _, r := range runs {
+		steps, err := s.runRepo.ListRunStepsByRun(ctx, r.ID)
+		if err != nil {
+			return nil, err
+		}
+		r.Steps = make([]model.RunStep, len(steps))
+		for i, step := range steps {
+			r.Steps[i] = *step
+		}
+		r.Progress = r.ComputeProgress(r.Steps)
 	}
 
 	total, err := s.runRepo.CountRunsByProject(ctx, projectID)
@@ -196,6 +210,19 @@ func (s *RunService) ListRunsByStory(ctx context.Context, storyID uuid.UUID, pag
 	runs, err := s.runRepo.ListRunsByStory(ctx, storyID, limit, offset)
 	if err != nil {
 		return nil, err
+	}
+
+	// TODO(perf): batch fetch steps in single query for large lists (S-4-2)
+	for _, r := range runs {
+		steps, err := s.runRepo.ListRunStepsByRun(ctx, r.ID)
+		if err != nil {
+			return nil, err
+		}
+		r.Steps = make([]model.RunStep, len(steps))
+		for i, step := range steps {
+			r.Steps[i] = *step
+		}
+		r.Progress = r.ComputeProgress(r.Steps)
 	}
 
 	total, err := s.runRepo.CountRunsByStory(ctx, storyID)
