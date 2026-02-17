@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import Button from 'primevue/button'
 import Message from 'primevue/message'
 import Skeleton from 'primevue/skeleton'
+import Toast from 'primevue/toast'
 import EpicDetailLayout from '@/features/board/EpicDetailLayout.vue'
 import { useStories } from '@/composables/useStories'
 
@@ -56,6 +57,7 @@ watch(
 
 <template>
   <div class="flex flex-col h-full p-6">
+    <Toast />
     <div class="flex items-center gap-3 mb-4">
       <Button
         icon="pi pi-arrow-left"

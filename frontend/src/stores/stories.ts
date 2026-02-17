@@ -2,6 +2,15 @@ import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { apiClient } from '@/api/client'
 
+/** Latest run summary attached to a story */
+export interface LatestRun {
+  id: string
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
+  started_at?: string
+  completed_at?: string
+  error_message?: string
+}
+
 /**
  * Story entity type.
  * TODO(2-2): Replace with generated type from OpenAPI schema once Stories CRUD API lands.
@@ -17,6 +26,7 @@ export interface Story {
   acceptance_criteria?: string
   target_files?: string[]
   depends_on?: string[]
+  latest_run?: LatestRun
   created_at: string
   updated_at: string
 }
