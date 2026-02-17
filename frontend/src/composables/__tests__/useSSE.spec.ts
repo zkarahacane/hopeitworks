@@ -145,7 +145,7 @@ describe('useSSE', () => {
 
     expect(mockOnBeforeUnmount).toHaveBeenCalledTimes(1)
 
-    const unmountCallback = mockOnBeforeUnmount.mock.calls[0][0]
+    const unmountCallback = mockOnBeforeUnmount.mock.calls[0]![0]
     unmountCallback()
 
     expect(mockInstance.close).toHaveBeenCalledTimes(1)

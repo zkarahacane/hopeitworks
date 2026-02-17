@@ -15,7 +15,8 @@ import type { RunStep } from '@/features/runs/composables/useRunDetail'
 const route = useRoute()
 const runId = computed(() => route.params.id as string)
 
-const { run, isLoading, error, retry } = useRunDetail(runId.value)
+const { run: runRef, isLoading, error, retry } = useRunDetail(runId.value)
+const run = computed(() => runRef.value)
 
 const runStatusSeverity: Record<string, 'info' | 'success' | 'warn' | 'danger' | 'secondary'> = {
   pending: 'secondary',

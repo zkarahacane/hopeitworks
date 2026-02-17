@@ -29,8 +29,8 @@ describe('useRunLogs', () => {
     })
 
     expect(lines.value).toHaveLength(1)
-    expect(lines.value[0].text).toBe('hello world')
-    expect(lines.value[0].timestamp).toBeInstanceOf(Date)
+    expect(lines.value[0]!.text).toBe('hello world')
+    expect(lines.value[0]!.timestamp).toBeInstanceOf(Date)
   })
 
   it('ignores log.emitted events with different runId', () => {
