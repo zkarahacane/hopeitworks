@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	dockeradapter "github.com/zakari/hopeitworks/backend/internal/adapter/docker"
+	hbadapter "github.com/zakari/hopeitworks/backend/internal/adapter/handlebars"
 	pgadapter "github.com/zakari/hopeitworks/backend/internal/adapter/postgres"
 	"github.com/zakari/hopeitworks/backend/internal/api/handler"
 	authmw "github.com/zakari/hopeitworks/backend/internal/api/middleware"
@@ -101,6 +102,10 @@ func run() error {
 	promptTemplateRepo := pgadapter.NewPromptTemplateRepo(queries)
 	promptTemplateService := service.NewPromptTemplateService(promptTemplateRepo)
 	promptTemplateHandler := handler.NewPromptTemplateHandler(promptTemplateService)
+
+	// Template rendering service (Handlebars engine for prompt templates)
+	handlebarsRenderer := hbadapter.NewRenderer()
+	_ = service.NewTemplateService(promptTemplateRepo, handlebarsRenderer, logger)
 
 	// Auth handler
 	authHandler := handler.NewAuthHandler(authService, userRepo, false)

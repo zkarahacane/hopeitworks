@@ -56,6 +56,21 @@ func (r *PromptTemplateRepo) GetByID(ctx context.Context, id uuid.UUID) (*model.
 	return toDomainPromptTemplate(row), nil
 }
 
+// GetByProjectAndName retrieves a prompt template by project ID and name.
+func (r *PromptTemplateRepo) GetByProjectAndName(ctx context.Context, projectID uuid.UUID, name string) (*model.PromptTemplate, error) {
+	row, err := r.queries.GetPromptTemplateByProjectAndName(ctx, GetPromptTemplateByProjectAndNameParams{
+		ProjectID: projectID,
+		Name:      name,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, apperrors.NewNotFound("prompt_template", name)
+		}
+		return nil, apperrors.NewInternal("failed to get prompt template by project and name", err)
+	}
+	return toDomainPromptTemplate(row), nil
+}
+
 // ListByProject retrieves prompt templates for a project with pagination.
 func (r *PromptTemplateRepo) ListByProject(ctx context.Context, projectID uuid.UUID, limit, offset int32) ([]*model.PromptTemplate, error) {
 	rows, err := r.queries.ListPromptTemplatesByProject(ctx, ListPromptTemplatesByProjectParams{

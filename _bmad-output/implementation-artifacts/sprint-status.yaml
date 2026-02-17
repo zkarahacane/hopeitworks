@@ -112,7 +112,7 @@ development_status:
   epic-6: in-progress
   6-1-pipeline-configs-table-default-pipeline-seed-crud-api: done
   6-2-prompt-templates-table-crud-api: done
-  6-3-handlebars-rendering-engine-default-template-seeding: backlog
+  6-3-handlebars-rendering-engine-default-template-seeding: review
   6-4-pipeline-configuration-page: done
   6-5-prompt-template-list-page: done
   6-6-prompt-template-editor: backlog
@@ -380,7 +380,7 @@ parallel_waves:
       # Epic 6
       - key: 6-3-handlebars-rendering-engine-default-template-seeding
         domain: back
-        status: backlog
+        status: review
         explicit_deps: [6-2-prompt-templates-table-crud-api]
       - key: 6-6-prompt-template-editor
         domain: front
