@@ -16,6 +16,7 @@ set -euo pipefail
 
 STORY_KEY="${STORY_KEY:-unknown}"
 BASE_BRANCH="${BASE_BRANCH:-main}"
+SKIP_MERGE="${SKIP_MERGE:-false}"
 LOG_PREFIX="[pipeline:${STORY_KEY}]"
 
 log() { echo "$LOG_PREFIX $1"; }
@@ -66,16 +67,20 @@ fi
 log ""
 
 # Phase 3: Merge Story (Sonnet)
-log "=== Phase 3/3: merge-story (opus) ==="
-MERGE_PROMPT="${STORY_CONTEXT}
+if [ "$SKIP_MERGE" = "true" ]; then
+    log "=== Phase 3/3: merge-story SKIPPED (SKIP_MERGE=true) ==="
+else
+    log "=== Phase 3/3: merge-story (opus) ==="
+    MERGE_PROMPT="${STORY_CONTEXT}
 Execute /bmad-bmm-merge-story for story ${STORY_KEY}.
 Merge the PR for feat/${STORY_KEY} into ${BASE_BRANCH} via squash merge. Ensure CI is green before merging."
 
-if echo "$MERGE_PROMPT" | claude --dangerously-skip-permissions --model opus "$@"; then
-    log "✅ merge-story complete"
-else
-    log "❌ merge-story failed (exit $?)"
-    exit 3
+    if echo "$MERGE_PROMPT" | claude --dangerously-skip-permissions --model opus "$@"; then
+        log "✅ merge-story complete"
+    else
+        log "❌ merge-story failed (exit $?)"
+        exit 3
+    fi
 fi
 
 log ""
