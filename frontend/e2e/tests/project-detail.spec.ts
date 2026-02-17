@@ -93,7 +93,7 @@ test.describe('Project Detail — Tabbed Navigation', () => {
     await page.goto('/projects/p1')
 
     await expect(page.getByTestId('project-overview-card')).toBeVisible()
-    await expect(page.getByText('Test Project')).toBeVisible()
+    await expect(page.getByTestId('project-name')).toHaveText('Test Project')
     await expect(page.getByText('Jan 1, 2026')).toBeVisible()
   })
 
@@ -128,7 +128,7 @@ test.describe('Project Detail — Tabbed Navigation', () => {
     await page.getByTestId('project-tabs').getByText('Templates').click()
 
     await expect(page).toHaveURL('/projects/p1/templates')
-    await expect(page.getByRole('heading', { name: 'Prompt Templates' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Prompt Templates', exact: true })).toBeVisible()
   })
 
   test('back button navigates to projects list', async ({ page }) => {
