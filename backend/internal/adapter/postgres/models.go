@@ -100,6 +100,22 @@ type RunStep struct {
 	CreatedAt    time.Time          `json:"created_at"`
 }
 
+type Story struct {
+	ID                 uuid.UUID   `json:"id"`
+	ProjectID          uuid.UUID   `json:"project_id"`
+	EpicID             pgtype.UUID `json:"epic_id"`
+	Key                string      `json:"key"`
+	Title              string      `json:"title"`
+	Objective          pgtype.Text `json:"objective"`
+	TargetFiles        []byte      `json:"target_files"`
+	DependsOn          []byte      `json:"depends_on"`
+	Scope              pgtype.Text `json:"scope"`
+	Status             string      `json:"status"`
+	AcceptanceCriteria pgtype.Text `json:"acceptance_criteria"`
+	CreatedAt          time.Time   `json:"created_at"`
+	UpdatedAt          time.Time   `json:"updated_at"`
+}
+
 type User struct {
 	ID           uuid.UUID          `json:"id"`
 	Email        string             `json:"email"`

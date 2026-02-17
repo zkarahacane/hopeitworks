@@ -10,14 +10,15 @@ type Server struct {
 	projects        *ProjectHandler
 	users           *UserHandler
 	epics           *EpicHandler
+	stories         *StoryHandler
 	promptTemplates *PromptTemplateHandler
 	runs            *RunHandler
 	pipelineConfig  *PipelineConfigHandler
 }
 
 // NewServer creates a new Server with the given handlers.
-func NewServer(auth *AuthHandler, projects *ProjectHandler, users *UserHandler, epics *EpicHandler, promptTemplates *PromptTemplateHandler, runs *RunHandler, pipelineConfig *PipelineConfigHandler) *Server {
-	return &Server{auth: auth, projects: projects, users: users, epics: epics, promptTemplates: promptTemplates, runs: runs, pipelineConfig: pipelineConfig}
+func NewServer(auth *AuthHandler, projects *ProjectHandler, users *UserHandler, epics *EpicHandler, stories *StoryHandler, promptTemplates *PromptTemplateHandler, runs *RunHandler, pipelineConfig *PipelineConfigHandler) *Server {
+	return &Server{auth: auth, projects: projects, users: users, epics: epics, stories: stories, promptTemplates: promptTemplates, runs: runs, pipelineConfig: pipelineConfig}
 }
 
 // RegisterUser delegates to AuthHandler.
@@ -108,6 +109,31 @@ func (s *Server) UpdateEpic(w http.ResponseWriter, r *http.Request, projectID Pr
 // DeleteEpic delegates to EpicHandler.
 func (s *Server) DeleteEpic(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, epicID EpicIdPath) {
 	s.epics.DeleteEpic(w, r, projectID, epicID)
+}
+
+// ListStories delegates to StoryHandler.
+func (s *Server) ListStories(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, params ListStoriesParams) {
+	s.stories.ListStories(w, r, projectID, params)
+}
+
+// CreateStory delegates to StoryHandler.
+func (s *Server) CreateStory(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath) {
+	s.stories.CreateStory(w, r, projectID)
+}
+
+// GetStory delegates to StoryHandler.
+func (s *Server) GetStory(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, storyID StoryIdPath) {
+	s.stories.GetStory(w, r, projectID, storyID)
+}
+
+// UpdateStory delegates to StoryHandler.
+func (s *Server) UpdateStory(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, storyID StoryIdPath) {
+	s.stories.UpdateStory(w, r, projectID, storyID)
+}
+
+// DeleteStory delegates to StoryHandler.
+func (s *Server) DeleteStory(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, storyID StoryIdPath) {
+	s.stories.DeleteStory(w, r, projectID, storyID)
 }
 
 // ListPromptTemplates delegates to PromptTemplateHandler.

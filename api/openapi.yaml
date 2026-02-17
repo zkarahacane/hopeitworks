@@ -31,6 +31,8 @@ tags:
     description: Pipeline run management endpoints
   - name: prompt-templates
     description: Prompt template management endpoints
+  - name: stories
+    description: Story management endpoints
   - name: pipeline-configs
     description: Pipeline configuration endpoints
 
@@ -416,6 +418,136 @@ paths:
       responses:
         "204":
           description: Epic deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ── Stories ──────────────────────────────────────────────────────────
+  /projects/{projectId}/stories:
+    get:
+      operationId: listStories
+      summary: List stories for a project with optional status filtering
+      tags: [stories]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/PerPageParam"
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Comma-separated list of statuses to filter by (e.g., backlog,running)
+        - name: key
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Story key to look up (returns single story)
+      responses:
+        "200":
+          description: Paginated list of stories or single story by key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoryListOrSingle"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    post:
+      operationId: createStory
+      summary: Create a new story in a project
+      tags: [stories]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateStoryRequest"
+      responses:
+        "201":
+          description: Story created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Story"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /projects/{projectId}/stories/{storyId}:
+    get:
+      operationId: getStory
+      summary: Get a story by ID
+      tags: [stories]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/StoryIdPath"
+      responses:
+        "200":
+          description: Story details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Story"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    put:
+      operationId: updateStory
+      summary: Update a story
+      tags: [stories]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/StoryIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateStoryRequest"
+      responses:
+        "200":
+          description: Story updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Story"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+    delete:
+      operationId: deleteStory
+      summary: Delete a story
+      tags: [stories]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/StoryIdPath"
+      responses:
+        "204":
+          description: Story deleted
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -1051,6 +1183,145 @@ components:
             $ref: "#/components/schemas/Epic"
         pagination:
           $ref: "#/components/schemas/Pagination"
+
+    # ── Story ───────────────────────────────────────────────────────────
+    Story:
+      type: object
+      required:
+        - id
+        - project_id
+        - key
+        - title
+        - status
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        epic_id:
+          type: string
+          format: uuid
+        key:
+          type: string
+          description: Unique story identifier within project (e.g., S-01)
+          example: S-01
+        title:
+          type: string
+          maxLength: 255
+          example: Implement login page
+        objective:
+          type: string
+        target_files:
+          type: array
+          items:
+            type: string
+        depends_on:
+          type: array
+          items:
+            type: string
+        scope:
+          type: string
+          enum: [backend, frontend, shared]
+        status:
+          $ref: "#/components/schemas/StoryStatus"
+        acceptance_criteria:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    StoryStatus:
+      type: string
+      enum: [backlog, running, done, failed]
+      default: backlog
+
+    StoryList:
+      type: object
+      required:
+        - data
+        - pagination
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Story"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+
+    StoryListOrSingle:
+      description: Returns StoryList for list queries, or single Story for key lookup
+      oneOf:
+        - $ref: "#/components/schemas/StoryList"
+        - $ref: "#/components/schemas/Story"
+
+    CreateStoryRequest:
+      type: object
+      required:
+        - key
+        - title
+      properties:
+        key:
+          type: string
+          maxLength: 50
+          example: S-01
+        title:
+          type: string
+          maxLength: 255
+          example: Implement login page
+        objective:
+          type: string
+        epic_id:
+          type: string
+          format: uuid
+        target_files:
+          type: array
+          items:
+            type: string
+        depends_on:
+          type: array
+          items:
+            type: string
+        scope:
+          type: string
+          enum: [backend, frontend, shared]
+        status:
+          $ref: "#/components/schemas/StoryStatus"
+        acceptance_criteria:
+          type: string
+
+    UpdateStoryRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 255
+        objective:
+          type: string
+        epic_id:
+          type: string
+          format: uuid
+        target_files:
+          type: array
+          items:
+            type: string
+        depends_on:
+          type: array
+          items:
+            type: string
+        scope:
+          type: string
+          enum: [backend, frontend, shared]
+        status:
+          $ref: "#/components/schemas/StoryStatus"
+        acceptance_criteria:
+          type: string
 
     # ── Prompt Template ────────────────────────────────────────────────
     PromptTemplate:

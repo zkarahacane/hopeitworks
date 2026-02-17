@@ -8,6 +8,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -39,6 +40,13 @@ const (
 	CreatePromptTemplateRequestTypeMerge     CreatePromptTemplateRequestType = "merge"
 	CreatePromptTemplateRequestTypeRetry     CreatePromptTemplateRequestType = "retry"
 	CreatePromptTemplateRequestTypeReview    CreatePromptTemplateRequestType = "review"
+)
+
+// Defines values for CreateStoryRequestScope.
+const (
+	CreateStoryRequestScopeBackend  CreateStoryRequestScope = "backend"
+	CreateStoryRequestScopeFrontend CreateStoryRequestScope = "frontend"
+	CreateStoryRequestScopeShared   CreateStoryRequestScope = "shared"
 )
 
 // Defines values for EpicStatus.
@@ -100,11 +108,26 @@ const (
 
 // Defines values for RunWithStepsStatus.
 const (
-	Cancelled RunWithStepsStatus = "cancelled"
-	Completed RunWithStepsStatus = "completed"
-	Failed    RunWithStepsStatus = "failed"
-	Pending   RunWithStepsStatus = "pending"
-	Running   RunWithStepsStatus = "running"
+	RunWithStepsStatusCancelled RunWithStepsStatus = "cancelled"
+	RunWithStepsStatusCompleted RunWithStepsStatus = "completed"
+	RunWithStepsStatusFailed    RunWithStepsStatus = "failed"
+	RunWithStepsStatusPending   RunWithStepsStatus = "pending"
+	RunWithStepsStatusRunning   RunWithStepsStatus = "running"
+)
+
+// Defines values for StoryScope.
+const (
+	StoryScopeBackend  StoryScope = "backend"
+	StoryScopeFrontend StoryScope = "frontend"
+	StoryScopeShared   StoryScope = "shared"
+)
+
+// Defines values for StoryStatus.
+const (
+	StoryStatusBacklog StoryStatus = "backlog"
+	StoryStatusDone    StoryStatus = "done"
+	StoryStatusFailed  StoryStatus = "failed"
+	StoryStatusRunning StoryStatus = "running"
 )
 
 // Defines values for UpdateEpicRequestStatus.
@@ -121,6 +144,13 @@ const (
 	UpdatePromptTemplateRequestTypeMerge     UpdatePromptTemplateRequestType = "merge"
 	UpdatePromptTemplateRequestTypeRetry     UpdatePromptTemplateRequestType = "retry"
 	UpdatePromptTemplateRequestTypeReview    UpdatePromptTemplateRequestType = "review"
+)
+
+// Defines values for UpdateStoryRequestScope.
+const (
+	Backend  UpdateStoryRequestScope = "backend"
+	Frontend UpdateStoryRequestScope = "frontend"
+	Shared   UpdateStoryRequestScope = "shared"
 )
 
 // Defines values for UpdateUserRequestRole.
@@ -172,6 +202,22 @@ type CreateRunRequest struct {
 	StoryId openapi_types.UUID `json:"story_id"`
 }
 
+// CreateStoryRequest defines model for CreateStoryRequest.
+type CreateStoryRequest struct {
+	AcceptanceCriteria *string                  `json:"acceptance_criteria,omitempty"`
+	DependsOn          *[]string                `json:"depends_on,omitempty"`
+	EpicId             *openapi_types.UUID      `json:"epic_id,omitempty"`
+	Key                string                   `json:"key"`
+	Objective          *string                  `json:"objective,omitempty"`
+	Scope              *CreateStoryRequestScope `json:"scope,omitempty"`
+	Status             *StoryStatus             `json:"status,omitempty"`
+	TargetFiles        *[]string                `json:"target_files,omitempty"`
+	Title              string                   `json:"title"`
+}
+
+// CreateStoryRequestScope defines model for CreateStoryRequest.Scope.
+type CreateStoryRequestScope string
+
 // Epic defines model for Epic.
 type Epic struct {
 	CreatedAt   time.Time          `json:"created_at"`
@@ -180,6 +226,7 @@ type Epic struct {
 	Name        string             `json:"name"`
 	ProjectId   openapi_types.UUID `json:"project_id"`
 	Status      EpicStatus         `json:"status"`
+	StoryCounts StoryCounts        `json:"story_counts"`
 	UpdatedAt   time.Time          `json:"updated_at"`
 }
 
@@ -349,6 +396,50 @@ type RunWithSteps struct {
 // RunWithStepsStatus defines model for RunWithSteps.Status.
 type RunWithStepsStatus string
 
+// Story defines model for Story.
+type Story struct {
+	AcceptanceCriteria *string             `json:"acceptance_criteria,omitempty"`
+	CreatedAt          time.Time           `json:"created_at"`
+	DependsOn          *[]string           `json:"depends_on,omitempty"`
+	EpicId             *openapi_types.UUID `json:"epic_id,omitempty"`
+	Id                 openapi_types.UUID  `json:"id"`
+
+	// Key Unique story identifier within project (e.g., S-01)
+	Key         string             `json:"key"`
+	Objective   *string            `json:"objective,omitempty"`
+	ProjectId   openapi_types.UUID `json:"project_id"`
+	Scope       *StoryScope        `json:"scope,omitempty"`
+	Status      StoryStatus        `json:"status"`
+	TargetFiles *[]string          `json:"target_files,omitempty"`
+	Title       string             `json:"title"`
+	UpdatedAt   time.Time          `json:"updated_at"`
+}
+
+// StoryScope defines model for Story.Scope.
+type StoryScope string
+
+// StoryCounts defines model for StoryCounts.
+type StoryCounts struct {
+	Backlog int `json:"backlog"`
+	Done    int `json:"done"`
+	Failed  int `json:"failed"`
+	Running int `json:"running"`
+}
+
+// StoryList defines model for StoryList.
+type StoryList struct {
+	Data       []Story    `json:"data"`
+	Pagination Pagination `json:"pagination"`
+}
+
+// StoryListOrSingle Returns StoryList for list queries, or single Story for key lookup
+type StoryListOrSingle struct {
+	union json.RawMessage
+}
+
+// StoryStatus defines model for StoryStatus.
+type StoryStatus string
+
 // UpdateEpicRequest defines model for UpdateEpicRequest.
 type UpdateEpicRequest struct {
 	Description *string                  `json:"description,omitempty"`
@@ -379,6 +470,21 @@ type UpdatePromptTemplateRequest struct {
 
 // UpdatePromptTemplateRequestType defines model for UpdatePromptTemplateRequest.Type.
 type UpdatePromptTemplateRequestType string
+
+// UpdateStoryRequest defines model for UpdateStoryRequest.
+type UpdateStoryRequest struct {
+	AcceptanceCriteria *string                  `json:"acceptance_criteria,omitempty"`
+	DependsOn          *[]string                `json:"depends_on,omitempty"`
+	EpicId             *openapi_types.UUID      `json:"epic_id,omitempty"`
+	Objective          *string                  `json:"objective,omitempty"`
+	Scope              *UpdateStoryRequestScope `json:"scope,omitempty"`
+	Status             *StoryStatus             `json:"status,omitempty"`
+	TargetFiles        *[]string                `json:"target_files,omitempty"`
+	Title              *string                  `json:"title,omitempty"`
+}
+
+// UpdateStoryRequestScope defines model for UpdateStoryRequest.Scope.
+type UpdateStoryRequestScope string
 
 // UpdateUserRequest defines model for UpdateUserRequest.
 type UpdateUserRequest struct {
@@ -470,6 +576,9 @@ type ListEpicsParams struct {
 
 	// PerPage Items per page
 	PerPage *PerPageParam `form:"per_page,omitempty" json:"per_page,omitempty"`
+
+	// SortBy Field to sort by
+	SortBy *SortByParam `form:"sort_by,omitempty" json:"sort_by,omitempty"`
 }
 
 // ListRunsByProjectParams defines parameters for ListRunsByProject.
@@ -479,6 +588,21 @@ type ListRunsByProjectParams struct {
 
 	// PerPage Items per page
 	PerPage *PerPageParam `form:"per_page,omitempty" json:"per_page,omitempty"`
+}
+
+// ListStoriesParams defines parameters for ListStories.
+type ListStoriesParams struct {
+	// Page Page number
+	Page *PageParam `form:"page,omitempty" json:"page,omitempty"`
+
+	// PerPage Items per page
+	PerPage *PerPageParam `form:"per_page,omitempty" json:"per_page,omitempty"`
+
+	// Status Comma-separated list of statuses to filter by (e.g., backlog,running)
+	Status *string `form:"status,omitempty" json:"status,omitempty"`
+
+	// Key Story key to look up (returns single story)
+	Key *string `form:"key,omitempty" json:"key,omitempty"`
 }
 
 // ListPromptTemplatesParams defines parameters for ListPromptTemplates.
@@ -535,6 +659,12 @@ type UpdatePipelineConfigJSONRequestBody = UpdatePipelineConfigRequest
 // CreateRunJSONRequestBody defines body for CreateRun for application/json ContentType.
 type CreateRunJSONRequestBody = CreateRunRequest
 
+// CreateStoryJSONRequestBody defines body for CreateStory for application/json ContentType.
+type CreateStoryJSONRequestBody = CreateStoryRequest
+
+// UpdateStoryJSONRequestBody defines body for UpdateStory for application/json ContentType.
+type UpdateStoryJSONRequestBody = UpdateStoryRequest
+
 // CreatePromptTemplateJSONRequestBody defines body for CreatePromptTemplate for application/json ContentType.
 type CreatePromptTemplateJSONRequestBody = CreatePromptTemplateRequest
 
@@ -543,6 +673,68 @@ type UpdatePromptTemplateJSONRequestBody = UpdatePromptTemplateRequest
 
 // UpdateUserJSONRequestBody defines body for UpdateUser for application/json ContentType.
 type UpdateUserJSONRequestBody = UpdateUserRequest
+
+// AsStoryList returns the union data inside the StoryListOrSingle as a StoryList
+func (t StoryListOrSingle) AsStoryList() (StoryList, error) {
+	var body StoryList
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromStoryList overwrites any union data inside the StoryListOrSingle as the provided StoryList
+func (t *StoryListOrSingle) FromStoryList(v StoryList) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeStoryList performs a merge with any union data inside the StoryListOrSingle, using the provided StoryList
+func (t *StoryListOrSingle) MergeStoryList(v StoryList) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsStory returns the union data inside the StoryListOrSingle as a Story
+func (t StoryListOrSingle) AsStory() (Story, error) {
+	var body Story
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromStory overwrites any union data inside the StoryListOrSingle as the provided Story
+func (t *StoryListOrSingle) FromStory(v Story) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeStory performs a merge with any union data inside the StoryListOrSingle, using the provided Story
+func (t *StoryListOrSingle) MergeStory(v Story) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t StoryListOrSingle) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *StoryListOrSingle) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -573,7 +765,7 @@ type ServerInterface interface {
 	// Update a project
 	// (PUT /projects/{id})
 	UpdateProject(w http.ResponseWriter, r *http.Request, id IdPath)
-	// List epics for a project
+	// List epics for a project with story counts
 	// (GET /projects/{projectId}/epics)
 	ListEpics(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, params ListEpicsParams)
 	// Create a new epic in a project
@@ -600,6 +792,21 @@ type ServerInterface interface {
 	// Create a new pipeline run for a project
 	// (POST /projects/{projectId}/runs)
 	CreateRun(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath)
+	// List stories for a project with optional status filtering
+	// (GET /projects/{projectId}/stories)
+	ListStories(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, params ListStoriesParams)
+	// Create a new story in a project
+	// (POST /projects/{projectId}/stories)
+	CreateStory(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath)
+	// Delete a story
+	// (DELETE /projects/{projectId}/stories/{storyId})
+	DeleteStory(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, storyId StoryIdPath)
+	// Get a story by ID
+	// (GET /projects/{projectId}/stories/{storyId})
+	GetStory(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, storyId StoryIdPath)
+	// Update a story
+	// (PUT /projects/{projectId}/stories/{storyId})
+	UpdateStory(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, storyId StoryIdPath)
 	// List prompt templates for a project
 	// (GET /projects/{projectId}/templates)
 	ListPromptTemplates(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, params ListPromptTemplatesParams)
@@ -693,7 +900,7 @@ func (_ Unimplemented) UpdateProject(w http.ResponseWriter, r *http.Request, id 
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// List epics for a project
+// List epics for a project with story counts
 // (GET /projects/{projectId}/epics)
 func (_ Unimplemented) ListEpics(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, params ListEpicsParams) {
 	w.WriteHeader(http.StatusNotImplemented)
@@ -744,6 +951,36 @@ func (_ Unimplemented) ListRunsByProject(w http.ResponseWriter, r *http.Request,
 // Create a new pipeline run for a project
 // (POST /projects/{projectId}/runs)
 func (_ Unimplemented) CreateRun(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// List stories for a project with optional status filtering
+// (GET /projects/{projectId}/stories)
+func (_ Unimplemented) ListStories(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, params ListStoriesParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Create a new story in a project
+// (POST /projects/{projectId}/stories)
+func (_ Unimplemented) CreateStory(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Delete a story
+// (DELETE /projects/{projectId}/stories/{storyId})
+func (_ Unimplemented) DeleteStory(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, storyId StoryIdPath) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Get a story by ID
+// (GET /projects/{projectId}/stories/{storyId})
+func (_ Unimplemented) GetStory(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, storyId StoryIdPath) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Update a story
+// (PUT /projects/{projectId}/stories/{storyId})
+func (_ Unimplemented) UpdateStory(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, storyId StoryIdPath) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1091,6 +1328,14 @@ func (siw *ServerInterfaceWrapper) ListEpics(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// ------------- Optional query parameter "sort_by" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "sort_by", r.URL.Query(), &params.SortBy)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sort_by", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListEpics(w, r, projectId, params)
 	}))
@@ -1387,6 +1632,223 @@ func (siw *ServerInterfaceWrapper) CreateRun(w http.ResponseWriter, r *http.Requ
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateRun(w, r, projectId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListStories operation middleware
+func (siw *ServerInterfaceWrapper) ListStories(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "projectId" -------------
+	var projectId ProjectIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectId", chi.URLParam(r, "projectId"), &projectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListStoriesParams
+
+	// ------------- Optional query parameter "page" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "page", r.URL.Query(), &params.Page)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "page", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "per_page" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "per_page", r.URL.Query(), &params.PerPage)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "per_page", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "status" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "status", r.URL.Query(), &params.Status)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "status", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "key" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "key", r.URL.Query(), &params.Key)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListStories(w, r, projectId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateStory operation middleware
+func (siw *ServerInterfaceWrapper) CreateStory(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "projectId" -------------
+	var projectId ProjectIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectId", chi.URLParam(r, "projectId"), &projectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateStory(w, r, projectId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteStory operation middleware
+func (siw *ServerInterfaceWrapper) DeleteStory(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "projectId" -------------
+	var projectId ProjectIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectId", chi.URLParam(r, "projectId"), &projectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "storyId" -------------
+	var storyId StoryIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "storyId", chi.URLParam(r, "storyId"), &storyId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "storyId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteStory(w, r, projectId, storyId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetStory operation middleware
+func (siw *ServerInterfaceWrapper) GetStory(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "projectId" -------------
+	var projectId ProjectIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectId", chi.URLParam(r, "projectId"), &projectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "storyId" -------------
+	var storyId StoryIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "storyId", chi.URLParam(r, "storyId"), &storyId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "storyId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetStory(w, r, projectId, storyId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateStory operation middleware
+func (siw *ServerInterfaceWrapper) UpdateStory(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "projectId" -------------
+	var projectId ProjectIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectId", chi.URLParam(r, "projectId"), &projectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "storyId" -------------
+	var storyId StoryIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "storyId", chi.URLParam(r, "storyId"), &storyId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "storyId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateStory(w, r, projectId, storyId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1988,6 +2450,21 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/projects/{projectId}/runs", wrapper.CreateRun)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/projects/{projectId}/stories", wrapper.ListStories)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/projects/{projectId}/stories", wrapper.CreateStory)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/projects/{projectId}/stories/{storyId}", wrapper.DeleteStory)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/projects/{projectId}/stories/{storyId}", wrapper.GetStory)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/projects/{projectId}/stories/{storyId}", wrapper.UpdateStory)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/projects/{projectId}/templates", wrapper.ListPromptTemplates)
 	})
 	r.Group(func(r chi.Router) {
@@ -2027,64 +2504,75 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
+	"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",
+	"zzbWboEAAA==",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file
