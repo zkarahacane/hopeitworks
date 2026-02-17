@@ -90,7 +90,7 @@ test.describe('Epic Detail Page', () => {
 
     await page.goto('/projects/p1/epics/e1')
 
-    await expect(page.locator('h1')).toHaveText('Epic Stories')
+    await expect(page.getByRole('heading', { name: 'Epic Stories' })).toBeVisible()
     await expect(page.getByText('S-01')).toBeVisible()
     await expect(page.getByText('Setup authentication')).toBeVisible()
     await expect(page.getByText('S-02')).toBeVisible()
