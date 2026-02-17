@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
+	actionadapter "github.com/zakari/hopeitworks/backend/internal/adapter/action"
 	dockeradapter "github.com/zakari/hopeitworks/backend/internal/adapter/docker"
 	hbadapter "github.com/zakari/hopeitworks/backend/internal/adapter/handlebars"
 	pgadapter "github.com/zakari/hopeitworks/backend/internal/adapter/postgres"
@@ -105,7 +106,7 @@ func run() error {
 
 	// Template rendering service (Handlebars engine for prompt templates)
 	handlebarsRenderer := hbadapter.NewRenderer()
-	_ = service.NewTemplateService(promptTemplateRepo, handlebarsRenderer, logger)
+	templateSvc := service.NewTemplateService(promptTemplateRepo, handlebarsRenderer, logger)
 
 	// Auth handler
 	authHandler := handler.NewAuthHandler(authService, userRepo, false)
@@ -123,6 +124,36 @@ func run() error {
 	containerMgr, err := dockeradapter.NewDockerContainerManager(cfg.Docker.Host, logger)
 	if err != nil {
 		logger.Warn("docker container manager unavailable, timeout enforcer and orphan cleaner disabled", "error", err)
+	}
+
+	// Event publisher (for persisting events to DB)
+	eventRepo := pgadapter.NewEventRepo(queries)
+
+	// Action registry
+	actionReg := service.NewActionRegistry()
+
+	// Agent run action (requires Docker)
+	if containerMgr != nil {
+		logStreamer, logErr := dockeradapter.NewDockerLogStreamerFromHost(cfg.Docker.Host, logger)
+		if logErr != nil {
+			logger.Warn("log streamer unavailable, agent_run action disabled", "error", logErr)
+		} else {
+			agentCfg := actionadapter.AgentConfig{
+				DefaultImage:  getEnvOrDefault("AGENT_IMAGE", "hopeitworks/agent:latest"),
+				DefaultMemory: 4294967296, // 4GB
+				DefaultCPUs:   2.0,
+				NetworkName:   cfg.Docker.AgentNetwork,
+				LogTailLines:  50,
+				ClaudeMDPath:  getEnvOrDefault("CLAUDE_MD_PATH", "agent/claude-md"),
+			}
+			agentRunAction := actionadapter.NewAgentRunAction(
+				containerMgr, logStreamer, eventRepo,
+				storyRepo, projectRepo, runRepo,
+				templateSvc, agentCfg, logger,
+			)
+			actionReg.Register(agentRunAction)
+			logger.Info("agent_run action registered")
+		}
 	}
 
 	// Orphan cleanup and timeout enforcement (requires Docker)

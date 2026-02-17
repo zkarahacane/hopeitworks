@@ -9,6 +9,7 @@ import (
 	"time"
 
 	dockercontainer "github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
 
 	"github.com/zakari/hopeitworks/backend/internal/domain/model"
@@ -38,6 +39,19 @@ type LogStreamer struct {
 // NewDockerLogStreamer creates a LogStreamer with an existing Docker client.
 func NewDockerLogStreamer(client logStreamClient, logger *slog.Logger) *LogStreamer {
 	return &LogStreamer{client: client, logger: logger, idleTimeout: DefaultIdleTimeout}
+}
+
+// NewDockerLogStreamerFromHost creates a LogStreamer by connecting to Docker
+// via the specified host URL (e.g., "tcp://socket-proxy:2375").
+func NewDockerLogStreamerFromHost(dockerHost string, logger *slog.Logger) (*LogStreamer, error) {
+	cli, err := client.NewClientWithOpts(
+		client.WithHost(dockerHost),
+		client.WithAPIVersionNegotiation(),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("creating docker client for log streamer: %w", err)
+	}
+	return &LogStreamer{client: cli, logger: logger, idleTimeout: DefaultIdleTimeout}, nil
 }
 
 // StreamLogs streams log events from a container.

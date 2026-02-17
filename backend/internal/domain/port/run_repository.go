@@ -22,4 +22,8 @@ type RunRepository interface {
 	GetRunStep(ctx context.Context, id uuid.UUID) (*model.RunStep, error)
 	ListRunStepsByRun(ctx context.Context, runID uuid.UUID) ([]*model.RunStep, error)
 	UpdateRunStepStatus(ctx context.Context, id uuid.UUID, status model.StepStatus, startedAt, completedAt *time.Time, errorMsg *string) (*model.RunStep, error)
+
+	// UpdateRunStepContainerInfo updates container_id and/or log_tail on a run step
+	// without changing its status. Nil values are ignored (existing values preserved).
+	UpdateRunStepContainerInfo(ctx context.Context, id uuid.UUID, containerID *string, logTail *string) (*model.RunStep, error)
 }

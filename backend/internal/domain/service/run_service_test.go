@@ -93,6 +93,9 @@ func (m *mockRunRepo) UpdateRunStepStatus(ctx context.Context, id uuid.UUID, sta
 	}
 	return nil, nil
 }
+func (m *mockRunRepo) UpdateRunStepContainerInfo(_ context.Context, id uuid.UUID, _ *string, _ *string) (*model.RunStep, error) {
+	return &model.RunStep{ID: id}, nil
+}
 
 // newMockProjectRepoWithProject creates a mockProjectRepo preloaded with a project.
 func newMockProjectRepoWithProject(project *model.Project) *mockProjectRepo {
