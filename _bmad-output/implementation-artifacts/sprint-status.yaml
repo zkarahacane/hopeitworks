@@ -85,10 +85,10 @@ development_status:
   3-6-events-table-pgxlisten-event-bus: done
   3-7-pipeline-executor-sequential-step-runner: done
   3-8-agent-run-action-compose-claude-md-launch-container-stream-logs: backlog
-  3-9-container-timeout-enforcement-orphan-cleanup: backlog
+  3-9-container-timeout-enforcement-orphan-cleanup: done
   3-10-run-launch-api-endpoint-single-story: backlog
   3-11-run-launch-button-confirmation-dialog: done
-  3-12-run-status-display-on-story-card: backlog
+  3-12-run-status-display-on-story-card: done
   epic-3-retrospective: optional
 
   # Epic 4: Real-time Monitoring & Live Logs
@@ -109,13 +109,13 @@ development_status:
   epic-5-retrospective: optional
 
   # Epic 6: Pipeline Configuration & Prompt Templates
-  epic-6: in-progress
+  epic-6: done
   6-1-pipeline-configs-table-default-pipeline-seed-crud-api: done
   6-2-prompt-templates-table-crud-api: done
-  6-3-handlebars-rendering-engine-default-template-seeding: review
+  6-3-handlebars-rendering-engine-default-template-seeding: done
   6-4-pipeline-configuration-page: done
   6-5-prompt-template-list-page: done
-  6-6-prompt-template-editor: backlog
+  6-6-prompt-template-editor: done
   epic-6-retrospective: optional
 
   # Epic 7: Epic Batch Execution & DAG Scheduling
@@ -371,20 +371,20 @@ parallel_waves:
         explicit_deps: [3-1-runs-runsteps-tables-run-creation-api-state-machine]
       - key: 3-9-container-timeout-enforcement-orphan-cleanup
         domain: back
-        status: backlog
+        status: done
         explicit_deps: [3-4-docker-container-lifecycle-manager-create-start-stop-cleanup]
       - key: 3-12-run-status-display-on-story-card
         domain: front
-        status: backlog
+        status: done
         explicit_deps: [3-11-run-launch-button-confirmation-dialog]
       # Epic 6
       - key: 6-3-handlebars-rendering-engine-default-template-seeding
         domain: back
-        status: review
+        status: done
         explicit_deps: [6-2-prompt-templates-table-crud-api]
       - key: 6-6-prompt-template-editor
         domain: front
-        status: backlog
+        status: done
         explicit_deps: [6-5-prompt-template-list-page]
     container_count: 9
     depends_on: [wave-5]
