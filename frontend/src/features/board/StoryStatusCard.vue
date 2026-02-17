@@ -1,8 +1,12 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import Badge from 'primevue/badge'
+import { useToast } from 'primevue/usetoast'
 import type { Story } from '@/stores/stories'
+import RunStatusIndicator from './RunStatusIndicator.vue'
+import type { RunStatus } from './RunStatusIndicator.vue'
 
-defineProps<{
+const props = defineProps<{
   story: Story
   isSelected: boolean
 }>()
@@ -16,6 +20,27 @@ const severityMap: Record<string, 'secondary' | 'info' | 'success' | 'danger'> =
   running: 'info',
   done: 'success',
   failed: 'danger',
+}
+
+const toast = useToast()
+
+/** Derive run status from the latest_run field */
+const runStatus = computed<RunStatus>(() => {
+  if (!props.story.latest_run) return 'backlog'
+  return props.story.latest_run.status === 'cancelled'
+    ? 'failed'
+    : (props.story.latest_run.status as RunStatus)
+})
+
+function handleErrorClick() {
+  if (props.story.latest_run?.error_message) {
+    toast.add({
+      severity: 'error',
+      summary: 'Run Failed',
+      detail: props.story.latest_run.error_message,
+      life: 5000,
+    })
+  }
 }
 </script>
 
@@ -48,6 +73,12 @@ const severityMap: Record<string, 'secondary' | 'info' | 'success' | 'danger'> =
     >
       {{ story.title }}
     </span>
+    <RunStatusIndicator
+      :status="runStatus"
+      :completed-at="story.latest_run?.completed_at"
+      :error-message="story.latest_run?.error_message"
+      @error-click="handleErrorClick"
+    />
   </div>
 </template>
 
