@@ -14,6 +14,7 @@ import (
 	"github.com/riverqueue/river"
 	actionadapter "github.com/zakari/hopeitworks/backend/internal/adapter/action"
 	dockeradapter "github.com/zakari/hopeitworks/backend/internal/adapter/docker"
+	gitadapter "github.com/zakari/hopeitworks/backend/internal/adapter/git"
 	hbadapter "github.com/zakari/hopeitworks/backend/internal/adapter/handlebars"
 	pgadapter "github.com/zakari/hopeitworks/backend/internal/adapter/postgres"
 	riveradapter "github.com/zakari/hopeitworks/backend/internal/adapter/river"
@@ -21,6 +22,7 @@ import (
 	authmw "github.com/zakari/hopeitworks/backend/internal/api/middleware"
 	internalconfig "github.com/zakari/hopeitworks/backend/internal/config"
 	"github.com/zakari/hopeitworks/backend/internal/domain/service"
+	pkgexec "github.com/zakari/hopeitworks/backend/pkg/exec"
 	pkglog "github.com/zakari/hopeitworks/backend/pkg/log"
 )
 
@@ -127,9 +129,14 @@ func run() error {
 	// Run service and job queue
 	runRepo := pgadapter.NewRunRepo(queries)
 
+	// Event publisher (for persisting events to DB)
+	eventRepo := pgadapter.NewEventRepo(queries)
+
+	// Action registry
+	actionReg := service.NewActionRegistry()
+
 	// Pipeline executor (will be used by River workers)
-	// NOTE: event publisher and action registry wiring deferred to later story
-	pipelineExecutor := service.NewPipelineExecutor(runRepo, nil, nil, logger)
+	pipelineExecutor := service.NewPipelineExecutor(runRepo, actionReg, eventRepo, logger)
 
 	// River job queue for async pipeline execution
 	workers := river.NewWorkers()
@@ -156,12 +163,6 @@ func run() error {
 		logger.Warn("docker container manager unavailable, timeout enforcer and orphan cleaner disabled", "error", err)
 	}
 
-	// Event publisher (for persisting events to DB)
-	eventRepo := pgadapter.NewEventRepo(queries)
-
-	// Action registry
-	actionReg := service.NewActionRegistry()
-
 	// Agent run action (requires Docker)
 	if containerMgr != nil {
 		logStreamer, logErr := dockeradapter.NewDockerLogStreamerFromHost(cfg.Docker.Host, logger)
@@ -185,6 +186,16 @@ func run() error {
 			logger.Info("agent_run action registered")
 		}
 	}
+
+	// HITL gate action (always available — does not require Docker)
+	hitlRepo := pgadapter.NewHITLRepo(queries)
+	cmdRunner := pkgexec.NewRealCommandRunner()
+	gitProvider := gitadapter.NewGhCliAdapter(cmdRunner, logger)
+	hitlGateAction := actionadapter.NewHITLGateAction(
+		hitlRepo, runRepo, gitProvider, eventRepo, storyRepo, logger,
+	)
+	actionReg.Register(hitlGateAction)
+	logger.Info("hitl_gate action registered")
 
 	// Orphan cleanup and timeout enforcement (requires Docker)
 	if containerMgr != nil {
