@@ -11,6 +11,17 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type CostRecord struct {
+	ID           uuid.UUID      `json:"id"`
+	RunStepID    uuid.UUID      `json:"run_step_id"`
+	ProjectID    uuid.UUID      `json:"project_id"`
+	TokensInput  int64          `json:"tokens_input"`
+	TokensOutput int64          `json:"tokens_output"`
+	CostUsd      pgtype.Numeric `json:"cost_usd"`
+	Model        string         `json:"model"`
+	CreatedAt    time.Time      `json:"created_at"`
+}
+
 type Epic struct {
 	ID          uuid.UUID   `json:"id"`
 	ProjectID   uuid.UUID   `json:"project_id"`

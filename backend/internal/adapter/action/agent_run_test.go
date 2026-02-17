@@ -346,6 +346,22 @@ func (m *mockTemplateRenderer) Render(templateContent string, _ *model.TemplateC
 
 // --- Test fixture ---
 
+// mockCostRepo is a no-op CostRepository for use in AgentRunAction tests.
+type mockCostRepo struct{}
+
+func (m *mockCostRepo) InsertCostRecord(_ context.Context, r *model.CostRecord) (*model.CostRecord, error) {
+	return r, nil
+}
+func (m *mockCostRepo) GetCostByRunStep(_ context.Context, _ uuid.UUID) (*model.CostRecord, error) {
+	return nil, nil
+}
+func (m *mockCostRepo) SumCostByProject(_ context.Context, _ uuid.UUID, _ time.Time) (float64, int64, int64, error) {
+	return 0, 0, 0, nil
+}
+func (m *mockCostRepo) SumCostByRun(_ context.Context, _ uuid.UUID) (float64, error) {
+	return 0, nil
+}
+
 type agentRunFixture struct {
 	projectID uuid.UUID
 	storyID   uuid.UUID
@@ -364,6 +380,7 @@ type agentRunFixture struct {
 	projectRepo  *mockProjectRepo
 	runRepo      *mockRunRepo
 	templateSvc  *service.TemplateService
+	costSvc      *service.CostService
 
 	action *action.AgentRunAction
 }
@@ -464,6 +481,9 @@ func newAgentRunFixture(t *testing.T) *agentRunFixture {
 	renderer := &mockTemplateRenderer{}
 	f.templateSvc = service.NewTemplateService(promptTemplateRepo, renderer, testLogger())
 
+	// Create a CostService with a no-op mock repository
+	f.costSvc = service.NewCostService(&mockCostRepo{}, testLogger())
+
 	agentCfg := action.AgentConfig{
 		DefaultImage:  "hopeitworks/agent:latest",
 		DefaultMemory: 4294967296,
@@ -481,6 +501,7 @@ func newAgentRunFixture(t *testing.T) *agentRunFixture {
 		f.projectRepo,
 		f.runRepo,
 		f.templateSvc,
+		f.costSvc,
 		agentCfg,
 		testLogger(),
 	)
