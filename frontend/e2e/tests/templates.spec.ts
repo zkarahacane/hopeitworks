@@ -68,9 +68,9 @@ test.describe('Prompt Template List Page', () => {
       await expect(page.getByText('Code Review')).toBeVisible()
       await expect(page.getByText('Merge Strategy')).toBeVisible()
 
-      await expect(page.getByText('Name')).toBeVisible()
-      await expect(page.getByText('Type')).toBeVisible()
-      await expect(page.getByText('Last Updated')).toBeVisible()
+      await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible()
+      await expect(page.getByRole('columnheader', { name: 'Type' })).toBeVisible()
+      await expect(page.getByRole('columnheader', { name: 'Last Updated' })).toBeVisible()
     })
 
     test('does not show Create Template button for non-admin user', async ({ page }) => {
