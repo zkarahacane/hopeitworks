@@ -11,7 +11,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
-	"github.com/zakari/hopeitworks/backend/internal/adapter/postgres"
 	pgadapter "github.com/zakari/hopeitworks/backend/internal/adapter/postgres"
 	"github.com/zakari/hopeitworks/backend/internal/api/handler"
 	authmw "github.com/zakari/hopeitworks/backend/internal/api/middleware"
@@ -41,7 +40,7 @@ func run() error {
 	logger.Info("config loaded")
 
 	// Connect to database
-	pool, err := postgres.NewPool(ctx, cfg.Database)
+	pool, err := pgadapter.NewPool(ctx, cfg.Database)
 	if err != nil {
 		return fmt.Errorf("connecting to database: %w", err)
 	}
@@ -63,9 +62,6 @@ func run() error {
 
 	// Build dependency graph
 	queries := pgadapter.New(pool)
-
-	// Event publisher
-	_ = pgadapter.NewEventRepo(queries) // EventPublisher available for services
 
 	// Auth service and middleware
 	userRepo := pgadapter.NewUserRepository(pool)
