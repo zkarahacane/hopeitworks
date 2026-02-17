@@ -136,6 +136,11 @@ func (s *Server) DeleteStory(w http.ResponseWriter, r *http.Request, projectID P
 	s.stories.DeleteStory(w, r, projectID, storyID)
 }
 
+// ImportStories delegates to StoryHandler.
+func (s *Server) ImportStories(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath) {
+	s.stories.ImportStories(w, r, projectID)
+}
+
 // ListPromptTemplates delegates to PromptTemplateHandler.
 func (s *Server) ListPromptTemplates(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, params ListPromptTemplatesParams) {
 	s.promptTemplates.ListPromptTemplates(w, r, projectID, params)
