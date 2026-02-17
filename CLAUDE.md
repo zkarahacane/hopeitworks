@@ -209,6 +209,25 @@ Generated files (e.g., `wire_gen.go`, `db/` for sqlc, `frontend/src/api/generate
 
 ## CI Pipeline
 
+CI runs on GitHub Actions (`.github/workflows/ci.yml`) with **path-based filtering** to skip unrelated jobs on PRs.
+
+### Path Filtering
+
+| Event | Backend runs if | Frontend runs if |
+|-------|----------------|-----------------|
+| PR | `backend/**`, `api/**`, or `.github/workflows/ci.yml` changed | `frontend/**`, `api/**`, or `.github/workflows/ci.yml` changed |
+| Push to `develop`/`wave-*`/`main` | **always** | **always** |
+| `workflow_dispatch` | **always** | **always** |
+
+A `changes` job (using `dorny/paths-filter`) detects modified paths. A **`CI Gate`** job runs `always()` and validates that no required job failed — it is the single required status check in branch protection rulesets.
+
+### Branch Protection Rulesets
+
+| Ruleset | Branches | Rules |
+|---------|----------|-------|
+| **Production** | `main` | PR required, CI Gate required (strict: branch must be up to date), no force push, no deletion |
+| **Integration** | `develop`, `wave-*` | CI Gate required (non-strict), no force push, no deletion |
+
 ### Backend CI
 
 ```bash
