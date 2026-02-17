@@ -401,7 +401,7 @@ func (s *RunService) ResumeRun(ctx context.Context, projectID, runID uuid.UUID) 
 	}
 
 	if run.Status != model.RunStatusPaused {
-		return nil, errors.NewInvalidState("INVALID_STATE_TRANSITION",
+		return nil, errors.NewInvalidState("errors.ErrCodeInvalidStateTransition",
 			fmt.Sprintf("cannot resume run from status %s, must be paused", run.Status))
 	}
 

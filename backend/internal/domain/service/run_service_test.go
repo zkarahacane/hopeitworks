@@ -412,8 +412,8 @@ func TestTransitionRun_InvalidTransition(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected *errors.DomainError, got %T", err)
 	}
-	if domainErr.Code != "INVALID_STATE_TRANSITION" {
-		t.Errorf("expected INVALID_STATE_TRANSITION code, got %s", domainErr.Code)
+	if domainErr.Code != "errors.ErrCodeInvalidStateTransition" {
+		t.Errorf("expected errors.ErrCodeInvalidStateTransition code, got %s", domainErr.Code)
 	}
 }
 
@@ -486,8 +486,8 @@ func TestTransitionRunStep_InvalidTransition(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected *errors.DomainError, got %T", err)
 	}
-	if domainErr.Code != "INVALID_STATE_TRANSITION" {
-		t.Errorf("expected INVALID_STATE_TRANSITION code, got %s", domainErr.Code)
+	if domainErr.Code != "errors.ErrCodeInvalidStateTransition" {
+		t.Errorf("expected errors.ErrCodeInvalidStateTransition code, got %s", domainErr.Code)
 	}
 }
 
@@ -942,8 +942,8 @@ func TestPauseRun_InvalidState(t *testing.T) {
 			if !ok {
 				t.Fatalf("expected *errors.DomainError, got %T", err)
 			}
-			if domainErr.Code != "INVALID_STATE_TRANSITION" {
-				t.Errorf("expected INVALID_STATE_TRANSITION code, got %s", domainErr.Code)
+			if domainErr.Code != "errors.ErrCodeInvalidStateTransition" {
+				t.Errorf("expected errors.ErrCodeInvalidStateTransition code, got %s", domainErr.Code)
 			}
 		})
 	}
@@ -1174,8 +1174,8 @@ func TestTransitionRun_PausedInvalidTransitions(t *testing.T) {
 			if !ok {
 				t.Fatalf("expected *errors.DomainError, got %T", err)
 			}
-			if domainErr.Code != "INVALID_STATE_TRANSITION" {
-				t.Errorf("expected INVALID_STATE_TRANSITION code, got %s", domainErr.Code)
+			if domainErr.Code != "errors.ErrCodeInvalidStateTransition" {
+				t.Errorf("expected errors.ErrCodeInvalidStateTransition code, got %s", domainErr.Code)
 			}
 		})
 	}

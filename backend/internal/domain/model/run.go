@@ -79,7 +79,7 @@ var validStepTransitions = map[StepStatus][]StepStatus{
 func ValidateRunTransition(from, to RunStatus) error {
 	allowed, ok := validRunTransitions[from]
 	if !ok {
-		return errors.NewInvalidState("INVALID_STATE_TRANSITION",
+		return errors.NewInvalidState("errors.ErrCodeInvalidStateTransition",
 			fmt.Sprintf("no transitions allowed from run status: %s", from))
 	}
 	for _, valid := range allowed {
@@ -87,7 +87,7 @@ func ValidateRunTransition(from, to RunStatus) error {
 			return nil
 		}
 	}
-	return errors.NewInvalidState("INVALID_STATE_TRANSITION",
+	return errors.NewInvalidState("errors.ErrCodeInvalidStateTransition",
 		fmt.Sprintf("cannot transition run from %s to %s", from, to))
 }
 
@@ -95,7 +95,7 @@ func ValidateRunTransition(from, to RunStatus) error {
 func ValidateStepTransition(from, to StepStatus) error {
 	allowed, ok := validStepTransitions[from]
 	if !ok {
-		return errors.NewInvalidState("INVALID_STATE_TRANSITION",
+		return errors.NewInvalidState("errors.ErrCodeInvalidStateTransition",
 			fmt.Sprintf("no transitions allowed from step status: %s", from))
 	}
 	for _, valid := range allowed {
@@ -103,6 +103,6 @@ func ValidateStepTransition(from, to StepStatus) error {
 			return nil
 		}
 	}
-	return errors.NewInvalidState("INVALID_STATE_TRANSITION",
+	return errors.NewInvalidState("errors.ErrCodeInvalidStateTransition",
 		fmt.Sprintf("cannot transition step from %s to %s", from, to))
 }
