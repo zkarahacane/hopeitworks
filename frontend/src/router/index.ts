@@ -63,6 +63,17 @@ const router = createRouter({
           name: 'project-templates',
           component: PromptTemplatesView,
         },
+        {
+          path: 'templates/new',
+          name: 'template-create',
+          component: () => import('@/views/TemplateEditorView.vue'),
+          meta: { requiresAdmin: true },
+        },
+        {
+          path: 'templates/:templateId',
+          name: 'template-editor',
+          component: () => import('@/views/TemplateEditorView.vue'),
+        },
       ],
     },
     {

@@ -19,10 +19,13 @@
     "generate:api": "openapi-typescript ../api/openapi.yaml -o src/api/schema.d.ts"
   },
   "dependencies": {
+    "@guolao/vue-monaco-editor": "^1.6.0",
     "@primevue/themes": "^4.5.4",
     "@vee-validate/zod": "^4.15.1",
     "@vueuse/core": "^14.2.1",
     "date-fns": "^4.1.0",
+    "handlebars": "^4.7.8",
+    "monaco-editor": "^0.55.1",
     "openapi-fetch": "^0.17.0",
     "pinia": "^3.0.4",
     "primeicons": "^7.0.0",
