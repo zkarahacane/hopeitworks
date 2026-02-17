@@ -151,7 +151,7 @@ test.describe('Template Editor', () => {
         page.getByText('You are working on S-14: Add user authentication'),
       ).toBeVisible()
 
-      await page.getByRole('button', { name: 'Close' }).click()
+      await page.locator('.p-dialog-footer').getByRole('button', { name: 'Close' }).click()
 
       await expect(page.getByText('Template Preview')).not.toBeVisible()
     })
