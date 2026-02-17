@@ -19,6 +19,9 @@ const (
 const (
 	ErrCodeGitOperationFailed = "GIT_OPERATION_FAILED"
 	ErrCodeInvalidInput       = "INVALID_INPUT"
+	ErrCodeMergeConflict      = "MERGE_CONFLICT"
+	ErrCodeGitAuthFailed      = "GIT_AUTH_FAILED"
+	ErrCodePRNotFound         = "PR_NOT_FOUND"
 )
 
 // DomainError represents a structured error from the domain layer.

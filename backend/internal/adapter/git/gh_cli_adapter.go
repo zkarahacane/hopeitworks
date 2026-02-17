@@ -2,12 +2,20 @@ package git
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"regexp"
+	"strings"
 
 	"github.com/zakari/hopeitworks/backend/internal/domain/port"
 	"github.com/zakari/hopeitworks/backend/pkg/errors"
+)
+
+// CI check state and conclusion constants used when interpreting gh pr checks output.
+const (
+	ciStatusPending = "pending"
+	ciStatusFail    = "fail"
 )
 
 // branchNamePattern validates conventional branch naming: feat/{key}-{slug} or fix/{key}-{slug}.
@@ -110,4 +118,141 @@ func (a *GhCliAdapter) Push(ctx context.Context, workDir string, commitMsg strin
 	}
 
 	return nil
+}
+
+// CreatePR creates a pull request using gh CLI and returns the PR URL.
+func (a *GhCliAdapter) CreatePR(ctx context.Context, workDir string, title string, body string, baseBranch string) (string, error) {
+	a.logger.DebugContext(ctx, "creating pull request",
+		"work_dir", workDir,
+		"title", title,
+		"base_branch", baseBranch,
+	)
+
+	stdout, err := a.runner.Run(ctx, workDir, "gh", "pr", "create", "--title", title, "--body", body, "--base", baseBranch)
+	if err != nil {
+		if strings.Contains(stdout, "authentication") || strings.Contains(stdout, "login required") {
+			return "", errors.NewDomainError(
+				errors.ErrCodeGitAuthFailed,
+				fmt.Sprintf("GitHub authentication failed: %v", err),
+				map[string]any{"work_dir": workDir, "output": stdout},
+			)
+		}
+
+		return "", errors.NewDomainError(
+			errors.ErrCodeGitOperationFailed,
+			fmt.Sprintf("failed to create PR: %v", err),
+			map[string]any{"work_dir": workDir, "title": title, "base_branch": baseBranch, "output": stdout},
+		)
+	}
+
+	// Parse PR URL from stdout (gh pr create returns URL on last line)
+	lines := strings.Split(strings.TrimSpace(stdout), "\n")
+	prURL := strings.TrimSpace(lines[len(lines)-1])
+
+	if !strings.HasPrefix(prURL, "http") {
+		return "", errors.NewDomainError(
+			errors.ErrCodeGitOperationFailed,
+			"failed to parse PR URL from gh CLI output",
+			map[string]any{"output": stdout},
+		)
+	}
+
+	return prURL, nil
+}
+
+// MergePR squash-merges a pull request and deletes the source branch using gh CLI.
+func (a *GhCliAdapter) MergePR(ctx context.Context, workDir string, prIdentifier string) error {
+	a.logger.DebugContext(ctx, "merging pull request",
+		"work_dir", workDir,
+		"pr_identifier", prIdentifier,
+	)
+
+	stdout, err := a.runner.Run(ctx, workDir, "gh", "pr", "merge", prIdentifier, "--squash", "--delete-branch")
+	if err != nil {
+		if strings.Contains(stdout, "merge conflict") || strings.Contains(stdout, "conflicts") {
+			return errors.NewDomainError(
+				errors.ErrCodeMergeConflict,
+				fmt.Sprintf("merge conflict detected for PR %s: %v", prIdentifier, err),
+				map[string]any{"pr_identifier": prIdentifier, "work_dir": workDir, "output": stdout},
+			)
+		}
+
+		if strings.Contains(stdout, "no pull requests found") || strings.Contains(stdout, "not found") {
+			return errors.NewDomainError(
+				errors.ErrCodePRNotFound,
+				fmt.Sprintf("pull request not found: %s", prIdentifier),
+				map[string]any{"pr_identifier": prIdentifier, "work_dir": workDir, "output": stdout},
+			)
+		}
+
+		return errors.NewDomainError(
+			errors.ErrCodeGitOperationFailed,
+			fmt.Sprintf("failed to merge PR %s: %v", prIdentifier, err),
+			map[string]any{"pr_identifier": prIdentifier, "work_dir": workDir, "output": stdout},
+		)
+	}
+
+	return nil
+}
+
+// prCheck represents a single CI check result from gh pr checks --json output.
+type prCheck struct {
+	Name       string `json:"name"`
+	State      string `json:"state"`
+	Conclusion string `json:"conclusion"`
+}
+
+// GetCIStatus returns the CI check status for the current branch's PR using gh CLI.
+func (a *GhCliAdapter) GetCIStatus(ctx context.Context, workDir string) (string, error) {
+	a.logger.DebugContext(ctx, "getting CI status",
+		"work_dir", workDir,
+	)
+
+	stdout, err := a.runner.Run(ctx, workDir, "gh", "pr", "checks", "--json", "name,state,conclusion")
+	if err != nil {
+		if strings.Contains(stdout, "no pull request") {
+			return "", errors.NewDomainError(
+				errors.ErrCodePRNotFound,
+				"no pull request found for current branch",
+				map[string]any{"work_dir": workDir, "output": stdout},
+			)
+		}
+
+		return "", errors.NewDomainError(
+			errors.ErrCodeGitOperationFailed,
+			fmt.Sprintf("failed to get CI status: %v", err),
+			map[string]any{"work_dir": workDir, "output": stdout},
+		)
+	}
+
+	var checks []prCheck
+	if err := json.Unmarshal([]byte(stdout), &checks); err != nil {
+		return "", errors.NewDomainError(
+			errors.ErrCodeGitOperationFailed,
+			fmt.Sprintf("failed to parse CI check JSON: %v", err),
+			map[string]any{"output": stdout},
+		)
+	}
+
+	if len(checks) == 0 {
+		return "no_checks", nil
+	}
+
+	hasPending := false
+	for _, check := range checks {
+		if check.State == ciStatusPending || check.State == "queued" || check.State == "in_progress" {
+			hasPending = true
+			continue
+		}
+
+		if check.Conclusion == "failure" || check.Conclusion == "timed_out" || check.Conclusion == "action_required" {
+			return ciStatusFail, nil
+		}
+	}
+
+	if hasPending {
+		return ciStatusPending, nil
+	}
+
+	return "pass", nil
 }
