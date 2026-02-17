@@ -267,15 +267,17 @@ func TestSSEHandler_ReceivesLiveEvent(t *testing.T) {
 	// Wait for subscription to be established
 	waitForSubscription(t, sub, projectID)
 
-	// Send an event
+	// Send an event then close the channel so the handler processes it and exits naturally.
 	sub.send(projectID, testEvent)
+	sub.closeChan(projectID)
 
-	// Give handler time to process the event
-	time.Sleep(50 * time.Millisecond)
-
-	// Cancel context to stop the handler
-	cancel()
-	<-done
+	// Wait for handler to finish (channel closed causes it to return)
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("handler did not exit after channel closed")
+	}
+	cancel() // release context resources
 
 	body := rec.Body.String()
 
