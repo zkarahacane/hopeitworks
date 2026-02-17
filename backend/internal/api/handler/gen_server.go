@@ -216,7 +216,6 @@ type Pagination struct {
 
 // PipelineConfig defines model for PipelineConfig.
 type PipelineConfig struct {
-<<<<<<< HEAD
 	ProjectId openapi_types.UUID `json:"project_id"`
 	Steps     []PipelineStep     `json:"steps"`
 	UpdatedAt time.Time          `json:"updated_at"`
@@ -238,16 +237,6 @@ type PipelineStepActionType string
 // PipelineStepModel defines model for PipelineStep.Model.
 type PipelineStepModel string
 
-=======
-	ConfigYaml string             `json:"config_yaml"`
-	CreatedAt  time.Time          `json:"created_at"`
-	Id         openapi_types.UUID `json:"id"`
-	ProjectId  openapi_types.UUID `json:"project_id"`
-	UpdatedAt  time.Time          `json:"updated_at"`
-	Version    int                `json:"version"`
-}
-
->>>>>>> 99c5bda (feat(pipeline): add pipeline_configs table, default seed, and CRUD API)
 // Project defines model for Project.
 type Project struct {
 	CreatedAt   time.Time          `json:"created_at"`
@@ -372,12 +361,7 @@ type UpdateEpicRequestStatus string
 
 // UpdatePipelineConfigRequest defines model for UpdatePipelineConfigRequest.
 type UpdatePipelineConfigRequest struct {
-<<<<<<< HEAD
 	Steps []PipelineStep `json:"steps"`
-=======
-	// ConfigYaml Pipeline configuration in YAML format
-	ConfigYaml string `json:"config_yaml"`
->>>>>>> 99c5bda (feat(pipeline): add pipeline_configs table, default seed, and CRUD API)
 }
 
 // UpdateProjectRequest defines model for UpdateProjectRequest.
@@ -548,7 +532,6 @@ type UpdateEpicJSONRequestBody = UpdateEpicRequest
 // UpdatePipelineConfigJSONRequestBody defines body for UpdatePipelineConfig for application/json ContentType.
 type UpdatePipelineConfigJSONRequestBody = UpdatePipelineConfigRequest
 
-<<<<<<< HEAD
 // CreateRunJSONRequestBody defines body for CreateRun for application/json ContentType.
 type CreateRunJSONRequestBody = CreateRunRequest
 
@@ -558,8 +541,6 @@ type CreatePromptTemplateJSONRequestBody = CreatePromptTemplateRequest
 // UpdatePromptTemplateJSONRequestBody defines body for UpdatePromptTemplate for application/json ContentType.
 type UpdatePromptTemplateJSONRequestBody = UpdatePromptTemplateRequest
 
-=======
->>>>>>> 99c5bda (feat(pipeline): add pipeline_configs table, default seed, and CRUD API)
 // UpdateUserJSONRequestBody defines body for UpdateUser for application/json ContentType.
 type UpdateUserJSONRequestBody = UpdateUserRequest
 
@@ -607,7 +588,6 @@ type ServerInterface interface {
 	// Update an epic
 	// (PUT /projects/{projectId}/epics/{epicId})
 	UpdateEpic(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, epicId EpicIdPath)
-<<<<<<< HEAD
 	// Get the pipeline configuration for a project
 	// (GET /projects/{projectId}/pipeline)
 	GetPipelineConfig(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath)
@@ -641,14 +621,6 @@ type ServerInterface interface {
 	// List runs for a story
 	// (GET /stories/{storyId}/runs)
 	ListRunsByStory(w http.ResponseWriter, r *http.Request, storyId StoryIdPath, params ListRunsByStoryParams)
-=======
-	// Get pipeline config for a project
-	// (GET /projects/{projectId}/pipeline)
-	GetPipelineConfig(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath)
-	// Update pipeline config for a project
-	// (PUT /projects/{projectId}/pipeline)
-	UpdatePipelineConfig(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath)
->>>>>>> 99c5bda (feat(pipeline): add pipeline_configs table, default seed, and CRUD API)
 	// List all users
 	// (GET /users)
 	ListUsers(w http.ResponseWriter, r *http.Request, params ListUsersParams)
@@ -751,27 +723,18 @@ func (_ Unimplemented) UpdateEpic(w http.ResponseWriter, r *http.Request, projec
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-<<<<<<< HEAD
 // Get the pipeline configuration for a project
-=======
-// Get pipeline config for a project
->>>>>>> 99c5bda (feat(pipeline): add pipeline_configs table, default seed, and CRUD API)
 // (GET /projects/{projectId}/pipeline)
 func (_ Unimplemented) GetPipelineConfig(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-<<<<<<< HEAD
 // Update the pipeline configuration for a project
-=======
-// Update pipeline config for a project
->>>>>>> 99c5bda (feat(pipeline): add pipeline_configs table, default seed, and CRUD API)
 // (PUT /projects/{projectId}/pipeline)
 func (_ Unimplemented) UpdatePipelineConfig(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-<<<<<<< HEAD
 // List runs for a project
 // (GET /projects/{projectId}/runs)
 func (_ Unimplemented) ListRunsByProject(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, params ListRunsByProjectParams) {
@@ -826,8 +789,6 @@ func (_ Unimplemented) ListRunsByStory(w http.ResponseWriter, r *http.Request, s
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-=======
->>>>>>> 99c5bda (feat(pipeline): add pipeline_configs table, default seed, and CRUD API)
 // List all users
 // (GET /users)
 func (_ Unimplemented) ListUsers(w http.ResponseWriter, r *http.Request, params ListUsersParams) {
@@ -1354,7 +1315,6 @@ func (siw *ServerInterfaceWrapper) UpdatePipelineConfig(w http.ResponseWriter, r
 	handler.ServeHTTP(w, r)
 }
 
-<<<<<<< HEAD
 // ListRunsByProject operation middleware
 func (siw *ServerInterfaceWrapper) ListRunsByProject(w http.ResponseWriter, r *http.Request) {
 
@@ -1718,8 +1678,6 @@ func (siw *ServerInterfaceWrapper) ListRunsByStory(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
-=======
->>>>>>> 99c5bda (feat(pipeline): add pipeline_configs table, default seed, and CRUD API)
 // ListUsers operation middleware
 func (siw *ServerInterfaceWrapper) ListUsers(w http.ResponseWriter, r *http.Request) {
 
@@ -2024,7 +1982,6 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Put(options.BaseURL+"/projects/{projectId}/pipeline", wrapper.UpdatePipelineConfig)
 	})
 	r.Group(func(r chi.Router) {
-<<<<<<< HEAD
 		r.Get(options.BaseURL+"/projects/{projectId}/runs", wrapper.ListRunsByProject)
 	})
 	r.Group(func(r chi.Router) {
@@ -2052,8 +2009,6 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/stories/{storyId}/runs", wrapper.ListRunsByStory)
 	})
 	r.Group(func(r chi.Router) {
-=======
->>>>>>> 99c5bda (feat(pipeline): add pipeline_configs table, default seed, and CRUD API)
 		r.Get(options.BaseURL+"/users", wrapper.ListUsers)
 	})
 	r.Group(func(r chi.Router) {
@@ -2072,7 +2027,6 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-<<<<<<< HEAD
 	"H4sIAAAAAAAC/+wdaXPbNvavYLj7YXdGsihHTlN9as6uu2niceLp7KYeDUw+S2hIgAXAJFqP/vsOAN4E",
 	"D0mUlDb9FIsEHh7ehXeBeXA8FkaMApXCmT84EeY4BAlc/3oZEe/Sv8JypX75IDxOIkkYdeb6Hbq5uXzh",
 	"jByiHkRq2MihOARn7oCe6owcDr/HhIPvzCWPYeQIbwUhVvDuGQ+xdOZOHBM1Uq4jNVNITujS2WxGTtPa",
@@ -2131,50 +2085,6 @@ var swaggerSpec = []string{
 	"tnMGtXjY+/PoUO5x8bLwV3LXS8vHt1J6alT4yt2P8s3OD7dKKgTwT6kslUn49OoSfZqiOywAJf9RiLnP",
 	"OMERmXyaaqFKVqzNLX9+G6gfMUL1rYTkgqS+XKLOUgvfCjc0LTPTY6yp8bx9duHShbV7qn122h350FT7",
 	"VC5rO4jEierKFnXuohyktKBUrkXagFXLkJvbzf8DAAD//2tmrsuFagAA",
-=======
-	"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",
->>>>>>> 99c5bda (feat(pipeline): add pipeline_configs table, default seed, and CRUD API)
 }
 
 // GetSwagger returns the content of the embedded swagger specification file
