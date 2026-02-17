@@ -9,6 +9,8 @@ import (
 	"github.com/zakari/hopeitworks/backend/pkg/errors"
 )
 
+const gitCommand = "git"
+
 // commandInvocation records a single command call.
 type commandInvocation struct {
 	WorkDir string
@@ -123,8 +125,8 @@ func TestCreateBranch_ValidNames(t *testing.T) {
 			if inv.WorkDir != "/work" {
 				t.Errorf("expected workDir '/work', got %q", inv.WorkDir)
 			}
-			if inv.Name != "git" {
-				t.Errorf("expected command 'git', got %q", inv.Name)
+			if inv.Name != gitCommand {
+				t.Errorf("expected command %q, got %q", gitCommand, inv.Name)
 			}
 			expectedArgs := []string{"checkout", "-b", tt.branchName}
 			assertArgs(t, inv.Args, expectedArgs)
@@ -207,8 +209,8 @@ func TestPush_Success(t *testing.T) {
 
 	// Verify git add .
 	inv0 := runner.invocations[0]
-	if inv0.Name != "git" {
-		t.Errorf("invocation 0: expected 'git', got %q", inv0.Name)
+	if inv0.Name != gitCommand {
+		t.Errorf("invocation 0: expected %q, got %q", gitCommand, inv0.Name)
 	}
 	assertArgs(t, inv0.Args, []string{"add", "."})
 	if inv0.WorkDir != "/work" {
@@ -217,15 +219,15 @@ func TestPush_Success(t *testing.T) {
 
 	// Verify git commit -m
 	inv1 := runner.invocations[1]
-	if inv1.Name != "git" {
-		t.Errorf("invocation 1: expected 'git', got %q", inv1.Name)
+	if inv1.Name != gitCommand {
+		t.Errorf("invocation 1: expected %q, got %q", gitCommand, inv1.Name)
 	}
 	assertArgs(t, inv1.Args, []string{"commit", "-m", "feat(git): add clone support"})
 
 	// Verify git push -u origin HEAD
 	inv2 := runner.invocations[2]
-	if inv2.Name != "git" {
-		t.Errorf("invocation 2: expected 'git', got %q", inv2.Name)
+	if inv2.Name != gitCommand {
+		t.Errorf("invocation 2: expected %q, got %q", gitCommand, inv2.Name)
 	}
 	assertArgs(t, inv2.Args, []string{"push", "-u", "origin", "HEAD"})
 }
