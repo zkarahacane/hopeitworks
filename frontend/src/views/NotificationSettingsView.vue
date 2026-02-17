@@ -4,7 +4,9 @@ import { useRoute } from 'vue-router'
 import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
 import Button from 'primevue/button'
+import ConfirmDialog from 'primevue/confirmdialog'
 import Skeleton from 'primevue/skeleton'
+import Toast from 'primevue/toast'
 import { useAuthStore } from '@/stores/auth'
 import { useNotifications, type NotificationConfig } from '@/composables/useNotifications'
 import NotificationChannelRow from '@/features/notifications/NotificationChannelRow.vue'
@@ -140,5 +142,8 @@ function handleCreated() {
       :project-id="projectId"
       @created="handleCreated"
     />
+
+    <Toast />
+    <ConfirmDialog />
   </div>
 </template>
