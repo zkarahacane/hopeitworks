@@ -28,6 +28,11 @@ func testProjectStoriesPath() string {
 	return filepath.Join(filepath.Dir(filename), "..", "..", "..", "test-project", "stories", "todo-stories.md")
 }
 
+const (
+	scopeBackend  = "backend"
+	scopeFrontend = "frontend"
+)
+
 // noopAction implements model.Action for integration tests.
 // It succeeds immediately without performing real work.
 type noopAction struct {
@@ -138,16 +143,16 @@ func TestIntegration_PipelineValidation_StoryImport(t *testing.T) {
 		if err != nil {
 			t.Fatalf("GetByKey(TODO-1) error = %v", err)
 		}
-		if story1.Scope == nil || *story1.Scope != "backend" {
-			t.Errorf("TODO-1 scope: expected %q, got %v", "backend", story1.Scope)
+		if story1.Scope == nil || *story1.Scope != scopeBackend {
+			t.Errorf("TODO-1 scope: expected %q, got %v", scopeBackend, story1.Scope)
 		}
 
 		story5, err := storyRepo.GetByKey(ctx, projectID, "TODO-5")
 		if err != nil {
 			t.Fatalf("GetByKey(TODO-5) error = %v", err)
 		}
-		if story5.Scope == nil || *story5.Scope != "frontend" {
-			t.Errorf("TODO-5 scope: expected %q, got %v", "frontend", story5.Scope)
+		if story5.Scope == nil || *story5.Scope != scopeFrontend {
+			t.Errorf("TODO-5 scope: expected %q, got %v", scopeFrontend, story5.Scope)
 		}
 	})
 
@@ -211,7 +216,7 @@ func TestIntegration_PipelineValidation_RunCreation(t *testing.T) {
 	// Create a story
 	storyRepo := postgres.NewStoryRepo(queries)
 	storySvc := service.NewStoryService(storyRepo)
-	scope := "backend"
+	scope := scopeBackend
 	story, err := storySvc.Create(ctx, service.CreateStoryParams{
 		ProjectID: projectID,
 		Key:       "TODO-1",
@@ -360,7 +365,7 @@ func TestIntegration_PipelineValidation_Execution(t *testing.T) {
 	// Create story
 	storyRepo := postgres.NewStoryRepo(queries)
 	storySvc := service.NewStoryService(storyRepo)
-	scope := "backend"
+	scope := scopeBackend
 	story, err := storySvc.Create(ctx, service.CreateStoryParams{
 		ProjectID: projectID,
 		Key:       "TODO-1",
