@@ -16,8 +16,8 @@ import (
 )
 
 const (
-	testContainerID         = "abc123"
-	testErrorCodeContainer  = "CONTAINER_OPERATION_FAILED"
+	testContainerID        = "abc123"
+	testErrorCodeContainer = "CONTAINER_OPERATION_FAILED"
 )
 
 // mockDockerClient is a test double for the Docker SDK client.
