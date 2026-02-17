@@ -109,7 +109,7 @@ describe('useCosts', () => {
     expect(isLoading.value).toBe(false)
   })
 
-  it('sets error and clears isLoading when API returns an error', async () => {
+  it('sets error and clears isLoading when summary API returns an error', async () => {
     mockGet
       .mockResolvedValueOnce({ data: undefined, error: { code: 'NOT_FOUND', message: 'not found' } })
       .mockResolvedValue({ data: [], error: undefined })
@@ -118,6 +118,32 @@ describe('useCosts', () => {
     await fetchAll()
 
     expect(error.value).toBe('Failed to load cost summary')
+    expect(isLoading.value).toBe(false)
+  })
+
+  it('sets error when chart API returns an error', async () => {
+    mockGet
+      .mockResolvedValueOnce({ data: summaryData, error: undefined })
+      .mockResolvedValueOnce({ data: undefined, error: { code: 'INTERNAL', message: 'chart error' } })
+      .mockResolvedValueOnce({ data: { data: [], pagination: { total: 0, page: 1, per_page: 20 } }, error: undefined })
+
+    const { error, isLoading, fetchAll } = useCosts('proj-1')
+    await fetchAll()
+
+    expect(error.value).toBe('Failed to load cost chart')
+    expect(isLoading.value).toBe(false)
+  })
+
+  it('sets error when runs API returns an error', async () => {
+    mockGet
+      .mockResolvedValueOnce({ data: summaryData, error: undefined })
+      .mockResolvedValueOnce({ data: [], error: undefined })
+      .mockResolvedValueOnce({ data: undefined, error: { code: 'INTERNAL', message: 'runs error' } })
+
+    const { error, isLoading, fetchAll } = useCosts('proj-1')
+    await fetchAll()
+
+    expect(error.value).toBe('Failed to load cost runs')
     expect(isLoading.value).toBe(false)
   })
 

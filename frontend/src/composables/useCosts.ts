@@ -34,6 +34,8 @@ export function useCosts(projectId: string) {
         }),
       ])
       if (sumRes.error) throw new Error('Failed to load cost summary')
+      if (chartRes.error) throw new Error('Failed to load cost chart')
+      if (runsRes.error) throw new Error('Failed to load cost runs')
       summary.value = sumRes.data ?? null
       chartData.value = chartRes.data ?? []
       runs.value = runsRes.data?.data ?? []
@@ -47,7 +49,7 @@ export function useCosts(projectId: string) {
   /** Update the active period and re-fetch all cost data. */
   function setPeriod(p: '7d' | '30d') {
     period.value = p
-    fetchAll()
+    return fetchAll()
   }
 
   onMounted(fetchAll)

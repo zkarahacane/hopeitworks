@@ -85,7 +85,7 @@ function budgetPercent(total: number, limit: number): number {
 
       <!-- Budget progress bar -->
       <div
-        v-if="summary && summary.budget_limit_usd && summary.budget_limit_usd > 0"
+        v-if="summary && (summary.budget_limit_usd ?? 0) > 0"
         class="rounded-lg border border-surface-200 bg-surface-0 p-4"
         data-testid="budget-bar"
       >
@@ -93,11 +93,11 @@ function budgetPercent(total: number, limit: number): number {
           <span class="font-medium">Budget usage</span>
           <span class="text-surface-500">
             {{ formatCostUSD(summary.total_cost_usd) }} /
-            {{ formatCostUSD(summary.budget_limit_usd) }} used
+            {{ formatCostUSD(summary.budget_limit_usd ?? 0) }} used
           </span>
         </div>
         <ProgressBar
-          :value="budgetPercent(summary.total_cost_usd, summary.budget_limit_usd)"
+          :value="budgetPercent(summary.total_cost_usd, summary.budget_limit_usd ?? 0)"
           :show-value="false"
         />
       </div>
