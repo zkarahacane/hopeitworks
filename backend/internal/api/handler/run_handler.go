@@ -112,6 +112,17 @@ func (h *RunHandler) ListRunsByStory(w http.ResponseWriter, r *http.Request, sto
 	writeJSON(w, http.StatusOK, resp)
 }
 
+// LaunchRun handles POST /projects/{projectId}/stories/{storyId}/runs.
+func (h *RunHandler) LaunchRun(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, storyID StoryIdPath) {
+	run, err := h.service.LaunchRun(r.Context(), projectID, storyID)
+	if err != nil {
+		writeErrorResponse(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, toAPIRunWithSteps(run))
+}
+
 // GetRun handles GET /runs/{runId}.
 func (h *RunHandler) GetRun(w http.ResponseWriter, r *http.Request, runID RunIdPath) {
 	run, err := h.service.GetRun(r.Context(), runID)

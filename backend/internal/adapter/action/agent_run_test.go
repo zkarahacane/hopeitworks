@@ -198,6 +198,7 @@ type mockRunRepo struct {
 	containerInfoCalls    []containerInfoCall
 	createRunFn           func(ctx context.Context, run *model.Run) (*model.Run, error)
 	getRunFn              func(ctx context.Context, id uuid.UUID) (*model.Run, error)
+	getActiveRunByStoryFn func(ctx context.Context, storyID uuid.UUID) (*model.Run, error)
 	listRunsByProjectFn   func(ctx context.Context, projectID uuid.UUID, limit, offset int32) ([]*model.Run, error)
 	listRunsByStoryFn     func(ctx context.Context, storyID uuid.UUID, limit, offset int32) ([]*model.Run, error)
 	updateRunStatusFn     func(ctx context.Context, id uuid.UUID, status model.RunStatus, startedAt, completedAt *time.Time, errorMsg *string) (*model.Run, error)
@@ -236,6 +237,12 @@ func (m *mockRunRepo) GetRun(ctx context.Context, id uuid.UUID) (*model.Run, err
 		return m.getRunFn(ctx, id)
 	}
 	return nil, errors.NewNotFound("run", id)
+}
+func (m *mockRunRepo) GetActiveRunByStory(ctx context.Context, storyID uuid.UUID) (*model.Run, error) {
+	if m.getActiveRunByStoryFn != nil {
+		return m.getActiveRunByStoryFn(ctx, storyID)
+	}
+	return nil, nil
 }
 func (m *mockRunRepo) ListRunsByProject(ctx context.Context, projectID uuid.UUID, limit, offset int32) ([]*model.Run, error) {
 	if m.listRunsByProjectFn != nil {

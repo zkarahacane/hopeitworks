@@ -12,6 +12,8 @@ import (
 type RunRepository interface {
 	CreateRun(ctx context.Context, run *model.Run) (*model.Run, error)
 	GetRun(ctx context.Context, id uuid.UUID) (*model.Run, error)
+	// GetActiveRunByStory returns the most recent pending or running run for a story, or nil if none.
+	GetActiveRunByStory(ctx context.Context, storyID uuid.UUID) (*model.Run, error)
 	ListRunsByProject(ctx context.Context, projectID uuid.UUID, limit, offset int32) ([]*model.Run, error)
 	ListRunsByStory(ctx context.Context, storyID uuid.UUID, limit, offset int32) ([]*model.Run, error)
 	UpdateRunStatus(ctx context.Context, id uuid.UUID, status model.RunStatus, startedAt, completedAt *time.Time, errorMsg *string) (*model.Run, error)

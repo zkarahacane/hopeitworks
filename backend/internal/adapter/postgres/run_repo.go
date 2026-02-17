@@ -56,6 +56,17 @@ func (r *RunRepo) GetRun(ctx context.Context, id uuid.UUID) (*model.Run, error) 
 	return toDomainRun(row), nil
 }
 
+func (r *RunRepo) GetActiveRunByStory(ctx context.Context, storyID uuid.UUID) (*model.Run, error) {
+	row, err := r.queries.GetActiveRunByStory(ctx, storyID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, apperrors.NewInternal("failed to get active run by story", err)
+	}
+	return toDomainRun(row), nil
+}
+
 func (r *RunRepo) ListRunsByProject(ctx context.Context, projectID uuid.UUID, limit, offset int32) ([]*model.Run, error) {
 	rows, err := r.queries.ListRunsByProject(ctx, ListRunsByProjectParams{
 		ProjectID: projectID,
