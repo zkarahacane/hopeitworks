@@ -2,17 +2,57 @@
 import { ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import Button from 'primevue/button'
+import Toast from 'primevue/toast'
+import { useToast } from 'primevue/usetoast'
 import AppHeader from './AppHeader.vue'
 import AppSidebar from './AppSidebar.vue'
 import AppStatusBar from './AppStatusBar.vue'
 import { useLayoutStore } from '@/stores/layout'
+import { useApprovalsStore, type PendingApproval } from '@/stores/approvals'
 import { useKeyboard } from '@/composables/useKeyboard'
 import { useBreakpoint } from '@/composables/useBreakpoint'
 
 const layoutStore = useLayoutStore()
+const approvalsStore = useApprovalsStore()
+const toast = useToast()
 const { isMobile } = useBreakpoint()
 const mobileSidebarOpen = ref(false)
 const router = useRouter()
+
+/** Watch for new pending approvals and show toast notifications */
+watch(
+  () => approvalsStore.pendingApprovals.length,
+  (newLen, oldLen) => {
+    if (newLen > oldLen) {
+      const latest = approvalsStore.pendingApprovals[newLen - 1]
+      if (latest) showApprovalToast(latest)
+    }
+  },
+)
+
+function showApprovalToast(approval: PendingApproval) {
+  toast.add({
+    severity: 'warn',
+    summary: 'Review Required',
+    detail: `Review required for ${approval.storyKey}`,
+    life: 0,
+    group: 'hitl',
+  })
+}
+
+function navigateToApproval() {
+  const latest = approvalsStore.pendingApprovals[approvalsStore.pendingApprovals.length - 1]
+  if (!latest) return
+  approvalsStore.removePendingApproval(latest.hitlRequestId)
+  router.push({
+    name: 'hitl-approve',
+    params: {
+      id: latest.projectId,
+      runId: latest.runId,
+      stepId: latest.stepId,
+    },
+  })
+}
 
 const mobileNavItems = [
   { label: 'Dashboard', icon: 'pi pi-home', route: '/' },
@@ -89,5 +129,24 @@ function toggleMobileSidebar() {
     </nav>
 
     <AppStatusBar v-if="!isMobile" />
+
+    <!-- Global toast for SSE notifications (HITL approvals) -->
+    <Toast position="top-right" group="hitl">
+      <template #message="slotProps">
+        <div class="flex flex-col gap-2">
+          <div class="flex items-center gap-2">
+            <i class="pi pi-exclamation-triangle" />
+            <span class="font-semibold">{{ slotProps.message.summary }}</span>
+          </div>
+          <span>{{ slotProps.message.detail }}</span>
+          <Button
+            label="Review Now"
+            size="small"
+            severity="warn"
+            @click="navigateToApproval()"
+          />
+        </div>
+      </template>
+    </Toast>
   </div>
 </template>

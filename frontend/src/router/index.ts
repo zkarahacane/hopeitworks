@@ -79,6 +79,11 @@ const router = createRouter({
           name: 'template-editor',
           component: () => import('@/views/TemplateEditorView.vue'),
         },
+        {
+          path: 'runs/:runId/approve/:stepId',
+          name: 'hitl-approve',
+          component: () => import('@/views/HITLApprovalView.vue'),
+        },
       ],
     },
     {
