@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/zakari/hopeitworks/backend/internal/adapter/markdown"
 	"github.com/zakari/hopeitworks/backend/internal/api/middleware"
 	"github.com/zakari/hopeitworks/backend/internal/domain/model"
 	"github.com/zakari/hopeitworks/backend/internal/domain/service"
@@ -187,6 +188,65 @@ func (h *StoryHandler) DeleteStory(w http.ResponseWriter, r *http.Request, _ Pro
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// ImportStories handles POST /projects/{projectId}/stories/import.
+// Only admin users can import stories.
+func (h *StoryHandler) ImportStories(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath) {
+	if !middleware.IsAdmin(r.Context()) {
+		writeErrorResponse(w, errors.NewForbidden("Admin access required"))
+		return
+	}
+
+	var req ImportStoriesRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErrorResponse(w, errors.NewValidation("body", "invalid JSON"))
+		return
+	}
+
+	if strings.TrimSpace(req.Content) == "" {
+		writeErrorResponse(w, errors.NewValidation("content", "must not be empty"))
+		return
+	}
+
+	parsed := markdown.ParseStoryMarkdown(req.Content)
+	inputs := make([]service.ImportStoryInput, len(parsed))
+	for i, p := range parsed {
+		inputs[i] = service.ImportStoryInput{
+			Key:                p.Key,
+			Title:              p.Title,
+			Epic:               p.Epic,
+			DependsOn:          p.DependsOn,
+			Scope:              p.Scope,
+			Status:             p.Status,
+			AcceptanceCriteria: p.AcceptanceCriteria,
+			ParseError:         p.ParseError,
+		}
+	}
+
+	result, err := h.service.Import(r.Context(), projectID, inputs)
+	if err != nil {
+		writeErrorResponse(w, err)
+		return
+	}
+
+	apiErrors := make([]ImportStoryError, len(result.Errors))
+	for i, e := range result.Errors {
+		apiErrors[i] = ImportStoryError{
+			Key:     e.Key,
+			Message: e.Message,
+			Code:    e.Code,
+		}
+	}
+
+	resp := ImportStoriesResult{
+		Imported: result.Imported,
+		Updated:  result.Updated,
+		Failed:   result.Failed,
+		Errors:   apiErrors,
+	}
+
+	writeJSON(w, http.StatusOK, resp)
 }
 
 // toAPIStory converts a domain Story to the API Story type.

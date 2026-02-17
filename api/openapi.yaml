@@ -487,6 +487,33 @@ paths:
         "409":
           $ref: "#/components/responses/Conflict"
 
+  /projects/{projectId}/stories/import:
+    post:
+      operationId: importStories
+      summary: Bulk import stories from markdown with YAML frontmatter
+      tags: [stories]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImportStoriesRequest"
+      responses:
+        "200":
+          description: Import result with per-story success and error counts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportStoriesResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
   /projects/{projectId}/stories/{storyId}:
     get:
       operationId: getStory
@@ -1322,6 +1349,47 @@ components:
           $ref: "#/components/schemas/StoryStatus"
         acceptance_criteria:
           type: string
+
+    # ── Story Import ──────────────────────────────────────────────────
+    ImportStoriesRequest:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+          description: Raw markdown content with YAML frontmatter story blocks
+
+    ImportStoriesResult:
+      type: object
+      required: [imported, updated, failed, errors]
+      properties:
+        imported:
+          type: integer
+          description: Number of newly created stories
+        updated:
+          type: integer
+          description: Number of updated stories (key already existed)
+        failed:
+          type: integer
+          description: Number of stories that failed to import
+        errors:
+          type: array
+          items:
+            $ref: "#/components/schemas/ImportStoryError"
+
+    ImportStoryError:
+      type: object
+      required: [key, message, code]
+      properties:
+        key:
+          type: string
+          description: Story key (may be empty if key could not be extracted)
+        message:
+          type: string
+          description: Human-readable error description
+        code:
+          type: string
+          description: Machine-readable error code
 
     # ── Prompt Template ────────────────────────────────────────────────
     PromptTemplate:

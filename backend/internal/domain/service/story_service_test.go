@@ -2,12 +2,15 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/google/uuid"
 	"github.com/zakari/hopeitworks/backend/internal/domain/model"
 	"github.com/zakari/hopeitworks/backend/pkg/errors"
 )
+
+const testStoryKeyS01 = "S-01"
 
 // mockStoryRepo is a mock implementation of port.StoryRepository for testing.
 type mockStoryRepo struct {
@@ -143,7 +146,7 @@ func TestStoryService_Create(t *testing.T) {
 	}{
 		{
 			name:    "valid story with default status",
-			params:  CreateStoryParams{ProjectID: projectID, Key: "S-01", Title: "Story 1"},
+			params:  CreateStoryParams{ProjectID: projectID, Key: testStoryKeyS01, Title: "Story 1"},
 			wantErr: false,
 		},
 		{
@@ -153,7 +156,7 @@ func TestStoryService_Create(t *testing.T) {
 		},
 		{
 			name:    "valid story with all fields",
-			params:  CreateStoryParams{ProjectID: projectID, Key: "S-03", Title: "Story 3", Objective: storyStrPtr("An objective"), TargetFiles: []string{"main.go"}, DependsOn: []string{"S-01"}, Scope: storyStrPtr("backend"), AcceptanceCriteria: storyStrPtr("It works")},
+			params:  CreateStoryParams{ProjectID: projectID, Key: "S-03", Title: "Story 3", Objective: storyStrPtr("An objective"), TargetFiles: []string{"main.go"}, DependsOn: []string{testStoryKeyS01}, Scope: storyStrPtr("backend"), AcceptanceCriteria: storyStrPtr("It works")},
 			wantErr: false,
 		},
 		{
@@ -204,31 +207,31 @@ func TestStoryService_Create(t *testing.T) {
 		},
 		{
 			name:    "empty title",
-			params:  CreateStoryParams{ProjectID: projectID, Key: "S-01", Title: ""},
+			params:  CreateStoryParams{ProjectID: projectID, Key: testStoryKeyS01, Title: ""},
 			wantErr: true,
 			errCode: "VALIDATION_ERROR",
 		},
 		{
 			name:    "title too long",
-			params:  CreateStoryParams{ProjectID: projectID, Key: "S-01", Title: string(make([]byte, 256))},
+			params:  CreateStoryParams{ProjectID: projectID, Key: testStoryKeyS01, Title: string(make([]byte, 256))},
 			wantErr: true,
 			errCode: "VALIDATION_ERROR",
 		},
 		{
 			name:    "missing project_id",
-			params:  CreateStoryParams{Key: "S-01", Title: "Story"},
+			params:  CreateStoryParams{Key: testStoryKeyS01, Title: "Story"},
 			wantErr: true,
 			errCode: "VALIDATION_ERROR",
 		},
 		{
 			name:    "invalid status",
-			params:  CreateStoryParams{ProjectID: projectID, Key: "S-01", Title: "Story", Status: "invalid"},
+			params:  CreateStoryParams{ProjectID: projectID, Key: testStoryKeyS01, Title: "Story", Status: "invalid"},
 			wantErr: true,
 			errCode: "VALIDATION_ERROR",
 		},
 		{
 			name:    "invalid scope",
-			params:  CreateStoryParams{ProjectID: projectID, Key: "S-01", Title: "Story", Scope: storyStrPtr("invalid")},
+			params:  CreateStoryParams{ProjectID: projectID, Key: testStoryKeyS01, Title: "Story", Scope: storyStrPtr("invalid")},
 			wantErr: true,
 			errCode: "VALIDATION_ERROR",
 		},
@@ -298,13 +301,13 @@ func TestStoryService_GetByID(t *testing.T) {
 	svc := NewStoryService(repo)
 
 	id := uuid.New()
-	repo.stories[id] = &model.Story{ID: id, Key: "S-01", Title: "test-story", ProjectID: uuid.New(), Status: "backlog"}
+	repo.stories[id] = &model.Story{ID: id, Key: testStoryKeyS01, Title: "test-story", ProjectID: uuid.New(), Status: "backlog"}
 
 	result, err := svc.GetByID(context.Background(), id)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if result.Key != "S-01" {
+	if result.Key != testStoryKeyS01 {
 		t.Errorf("expected key 'S-01', got %q", result.Key)
 	}
 
@@ -542,7 +545,7 @@ func TestStoryService_Delete(t *testing.T) {
 	svc := NewStoryService(repo)
 
 	id := uuid.New()
-	repo.stories[id] = &model.Story{ID: id, Key: "S-01", Title: "to-delete", ProjectID: uuid.New(), Status: "backlog"}
+	repo.stories[id] = &model.Story{ID: id, Key: testStoryKeyS01, Title: "to-delete", ProjectID: uuid.New(), Status: "backlog"}
 
 	err := svc.Delete(context.Background(), id)
 	if err != nil {
@@ -564,6 +567,212 @@ func TestStoryService_Delete(t *testing.T) {
 	}
 	if domainErr.Category != errors.CategoryNotFound {
 		t.Errorf("expected not_found category, got %q", domainErr.Category)
+	}
+}
+
+func TestStoryService_Import_AllNew(t *testing.T) {
+	repo := newMockStoryRepo()
+	svc := NewStoryService(repo)
+	projectID := uuid.New()
+
+	stories := []ImportStoryInput{
+		{Key: testStoryKeyS01, Title: "First Story", Scope: "backend"},
+		{Key: "S-02", Title: "Second Story", Scope: "frontend"},
+	}
+
+	result, err := svc.Import(context.Background(), projectID, stories)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Imported != 2 {
+		t.Errorf("expected imported=2, got %d", result.Imported)
+	}
+	if result.Updated != 0 {
+		t.Errorf("expected updated=0, got %d", result.Updated)
+	}
+	if result.Failed != 0 {
+		t.Errorf("expected failed=0, got %d", result.Failed)
+	}
+	if len(result.Errors) != 0 {
+		t.Errorf("expected no errors, got %v", result.Errors)
+	}
+}
+
+func TestStoryService_Import_AllExisting(t *testing.T) {
+	repo := newMockStoryRepo()
+	svc := NewStoryService(repo)
+	projectID := uuid.New()
+
+	// Pre-create stories
+	id1 := uuid.New()
+	id2 := uuid.New()
+	repo.stories[id1] = &model.Story{ID: id1, ProjectID: projectID, Key: testStoryKeyS01, Title: "Old Title 1", Status: "backlog"}
+	repo.stories[id2] = &model.Story{ID: id2, ProjectID: projectID, Key: "S-02", Title: "Old Title 2", Status: "backlog"}
+
+	stories := []ImportStoryInput{
+		{Key: testStoryKeyS01, Title: "New Title 1", Scope: "backend"},
+		{Key: "S-02", Title: "New Title 2", Scope: "frontend"},
+	}
+
+	result, err := svc.Import(context.Background(), projectID, stories)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Imported != 0 {
+		t.Errorf("expected imported=0, got %d", result.Imported)
+	}
+	if result.Updated != 2 {
+		t.Errorf("expected updated=2, got %d", result.Updated)
+	}
+	if result.Failed != 0 {
+		t.Errorf("expected failed=0, got %d", result.Failed)
+	}
+
+	// Verify titles were updated
+	for _, s := range repo.stories {
+		if s.Key == testStoryKeyS01 && s.Title != "New Title 1" {
+			t.Errorf("expected S-01 title to be 'New Title 1', got %q", s.Title)
+		}
+		if s.Key == "S-02" && s.Title != "New Title 2" {
+			t.Errorf("expected S-02 title to be 'New Title 2', got %q", s.Title)
+		}
+	}
+}
+
+func TestStoryService_Import_MixNewAndExisting(t *testing.T) {
+	repo := newMockStoryRepo()
+	svc := NewStoryService(repo)
+	projectID := uuid.New()
+
+	id1 := uuid.New()
+	repo.stories[id1] = &model.Story{ID: id1, ProjectID: projectID, Key: testStoryKeyS01, Title: "Existing", Status: "backlog"}
+
+	stories := []ImportStoryInput{
+		{Key: testStoryKeyS01, Title: "Updated Title"},
+		{Key: "S-02", Title: "Brand New Story"},
+	}
+
+	result, err := svc.Import(context.Background(), projectID, stories)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Imported != 1 {
+		t.Errorf("expected imported=1, got %d", result.Imported)
+	}
+	if result.Updated != 1 {
+		t.Errorf("expected updated=1, got %d", result.Updated)
+	}
+	if result.Failed != 0 {
+		t.Errorf("expected failed=0, got %d", result.Failed)
+	}
+}
+
+func TestStoryService_Import_ParseError(t *testing.T) {
+	repo := newMockStoryRepo()
+	svc := NewStoryService(repo)
+	projectID := uuid.New()
+
+	stories := []ImportStoryInput{
+		{Key: testStoryKeyS01, Title: "Valid Story"},
+		{ParseError: fmt.Errorf("yaml: unmarshal error")},
+	}
+
+	result, err := svc.Import(context.Background(), projectID, stories)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Imported != 1 {
+		t.Errorf("expected imported=1, got %d", result.Imported)
+	}
+	if result.Failed != 1 {
+		t.Errorf("expected failed=1, got %d", result.Failed)
+	}
+	if len(result.Errors) != 1 {
+		t.Fatalf("expected 1 error, got %d", len(result.Errors))
+	}
+	if result.Errors[0].Code != "YAML_PARSE_ERROR" {
+		t.Errorf("expected error code 'YAML_PARSE_ERROR', got %q", result.Errors[0].Code)
+	}
+}
+
+func TestStoryService_Import_EmptyKey(t *testing.T) {
+	repo := newMockStoryRepo()
+	svc := NewStoryService(repo)
+	projectID := uuid.New()
+
+	stories := []ImportStoryInput{
+		{Key: "", Title: "No Key Story"},
+	}
+
+	result, err := svc.Import(context.Background(), projectID, stories)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Failed != 1 {
+		t.Errorf("expected failed=1, got %d", result.Failed)
+	}
+	if len(result.Errors) != 1 {
+		t.Fatalf("expected 1 error, got %d", len(result.Errors))
+	}
+	if result.Errors[0].Code != "VALIDATION_ERROR" {
+		t.Errorf("expected error code 'VALIDATION_ERROR', got %q", result.Errors[0].Code)
+	}
+	if result.Errors[0].Message != "key is required" {
+		t.Errorf("expected message 'key is required', got %q", result.Errors[0].Message)
+	}
+}
+
+func TestStoryService_Import_EmptyTitle(t *testing.T) {
+	repo := newMockStoryRepo()
+	svc := NewStoryService(repo)
+	projectID := uuid.New()
+
+	stories := []ImportStoryInput{
+		{Key: testStoryKeyS01, Title: ""},
+	}
+
+	result, err := svc.Import(context.Background(), projectID, stories)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Failed != 1 {
+		t.Errorf("expected failed=1, got %d", result.Failed)
+	}
+	if len(result.Errors) != 1 {
+		t.Fatalf("expected 1 error, got %d", len(result.Errors))
+	}
+	if result.Errors[0].Code != "VALIDATION_ERROR" {
+		t.Errorf("expected error code 'VALIDATION_ERROR', got %q", result.Errors[0].Code)
+	}
+	if result.Errors[0].Key != testStoryKeyS01 {
+		t.Errorf("expected error key 'S-01', got %q", result.Errors[0].Key)
+	}
+}
+
+func TestStoryService_Import_CreateFailure(t *testing.T) {
+	repo := newMockStoryRepo()
+	repo.createFn = func(_ context.Context, _ *model.Story) (*model.Story, error) {
+		return nil, fmt.Errorf("database connection lost")
+	}
+	svc := NewStoryService(repo)
+	projectID := uuid.New()
+
+	stories := []ImportStoryInput{
+		{Key: testStoryKeyS01, Title: "Story That Fails"},
+	}
+
+	result, err := svc.Import(context.Background(), projectID, stories)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Failed != 1 {
+		t.Errorf("expected failed=1, got %d", result.Failed)
+	}
+	if len(result.Errors) != 1 {
+		t.Fatalf("expected 1 error, got %d", len(result.Errors))
+	}
+	if result.Errors[0].Code != "IMPORT_ERROR" {
+		t.Errorf("expected error code 'IMPORT_ERROR', got %q", result.Errors[0].Code)
 	}
 }
 
