@@ -1,6 +1,6 @@
 # Story 3.8: [BACK] Agent run action — compose CLAUDE.md + launch container + stream logs
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 

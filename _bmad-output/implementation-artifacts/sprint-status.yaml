@@ -84,7 +84,7 @@ development_status:
   3-5-ndjson-log-streaming-from-container: done
   3-6-events-table-pgxlisten-event-bus: done
   3-7-pipeline-executor-sequential-step-runner: done
-  3-8-agent-run-action-compose-claude-md-launch-container-stream-logs: backlog
+  3-8-agent-run-action-compose-claude-md-launch-container-stream-logs: done
   3-9-container-timeout-enforcement-orphan-cleanup: done
   3-10-run-launch-api-endpoint-single-story: backlog
   3-11-run-launch-button-confirmation-dialog: done
@@ -405,7 +405,7 @@ parallel_waves:
       # Epic 3
       - key: 3-8-agent-run-action-compose-claude-md-launch-container-stream-logs
         domain: back
-        status: backlog
+        status: done
         explicit_deps: [3-4-docker-container-lifecycle-manager-create-start-stop-cleanup, 3-5-ndjson-log-streaming-from-container, 3-6-events-table-pgxlisten-event-bus, 3-7-pipeline-executor-sequential-step-runner]
       - key: 3-10-run-launch-api-endpoint-single-story
         domain: back
