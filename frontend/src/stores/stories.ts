@@ -4,7 +4,7 @@ import { apiClient } from '@/api/client'
 
 /**
  * Story entity type.
- * TODO(S-2-2): Replace with generated type from OpenAPI schema once Stories CRUD API lands.
+ * TODO(2-2): Replace with generated type from OpenAPI schema once Stories CRUD API lands.
  */
 export interface Story {
   id: string

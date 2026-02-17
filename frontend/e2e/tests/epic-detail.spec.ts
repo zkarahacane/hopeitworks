@@ -127,10 +127,21 @@ test.describe('Epic Detail Page', () => {
 
     await page.goto('/projects/p1/epics/e1')
 
+    // All stories visible initially
     await expect(page.getByText('S-01')).toBeVisible()
     await expect(page.getByText('S-02')).toBeVisible()
     await expect(page.getByText('S-03')).toBeVisible()
     await expect(page.getByText('S-04')).toBeVisible()
+
+    // Open the status dropdown and select "Done"
+    await page.locator('.p-select').click()
+    await page.getByRole('option', { name: 'Done' }).click()
+
+    // Only the done story should remain visible
+    await expect(page.getByText('S-01')).toBeVisible()
+    await expect(page.getByText('S-02')).not.toBeVisible()
+    await expect(page.getByText('S-03')).not.toBeVisible()
+    await expect(page.getByText('S-04')).not.toBeVisible()
   })
 
   test('filters stories by text search with debounce', async ({ page }) => {

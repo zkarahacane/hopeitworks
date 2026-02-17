@@ -1,12 +1,11 @@
 <script setup lang="ts">
-import { watch } from 'vue'
+import { ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import Button from 'primevue/button'
 import Message from 'primevue/message'
 import Skeleton from 'primevue/skeleton'
 import EpicDetailLayout from '@/features/board/EpicDetailLayout.vue'
 import { useStories } from '@/composables/useStories'
-import type { StoryFilters } from '@/stores/stories'
 
 const route = useRoute()
 const router = useRouter()
@@ -33,10 +32,15 @@ if (initialStatus || initialSearch) {
   setFilters({ status: initialStatus, search: initialSearch })
 }
 
-/** Sync filters to URL query params */
+/** Sync filters to URL query params — skip the initial render to avoid redundant replace */
+const filtersInitialized = ref(false)
 watch(
   filters,
   (newFilters) => {
+    if (!filtersInitialized.value) {
+      filtersInitialized.value = true
+      return
+    }
     router.replace({
       query: {
         ...route.query,
@@ -48,13 +52,6 @@ watch(
   { deep: true },
 )
 
-function handleSelect(storyId: string) {
-  selectStory(storyId)
-}
-
-function handleFilterUpdate(newFilters: StoryFilters) {
-  setFilters(newFilters)
-}
 </script>
 
 <template>
@@ -105,8 +102,8 @@ function handleFilterUpdate(newFilters: StoryFilters) {
       :selected-story="selectedStory"
       :selected-story-id="selectedStoryId"
       :filters="filters"
-      @select="handleSelect"
-      @update:filters="handleFilterUpdate"
+      @select="selectStory"
+      @update:filters="setFilters"
     />
   </div>
 </template>

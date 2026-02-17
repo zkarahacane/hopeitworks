@@ -27,10 +27,7 @@ const emit = defineEmits<{
         @update:filters="emit('update:filters', $event)"
       />
     </div>
-    <div
-      class="flex-1 overflow-y-auto"
-      style="border-left: 1px solid var(--p-surface-200)"
-    >
+    <div class="flex-1 overflow-y-auto border-l border-surface-200">
       <StoryDetailPanel :story="selectedStory" />
     </div>
   </div>
