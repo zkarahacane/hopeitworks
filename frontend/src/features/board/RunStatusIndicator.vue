@@ -87,6 +87,8 @@ function handleClick() {
     <i
       v-else-if="config.icon"
       :class="[config.icon, config.color]"
+      role="img"
+      :aria-label="config.text ?? (status ?? 'status')"
       data-testid="run-status-icon"
     />
 
