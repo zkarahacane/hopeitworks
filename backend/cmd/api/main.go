@@ -85,7 +85,12 @@ func run() error {
 	userService := service.NewUserService(userRepo)
 	userHandler := handler.NewUserHandler(userService)
 
-	server := handler.NewServer(authHandler, projectHandler, userHandler, epicHandler, promptTemplateHandler)
+	// Run service
+	runRepo := pgadapter.NewRunRepo(queries)
+	runService := service.NewRunService(runRepo, projectRepo)
+	runHandler := handler.NewRunHandler(runService)
+
+	server := handler.NewServer(authHandler, projectHandler, userHandler, epicHandler, promptTemplateHandler, runHandler)
 
 	// Project user handler
 	projectUserHandler := handler.NewProjectUserHandler(projectUserService)

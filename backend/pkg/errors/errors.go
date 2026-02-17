@@ -12,6 +12,7 @@ const (
 	CategoryUnauthorized ErrorCategory = "unauthorized"
 	CategoryForbidden    ErrorCategory = "forbidden"
 	CategoryInternal     ErrorCategory = "internal"
+	CategoryInvalidState ErrorCategory = "invalid_state"
 )
 
 // Error codes for git operations.
@@ -81,6 +82,15 @@ func NewUnauthorized(message string) *DomainError {
 	return &DomainError{
 		Category: CategoryUnauthorized,
 		Code:     "UNAUTHORIZED",
+		Message:  message,
+	}
+}
+
+// NewInvalidState creates an invalid state transition domain error.
+func NewInvalidState(code, message string) *DomainError {
+	return &DomainError{
+		Category: CategoryInvalidState,
+		Code:     code,
 		Message:  message,
 	}
 }

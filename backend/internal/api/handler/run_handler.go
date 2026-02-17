@@ -1,0 +1,215 @@
+package handler
+
+import (
+	"encoding/json"
+	"net/http"
+
+	"github.com/zakari/hopeitworks/backend/internal/domain/model"
+	"github.com/zakari/hopeitworks/backend/internal/domain/service"
+	"github.com/zakari/hopeitworks/backend/pkg/errors"
+)
+
+// RunHandler implements run-related HTTP handlers.
+type RunHandler struct {
+	service *service.RunService
+}
+
+// NewRunHandler creates a new RunHandler.
+func NewRunHandler(svc *service.RunService) *RunHandler {
+	return &RunHandler{service: svc}
+}
+
+// ListRunsByProject handles GET /projects/{projectId}/runs.
+func (h *RunHandler) ListRunsByProject(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, params ListRunsByProjectParams) {
+	page := 1
+	perPage := 20
+	if params.Page != nil && *params.Page > 0 {
+		page = *params.Page
+	}
+	if params.PerPage != nil && *params.PerPage > 0 {
+		perPage = *params.PerPage
+	}
+
+	result, err := h.service.ListRunsByProject(r.Context(), projectID, page, perPage)
+	if err != nil {
+		writeErrorResponse(w, err)
+		return
+	}
+
+	resp := RunList{
+		Data: make([]Run, len(result.Runs)),
+		Pagination: Pagination{
+			Total:   int(result.Total),
+			Page:    page,
+			PerPage: perPage,
+		},
+	}
+	for i, run := range result.Runs {
+		resp.Data[i] = toAPIRun(run)
+	}
+
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// CreateRun handles POST /projects/{projectId}/runs.
+func (h *RunHandler) CreateRun(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath) {
+	var req CreateRunRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErrorResponse(w, errors.NewValidation("body", "invalid JSON"))
+		return
+	}
+
+	configJSON, err := json.Marshal(req.PipelineConfig)
+	if err != nil {
+		writeErrorResponse(w, errors.NewValidation("pipeline_config", "failed to marshal config"))
+		return
+	}
+
+	params := service.CreateRunParams{
+		ProjectID:      projectID,
+		StoryID:        req.StoryId,
+		PipelineConfig: configJSON,
+	}
+
+	run, err := h.service.CreateRun(r.Context(), params)
+	if err != nil {
+		writeErrorResponse(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, toAPIRunWithSteps(run))
+}
+
+// ListRunsByStory handles GET /stories/{storyId}/runs.
+func (h *RunHandler) ListRunsByStory(w http.ResponseWriter, r *http.Request, storyID StoryIdPath, params ListRunsByStoryParams) {
+	page := 1
+	perPage := 20
+	if params.Page != nil && *params.Page > 0 {
+		page = *params.Page
+	}
+	if params.PerPage != nil && *params.PerPage > 0 {
+		perPage = *params.PerPage
+	}
+
+	result, err := h.service.ListRunsByStory(r.Context(), storyID, page, perPage)
+	if err != nil {
+		writeErrorResponse(w, err)
+		return
+	}
+
+	resp := RunList{
+		Data: make([]Run, len(result.Runs)),
+		Pagination: Pagination{
+			Total:   int(result.Total),
+			Page:    page,
+			PerPage: perPage,
+		},
+	}
+	for i, run := range result.Runs {
+		resp.Data[i] = toAPIRun(run)
+	}
+
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// GetRun handles GET /runs/{runId}.
+func (h *RunHandler) GetRun(w http.ResponseWriter, r *http.Request, runID RunIdPath) {
+	run, err := h.service.GetRun(r.Context(), runID)
+	if err != nil {
+		writeErrorResponse(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, toAPIRunWithSteps(run))
+}
+
+// toAPIRun converts a domain Run to the API Run type.
+func toAPIRun(r *model.Run) Run {
+	run := Run{
+		Id:        r.ID,
+		ProjectId: r.ProjectID,
+		StoryId:   r.StoryID,
+		Status:    RunStatus(r.Status),
+		CreatedAt: r.CreatedAt,
+		UpdatedAt: r.UpdatedAt,
+	}
+	run.PipelineConfigSnapshot = rawJSONToMap(r.PipelineConfigSnapshot)
+	if r.StartedAt != nil {
+		run.StartedAt = r.StartedAt
+	}
+	if r.CompletedAt != nil {
+		run.CompletedAt = r.CompletedAt
+	}
+	if r.ErrorMessage != nil {
+		run.ErrorMessage = r.ErrorMessage
+	}
+	return run
+}
+
+// toAPIRunStep converts a domain RunStep to the API RunStep type.
+func toAPIRunStep(s *model.RunStep) RunStep {
+	step := RunStep{
+		Id:        s.ID,
+		RunId:     s.RunID,
+		StepName:  s.StepName,
+		StepOrder: s.StepOrder,
+		Action:    s.Action,
+		Status:    RunStepStatus(s.Status),
+		CreatedAt: s.CreatedAt,
+	}
+	if s.StartedAt != nil {
+		step.StartedAt = s.StartedAt
+	}
+	if s.CompletedAt != nil {
+		step.CompletedAt = s.CompletedAt
+	}
+	if s.ErrorMessage != nil {
+		step.ErrorMessage = s.ErrorMessage
+	}
+	if s.ContainerID != nil {
+		step.ContainerId = s.ContainerID
+	}
+	if s.LogTail != nil {
+		step.LogTail = s.LogTail
+	}
+	return step
+}
+
+// toAPIRunWithSteps converts a domain Run (with steps) to the API RunWithSteps type.
+func toAPIRunWithSteps(r *model.Run) RunWithSteps {
+	rws := RunWithSteps{
+		Id:        r.ID,
+		ProjectId: r.ProjectID,
+		StoryId:   r.StoryID,
+		Status:    RunWithStepsStatus(r.Status),
+		CreatedAt: r.CreatedAt,
+		UpdatedAt: r.UpdatedAt,
+		Steps:     make([]RunStep, len(r.Steps)),
+	}
+	rws.PipelineConfigSnapshot = rawJSONToMap(r.PipelineConfigSnapshot)
+	if r.StartedAt != nil {
+		rws.StartedAt = r.StartedAt
+	}
+	if r.CompletedAt != nil {
+		rws.CompletedAt = r.CompletedAt
+	}
+	if r.ErrorMessage != nil {
+		rws.ErrorMessage = r.ErrorMessage
+	}
+	for i := range r.Steps {
+		rws.Steps[i] = toAPIRunStep(&r.Steps[i])
+	}
+	return rws
+}
+
+// rawJSONToMap converts json.RawMessage to *map[string]interface{} for the API type.
+func rawJSONToMap(raw json.RawMessage) *map[string]interface{} {
+	if len(raw) == 0 {
+		return nil
+	}
+	var m map[string]interface{}
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return nil
+	}
+	return &m
+}

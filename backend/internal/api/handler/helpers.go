@@ -51,6 +51,8 @@ func mapCategoryToStatus(cat errors.ErrorCategory) int {
 		return http.StatusUnauthorized
 	case errors.CategoryForbidden:
 		return http.StatusForbidden
+	case errors.CategoryInvalidState:
+		return http.StatusConflict
 	default:
 		return http.StatusInternalServerError
 	}

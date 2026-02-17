@@ -143,7 +143,7 @@ test.describe('Pipeline Configuration Page', () => {
       await page.getByTestId('add-step-btn').click()
       await page.getByTestId('add-step-submit').click()
 
-      await expect(page.getByText('Step name is required')).toBeVisible()
+      await expect(page.locator('small').getByText('Step name is required')).toBeVisible()
     })
 
     test('saves configuration and shows success toast', async ({ page }) => {

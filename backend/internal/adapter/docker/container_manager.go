@@ -25,18 +25,18 @@ type dockerClient interface {
 	ContainerWait(ctx context.Context, containerID string, condition dockercontainer.WaitCondition) (<-chan dockercontainer.WaitResponse, <-chan error)
 }
 
-// Ensure DockerContainerManager implements port.ContainerManager at compile time.
-var _ port.ContainerManager = (*DockerContainerManager)(nil)
+// Ensure ContainerManager implements port.ContainerManager at compile time.
+var _ port.ContainerManager = (*ContainerManager)(nil)
 
-// DockerContainerManager implements port.ContainerManager using the Docker SDK.
-type DockerContainerManager struct {
+// ContainerManager implements port.ContainerManager using the Docker SDK.
+type ContainerManager struct {
 	client dockerClient
 	logger *slog.Logger
 }
 
-// NewDockerContainerManager creates a DockerContainerManager that connects to Docker
+// NewContainerManager creates a ContainerManager that connects to Docker
 // via the specified host URL (e.g., "tcp://socket-proxy:2375").
-func NewDockerContainerManager(dockerHost string, logger *slog.Logger) (*DockerContainerManager, error) {
+func NewContainerManager(dockerHost string, logger *slog.Logger) (*ContainerManager, error) {
 	cli, err := client.NewClientWithOpts(
 		client.WithHost(dockerHost),
 		client.WithAPIVersionNegotiation(),
@@ -44,18 +44,21 @@ func NewDockerContainerManager(dockerHost string, logger *slog.Logger) (*DockerC
 	if err != nil {
 		return nil, fmt.Errorf("creating docker client: %w", err)
 	}
-	return &DockerContainerManager{client: cli, logger: logger}, nil
+	return &ContainerManager{client: cli, logger: logger}, nil
 }
 
 // stopTimeoutSeconds is the graceful shutdown timeout before SIGKILL.
 const stopTimeoutSeconds = 10
 
+// managedByLabel is the value for the managed_by label on containers.
+const managedByLabel = "hopeitworks"
+
 // Create creates a container with the specified options, enforcing security constraints.
-func (m *DockerContainerManager) Create(ctx context.Context, opts model.ContainerOpts) (string, error) {
+func (m *ContainerManager) Create(ctx context.Context, opts model.ContainerOpts) (string, error) {
 	if opts.Labels == nil {
 		opts.Labels = make(map[string]string)
 	}
-	opts.Labels["managed_by"] = "hopeitworks"
+	opts.Labels["managed_by"] = managedByLabel
 
 	config := &dockercontainer.Config{
 		Image:  opts.Image,
@@ -103,7 +106,7 @@ func (m *DockerContainerManager) Create(ctx context.Context, opts model.Containe
 }
 
 // Start starts a created container.
-func (m *DockerContainerManager) Start(ctx context.Context, containerID string) error {
+func (m *ContainerManager) Start(ctx context.Context, containerID string) error {
 	if err := m.client.ContainerStart(ctx, containerID, dockercontainer.StartOptions{}); err != nil {
 		return apperrors.NewContainerError(
 			fmt.Sprintf("failed to start container %s: %v", containerID, err),
@@ -116,7 +119,7 @@ func (m *DockerContainerManager) Start(ctx context.Context, containerID string) 
 }
 
 // Stop stops a running container gracefully (SIGTERM, 10s timeout, then SIGKILL).
-func (m *DockerContainerManager) Stop(ctx context.Context, containerID string) error {
+func (m *ContainerManager) Stop(ctx context.Context, containerID string) error {
 	timeout := stopTimeoutSeconds
 	if err := m.client.ContainerStop(ctx, containerID, dockercontainer.StopOptions{Timeout: &timeout}); err != nil {
 		return apperrors.NewContainerError(
@@ -130,7 +133,7 @@ func (m *DockerContainerManager) Stop(ctx context.Context, containerID string) e
 }
 
 // Remove removes a stopped container and its associated volumes.
-func (m *DockerContainerManager) Remove(ctx context.Context, containerID string) error {
+func (m *ContainerManager) Remove(ctx context.Context, containerID string) error {
 	if err := m.client.ContainerRemove(ctx, containerID, dockercontainer.RemoveOptions{
 		Force:         true,
 		RemoveVolumes: true,
@@ -146,7 +149,7 @@ func (m *DockerContainerManager) Remove(ctx context.Context, containerID string)
 }
 
 // Wait blocks until the container exits and returns its exit code.
-func (m *DockerContainerManager) Wait(ctx context.Context, containerID string) (int, error) {
+func (m *ContainerManager) Wait(ctx context.Context, containerID string) (int, error) {
 	statusCh, errCh := m.client.ContainerWait(ctx, containerID, dockercontainer.WaitConditionNotRunning)
 
 	select {
