@@ -14,6 +14,26 @@ test.describe('Run Launch', () => {
         }),
       })
     })
+
+    // Mock story detail API
+    await page.route('**/api/v1/projects/*/stories/*', async (route) => {
+      if (route.request().url().includes('/runs')) {
+        return route.fallback()
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          id: 'story-1',
+          key: 'S-1',
+          title: 'Test Story',
+          status: 'backlog',
+          description: 'A test story',
+          epic_id: 'epic-1',
+          project_id: 'proj-1',
+        }),
+      })
+    })
   })
 
   test('shows Launch Run button on story detail page', async ({ page }) => {
