@@ -75,9 +75,9 @@ test.describe('Pipeline Configuration Page', () => {
       await page.goto('/projects/proj-1/pipeline')
 
       await expect(page.locator('h1')).toHaveText('Pipeline Configuration')
-      await expect(page.getByText('implement')).toBeVisible()
-      await expect(page.getByText('review')).toBeVisible()
-      await expect(page.getByText('merge')).toBeVisible()
+      await expect(page.locator('.font-semibold').filter({ hasText: 'implement' })).toBeVisible()
+      await expect(page.locator('.font-semibold').filter({ hasText: 'review' })).toBeVisible()
+      await expect(page.locator('.font-semibold').filter({ hasText: 'merge' })).toBeVisible()
     })
 
     test('shows admin controls: Add Step and Save buttons', async ({ page }) => {
@@ -191,9 +191,9 @@ test.describe('Pipeline Configuration Page', () => {
       await page.goto('/projects/proj-1/pipeline')
 
       await expect(page.locator('h1')).toHaveText('Pipeline Configuration')
-      await expect(page.getByText('implement')).toBeVisible()
-      await expect(page.getByText('review')).toBeVisible()
-      await expect(page.getByText('merge')).toBeVisible()
+      await expect(page.locator('.font-semibold').filter({ hasText: 'implement' })).toBeVisible()
+      await expect(page.locator('.font-semibold').filter({ hasText: 'review' })).toBeVisible()
+      await expect(page.locator('.font-semibold').filter({ hasText: 'merge' })).toBeVisible()
     })
 
     test('does not show admin controls', async ({ page }) => {
@@ -257,7 +257,7 @@ test.describe('Pipeline Configuration Page', () => {
       await expect(page.getByTestId('loading-skeleton')).toBeVisible()
 
       // Then steps should appear
-      await expect(page.getByText('implement')).toBeVisible()
+      await expect(page.locator('.font-semibold').filter({ hasText: 'implement' })).toBeVisible()
     })
   })
 })
