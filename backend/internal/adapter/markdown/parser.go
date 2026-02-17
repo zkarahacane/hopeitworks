@@ -138,15 +138,15 @@ func parseBlock(block storyBlock) ParsedStory {
 // extractTitleAndBody extracts the first H1 heading as the title and the
 // remaining content as acceptance criteria.
 func extractTitleAndBody(body string) (title, acceptanceCriteria string) {
-	loc := titleRegex.FindStringIndex(body)
+	loc := titleRegex.FindStringSubmatchIndex(body)
 	if loc == nil {
 		return "", strings.TrimSpace(body)
 	}
 
-	match := titleRegex.FindStringSubmatch(body)
-	title = strings.TrimSpace(match[1])
+	// loc[0]:loc[1] is the full match extent; loc[2]:loc[3] is the capture group (title text).
+	title = strings.TrimSpace(body[loc[2]:loc[3]])
 
-	// Everything after the title line becomes the acceptance criteria
+	// Everything after the title line becomes the acceptance criteria.
 	remaining := body[loc[1]:]
 	acceptanceCriteria = strings.TrimSpace(remaining)
 
