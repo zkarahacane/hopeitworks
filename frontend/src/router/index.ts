@@ -9,7 +9,7 @@ import ApprovalsView from '@/views/ApprovalsView.vue'
 import PipelineConfigView from '@/views/PipelineConfigView.vue'
 import PromptTemplatesView from '@/views/PromptTemplatesView.vue'
 import BoardView from '@/views/BoardView.vue'
-import EpicDetailView from '@/views/EpicDetailView.vue'
+import ProjectOverview from '@/features/projects/ProjectOverview.vue'
 import { setupAuthGuard, setupAdminGuard } from './guards'
 
 const router = createRouter({
@@ -35,38 +35,40 @@ const router = createRouter({
     },
     {
       path: '/projects/:id',
-      name: 'project-detail',
       component: ProjectDetailView,
       meta: { requiresAuth: true },
-    },
-    {
-      path: '/projects/:id/board',
-      name: 'project-board',
-      component: BoardView,
-      meta: { requiresAuth: true },
-    },
-    {
-      path: '/projects/:id/epics/:epicId',
-      name: 'epic-detail',
-      component: EpicDetailView,
-      meta: { requiresAuth: true },
-    },
-    {
-      path: '/projects/:id/templates',
-      name: 'project-templates',
-      component: PromptTemplatesView,
-      meta: { requiresAuth: true },
+      children: [
+        {
+          path: '',
+          name: 'project-overview',
+          component: ProjectOverview,
+        },
+        {
+          path: 'board',
+          name: 'project-board',
+          component: BoardView,
+        },
+        {
+          path: 'epics/:epicId',
+          name: 'epic-detail',
+          component: () => import('@/views/EpicDetailView.vue'),
+        },
+        {
+          path: 'pipeline',
+          name: 'project-pipeline',
+          component: PipelineConfigView,
+        },
+        {
+          path: 'templates',
+          name: 'project-templates',
+          component: PromptTemplatesView,
+        },
+      ],
     },
     {
       path: '/projects/:projectId/stories/:storyId',
       name: 'story-detail',
       component: StoryDetailView,
-      meta: { requiresAuth: true },
-    },
-    {
-      path: '/projects/:id/pipeline',
-      name: 'project-pipeline',
-      component: PipelineConfigView,
       meta: { requiresAuth: true },
     },
     {

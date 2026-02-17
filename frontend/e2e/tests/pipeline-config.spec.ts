@@ -49,6 +49,21 @@ test.describe('Pipeline Configuration Page', () => {
         })
       })
 
+      await page.route('**/api/v1/projects/proj-1', async (route) => {
+        if (route.request().url().includes('/pipeline')) return route.fallback()
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            id: 'proj-1',
+            name: 'Test Project',
+            owner_id: 'u1',
+            created_at: '2026-01-01T00:00:00Z',
+            updated_at: '2026-01-01T00:00:00Z',
+          }),
+        })
+      })
+
       await page.route('**/api/v1/projects/proj-1/pipeline', async (route) => {
         if (route.request().method() === 'GET') {
           await route.fulfill({
@@ -74,7 +89,7 @@ test.describe('Pipeline Configuration Page', () => {
     test('displays pipeline steps as an ordered list', async ({ page }) => {
       await page.goto('/projects/proj-1/pipeline')
 
-      await expect(page.locator('h1')).toHaveText('Pipeline Configuration')
+      await expect(page.getByRole('heading', { name: 'Pipeline Configuration' })).toBeVisible()
       await expect(page.locator('.font-semibold').filter({ hasText: 'implement' })).toBeVisible()
       await expect(page.locator('.font-semibold').filter({ hasText: 'review' })).toBeVisible()
       await expect(page.locator('.font-semibold').filter({ hasText: 'merge' })).toBeVisible()
@@ -178,6 +193,21 @@ test.describe('Pipeline Configuration Page', () => {
         })
       })
 
+      await page.route('**/api/v1/projects/proj-1', async (route) => {
+        if (route.request().url().includes('/pipeline')) return route.fallback()
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            id: 'proj-1',
+            name: 'Test Project',
+            owner_id: 'u1',
+            created_at: '2026-01-01T00:00:00Z',
+            updated_at: '2026-01-01T00:00:00Z',
+          }),
+        })
+      })
+
       await page.route('**/api/v1/projects/proj-1/pipeline', async (route) => {
         await route.fulfill({
           status: 200,
@@ -190,7 +220,7 @@ test.describe('Pipeline Configuration Page', () => {
     test('displays pipeline steps in read-only mode', async ({ page }) => {
       await page.goto('/projects/proj-1/pipeline')
 
-      await expect(page.locator('h1')).toHaveText('Pipeline Configuration')
+      await expect(page.getByRole('heading', { name: 'Pipeline Configuration' })).toBeVisible()
       await expect(page.locator('.font-semibold').filter({ hasText: 'implement' })).toBeVisible()
       await expect(page.locator('.font-semibold').filter({ hasText: 'review' })).toBeVisible()
       await expect(page.locator('.font-semibold').filter({ hasText: 'merge' })).toBeVisible()
@@ -218,6 +248,21 @@ test.describe('Pipeline Configuration Page', () => {
             email: 'admin@test.com',
             name: 'Admin User',
             role: 'admin',
+          }),
+        })
+      })
+
+      await page.route('**/api/v1/projects/proj-1', async (route) => {
+        if (route.request().url().includes('/pipeline')) return route.fallback()
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            id: 'proj-1',
+            name: 'Test Project',
+            owner_id: 'u1',
+            created_at: '2026-01-01T00:00:00Z',
+            updated_at: '2026-01-01T00:00:00Z',
           }),
         })
       })
