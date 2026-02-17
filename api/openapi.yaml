@@ -39,6 +39,8 @@ tags:
     description: Human-in-the-loop approval endpoints
   - name: notifications
     description: Notification configuration endpoints
+  - name: costs
+    description: Cost tracking and observability endpoints
 
 paths:
   # ── Auth ────────────────────────────────────────────────────────────────
@@ -309,6 +311,23 @@ paths:
           description: Project deleted
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /projects/{id}/circuit-breaker/reset:
+    post:
+      operationId: resetCircuitBreaker
+      summary: Reset circuit breaker for a project
+      tags: [projects]
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "204":
+          description: Circuit breaker reset successfully
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -1062,6 +1081,100 @@ paths:
         "409":
           $ref: "#/components/responses/Conflict"
 
+  # ── Costs ─────────────────────────────────────────────────────────────
+  /projects/{projectId}/costs/summary:
+    get:
+      operationId: getProjectCostSummary
+      summary: Get cost summary for a project
+      tags: [costs]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - name: period
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [7d, 30d]
+            default: 7d
+          description: Time period for cost aggregation
+      responses:
+        "200":
+          description: Cost summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CostSummary"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /projects/{projectId}/costs/chart:
+    get:
+      operationId: getProjectCostChart
+      summary: Get daily cost data points for chart rendering
+      tags: [costs]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - name: period
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [7d, 30d]
+            default: 7d
+          description: Time period for cost chart data
+      responses:
+        "200":
+          description: Daily cost data points
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CostDataPoint"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /projects/{projectId}/costs/runs:
+    get:
+      operationId: getProjectCostRuns
+      summary: Get run-level cost breakdown for a project
+      tags: [costs]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - name: period
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [7d, 30d]
+            default: 7d
+          description: Time period for run cost data
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/PerPageParam"
+      responses:
+        "200":
+          description: Paginated list of run cost rows
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, pagination]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/RunCostRow"
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /hitl-requests/{hitlRequestId}/reject:
     post:
       operationId: rejectHITLRequest
@@ -1339,6 +1452,10 @@ components:
           type: string
           format: uuid
           example: 550e8400-e29b-41d4-a716-446655440000
+        circuit_breaker_active:
+          type: boolean
+          description: Whether the circuit breaker is active, pausing all pipeline runs
+          example: false
         created_at:
           type: string
           format: date-time
@@ -1997,6 +2114,20 @@ components:
           type: string
         log_tail:
           type: string
+        parent_step_id:
+          type: string
+          format: uuid
+          description: ID of the original step this is a retry of; null for root steps
+          nullable: true
+        retry_count:
+          type: integer
+          description: Which retry attempt this is (1-based); null for root steps
+          nullable: true
+        retry_type:
+          type: string
+          enum: [incremental, full]
+          description: Retry strategy used for this attempt; null for root steps
+          nullable: true
         created_at:
           type: string
           format: date-time
@@ -2130,6 +2261,86 @@ components:
           minLength: 10
           description: Reason for rejecting the HITL request
 
+
+    # ── Costs ──────────────────────────────────────────────────────────
+    CostSummary:
+      type: object
+      required:
+        - total_cost_usd
+        - period_start
+        - period_end
+        - avg_cost_per_story_usd
+      properties:
+        total_cost_usd:
+          type: number
+          format: double
+          example: 1.2345
+        total_cost_week_usd:
+          type: number
+          format: double
+          example: 0.5678
+        total_cost_month_usd:
+          type: number
+          format: double
+          example: 3.4567
+        avg_cost_per_story_usd:
+          type: number
+          format: double
+          example: 0.1234
+        budget_limit_usd:
+          type: number
+          format: double
+          example: 10.0
+        period_start:
+          type: string
+          format: date-time
+          example: "2026-02-10T00:00:00Z"
+        period_end:
+          type: string
+          format: date-time
+          example: "2026-02-17T00:00:00Z"
+
+    CostDataPoint:
+      type: object
+      required:
+        - date
+        - total_cost_usd
+      properties:
+        date:
+          type: string
+          format: date
+          example: "2026-02-10"
+        total_cost_usd:
+          type: number
+          format: double
+          example: 0.1234
+
+    RunCostRow:
+      type: object
+      required:
+        - run_id
+        - story_key
+        - status
+        - started_at
+        - total_cost_usd
+      properties:
+        run_id:
+          type: string
+          format: uuid
+        story_key:
+          type: string
+          example: S-01
+        status:
+          type: string
+          example: completed
+        started_at:
+          type: string
+          format: date-time
+          example: "2026-02-10T10:30:00Z"
+        total_cost_usd:
+          type: number
+          format: double
+          example: 0.01234
 
     # ── Shared ─────────────────────────────────────────────────────────
     Pagination:

@@ -190,33 +190,15 @@ stop_container() {
 
 get_wave_stories() {
     local wave="$1"
-    local in_wave=false
-    local in_stories=false
-    while IFS= read -r line; do
-        # Detect wave start: "  wave-N:"
-        if echo "$line" | grep -qE "^  wave-${wave}:"; then
-            in_wave=true
-            in_stories=false
-            continue
-        fi
-        # Detect next wave or end of parallel_waves
-        if $in_wave && echo "$line" | grep -qE "^  wave-[0-9]+:"; then
-            break
-        fi
-        # Detect stories section
-        if $in_wave && echo "$line" | grep -q "stories:"; then
-            in_stories=true
-            continue
-        fi
-        # Extract key values
-        if $in_wave && $in_stories && echo "$line" | grep -qE "^\s+- key:"; then
-            echo "$line" | sed 's/.*key: *//'
-        fi
-        # Stop stories section on non-indented or different section
-        if $in_wave && $in_stories && echo "$line" | grep -qE "^    [a-z]" && ! echo "$line" | grep -qE "^\s+-"; then
-            in_stories=false
-        fi
-    done < "$SPRINT_STATUS"
+    awk -v wave="wave-${wave}" '
+        # Match target wave header (2-space indent)
+        $0 ~ "^  " wave ":" { in_wave=1; next }
+        # Stop at next wave header or any line at wave indent level that is not a child
+        in_wave && /^  wave-[0-9]+:/ { exit }
+        in_wave && /^  [a-z#]/ { exit }
+        # Extract key values (6+ space indent, "- key:")
+        in_wave && /- key:/ { sub(/.*key: */, ""); print }
+    ' "$SPRINT_STATUS"
 }
 
 # Run container in CLONE mode (detached)

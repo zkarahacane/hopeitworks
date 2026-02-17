@@ -12,10 +12,65 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const createRetryRunStep = `-- name: CreateRetryRunStep :one
+INSERT INTO run_steps (
+    id, run_id, step_name, step_order, action, status,
+    retry_count, retry_type, parent_step_id
+) VALUES (
+    $1, $2, $3, $4, $5, $6, $7, $8, $9
+)
+RETURNING id, run_id, step_name, step_order, action, status, started_at, completed_at, error_message, container_id, log_tail, created_at, retry_count, retry_type, parent_step_id
+`
+
+type CreateRetryRunStepParams struct {
+	ID           uuid.UUID   `json:"id"`
+	RunID        uuid.UUID   `json:"run_id"`
+	StepName     string      `json:"step_name"`
+	StepOrder    int32       `json:"step_order"`
+	Action       string      `json:"action"`
+	Status       string      `json:"status"`
+	RetryCount   int32       `json:"retry_count"`
+	RetryType    pgtype.Text `json:"retry_type"`
+	ParentStepID pgtype.UUID `json:"parent_step_id"`
+}
+
+func (q *Queries) CreateRetryRunStep(ctx context.Context, arg CreateRetryRunStepParams) (RunStep, error) {
+	row := q.db.QueryRow(ctx, createRetryRunStep,
+		arg.ID,
+		arg.RunID,
+		arg.StepName,
+		arg.StepOrder,
+		arg.Action,
+		arg.Status,
+		arg.RetryCount,
+		arg.RetryType,
+		arg.ParentStepID,
+	)
+	var i RunStep
+	err := row.Scan(
+		&i.ID,
+		&i.RunID,
+		&i.StepName,
+		&i.StepOrder,
+		&i.Action,
+		&i.Status,
+		&i.StartedAt,
+		&i.CompletedAt,
+		&i.ErrorMessage,
+		&i.ContainerID,
+		&i.LogTail,
+		&i.CreatedAt,
+		&i.RetryCount,
+		&i.RetryType,
+		&i.ParentStepID,
+	)
+	return i, err
+}
+
 const createRunStep = `-- name: CreateRunStep :one
 INSERT INTO run_steps (run_id, step_name, step_order, action, status)
 VALUES ($1, $2, $3, $4, $5)
-RETURNING id, run_id, step_name, step_order, action, status, started_at, completed_at, error_message, container_id, log_tail, created_at
+RETURNING id, run_id, step_name, step_order, action, status, started_at, completed_at, error_message, container_id, log_tail, created_at, retry_count, retry_type, parent_step_id
 `
 
 type CreateRunStepParams struct {
@@ -48,12 +103,15 @@ func (q *Queries) CreateRunStep(ctx context.Context, arg CreateRunStepParams) (R
 		&i.ContainerID,
 		&i.LogTail,
 		&i.CreatedAt,
+		&i.RetryCount,
+		&i.RetryType,
+		&i.ParentStepID,
 	)
 	return i, err
 }
 
 const getRunStep = `-- name: GetRunStep :one
-SELECT id, run_id, step_name, step_order, action, status, started_at, completed_at, error_message, container_id, log_tail, created_at FROM run_steps WHERE id = $1
+SELECT id, run_id, step_name, step_order, action, status, started_at, completed_at, error_message, container_id, log_tail, created_at, retry_count, retry_type, parent_step_id FROM run_steps WHERE id = $1
 `
 
 func (q *Queries) GetRunStep(ctx context.Context, id uuid.UUID) (RunStep, error) {
@@ -72,12 +130,57 @@ func (q *Queries) GetRunStep(ctx context.Context, id uuid.UUID) (RunStep, error)
 		&i.ContainerID,
 		&i.LogTail,
 		&i.CreatedAt,
+		&i.RetryCount,
+		&i.RetryType,
+		&i.ParentStepID,
 	)
 	return i, err
 }
 
+const listRetryStepsByParent = `-- name: ListRetryStepsByParent :many
+SELECT id, run_id, step_name, step_order, action, status, started_at, completed_at, error_message, container_id, log_tail, created_at, retry_count, retry_type, parent_step_id FROM run_steps
+WHERE parent_step_id = $1
+ORDER BY retry_count ASC
+`
+
+func (q *Queries) ListRetryStepsByParent(ctx context.Context, parentStepID pgtype.UUID) ([]RunStep, error) {
+	rows, err := q.db.Query(ctx, listRetryStepsByParent, parentStepID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []RunStep{}
+	for rows.Next() {
+		var i RunStep
+		if err := rows.Scan(
+			&i.ID,
+			&i.RunID,
+			&i.StepName,
+			&i.StepOrder,
+			&i.Action,
+			&i.Status,
+			&i.StartedAt,
+			&i.CompletedAt,
+			&i.ErrorMessage,
+			&i.ContainerID,
+			&i.LogTail,
+			&i.CreatedAt,
+			&i.RetryCount,
+			&i.RetryType,
+			&i.ParentStepID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRunStepsByRun = `-- name: ListRunStepsByRun :many
-SELECT id, run_id, step_name, step_order, action, status, started_at, completed_at, error_message, container_id, log_tail, created_at FROM run_steps
+SELECT id, run_id, step_name, step_order, action, status, started_at, completed_at, error_message, container_id, log_tail, created_at, retry_count, retry_type, parent_step_id FROM run_steps
 WHERE run_id = $1
 ORDER BY step_order ASC
 `
@@ -104,6 +207,9 @@ func (q *Queries) ListRunStepsByRun(ctx context.Context, runID uuid.UUID) ([]Run
 			&i.ContainerID,
 			&i.LogTail,
 			&i.CreatedAt,
+			&i.RetryCount,
+			&i.RetryType,
+			&i.ParentStepID,
 		); err != nil {
 			return nil, err
 		}
@@ -120,7 +226,7 @@ UPDATE run_steps
 SET container_id = COALESCE($2, container_id),
     log_tail = COALESCE($3, log_tail)
 WHERE id = $1
-RETURNING id, run_id, step_name, step_order, action, status, started_at, completed_at, error_message, container_id, log_tail, created_at
+RETURNING id, run_id, step_name, step_order, action, status, started_at, completed_at, error_message, container_id, log_tail, created_at, retry_count, retry_type, parent_step_id
 `
 
 type UpdateRunStepContainerInfoParams struct {
@@ -145,6 +251,9 @@ func (q *Queries) UpdateRunStepContainerInfo(ctx context.Context, arg UpdateRunS
 		&i.ContainerID,
 		&i.LogTail,
 		&i.CreatedAt,
+		&i.RetryCount,
+		&i.RetryType,
+		&i.ParentStepID,
 	)
 	return i, err
 }
@@ -158,7 +267,7 @@ SET status = $2,
     container_id = COALESCE($6, container_id),
     log_tail = COALESCE($7, log_tail)
 WHERE id = $1
-RETURNING id, run_id, step_name, step_order, action, status, started_at, completed_at, error_message, container_id, log_tail, created_at
+RETURNING id, run_id, step_name, step_order, action, status, started_at, completed_at, error_message, container_id, log_tail, created_at, retry_count, retry_type, parent_step_id
 `
 
 type UpdateRunStepStatusParams struct {
@@ -195,6 +304,9 @@ func (q *Queries) UpdateRunStepStatus(ctx context.Context, arg UpdateRunStepStat
 		&i.ContainerID,
 		&i.LogTail,
 		&i.CreatedAt,
+		&i.RetryCount,
+		&i.RetryType,
+		&i.ParentStepID,
 	)
 	return i, err
 }

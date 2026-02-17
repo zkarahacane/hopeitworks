@@ -105,6 +105,14 @@ func (m *hitlMockRunRepo) UpdateRunStepContainerInfo(_ context.Context, id uuid.
 	return &model.RunStep{ID: id}, nil
 }
 
+func (m *hitlMockRunRepo) CreateRetryRunStep(_ context.Context, step *model.RunStep) (*model.RunStep, error) {
+	return step, nil
+}
+
+func (m *hitlMockRunRepo) ListRetryStepsByParent(_ context.Context, _ uuid.UUID) ([]*model.RunStep, error) {
+	return nil, nil
+}
+
 func (m *hitlMockRunRepo) getStatusCalls() []hitlStepStatusCall {
 	m.mu.Lock()
 	defer m.mu.Unlock()
