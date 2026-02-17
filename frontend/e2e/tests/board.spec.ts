@@ -4,7 +4,7 @@ const mockEpics = [
   {
     id: 'e1',
     project_id: 'p1',
-    title: 'User Authentication',
+    name: 'User Authentication',
     description: 'Implement user authentication and authorization',
     status: 'in_progress',
     story_counts: { backlog: 3, running: 1, done: 5, failed: 0 },
@@ -14,7 +14,7 @@ const mockEpics = [
   {
     id: 'e2',
     project_id: 'p1',
-    title: 'Pipeline Execution',
+    name: 'Pipeline Execution',
     description: 'Build the pipeline execution engine',
     status: 'backlog',
     story_counts: { backlog: 4, running: 0, done: 0, failed: 0 },
@@ -49,7 +49,11 @@ test.describe('Board Page', () => {
       })
     })
 
-    await page.route('**/api/v1/projects?*', async (route) => {
+    await page.route('**/api/v1/projects*', async (route) => {
+      // Only mock the projects list endpoint, not sub-paths like /projects/p1/epics
+      if (route.request().url().includes('/epics')) {
+        return route.fallback()
+      }
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
