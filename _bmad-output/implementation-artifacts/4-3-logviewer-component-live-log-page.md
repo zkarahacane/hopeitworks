@@ -1,6 +1,6 @@
 # Story 4.3: [FRONT] LogViewer Component + Live Log Page
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -50,61 +50,61 @@ As a user watching a run execute, I want a live log view with ANSI color renderi
 
 ## Tasks / Subtasks
 
-- [ ] [FRONT] Task 1: Install `ansi-to-html` and create `formatLogLine` utility (AC: #1)
-  - [ ] Run `npm install ansi-to-html` in `frontend/`
-  - [ ] Create `frontend/src/utils/formatLogLine.ts` — exports `formatLogLine(raw: string, timestamp: Date): string`
-  - [ ] Uses `new AnsiUp().ansi_to_html(raw)` (or `ansi-to-html` Convert class) for ANSI rendering
-  - [ ] Prepends `HH:MM:SS` timestamp formatted from `timestamp` parameter
-  - [ ] Write unit tests in `frontend/src/utils/__tests__/formatLogLine.spec.ts`
+- [x] [FRONT] Task 1: Install `ansi-to-html` and create `formatLogLine` utility (AC: #1)
+  - [x] Run `npm install ansi-to-html` in `frontend/`
+  - [x] Create `frontend/src/utils/formatLogLine.ts` — exports `formatLogLine(raw: string, timestamp: Date): string`
+  - [x] Uses `ansi-to-html` Convert class for ANSI rendering with XML escaping
+  - [x] Prepends `HH:MM:SS` timestamp formatted from `timestamp` parameter
+  - [x] Write unit tests in `frontend/src/utils/__tests__/formatLogLine.spec.ts`
 
-- [ ] [FRONT] Task 2: Create `useSSE` composable (AC: #4)
-  - [ ] Create `frontend/src/composables/useSSE.ts`
-  - [ ] Uses native `EventSource` API (not `@vueuse/core` `useEventSource` — need explicit named-event support)
-  - [ ] Accepts `projectId: string` and `onEvent: (eventName: string, data: unknown) => void` callback
-  - [ ] Exposes `status: Ref<'connecting' | 'open' | 'closed' | 'error'>`
-  - [ ] Opens connection on call, calls `onEvent` for all message events, closes on `onBeforeUnmount`
-  - [ ] Write unit tests in `frontend/src/composables/__tests__/useSSE.spec.ts` using mock `EventSource`
+- [x] [FRONT] Task 2: Create `useSSE` composable (AC: #4)
+  - [x] Create `frontend/src/composables/useSSE.ts`
+  - [x] Uses native `EventSource` API (not `@vueuse/core` `useEventSource` — need explicit named-event support)
+  - [x] Accepts `projectId: string` and `onEvent: (eventName: string, data: unknown) => void` callback
+  - [x] Exposes `status: Ref<'connecting' | 'open' | 'closed' | 'error'>`
+  - [x] Opens connection on call, calls `onEvent` for all message events, closes on `onBeforeUnmount`
+  - [x] Write unit tests in `frontend/src/composables/__tests__/useSSE.spec.ts` using mock `EventSource`
 
-- [ ] [FRONT] Task 3: Build `LogViewer.vue` shared component (AC: #1, #2, #3)
-  - [ ] Create `frontend/src/ui/composed/LogViewer.vue`
-  - [ ] Props: `lines: LogLine[]` (type `{ text: string; timestamp: Date }`), `status: 'connecting' | 'open' | 'closed' | 'error'`
-  - [ ] Renders lines as `v-html` from `formatLogLine(line.text, line.timestamp)` inside a `<pre>` or fixed-height `<div>` with `overflow-y: auto`
-  - [ ] Toolbar row: connection state badge (PrimeVue Tag severity mapped from status), Clear button, auto-scroll indicator
-  - [ ] Auto-scroll logic: use `useTemplateRef` on the scroll container; on new `lines`, if auto-scroll enabled, scroll to bottom via `scrollTop = scrollHeight`
-  - [ ] Scroll listener: detect user scroll-up → pause; detect near-bottom → resume
+- [x] [FRONT] Task 3: Build `LogViewer.vue` shared component (AC: #1, #2, #3)
+  - [x] Create `frontend/src/ui/composed/LogViewer.vue`
+  - [x] Props: `lines: LogLine[]` (type `{ text: string; timestamp: Date }`), `status: 'connecting' | 'open' | 'closed' | 'error'`
+  - [x] Renders lines as `v-html` from `formatLogLine(line.text, line.timestamp)` inside a fixed-height `<div>` with `overflow-y: auto`
+  - [x] Toolbar row: connection state badge (PrimeVue Tag severity mapped from status), Clear button, auto-scroll indicator
+  - [x] Auto-scroll logic: use `useTemplateRef` on the scroll container; on new `lines`, if auto-scroll enabled, scroll to bottom via `scrollTop = scrollHeight`
+  - [x] Scroll listener: detect user scroll-up → pause; detect near-bottom → resume
 
-- [ ] [FRONT] Task 4: Create `useRunLogs` composable (AC: #4, #5)
-  - [ ] Create `frontend/src/features/runs/composables/useRunLogs.ts`
-  - [ ] Accepts `projectId: string`, `runId: string`
-  - [ ] Uses `useSSE(projectId, onEvent)` internally
-  - [ ] Filters events: only processes events where `eventName === 'log.emitted'` and `payload.run_id === runId`
-  - [ ] Appends to `lines: Ref<LogLine[]>` on matching events
-  - [ ] Exposes `lines`, `sseStatus`, `clearLogs`
+- [x] [FRONT] Task 4: Create `useRunLogs` composable (AC: #4, #5)
+  - [x] Create `frontend/src/features/runs/composables/useRunLogs.ts`
+  - [x] Accepts `projectId: string`, `runId: string`
+  - [x] Uses `useSSE(projectId, onEvent)` internally
+  - [x] Filters events: only processes events where `eventName === 'log.emitted'` and `payload.run_id === runId`
+  - [x] Appends to `lines: Ref<LogLine[]>` on matching events
+  - [x] Exposes `lines`, `sseStatus`, `clearLogs`
 
-- [ ] [FRONT] Task 5: Create `useRunDetail` composable (AC: #5)
-  - [ ] Create `frontend/src/features/runs/composables/useRunDetail.ts`
-  - [ ] Accepts `runId: string`
-  - [ ] Uses `useAsyncAction` to fetch `GET /api/v1/runs/{runId}` (generated type `RunWithSteps`)
-  - [ ] Exposes `run`, `isLoading`, `error`, `fetchRun`, `retry`
-  - [ ] Calls `fetchRun` on mount via `onMounted`
-  - [ ] Write unit tests in `frontend/src/features/runs/__tests__/useRunDetail.spec.ts`
+- [x] [FRONT] Task 5: Create `useRunDetail` composable (AC: #5)
+  - [x] Create `frontend/src/features/runs/composables/useRunDetail.ts`
+  - [x] Accepts `runId: string`
+  - [x] Uses `useAsyncAction` to fetch `GET /api/v1/runs/{runId}` (generated type `RunWithSteps`)
+  - [x] Exposes `run`, `isLoading`, `error`, `fetchRun`, `retry`
+  - [x] Calls `fetchRun` on mount via `onMounted`
+  - [x] Write unit tests in `frontend/src/features/runs/__tests__/useRunDetail.spec.ts`
 
-- [ ] [FRONT] Task 6: Implement `RunDetailView.vue` (AC: #5)
-  - [ ] Replace placeholder content in `frontend/src/views/RunDetailView.vue`
-  - [ ] Extract `runId` from `useRoute().params.id`
-  - [ ] Use `useRunDetail(runId)` for run data; show `Skeleton` on load, `Message` on error
-  - [ ] Render: run ID (monospace), status `Tag`, `ProgressBar :value="run.progress"`, step list via PrimeVue `Timeline`
-  - [ ] Mount `LogViewer` below, wired to `useRunLogs(run.project_id, runId)` — only when `run` is loaded
-  - [ ] Extract `projectId` from `run.project_id` (available after fetch, not from route)
+- [x] [FRONT] Task 6: Implement `RunDetailView.vue` (AC: #5)
+  - [x] Replace placeholder content in `frontend/src/views/RunDetailView.vue`
+  - [x] Extract `runId` from `useRoute().params.id`
+  - [x] Use `useRunDetail(runId)` for run data; show `Skeleton` on load, `Message` on error
+  - [x] Render: run ID (monospace), status `Tag`, `ProgressBar :value="progress"`, step list via PrimeVue `Timeline`
+  - [x] Mount `LogViewer` below, wired to `useRunLogs(run.project_id, runId)` — only when `run` is loaded
+  - [x] Extract `projectId` from `run.project_id` (available after fetch, not from route)
 
-- [ ] [FRONT] Task 7: Wire step status to PrimeVue Timeline in RunDetailView (AC: #5)
-  - [ ] Map step `status` to Timeline marker severity: `completed → success`, `running → info`, `failed → danger`, `pending → secondary`, `cancelled → warn`
-  - [ ] Each Timeline item shows: step name, action, status badge, duration (if `started_at` and `completed_at` available)
-  - [ ] Use `date-fns` `differenceInSeconds` for duration formatting
+- [x] [FRONT] Task 7: Wire step status to PrimeVue Timeline in RunDetailView (AC: #5)
+  - [x] Map step `status` to Timeline marker severity: `completed → success`, `running → info`, `failed → danger`, `pending → secondary`, `cancelled → warn`
+  - [x] Each Timeline item shows: step name, action, status badge, duration (if `started_at` and `completed_at` available)
+  - [x] Use `date-fns` `differenceInSeconds` for duration formatting
 
-- [ ] [FRONT] Task 8: Write unit tests for LogViewer.vue and useRunLogs (AC: #1, #2, #3, #4)
-  - [ ] `frontend/src/ui/composed/__tests__/LogViewer.spec.ts`: renders lines with ANSI HTML; shows "Connecting..." when status is connecting; Clear button empties lines (via emit)
-  - [ ] `frontend/src/features/runs/__tests__/useRunLogs.spec.ts`: mock `useSSE`; assert only `log.emitted` events with matching `run_id` are appended; assert other events are ignored; `clearLogs` resets lines
+- [x] [FRONT] Task 8: Write unit tests for LogViewer.vue and useRunLogs (AC: #1, #2, #3, #4)
+  - [x] `frontend/src/ui/composed/__tests__/LogViewer.spec.ts`: renders lines with ANSI HTML; shows "Connecting..." when status is connecting; Clear button empties lines (via emit)
+  - [x] `frontend/src/features/runs/__tests__/useRunLogs.spec.ts`: mock `useSSE`; assert only `log.emitted` events with matching `run_id` are appended; assert other events are ignored; `clearLogs` resets lines
 
 ## Dev Notes
 
@@ -345,12 +345,48 @@ const stepSeverity: Record<string, string> = {
 - PrimeVue Tag: https://primevue.org/tag/
 - SSE named events via `addEventListener`: https://developer.mozilla.org/en-US/docs/Web/API/EventSource
 
+## File List
+
+| File | Action |
+|------|--------|
+| `frontend/package.json` | modified (added ansi-to-html dependency) |
+| `frontend/package-lock.json` | modified (lockfile update) |
+| `frontend/src/utils/formatLogLine.ts` | new |
+| `frontend/src/utils/__tests__/formatLogLine.spec.ts` | new |
+| `frontend/src/composables/useSSE.ts` | new |
+| `frontend/src/composables/__tests__/useSSE.spec.ts` | new |
+| `frontend/src/ui/composed/LogViewer.vue` | new |
+| `frontend/src/ui/composed/__tests__/LogViewer.spec.ts` | new |
+| `frontend/src/features/runs/composables/useRunLogs.ts` | new |
+| `frontend/src/features/runs/composables/useRunDetail.ts` | new |
+| `frontend/src/features/runs/RunLogViewer.vue` | new |
+| `frontend/src/features/runs/__tests__/useRunLogs.spec.ts` | new |
+| `frontend/src/features/runs/__tests__/useRunDetail.spec.ts` | new |
+| `frontend/src/views/RunDetailView.vue` | modified (replaced placeholder) |
+
 ## Dev Agent Record
 
-(Agent execution logs will be appended here)
+### Implementation Plan
+
+1. Installed `ansi-to-html` dependency and created `formatLogLine` utility with XSS-safe escaping
+2. Created `useSSE` composable with native EventSource, named event listeners for all known event types, and lifecycle cleanup
+3. Built `LogViewer.vue` as a pure display component with auto-scroll, connection status badge, and clear functionality
+4. Created `useRunLogs` composable that filters SSE events by `log.emitted` + `run_id` match
+5. Created `useRunDetail` composable following existing `useStoryDetail` pattern with `useAsyncAction`
+6. Implemented `RunDetailView.vue` with full run detail display: status badge, progress bar (computed from step completion ratio as fallback when `run.progress` not available), step timeline with severity-mapped markers and duration formatting, and live log viewer
+7. Created `RunLogViewer.vue` wrapper component to defer SSE connection until `projectId` is available from loaded run data
+8. All 31 new tests pass (4 formatLogLine, 10 useSSE, 8 LogViewer, 5 useRunLogs, 4 useRunDetail)
+9. Full regression suite: 342 tests pass across 40 files, zero failures
+
+### Completion Notes
+
+- Progress bar computes from step completion ratio as fallback since Story 4-2 (run.progress field) has not landed yet; when it does, the `progress` computed property will use `run.progress` if available
+- Created `RunLogViewer.vue` wrapper to solve the chicken-and-egg problem of needing `projectId` from the run API response before connecting SSE
+- All acceptance criteria satisfied with comprehensive test coverage
 
 ## Change Log
 
 | Date | Author | Change |
 |------|--------|--------|
 | 2026-02-17 | Claude Sonnet 4.5 | Initial story creation |
+| 2026-02-17 | Claude Opus 4.6 | Implementation complete — all 8 tasks done, 31 new tests, full regression green |

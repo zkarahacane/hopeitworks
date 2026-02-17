@@ -26,6 +26,7 @@
     "@vue-flow/core": "^1.48.2",
     "@vue-flow/minimap": "^1.5.4",
     "@vueuse/core": "^14.2.1",
+    "ansi-to-html": "^0.7.2",
     "date-fns": "^4.1.0",
     "diff2html": "^3.4.56",
     "dompurify": "^3.3.1",
