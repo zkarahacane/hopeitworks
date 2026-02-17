@@ -81,7 +81,7 @@ development_status:
   3-2-gitprovider-port-gh-cli-adapter-clone-branch-push: done
   3-3-gitprovider-pr-operations-create-pr-merge-pr: backlog
   3-4-docker-container-lifecycle-manager-create-start-stop-cleanup: done
-  3-5-ndjson-log-streaming-from-container: backlog
+  3-5-ndjson-log-streaming-from-container: review
   3-6-events-table-pgxlisten-event-bus: done
   3-7-pipeline-executor-sequential-step-runner: backlog
   3-8-agent-run-action-compose-claude-md-launch-container-stream-logs: backlog
