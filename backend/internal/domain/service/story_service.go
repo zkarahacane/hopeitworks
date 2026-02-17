@@ -2,12 +2,16 @@ package service
 
 import (
 	"context"
+	"regexp"
 
 	"github.com/google/uuid"
 	"github.com/zakari/hopeitworks/backend/internal/domain/model"
 	"github.com/zakari/hopeitworks/backend/internal/domain/port"
 	"github.com/zakari/hopeitworks/backend/pkg/errors"
 )
+
+// storyKeyPattern validates story key format: uppercase letters/digits, dash, one or more digits.
+var storyKeyPattern = regexp.MustCompile(`^[A-Z0-9]+-\d+$`)
 
 // StoryService provides business logic for story operations.
 type StoryService struct {
@@ -40,6 +44,9 @@ func (s *StoryService) Create(ctx context.Context, params CreateStoryParams) (*m
 	}
 	if len(params.Key) > 50 {
 		return nil, errors.NewValidation("key", "must be 50 characters or less")
+	}
+	if !storyKeyPattern.MatchString(params.Key) {
+		return nil, errors.NewValidation("key", "must match format [A-Z0-9]+-N (e.g., S-14, STORY-123)")
 	}
 	if params.Title == "" {
 		return nil, errors.NewValidation("title", "is required")

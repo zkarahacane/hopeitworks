@@ -12,17 +12,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const countStoriesByEpic = `-- name: CountStoriesByEpic :one
-SELECT COUNT(*) FROM stories WHERE epic_id = $1
-`
-
-func (q *Queries) CountStoriesByEpic(ctx context.Context, epicID pgtype.UUID) (int64, error) {
-	row := q.db.QueryRow(ctx, countStoriesByEpic, epicID)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
 const countStoriesByProject = `-- name: CountStoriesByProject :one
 SELECT COUNT(*) FROM stories WHERE project_id = $1
 `

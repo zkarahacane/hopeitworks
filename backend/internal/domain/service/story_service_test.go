@@ -169,6 +169,40 @@ func TestStoryService_Create(t *testing.T) {
 			errCode: "VALIDATION_ERROR",
 		},
 		{
+			name:    "key lowercase letters rejected",
+			params:  CreateStoryParams{ProjectID: projectID, Key: "s-01", Title: "Story"},
+			wantErr: true,
+			errCode: "VALIDATION_ERROR",
+		},
+		{
+			name:    "key missing digit suffix rejected",
+			params:  CreateStoryParams{ProjectID: projectID, Key: "S-", Title: "Story"},
+			wantErr: true,
+			errCode: "VALIDATION_ERROR",
+		},
+		{
+			name:    "key with no dash rejected",
+			params:  CreateStoryParams{ProjectID: projectID, Key: "STORY01", Title: "Story"},
+			wantErr: true,
+			errCode: "VALIDATION_ERROR",
+		},
+		{
+			name:    "key with only digits prefix rejected",
+			params:  CreateStoryParams{ProjectID: projectID, Key: "-01", Title: "Story"},
+			wantErr: true,
+			errCode: "VALIDATION_ERROR",
+		},
+		{
+			name:    "valid key with multi-digit number",
+			params:  CreateStoryParams{ProjectID: projectID, Key: "STORY-123", Title: "Story"},
+			wantErr: false,
+		},
+		{
+			name:    "valid key with digits in prefix",
+			params:  CreateStoryParams{ProjectID: projectID, Key: "S2-14", Title: "Story"},
+			wantErr: false,
+		},
+		{
 			name:    "empty title",
 			params:  CreateStoryParams{ProjectID: projectID, Key: "S-01", Title: ""},
 			wantErr: true,

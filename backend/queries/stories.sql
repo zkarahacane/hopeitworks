@@ -33,9 +33,6 @@ SELECT COUNT(*) FROM stories WHERE project_id = $1;
 -- name: CountStoriesByStatus :one
 SELECT COUNT(*) FROM stories WHERE project_id = $1 AND status = ANY($2::text[]);
 
--- name: CountStoriesByEpic :one
-SELECT COUNT(*) FROM stories WHERE epic_id = $1;
-
 -- name: UpdateStory :one
 UPDATE stories
 SET title = COALESCE(sqlc.narg('title'), title),

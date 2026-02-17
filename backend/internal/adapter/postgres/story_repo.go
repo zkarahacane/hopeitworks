@@ -27,14 +27,22 @@ func NewStoryRepo(queries *Queries) *StoryRepo {
 }
 
 func (r *StoryRepo) Create(ctx context.Context, story *model.Story) (*model.Story, error) {
+	targetFiles, err := marshalJSONB(story.TargetFiles)
+	if err != nil {
+		return nil, err
+	}
+	dependsOn, err := marshalJSONB(story.DependsOn)
+	if err != nil {
+		return nil, err
+	}
 	params := CreateStoryParams{
 		ProjectID:          story.ProjectID,
 		EpicID:             uuidFromPtr(story.EpicID),
 		Key:                story.Key,
 		Title:              story.Title,
 		Objective:          textFromStringPtr(story.Objective),
-		TargetFiles:        marshalJSONB(story.TargetFiles),
-		DependsOn:          marshalJSONB(story.DependsOn),
+		TargetFiles:        targetFiles,
+		DependsOn:          dependsOn,
 		Scope:              textFromStringPtr(story.Scope),
 		Status:             story.Status,
 		AcceptanceCriteria: textFromStringPtr(story.AcceptanceCriteria),
@@ -47,7 +55,7 @@ func (r *StoryRepo) Create(ctx context.Context, story *model.Story) (*model.Stor
 		}
 		return nil, apperrors.NewInternal("failed to create story", err)
 	}
-	return toDomainStory(row), nil
+	return toDomainStory(row)
 }
 
 func (r *StoryRepo) GetByID(ctx context.Context, id uuid.UUID) (*model.Story, error) {
@@ -58,7 +66,7 @@ func (r *StoryRepo) GetByID(ctx context.Context, id uuid.UUID) (*model.Story, er
 		}
 		return nil, apperrors.NewInternal("failed to get story", err)
 	}
-	return toDomainStory(row), nil
+	return toDomainStory(row)
 }
 
 func (r *StoryRepo) GetByKey(ctx context.Context, projectID uuid.UUID, key string) (*model.Story, error) {
@@ -72,7 +80,7 @@ func (r *StoryRepo) GetByKey(ctx context.Context, projectID uuid.UUID, key strin
 		}
 		return nil, apperrors.NewInternal("failed to get story by key", err)
 	}
-	return toDomainStory(row), nil
+	return toDomainStory(row)
 }
 
 func (r *StoryRepo) ListByProject(ctx context.Context, projectID uuid.UUID, limit, offset int32) ([]*model.Story, error) {
@@ -86,7 +94,11 @@ func (r *StoryRepo) ListByProject(ctx context.Context, projectID uuid.UUID, limi
 	}
 	stories := make([]*model.Story, len(rows))
 	for i, row := range rows {
-		stories[i] = toDomainStory(row)
+		s, err := toDomainStory(row)
+		if err != nil {
+			return nil, err
+		}
+		stories[i] = s
 	}
 	return stories, nil
 }
@@ -103,7 +115,11 @@ func (r *StoryRepo) ListByStatus(ctx context.Context, projectID uuid.UUID, statu
 	}
 	stories := make([]*model.Story, len(rows))
 	for i, row := range rows {
-		stories[i] = toDomainStory(row)
+		s, err := toDomainStory(row)
+		if err != nil {
+			return nil, err
+		}
+		stories[i] = s
 	}
 	return stories, nil
 }
@@ -119,7 +135,11 @@ func (r *StoryRepo) ListByEpic(ctx context.Context, epicID uuid.UUID, limit, off
 	}
 	stories := make([]*model.Story, len(rows))
 	for i, row := range rows {
-		stories[i] = toDomainStory(row)
+		s, err := toDomainStory(row)
+		if err != nil {
+			return nil, err
+		}
+		stories[i] = s
 	}
 	return stories, nil
 }
@@ -144,12 +164,20 @@ func (r *StoryRepo) CountByStatus(ctx context.Context, projectID uuid.UUID, stat
 }
 
 func (r *StoryRepo) Update(ctx context.Context, story *model.Story) (*model.Story, error) {
+	targetFiles, err := marshalJSONB(story.TargetFiles)
+	if err != nil {
+		return nil, err
+	}
+	dependsOn, err := marshalJSONB(story.DependsOn)
+	if err != nil {
+		return nil, err
+	}
 	params := UpdateStoryParams{
 		ID:                 story.ID,
 		Title:              textFromStringPtr(&story.Title),
 		Objective:          textFromStringPtr(story.Objective),
-		TargetFiles:        marshalJSONB(story.TargetFiles),
-		DependsOn:          marshalJSONB(story.DependsOn),
+		TargetFiles:        targetFiles,
+		DependsOn:          dependsOn,
 		Scope:              textFromStringPtr(story.Scope),
 		Status:             pgtype.Text{String: story.Status, Valid: true},
 		AcceptanceCriteria: textFromStringPtr(story.AcceptanceCriteria),
@@ -166,7 +194,7 @@ func (r *StoryRepo) Update(ctx context.Context, story *model.Story) (*model.Stor
 		}
 		return nil, apperrors.NewInternal("failed to update story", err)
 	}
-	return toDomainStory(row), nil
+	return toDomainStory(row)
 }
 
 func (r *StoryRepo) Delete(ctx context.Context, id uuid.UUID) error {
@@ -178,15 +206,25 @@ func (r *StoryRepo) Delete(ctx context.Context, id uuid.UUID) error {
 }
 
 // toDomainStory maps a sqlc-generated Story to a domain Story.
-func toDomainStory(s Story) *model.Story {
+func toDomainStory(s Story) (*model.Story, error) {
+	targetFiles, err := unmarshalJSONBStringSlice(s.TargetFiles)
+	if err != nil {
+		return nil, err
+	}
+	dependsOn, err := unmarshalJSONBStringSlice(s.DependsOn)
+	if err != nil {
+		return nil, err
+	}
 	story := &model.Story{
-		ID:        s.ID,
-		ProjectID: s.ProjectID,
-		Key:       s.Key,
-		Title:     s.Title,
-		Status:    s.Status,
-		CreatedAt: s.CreatedAt,
-		UpdatedAt: s.UpdatedAt,
+		ID:          s.ID,
+		ProjectID:   s.ProjectID,
+		Key:         s.Key,
+		Title:       s.Title,
+		Status:      s.Status,
+		TargetFiles: targetFiles,
+		DependsOn:   dependsOn,
+		CreatedAt:   s.CreatedAt,
+		UpdatedAt:   s.UpdatedAt,
 	}
 	if s.EpicID.Valid {
 		epicID := uuid.UUID(s.EpicID.Bytes)
@@ -201,31 +239,29 @@ func toDomainStory(s Story) *model.Story {
 	if s.AcceptanceCriteria.Valid {
 		story.AcceptanceCriteria = &s.AcceptanceCriteria.String
 	}
-	story.TargetFiles = unmarshalJSONBStringSlice(s.TargetFiles)
-	story.DependsOn = unmarshalJSONBStringSlice(s.DependsOn)
-	return story
+	return story, nil
 }
 
-// marshalJSONB marshals a string slice to JSONB bytes. Returns nil for nil/empty slices.
-func marshalJSONB(vals []string) []byte {
+// marshalJSONB marshals a string slice to JSONB bytes. Returns nil for nil slices.
+func marshalJSONB(vals []string) ([]byte, error) {
 	if vals == nil {
-		return nil
+		return nil, nil
 	}
 	b, err := json.Marshal(vals)
 	if err != nil {
-		return nil
+		return nil, apperrors.NewInternal("failed to marshal JSONB field", err)
 	}
-	return b
+	return b, nil
 }
 
 // unmarshalJSONBStringSlice unmarshals JSONB bytes to a string slice. Returns nil for nil/empty input.
-func unmarshalJSONBStringSlice(data []byte) []string {
+func unmarshalJSONBStringSlice(data []byte) ([]string, error) {
 	if len(data) == 0 {
-		return nil
+		return nil, nil
 	}
 	var result []string
 	if err := json.Unmarshal(data, &result); err != nil {
-		return nil
+		return nil, apperrors.NewInternal("failed to unmarshal JSONB field", err)
 	}
-	return result
+	return result, nil
 }
