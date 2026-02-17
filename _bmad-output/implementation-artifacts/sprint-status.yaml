@@ -60,16 +60,16 @@ development_status:
   1-16-vue-app-routing-state-tooling: done
   1-17-github-actions-ci-pipeline: done
   1-18-dev-seed-data-fixtures: done
-  1-19-project-detail-tabbed-navigation: backlog
+  1-19-project-detail-tabbed-navigation: done
   epic-1-retrospective: optional
 
   # Epic 2: Story Board & Management
   epic-2: in-progress
   2-1-epics-table-epic-crud-api: done
-  2-2-stories-table-story-crud-api-status-filtering: backlog
+  2-2-stories-table-story-crud-api-status-filtering: done
   2-3-story-markdown-import-frontmatter-parsing: backlog
   2-4-story-board-page-epic-list-with-story-counts: done
-  2-5-epic-detail-split-focus-story-list-filters: backlog
+  2-5-epic-detail-split-focus-story-list-filters: done
   2-6-story-detail-view-read-only: backlog
   2-7-story-editor-create-edit-mode: backlog
   2-8-story-import-from-markdown: backlog
@@ -79,11 +79,11 @@ development_status:
   epic-3: in-progress
   3-1-runs-runsteps-tables-run-creation-api-state-machine: done
   3-2-gitprovider-port-gh-cli-adapter-clone-branch-push: done
-  3-3-gitprovider-pr-operations-create-pr-merge-pr: backlog
+  3-3-gitprovider-pr-operations-create-pr-merge-pr: done
   3-4-docker-container-lifecycle-manager-create-start-stop-cleanup: done
-  3-5-ndjson-log-streaming-from-container: review
+  3-5-ndjson-log-streaming-from-container: done
   3-6-events-table-pgxlisten-event-bus: done
-  3-7-pipeline-executor-sequential-step-runner: backlog
+  3-7-pipeline-executor-sequential-step-runner: done
   3-8-agent-run-action-compose-claude-md-launch-container-stream-logs: backlog
   3-9-container-timeout-enforcement-orphan-cleanup: backlog
   3-10-run-launch-api-endpoint-single-story: backlog
@@ -345,29 +345,29 @@ parallel_waves:
       # Epic 2
       - key: 2-2-stories-table-story-crud-api-status-filtering
         domain: back
-        status: backlog
+        status: done
         explicit_deps: [2-1-epics-table-epic-crud-api]
       - key: 2-5-epic-detail-split-focus-story-list-filters
         domain: front
-        status: backlog
+        status: done
         explicit_deps: [2-4-story-board-page-epic-list-with-story-counts]
       # Epic 1 - Integration fix
       - key: 1-19-project-detail-tabbed-navigation
         domain: front
-        status: backlog
+        status: done
         cross_epic_deps: [2-4-story-board-page-epic-list-with-story-counts, 6-4-pipeline-configuration-page, 6-5-prompt-template-list-page]
       # Epic 3
       - key: 3-3-gitprovider-pr-operations-create-pr-merge-pr
         domain: back
-        status: backlog
+        status: done
         explicit_deps: [3-2-gitprovider-port-gh-cli-adapter-clone-branch-push]
       - key: 3-5-ndjson-log-streaming-from-container
         domain: back
-        status: backlog
+        status: done
         explicit_deps: [3-4-docker-container-lifecycle-manager-create-start-stop-cleanup]
       - key: 3-7-pipeline-executor-sequential-step-runner
         domain: back
-        status: backlog
+        status: done
         explicit_deps: [3-1-runs-runsteps-tables-run-creation-api-state-machine]
       - key: 3-9-container-timeout-enforcement-orphan-cleanup
         domain: back
