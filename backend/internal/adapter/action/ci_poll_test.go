@@ -12,12 +12,19 @@ import (
 	"github.com/zakari/hopeitworks/backend/internal/domain/model"
 )
 
+const (
+	ciPollActionName = "ci_poll"
+	ciStatusPass     = "pass"
+	ciStatusPending  = "pending"
+	ciStatusFail     = "fail"
+)
+
 // --- Mocks for CIPollAction ---
 
 type ciMockGitProvider struct {
-	mu              sync.Mutex
-	getCIStatusFn   func(ctx context.Context, workDir string) (string, error)
-	calls           int
+	mu            sync.Mutex
+	getCIStatusFn func(ctx context.Context, workDir string) (string, error)
+	calls         int
 }
 
 func (m *ciMockGitProvider) GetCIStatus(ctx context.Context, workDir string) (string, error) {
@@ -33,8 +40,8 @@ func (m *ciMockGitProvider) Push(_ context.Context, _ string, _ string) error   
 func (m *ciMockGitProvider) CreatePR(_ context.Context, _ string, _ string, _ string, _ string) (string, error) {
 	return "", nil
 }
-func (m *ciMockGitProvider) MergePR(_ context.Context, _ string, _ string) error       { return nil }
-func (m *ciMockGitProvider) GetPRDiff(_ context.Context, _ string) (string, error)     { return "", nil }
+func (m *ciMockGitProvider) MergePR(_ context.Context, _ string, _ string) error   { return nil }
+func (m *ciMockGitProvider) GetPRDiff(_ context.Context, _ string) (string, error) { return "", nil }
 
 func (m *ciMockGitProvider) getCalls() int {
 	m.mu.Lock()
@@ -88,7 +95,7 @@ func buildCIRunCtx(metadata map[string]any) *model.RunContext {
 		RunStep: &model.RunStep{
 			ID:     stepID,
 			RunID:  runID,
-			Action: "ci_poll",
+			Action: ciPollActionName,
 			Status: model.StepStatusRunning,
 		},
 		ProjectID: projectID,
@@ -101,8 +108,8 @@ func buildCIRunCtx(metadata map[string]any) *model.RunContext {
 
 func TestCIPollAction_Name(t *testing.T) {
 	a := action.NewCIPollAction(nil, nil, fastCIPollConfig(), testLogger())
-	if a.Name() != "ci_poll" {
-		t.Fatalf("expected Name() = %q, got %q", "ci_poll", a.Name())
+	if a.Name() != ciPollActionName {
+		t.Fatalf("expected Name() = %q, got %q", ciPollActionName, a.Name())
 	}
 }
 
@@ -130,7 +137,7 @@ func TestCIPollAction_Execute_MissingPRURL(t *testing.T) {
 func TestCIPollAction_Execute_HappyPath_PassOnFirstTick(t *testing.T) {
 	gitProvider := &ciMockGitProvider{
 		getCIStatusFn: func(_ context.Context, _ string) (string, error) {
-			return "pass", nil
+			return ciStatusPass, nil
 		},
 	}
 	eventPub := &ciMockEventPublisher{}
@@ -155,8 +162,8 @@ func TestCIPollAction_Execute_HappyPath_PassOnFirstTick(t *testing.T) {
 	if len(events) != 1 {
 		t.Fatalf("expected 1 event published, got %d", len(events))
 	}
-	if events[0].EntityType != "ci_poll" {
-		t.Fatalf("expected entity_type %q, got %q", "ci_poll", events[0].EntityType)
+	if events[0].EntityType != ciPollActionName {
+		t.Fatalf("expected entity_type %q, got %q", ciPollActionName, events[0].EntityType)
 	}
 	if events[0].Action != "checking" {
 		t.Fatalf("expected action %q, got %q", "checking", events[0].Action)
@@ -169,9 +176,9 @@ func TestCIPollAction_Execute_PendingThenPass(t *testing.T) {
 		getCIStatusFn: func(_ context.Context, _ string) (string, error) {
 			callCount++
 			if callCount < 3 {
-				return "pending", nil
+				return ciStatusPending, nil
 			}
-			return "pass", nil
+			return ciStatusPass, nil
 		},
 	}
 	eventPub := &ciMockEventPublisher{}
@@ -197,7 +204,7 @@ func TestCIPollAction_Execute_PendingThenPass(t *testing.T) {
 		t.Fatalf("expected 3 events published, got %d", len(events))
 	}
 	for _, e := range events {
-		if e.EntityType != "ci_poll" || e.Action != "checking" {
+		if e.EntityType != ciPollActionName || e.Action != "checking" {
 			t.Fatalf("unexpected event: entity_type=%q action=%q", e.EntityType, e.Action)
 		}
 	}
@@ -207,7 +214,7 @@ func TestCIPollAction_Execute_CIFailure(t *testing.T) {
 	prURL := "https://github.com/owner/repo/pull/3"
 	gitProvider := &ciMockGitProvider{
 		getCIStatusFn: func(_ context.Context, _ string) (string, error) {
-			return "fail", nil
+			return ciStatusFail, nil
 		},
 	}
 	eventPub := &ciMockEventPublisher{}
@@ -230,7 +237,7 @@ func TestCIPollAction_Execute_CIFailure(t *testing.T) {
 func TestCIPollAction_Execute_Timeout(t *testing.T) {
 	gitProvider := &ciMockGitProvider{
 		getCIStatusFn: func(_ context.Context, _ string) (string, error) {
-			return "pending", nil
+			return ciStatusPending, nil
 		},
 	}
 	eventPub := &ciMockEventPublisher{}
