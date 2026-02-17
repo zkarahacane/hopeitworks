@@ -15,12 +15,19 @@ const (
 	CategoryInvalidState ErrorCategory = "invalid_state"
 )
 
+// Error codes for git operations.
+const (
+	ErrCodeGitOperationFailed = "GIT_OPERATION_FAILED"
+	ErrCodeInvalidInput       = "INVALID_INPUT"
+)
+
 // DomainError represents a structured error from the domain layer.
 type DomainError struct {
 	Category ErrorCategory
 	Code     string
 	Message  string
 	Cause    error
+	Details  map[string]any
 }
 
 func (e *DomainError) Error() string {
@@ -93,6 +100,26 @@ func NewInternal(message string, cause error) *DomainError {
 	return &DomainError{
 		Category: CategoryInternal,
 		Code:     "INTERNAL_ERROR",
+		Message:  message,
+		Cause:    cause,
+	}
+}
+
+// NewDomainError creates a domain error with an explicit code, message, and optional details.
+func NewDomainError(code string, message string, details map[string]any) *DomainError {
+	return &DomainError{
+		Category: CategoryInternal,
+		Code:     code,
+		Message:  message,
+		Details:  details,
+	}
+}
+
+// NewContainerError creates an error for container lifecycle operations.
+func NewContainerError(message string, cause error) *DomainError {
+	return &DomainError{
+		Category: CategoryInternal,
+		Code:     "CONTAINER_OPERATION_FAILED",
 		Message:  message,
 		Cause:    cause,
 	}

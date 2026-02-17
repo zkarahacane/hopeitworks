@@ -73,6 +73,11 @@ func run() error {
 	epicService := service.NewEpicService(epicRepo)
 	epicHandler := handler.NewEpicHandler(epicService)
 
+	// Prompt template service
+	promptTemplateRepo := pgadapter.NewPromptTemplateRepo(queries)
+	promptTemplateService := service.NewPromptTemplateService(promptTemplateRepo)
+	promptTemplateHandler := handler.NewPromptTemplateHandler(promptTemplateService)
+
 	// Auth handler
 	authHandler := handler.NewAuthHandler(authService, userRepo, false)
 
@@ -85,7 +90,7 @@ func run() error {
 	runService := service.NewRunService(runRepo, projectRepo)
 	runHandler := handler.NewRunHandler(runService)
 
-	server := handler.NewServer(authHandler, projectHandler, userHandler, epicHandler, runHandler)
+	server := handler.NewServer(authHandler, projectHandler, userHandler, epicHandler, promptTemplateHandler, runHandler)
 
 	// Project user handler
 	projectUserHandler := handler.NewProjectUserHandler(projectUserService)

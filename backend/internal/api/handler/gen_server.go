@@ -32,11 +32,52 @@ const (
 	CreateEpicRequestStatusInProgress CreateEpicRequestStatus = "in_progress"
 )
 
+// Defines values for CreatePromptTemplateRequestType.
+const (
+	CreatePromptTemplateRequestTypeCustom    CreatePromptTemplateRequestType = "custom"
+	CreatePromptTemplateRequestTypeImplement CreatePromptTemplateRequestType = "implement"
+	CreatePromptTemplateRequestTypeMerge     CreatePromptTemplateRequestType = "merge"
+	CreatePromptTemplateRequestTypeRetry     CreatePromptTemplateRequestType = "retry"
+	CreatePromptTemplateRequestTypeReview    CreatePromptTemplateRequestType = "review"
+)
+
 // Defines values for EpicStatus.
 const (
 	EpicStatusBacklog    EpicStatus = "backlog"
 	EpicStatusDone       EpicStatus = "done"
 	EpicStatusInProgress EpicStatus = "in_progress"
+)
+
+// Defines values for PipelineStepActionType.
+const (
+	PipelineStepActionTypeCustom    PipelineStepActionType = "custom"
+	PipelineStepActionTypeImplement PipelineStepActionType = "implement"
+	PipelineStepActionTypeMerge     PipelineStepActionType = "merge"
+	PipelineStepActionTypeReview    PipelineStepActionType = "review"
+	PipelineStepActionTypeTest      PipelineStepActionType = "test"
+)
+
+// Defines values for PipelineStepModel.
+const (
+	ClaudeHaiku43  PipelineStepModel = "claude-haiku-4-3"
+	ClaudeOpus46   PipelineStepModel = "claude-opus-4-6"
+	ClaudeSonnet45 PipelineStepModel = "claude-sonnet-4-5"
+)
+
+// Defines values for PromptTemplateType.
+const (
+	PromptTemplateTypeCustom    PromptTemplateType = "custom"
+	PromptTemplateTypeImplement PromptTemplateType = "implement"
+	PromptTemplateTypeMerge     PromptTemplateType = "merge"
+	PromptTemplateTypeRetry     PromptTemplateType = "retry"
+	PromptTemplateTypeReview    PromptTemplateType = "review"
+)
+
+// Defines values for RetryPolicyRetryType.
+const (
+	Always    RetryPolicyRetryType = "always"
+	None      RetryPolicyRetryType = "none"
+	OnFailure RetryPolicyRetryType = "on-failure"
 )
 
 // Defines values for RunStatus.
@@ -73,6 +114,15 @@ const (
 	InProgress UpdateEpicRequestStatus = "in_progress"
 )
 
+// Defines values for UpdatePromptTemplateRequestType.
+const (
+	UpdatePromptTemplateRequestTypeCustom    UpdatePromptTemplateRequestType = "custom"
+	UpdatePromptTemplateRequestTypeImplement UpdatePromptTemplateRequestType = "implement"
+	UpdatePromptTemplateRequestTypeMerge     UpdatePromptTemplateRequestType = "merge"
+	UpdatePromptTemplateRequestTypeRetry     UpdatePromptTemplateRequestType = "retry"
+	UpdatePromptTemplateRequestTypeReview    UpdatePromptTemplateRequestType = "review"
+)
+
 // Defines values for UpdateUserRequestRole.
 const (
 	UpdateUserRequestRoleAdmin UpdateUserRequestRole = "admin"
@@ -100,6 +150,16 @@ type CreateProjectRequest struct {
 	Description *string `json:"description,omitempty"`
 	Name        string  `json:"name"`
 }
+
+// CreatePromptTemplateRequest defines model for CreatePromptTemplateRequest.
+type CreatePromptTemplateRequest struct {
+	Name            string                          `json:"name"`
+	TemplateContent string                          `json:"template_content"`
+	Type            CreatePromptTemplateRequestType `json:"type"`
+}
+
+// CreatePromptTemplateRequestType defines model for CreatePromptTemplateRequest.Type.
+type CreatePromptTemplateRequestType string
 
 // CreateRunRequest defines model for CreateRunRequest.
 type CreateRunRequest struct {
@@ -154,6 +214,29 @@ type Pagination struct {
 	Total   int `json:"total"`
 }
 
+// PipelineConfig defines model for PipelineConfig.
+type PipelineConfig struct {
+	ProjectId openapi_types.UUID `json:"project_id"`
+	Steps     []PipelineStep     `json:"steps"`
+	UpdatedAt time.Time          `json:"updated_at"`
+}
+
+// PipelineStep defines model for PipelineStep.
+type PipelineStep struct {
+	ActionType  PipelineStepActionType `json:"action_type"`
+	AutoApprove bool                   `json:"auto_approve"`
+	Id          openapi_types.UUID     `json:"id"`
+	Model       PipelineStepModel      `json:"model"`
+	Name        string                 `json:"name"`
+	RetryPolicy RetryPolicy            `json:"retry_policy"`
+}
+
+// PipelineStepActionType defines model for PipelineStep.ActionType.
+type PipelineStepActionType string
+
+// PipelineStepModel defines model for PipelineStep.Model.
+type PipelineStepModel string
+
 // Project defines model for Project.
 type Project struct {
 	CreatedAt   time.Time          `json:"created_at"`
@@ -170,12 +253,41 @@ type ProjectList struct {
 	Pagination Pagination `json:"pagination"`
 }
 
+// PromptTemplate defines model for PromptTemplate.
+type PromptTemplate struct {
+	CreatedAt       time.Time          `json:"created_at"`
+	Id              openapi_types.UUID `json:"id"`
+	Name            string             `json:"name"`
+	ProjectId       openapi_types.UUID `json:"project_id"`
+	TemplateContent string             `json:"template_content"`
+	Type            PromptTemplateType `json:"type"`
+	UpdatedAt       time.Time          `json:"updated_at"`
+}
+
+// PromptTemplateType defines model for PromptTemplate.Type.
+type PromptTemplateType string
+
+// PromptTemplateList defines model for PromptTemplateList.
+type PromptTemplateList struct {
+	Data       []PromptTemplate `json:"data"`
+	Pagination Pagination       `json:"pagination"`
+}
+
 // RegisterRequest defines model for RegisterRequest.
 type RegisterRequest struct {
 	Email    openapi_types.Email `json:"email"`
 	Name     string              `json:"name"`
 	Password string              `json:"password"`
 }
+
+// RetryPolicy defines model for RetryPolicy.
+type RetryPolicy struct {
+	MaxRetries int                  `json:"max_retries"`
+	RetryType  RetryPolicyRetryType `json:"retry_type"`
+}
+
+// RetryPolicyRetryType defines model for RetryPolicy.RetryType.
+type RetryPolicyRetryType string
 
 // Run defines model for Run.
 type Run struct {
@@ -247,11 +359,26 @@ type UpdateEpicRequest struct {
 // UpdateEpicRequestStatus defines model for UpdateEpicRequest.Status.
 type UpdateEpicRequestStatus string
 
+// UpdatePipelineConfigRequest defines model for UpdatePipelineConfigRequest.
+type UpdatePipelineConfigRequest struct {
+	Steps []PipelineStep `json:"steps"`
+}
+
 // UpdateProjectRequest defines model for UpdateProjectRequest.
 type UpdateProjectRequest struct {
 	Description *string `json:"description,omitempty"`
 	Name        *string `json:"name,omitempty"`
 }
+
+// UpdatePromptTemplateRequest defines model for UpdatePromptTemplateRequest.
+type UpdatePromptTemplateRequest struct {
+	Name            *string                          `json:"name,omitempty"`
+	TemplateContent *string                          `json:"template_content,omitempty"`
+	Type            *UpdatePromptTemplateRequestType `json:"type,omitempty"`
+}
+
+// UpdatePromptTemplateRequestType defines model for UpdatePromptTemplateRequest.Type.
+type UpdatePromptTemplateRequestType string
 
 // UpdateUserRequest defines model for UpdateUserRequest.
 type UpdateUserRequest struct {
@@ -306,6 +433,9 @@ type SortByParam = string
 // StoryIdPath defines model for StoryIdPath.
 type StoryIdPath = openapi_types.UUID
 
+// TemplateIdPath defines model for TemplateIdPath.
+type TemplateIdPath = openapi_types.UUID
+
 // BadRequest defines model for BadRequest.
 type BadRequest = Error
 
@@ -344,6 +474,15 @@ type ListEpicsParams struct {
 
 // ListRunsByProjectParams defines parameters for ListRunsByProject.
 type ListRunsByProjectParams struct {
+	// Page Page number
+	Page *PageParam `form:"page,omitempty" json:"page,omitempty"`
+
+	// PerPage Items per page
+	PerPage *PerPageParam `form:"per_page,omitempty" json:"per_page,omitempty"`
+}
+
+// ListPromptTemplatesParams defines parameters for ListPromptTemplates.
+type ListPromptTemplatesParams struct {
 	// Page Page number
 	Page *PageParam `form:"page,omitempty" json:"page,omitempty"`
 
@@ -390,8 +529,17 @@ type CreateEpicJSONRequestBody = CreateEpicRequest
 // UpdateEpicJSONRequestBody defines body for UpdateEpic for application/json ContentType.
 type UpdateEpicJSONRequestBody = UpdateEpicRequest
 
+// UpdatePipelineConfigJSONRequestBody defines body for UpdatePipelineConfig for application/json ContentType.
+type UpdatePipelineConfigJSONRequestBody = UpdatePipelineConfigRequest
+
 // CreateRunJSONRequestBody defines body for CreateRun for application/json ContentType.
 type CreateRunJSONRequestBody = CreateRunRequest
+
+// CreatePromptTemplateJSONRequestBody defines body for CreatePromptTemplate for application/json ContentType.
+type CreatePromptTemplateJSONRequestBody = CreatePromptTemplateRequest
+
+// UpdatePromptTemplateJSONRequestBody defines body for UpdatePromptTemplate for application/json ContentType.
+type UpdatePromptTemplateJSONRequestBody = UpdatePromptTemplateRequest
 
 // UpdateUserJSONRequestBody defines body for UpdateUser for application/json ContentType.
 type UpdateUserJSONRequestBody = UpdateUserRequest
@@ -440,12 +588,33 @@ type ServerInterface interface {
 	// Update an epic
 	// (PUT /projects/{projectId}/epics/{epicId})
 	UpdateEpic(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, epicId EpicIdPath)
+	// Get the pipeline configuration for a project
+	// (GET /projects/{projectId}/pipeline)
+	GetPipelineConfig(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath)
+	// Update the pipeline configuration for a project
+	// (PUT /projects/{projectId}/pipeline)
+	UpdatePipelineConfig(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath)
 	// List runs for a project
 	// (GET /projects/{projectId}/runs)
 	ListRunsByProject(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, params ListRunsByProjectParams)
 	// Create a new pipeline run for a project
 	// (POST /projects/{projectId}/runs)
 	CreateRun(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath)
+	// List prompt templates for a project
+	// (GET /projects/{projectId}/templates)
+	ListPromptTemplates(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, params ListPromptTemplatesParams)
+	// Create a new prompt template in a project
+	// (POST /projects/{projectId}/templates)
+	CreatePromptTemplate(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath)
+	// Delete a prompt template
+	// (DELETE /projects/{projectId}/templates/{templateId})
+	DeletePromptTemplate(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, templateId TemplateIdPath)
+	// Get a prompt template by ID
+	// (GET /projects/{projectId}/templates/{templateId})
+	GetPromptTemplate(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, templateId TemplateIdPath)
+	// Update a prompt template
+	// (PUT /projects/{projectId}/templates/{templateId})
+	UpdatePromptTemplate(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, templateId TemplateIdPath)
 	// Get a run by ID with its steps
 	// (GET /runs/{runId})
 	GetRun(w http.ResponseWriter, r *http.Request, runId RunIdPath)
@@ -554,6 +723,18 @@ func (_ Unimplemented) UpdateEpic(w http.ResponseWriter, r *http.Request, projec
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Get the pipeline configuration for a project
+// (GET /projects/{projectId}/pipeline)
+func (_ Unimplemented) GetPipelineConfig(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Update the pipeline configuration for a project
+// (PUT /projects/{projectId}/pipeline)
+func (_ Unimplemented) UpdatePipelineConfig(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // List runs for a project
 // (GET /projects/{projectId}/runs)
 func (_ Unimplemented) ListRunsByProject(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, params ListRunsByProjectParams) {
@@ -563,6 +744,36 @@ func (_ Unimplemented) ListRunsByProject(w http.ResponseWriter, r *http.Request,
 // Create a new pipeline run for a project
 // (POST /projects/{projectId}/runs)
 func (_ Unimplemented) CreateRun(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// List prompt templates for a project
+// (GET /projects/{projectId}/templates)
+func (_ Unimplemented) ListPromptTemplates(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, params ListPromptTemplatesParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Create a new prompt template in a project
+// (POST /projects/{projectId}/templates)
+func (_ Unimplemented) CreatePromptTemplate(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Delete a prompt template
+// (DELETE /projects/{projectId}/templates/{templateId})
+func (_ Unimplemented) DeletePromptTemplate(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, templateId TemplateIdPath) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Get a prompt template by ID
+// (GET /projects/{projectId}/templates/{templateId})
+func (_ Unimplemented) GetPromptTemplate(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, templateId TemplateIdPath) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Update a prompt template
+// (PUT /projects/{projectId}/templates/{templateId})
+func (_ Unimplemented) UpdatePromptTemplate(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, templateId TemplateIdPath) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1042,6 +1253,68 @@ func (siw *ServerInterfaceWrapper) UpdateEpic(w http.ResponseWriter, r *http.Req
 	handler.ServeHTTP(w, r)
 }
 
+// GetPipelineConfig operation middleware
+func (siw *ServerInterfaceWrapper) GetPipelineConfig(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "projectId" -------------
+	var projectId ProjectIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectId", chi.URLParam(r, "projectId"), &projectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetPipelineConfig(w, r, projectId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdatePipelineConfig operation middleware
+func (siw *ServerInterfaceWrapper) UpdatePipelineConfig(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "projectId" -------------
+	var projectId ProjectIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectId", chi.URLParam(r, "projectId"), &projectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdatePipelineConfig(w, r, projectId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListRunsByProject operation middleware
 func (siw *ServerInterfaceWrapper) ListRunsByProject(w http.ResponseWriter, r *http.Request) {
 
@@ -1114,6 +1387,207 @@ func (siw *ServerInterfaceWrapper) CreateRun(w http.ResponseWriter, r *http.Requ
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateRun(w, r, projectId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListPromptTemplates operation middleware
+func (siw *ServerInterfaceWrapper) ListPromptTemplates(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "projectId" -------------
+	var projectId ProjectIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectId", chi.URLParam(r, "projectId"), &projectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListPromptTemplatesParams
+
+	// ------------- Optional query parameter "page" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "page", r.URL.Query(), &params.Page)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "page", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "per_page" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "per_page", r.URL.Query(), &params.PerPage)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "per_page", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListPromptTemplates(w, r, projectId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreatePromptTemplate operation middleware
+func (siw *ServerInterfaceWrapper) CreatePromptTemplate(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "projectId" -------------
+	var projectId ProjectIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectId", chi.URLParam(r, "projectId"), &projectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreatePromptTemplate(w, r, projectId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeletePromptTemplate operation middleware
+func (siw *ServerInterfaceWrapper) DeletePromptTemplate(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "projectId" -------------
+	var projectId ProjectIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectId", chi.URLParam(r, "projectId"), &projectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "templateId" -------------
+	var templateId TemplateIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "templateId", chi.URLParam(r, "templateId"), &templateId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "templateId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeletePromptTemplate(w, r, projectId, templateId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetPromptTemplate operation middleware
+func (siw *ServerInterfaceWrapper) GetPromptTemplate(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "projectId" -------------
+	var projectId ProjectIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectId", chi.URLParam(r, "projectId"), &projectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "templateId" -------------
+	var templateId TemplateIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "templateId", chi.URLParam(r, "templateId"), &templateId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "templateId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetPromptTemplate(w, r, projectId, templateId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdatePromptTemplate operation middleware
+func (siw *ServerInterfaceWrapper) UpdatePromptTemplate(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "projectId" -------------
+	var projectId ProjectIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectId", chi.URLParam(r, "projectId"), &projectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "templateId" -------------
+	var templateId TemplateIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "templateId", chi.URLParam(r, "templateId"), &templateId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "templateId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdatePromptTemplate(w, r, projectId, templateId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1502,10 +1976,31 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Put(options.BaseURL+"/projects/{projectId}/epics/{epicId}", wrapper.UpdateEpic)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/projects/{projectId}/pipeline", wrapper.GetPipelineConfig)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/projects/{projectId}/pipeline", wrapper.UpdatePipelineConfig)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/projects/{projectId}/runs", wrapper.ListRunsByProject)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/projects/{projectId}/runs", wrapper.CreateRun)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/projects/{projectId}/templates", wrapper.ListPromptTemplates)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/projects/{projectId}/templates", wrapper.CreatePromptTemplate)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/projects/{projectId}/templates/{templateId}", wrapper.DeletePromptTemplate)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/projects/{projectId}/templates/{templateId}", wrapper.GetPromptTemplate)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/projects/{projectId}/templates/{templateId}", wrapper.UpdatePromptTemplate)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/runs/{runId}", wrapper.GetRun)
@@ -1532,53 +2027,64 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
-	"2cRyEhZE3c//EwAA//8elRP+Sk0AAA==",
+	"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",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

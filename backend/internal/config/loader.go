@@ -59,6 +59,12 @@ func applyEnvOverrides(cfg *pkgconfig.Config) {
 	if v := os.Getenv("LOG_LEVEL"); v != "" {
 		cfg.Log.Level = v
 	}
+	if v := os.Getenv("DOCKER_HOST"); v != "" {
+		cfg.Docker.Host = v
+	}
+	if v := os.Getenv("DOCKER_AGENT_NETWORK"); v != "" {
+		cfg.Docker.AgentNetwork = v
+	}
 }
 
 func validate(cfg *pkgconfig.Config) error {

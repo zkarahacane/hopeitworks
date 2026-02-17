@@ -29,6 +29,10 @@ tags:
     description: Epic management endpoints
   - name: runs
     description: Pipeline run management endpoints
+  - name: prompt-templates
+    description: Prompt template management endpoints
+  - name: pipeline-configs
+    description: Pipeline configuration endpoints
 
 paths:
   # ── Auth ────────────────────────────────────────────────────────────────
@@ -502,6 +506,171 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+
+    # ── Prompt Templates ──────────────────────────────────────────────────
+  /projects/{projectId}/templates:
+    get:
+      operationId: listPromptTemplates
+      summary: List prompt templates for a project
+      tags: [prompt-templates]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/PerPageParam"
+      responses:
+        "200":
+          description: Paginated list of prompt templates
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromptTemplateList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    post:
+      operationId: createPromptTemplate
+      summary: Create a new prompt template in a project
+      tags: [prompt-templates]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePromptTemplateRequest"
+      responses:
+        "201":
+          description: Prompt template created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromptTemplate"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /projects/{projectId}/templates/{templateId}:
+    get:
+      operationId: getPromptTemplate
+      summary: Get a prompt template by ID
+      tags: [prompt-templates]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/TemplateIdPath"
+      responses:
+        "200":
+          description: Prompt template details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromptTemplate"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    put:
+      operationId: updatePromptTemplate
+      summary: Update a prompt template
+      tags: [prompt-templates]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/TemplateIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePromptTemplateRequest"
+      responses:
+        "200":
+          description: Prompt template updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromptTemplate"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+    delete:
+      operationId: deletePromptTemplate
+      summary: Delete a prompt template
+      tags: [prompt-templates]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/TemplateIdPath"
+      responses:
+        "204":
+          description: Prompt template deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ── Pipeline Configs ─────────────────────────────────────────────────
+  /projects/{projectId}/pipeline:
+    get:
+      operationId: getPipelineConfig
+      summary: Get the pipeline configuration for a project
+      tags: [pipeline-configs]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+      responses:
+        "200":
+          description: Pipeline configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PipelineConfig"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    put:
+      operationId: updatePipelineConfig
+      summary: Update the pipeline configuration for a project
+      tags: [pipeline-configs]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePipelineConfigRequest"
+      responses:
+        "200":
+          description: Pipeline configuration updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PipelineConfig"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
 # ── Components ──────────────────────────────────────────────────────────
 components:
   securitySchemes:
@@ -538,6 +707,15 @@ components:
         type: string
         format: uuid
       description: Epic UUID
+
+    TemplateIdPath:
+      name: templateId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Prompt template UUID
 
     RunIdPath:
       name: runId
@@ -850,6 +1028,173 @@ components:
         pagination:
           $ref: "#/components/schemas/Pagination"
 
+    # ── Prompt Template ────────────────────────────────────────────────
+    PromptTemplate:
+      type: object
+      required:
+        - id
+        - project_id
+        - name
+        - template_content
+        - type
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 880e8400-e29b-41d4-a716-446655440000
+        project_id:
+          type: string
+          format: uuid
+          example: 660e8400-e29b-41d4-a716-446655440000
+        name:
+          type: string
+          example: Default Implement Prompt
+        template_content:
+          type: string
+          example: "You are implementing story {{story_key}}..."
+        type:
+          type: string
+          enum: [implement, retry, review, merge, custom]
+          example: implement
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-01-15T10:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2026-01-15T10:30:00Z"
+
+    CreatePromptTemplateRequest:
+      type: object
+      required:
+        - name
+        - template_content
+        - type
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          example: Default Implement Prompt
+        template_content:
+          type: string
+          minLength: 1
+          example: "You are implementing story {{story_key}}..."
+        type:
+          type: string
+          enum: [implement, retry, review, merge, custom]
+          example: implement
+
+    UpdatePromptTemplateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          example: Updated Prompt Name
+        template_content:
+          type: string
+          minLength: 1
+          example: "Updated template content..."
+        type:
+          type: string
+          enum: [implement, retry, review, merge, custom]
+
+    PromptTemplateList:
+      type: object
+      required:
+        - data
+        - pagination
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/PromptTemplate"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+
+    # ── Pipeline Config ──────────────────────────────────────────────
+    PipelineStep:
+      type: object
+      required:
+        - id
+        - name
+        - action_type
+        - model
+        - auto_approve
+        - retry_policy
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 880e8400-e29b-41d4-a716-446655440000
+        name:
+          type: string
+          example: implement
+        action_type:
+          type: string
+          enum: [implement, review, merge, test, custom]
+          example: implement
+        model:
+          type: string
+          enum: [claude-opus-4-6, claude-sonnet-4-5, claude-haiku-4-3]
+          example: claude-opus-4-6
+        auto_approve:
+          type: boolean
+          example: false
+        retry_policy:
+          $ref: "#/components/schemas/RetryPolicy"
+
+    RetryPolicy:
+      type: object
+      required:
+        - max_retries
+        - retry_type
+      properties:
+        max_retries:
+          type: integer
+          minimum: 0
+          maximum: 10
+          example: 2
+        retry_type:
+          type: string
+          enum: [none, on-failure, always]
+          example: on-failure
+
+    PipelineConfig:
+      type: object
+      required:
+        - project_id
+        - steps
+        - updated_at
+      properties:
+        project_id:
+          type: string
+          format: uuid
+          example: 660e8400-e29b-41d4-a716-446655440000
+        steps:
+          type: array
+          items:
+            $ref: "#/components/schemas/PipelineStep"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2026-02-15T10:30:00Z"
+
+    UpdatePipelineConfigRequest:
+      type: object
+      required:
+        - steps
+      properties:
+        steps:
+          type: array
+          items:
+            $ref: "#/components/schemas/PipelineStep"
+
     # ── Run ──────────────────────────────────────────────────────────
     Run:
       type: object
@@ -987,7 +1332,8 @@ components:
         pagination:
           $ref: "#/components/schemas/Pagination"
 
-    # ── Shared ─────────────────────────────────────────────────────────
+
+        # ── Shared ─────────────────────────────────────────────────────────
     Pagination:
       type: object
       required:
