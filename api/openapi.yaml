@@ -37,6 +37,8 @@ tags:
     description: Pipeline configuration endpoints
   - name: hitl
     description: Human-in-the-loop approval endpoints
+  - name: notifications
+    description: Notification configuration endpoints
 
 paths:
   # ── Auth ────────────────────────────────────────────────────────────────
@@ -909,6 +911,95 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  # ── Notification Configs ─────────────────────────────────────────────
+  /projects/{projectId}/notifications:
+    get:
+      operationId: listNotificationConfigs
+      summary: List notification configs for a project
+      tags: [notifications]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+      responses:
+        "200":
+          description: List of notification configs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationConfigList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    post:
+      operationId: createNotificationConfig
+      summary: Create a notification config for a project
+      tags: [notifications]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateNotificationConfigRequest"
+      responses:
+        "201":
+          description: Notification config created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationConfig"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /projects/{projectId}/notifications/{notificationId}:
+    put:
+      operationId: updateNotificationConfig
+      summary: Update a notification config
+      tags: [notifications]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/NotificationIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateNotificationConfigRequest"
+      responses:
+        "200":
+          description: Notification config updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationConfig"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    delete:
+      operationId: deleteNotificationConfig
+      summary: Delete a notification config
+      tags: [notifications]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/NotificationIdPath"
+      responses:
+        "204":
+          description: Notification config deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   # ── HITL Requests ───────────────────────────────────────────────────
   /hitl-requests/by-step/{stepId}:
     get:
@@ -1081,6 +1172,15 @@ components:
         type: string
         format: uuid
       description: HITL request UUID
+
+    NotificationIdPath:
+      name: notificationId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Notification config UUID
 
     PageParam:
       name: page
@@ -2069,6 +2169,99 @@ components:
             details:
               type: object
               additionalProperties: true
+
+    # ── Notification Config ─────────────────────────────────────────────
+    NotificationConfig:
+      type: object
+      required: [id, project_id, channel_type, config, events_filter, enabled, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 770e8400-e29b-41d4-a716-446655440000
+        project_id:
+          type: string
+          format: uuid
+          example: 660e8400-e29b-41d4-a716-446655440000
+        channel_type:
+          type: string
+          enum: [discord, webhook]
+          example: discord
+        config:
+          type: object
+          additionalProperties:
+            type: string
+          example: {"url": "https://discord.com/api/webhooks/..."}
+        events_filter:
+          type: array
+          items:
+            type: string
+          example: ["run.completed", "run.failed"]
+        enabled:
+          type: boolean
+          example: true
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-01-15T10:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2026-01-15T10:30:00Z"
+
+    NotificationConfigList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/NotificationConfig"
+
+    CreateNotificationConfigRequest:
+      type: object
+      required: [channel_type, config, events_filter]
+      properties:
+        channel_type:
+          type: string
+          enum: [discord, webhook]
+          example: discord
+        config:
+          type: object
+          additionalProperties:
+            type: string
+          example: {"url": "https://discord.com/api/webhooks/..."}
+        events_filter:
+          type: array
+          items:
+            type: string
+          example: ["run.completed", "run.failed"]
+        enabled:
+          type: boolean
+          default: true
+          example: true
+
+    UpdateNotificationConfigRequest:
+      type: object
+      required: [channel_type, config, events_filter, enabled]
+      properties:
+        channel_type:
+          type: string
+          enum: [discord, webhook]
+          example: discord
+        config:
+          type: object
+          additionalProperties:
+            type: string
+          example: {"url": "https://discord.com/api/webhooks/..."}
+        events_filter:
+          type: array
+          items:
+            type: string
+          example: ["run.completed", "run.failed"]
+        enabled:
+          type: boolean
+          example: true
 
   responses:
     BadRequest:

@@ -43,6 +43,17 @@ type HitlRequest struct {
 	CreatedAt       time.Time          `json:"created_at"`
 }
 
+type NotificationConfig struct {
+	ID           uuid.UUID `json:"id"`
+	ProjectID    uuid.UUID `json:"project_id"`
+	ChannelType  string    `json:"channel_type"`
+	Config       []byte    `json:"config"`
+	EventsFilter []byte    `json:"events_filter"`
+	Enabled      bool      `json:"enabled"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
 type PipelineConfig struct {
 	ID         uuid.UUID `json:"id"`
 	ProjectID  uuid.UUID `json:"project_id"`
