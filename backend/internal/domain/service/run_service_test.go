@@ -105,6 +105,14 @@ func (m *mockRunRepo) UpdateRunStepContainerInfo(_ context.Context, id uuid.UUID
 	return &model.RunStep{ID: id}, nil
 }
 
+func (m *mockRunRepo) CreateRetryRunStep(_ context.Context, step *model.RunStep) (*model.RunStep, error) {
+	return step, nil
+}
+
+func (m *mockRunRepo) ListRetryStepsByParent(_ context.Context, _ uuid.UUID) ([]*model.RunStep, error) {
+	return nil, nil
+}
+
 // mockStoryRepoForRun implements port.StoryRepository for testing.
 type mockStoryRepoForRun struct {
 	getByIDFn func(ctx context.Context, id uuid.UUID) (*model.Story, error)

@@ -184,6 +184,12 @@ func run() error {
 			)
 			actionReg.Register(agentRunAction)
 			logger.Info("agent_run action registered")
+
+			incrementalRetryAction := actionadapter.NewIncrementalRetryAction(
+				runRepo, templateSvc, agentRunAction, logger,
+			)
+			actionReg.Register(incrementalRetryAction)
+			logger.Info("incremental_retry action registered")
 		}
 	}
 
