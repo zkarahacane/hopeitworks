@@ -58,6 +58,20 @@ function formatDuration(step: RunStep): string | null {
 
 <template>
   <div class="flex flex-col h-full p-6 gap-6">
+    <!-- Page Header — always visible -->
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <h1 class="text-xl font-bold">Run Detail</h1>
+        <code
+          v-if="run"
+          class="text-sm bg-surface-100 dark:bg-surface-800 px-2 py-1 rounded font-mono"
+        >
+          {{ run.id }}
+        </code>
+      </div>
+      <Tag v-if="run" :value="run.status" :severity="runStatusSeverity[run.status]" />
+    </div>
+
     <!-- Loading state -->
     <div v-if="isLoading" class="flex flex-col gap-4">
       <Skeleton width="20rem" height="2rem" />
@@ -73,16 +87,6 @@ function formatDuration(step: RunStep): string | null {
 
     <!-- Run data -->
     <template v-else-if="run">
-      <!-- Header: Run ID + Status -->
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-3">
-          <h1 class="text-xl font-bold">Run Detail</h1>
-          <code class="text-sm bg-surface-100 dark:bg-surface-800 px-2 py-1 rounded font-mono">
-            {{ run.id }}
-          </code>
-        </div>
-        <Tag :value="run.status" :severity="runStatusSeverity[run.status]" />
-      </div>
 
       <!-- Progress Bar -->
       <ProgressBar :value="progress" :show-value="true" />
