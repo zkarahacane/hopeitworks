@@ -23,7 +23,7 @@ const statusConfig = [
     class="flex flex-col gap-3 p-4 cursor-pointer"
     role="button"
     tabindex="0"
-    :aria-label="`Epic: ${epic.title}`"
+    :aria-label="`Epic: ${epic.name}`"
     @click="emit('click', epic.id)"
     @keydown.enter="emit('click', epic.id)"
     style="
@@ -35,7 +35,7 @@ const statusConfig = [
     @mouseenter="($event.currentTarget as HTMLElement).style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)'"
     @mouseleave="($event.currentTarget as HTMLElement).style.boxShadow = 'none'"
   >
-    <h3 class="m-0" style="font-size: 1.1rem; font-weight: 600">{{ epic.title }}</h3>
+    <h3 class="m-0" style="font-size: 1.1rem; font-weight: 600">{{ epic.name }}</h3>
     <p
       v-if="epic.description"
       class="m-0"

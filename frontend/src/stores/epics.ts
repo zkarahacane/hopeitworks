@@ -26,16 +26,16 @@ export const useEpicsStore = defineStore('epics', () => {
     isLoading.value = true
     error.value = null
     try {
-      const { data, error: apiError } = await apiClient.GET('/projects/{id}/epics', {
+      const { data, error: apiError } = await apiClient.GET('/projects/{projectId}/epics', {
         params: {
-          path: { id: projectId },
+          path: { projectId },
         },
       })
       if (apiError) {
         error.value = 'Failed to load epics'
         return
       }
-      items.value = (data?.data as Epic[]) ?? []
+      items.value = data?.data ?? []
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Failed to load epics'
     } finally {
