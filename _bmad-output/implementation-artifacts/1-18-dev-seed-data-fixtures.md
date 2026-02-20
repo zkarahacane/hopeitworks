@@ -1,6 +1,6 @@
 # Story 1.18: [BACK] Dev seed data fixtures
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -520,3 +520,10 @@ All tests run with `go test ./testdata/ -short` (no database container required)
 ## Dev Agent Record
 
 ## Change Log
+
+- 2026-02-18: Implémenté. Le seed de base (users, projects, memberships) correspond à la spec.
+  Étendu au-delà du scope initial avec : epics (3), stories (7, statuts variés), pipeline_config,
+  runs (4 : completed/running/failed/pending), run_steps (12, dont retry incremental),
+  events (6), hitl_requests (1 approved) — données suffisantes pour tester toutes les vues UI.
+  Fix annexe : renommage des migrations dupliquées 000006 (×3) et 000014 (×2) qui bloquaient
+  `migrate up`. Socket-proxy ajouté au docker-compose pour l'accès Docker depuis l'API.
