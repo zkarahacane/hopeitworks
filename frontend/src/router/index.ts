@@ -89,6 +89,11 @@ const router = createRouter({
           name: 'hitl-approve',
           component: () => import('@/views/HITLApprovalView.vue'),
         },
+        {
+          path: 'settings/notifications',
+          name: 'project-notifications',
+          component: () => import('@/views/NotificationSettingsView.vue'),
+        },
       ],
     },
     {
