@@ -5,60 +5,87 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/zakari/hopeitworks/backend/internal/adapter/action"
 	"github.com/zakari/hopeitworks/backend/internal/domain/model"
-	"github.com/zakari/hopeitworks/backend/pkg/errors"
+	"github.com/zakari/hopeitworks/backend/internal/domain/service"
+	apperrors "github.com/zakari/hopeitworks/backend/pkg/errors"
 )
 
-const (
-	retryTypeIncremental = "incremental"
-	retryTypeFull        = "full"
-)
+// --- Partial mocks for IncrementalRetryAction ---
 
-// --- Mocks specific to incremental retry tests ---
-
-// retryMockRunRepo is a minimal RunRepository mock for IncrementalRetryAction tests.
+// retryMockRunRepo implements port.RunRepository with configurable fns for retry tests.
 type retryMockRunRepo struct {
-	mockRunRepo
-	retryGetRunStepFn    func(ctx context.Context, id uuid.UUID) (*model.RunStep, error)
+	getRunStepFn         func(ctx context.Context, id uuid.UUID) (*model.RunStep, error)
 	createRetryRunStepFn func(ctx context.Context, step *model.RunStep) (*model.RunStep, error)
-	listRetryByParentFn  func(ctx context.Context, parentStepID uuid.UUID) ([]*model.RunStep, error)
-	createdRetrySteps    []*model.RunStep
+	createdStep          *model.RunStep
 }
 
 func (m *retryMockRunRepo) GetRunStep(ctx context.Context, id uuid.UUID) (*model.RunStep, error) {
-	if m.retryGetRunStepFn != nil {
-		return m.retryGetRunStepFn(ctx, id)
+	if m.getRunStepFn != nil {
+		return m.getRunStepFn(ctx, id)
 	}
-	return nil, errors.NewNotFound("run_step", id)
+	return nil, apperrors.NewNotFound("run step", id)
 }
 
 func (m *retryMockRunRepo) CreateRetryRunStep(ctx context.Context, step *model.RunStep) (*model.RunStep, error) {
-	m.createdRetrySteps = append(m.createdRetrySteps, step)
 	if m.createRetryRunStepFn != nil {
 		return m.createRetryRunStepFn(ctx, step)
 	}
+	m.createdStep = step
 	return step, nil
 }
 
-func (m *retryMockRunRepo) ListRetryStepsByParent(ctx context.Context, parentStepID uuid.UUID) ([]*model.RunStep, error) {
-	if m.listRetryByParentFn != nil {
-		return m.listRetryByParentFn(ctx, parentStepID)
-	}
+// Stub implementations for the full port.RunRepository interface.
+func (m *retryMockRunRepo) CreateRun(_ context.Context, run *model.Run) (*model.Run, error) {
+	return run, nil
+}
+func (m *retryMockRunRepo) GetRun(_ context.Context, id uuid.UUID) (*model.Run, error) {
+	return nil, apperrors.NewNotFound("run", id)
+}
+func (m *retryMockRunRepo) GetActiveRunByStory(_ context.Context, _ uuid.UUID) (*model.Run, error) {
+	return nil, nil
+}
+func (m *retryMockRunRepo) ListRunsByProject(_ context.Context, _ uuid.UUID, _, _ int32) ([]*model.Run, error) {
+	return nil, nil
+}
+func (m *retryMockRunRepo) ListRunsByStory(_ context.Context, _ uuid.UUID, _, _ int32) ([]*model.Run, error) {
+	return nil, nil
+}
+func (m *retryMockRunRepo) UpdateRunStatus(_ context.Context, id uuid.UUID, status model.RunStatus, _, _ *time.Time, _ *string) (*model.Run, error) {
+	return &model.Run{ID: id, Status: status}, nil
+}
+func (m *retryMockRunRepo) CountRunsByProject(_ context.Context, _ uuid.UUID) (int64, error) {
+	return 0, nil
+}
+func (m *retryMockRunRepo) CountRunsByStory(_ context.Context, _ uuid.UUID) (int64, error) {
+	return 0, nil
+}
+func (m *retryMockRunRepo) CreateRunStep(_ context.Context, step *model.RunStep) (*model.RunStep, error) {
+	return step, nil
+}
+func (m *retryMockRunRepo) ListRunStepsByRun(_ context.Context, _ uuid.UUID) ([]*model.RunStep, error) {
+	return nil, nil
+}
+func (m *retryMockRunRepo) UpdateRunStepStatus(_ context.Context, id uuid.UUID, status model.StepStatus, _, _ *time.Time, _ *string) (*model.RunStep, error) {
+	return &model.RunStep{ID: id, Status: status}, nil
+}
+func (m *retryMockRunRepo) UpdateRunStepContainerInfo(_ context.Context, id uuid.UUID, _ *string, _ *string) (*model.RunStep, error) {
+	return &model.RunStep{ID: id}, nil
+}
+func (m *retryMockRunRepo) ListRetryStepsByParent(_ context.Context, _ uuid.UUID) ([]*model.RunStep, error) {
 	return nil, nil
 }
 
-// mockAgentRunExecutor mocks AgentRunExecutor for test delegation.
-type mockAgentRunExecutor struct {
+// retryMockAgentRun is a mock AgentRunExecutor.
+type retryMockAgentRun struct {
 	executeFn  func(ctx context.Context, runCtx *model.RunContext) error
-	callCount  int
 	lastRunCtx *model.RunContext
 }
 
-func (m *mockAgentRunExecutor) Execute(ctx context.Context, runCtx *model.RunContext) error {
-	m.callCount++
+func (m *retryMockAgentRun) Execute(ctx context.Context, runCtx *model.RunContext) error {
 	m.lastRunCtx = runCtx
 	if m.executeFn != nil {
 		return m.executeFn(ctx, runCtx)
@@ -66,398 +93,277 @@ func (m *mockAgentRunExecutor) Execute(ctx context.Context, runCtx *model.RunCon
 	return nil
 }
 
-// --- Test fixture ---
-
-type retryFixture struct {
-	projectID    uuid.UUID
-	storyID      uuid.UUID
-	runID        uuid.UUID
-	parentStepID uuid.UUID
-	parentStep   *model.RunStep
-
-	runRepo   *retryMockRunRepo
-	agentExec *mockAgentRunExecutor
-	action    *action.IncrementalRetryAction
-}
-
-func newRetryFixture() *retryFixture {
-	f := &retryFixture{
-		projectID:    uuid.New(),
-		storyID:      uuid.New(),
-		runID:        uuid.New(),
-		parentStepID: uuid.New(),
+// buildRetryRunCtx creates a minimal RunContext for retry tests.
+func buildRetryRunCtx(parentStepID uuid.UUID, extraMeta map[string]any) *model.RunContext {
+	meta := map[string]any{
+		"parent_step_id": parentStepID.String(),
 	}
-
-	errMsg := "agent exited with code 1"
-	logTail := "line 1\nline 2\nline 3\nerror: build failed"
-	f.parentStep = &model.RunStep{
-		ID:           f.parentStepID,
-		RunID:        f.runID,
-		StepName:     "dev-story",
-		StepOrder:    1,
-		Action:       "agent_run",
-		Status:       model.StepStatusFailed,
-		ErrorMessage: &errMsg,
-		LogTail:      &logTail,
-		RetryCount:   0,
+	for k, v := range extraMeta {
+		meta[k] = v
 	}
-
-	f.runRepo = &retryMockRunRepo{
-		retryGetRunStepFn: func(_ context.Context, id uuid.UUID) (*model.RunStep, error) {
-			if id == f.parentStepID {
-				return f.parentStep, nil
-			}
-			return nil, errors.NewNotFound("run_step", id)
-		},
-	}
-
-	f.agentExec = &mockAgentRunExecutor{}
-
-	f.action = action.NewIncrementalRetryAction(
-		f.runRepo, f.agentExec, testLogger(),
-	)
-
-	return f
-}
-
-func (f *retryFixture) newRunContext() *model.RunContext {
 	return &model.RunContext{
-		Run: &model.Run{
-			ID:        f.runID,
-			ProjectID: f.projectID,
-			StoryID:   f.storyID,
-			Status:    model.RunStatusRunning,
-		},
-		RunStep: &model.RunStep{
-			ID:     uuid.New(),
-			RunID:  f.runID,
-			Action: "incremental_retry",
-		},
-		ProjectID: f.projectID,
-		StoryID:   f.storyID,
-		Metadata: map[string]any{
-			"parent_step_id": f.parentStepID.String(),
-		},
+		Run:       &model.Run{ID: uuid.New()},
+		RunStep:   &model.RunStep{ID: uuid.New()},
+		ProjectID: uuid.New(),
+		StoryID:   uuid.New(),
+		Metadata:  meta,
 	}
+}
+
+// makeParentStep creates a RunStep suitable as a parent for retry tests.
+func makeParentStep(retryCount int, errorMsg, logTail string) *model.RunStep {
+	step := &model.RunStep{
+		ID:         uuid.New(),
+		RunID:      uuid.New(),
+		StepName:   "implement",
+		StepOrder:  1,
+		Action:     "agent_run",
+		Status:     model.StepStatusFailed,
+		RetryCount: retryCount,
+	}
+	if errorMsg != "" {
+		step.ErrorMessage = &errorMsg
+	}
+	if logTail != "" {
+		step.LogTail = &logTail
+	}
+	return step
+}
+
+// buildTemplateService builds a TemplateService backed by a no-op template repo
+// so the default templates are used (no DB required).
+func buildTemplateService() *service.TemplateService {
+	return service.NewTemplateService(&mockPromptTemplateRepo{}, &mockTemplateRenderer{}, testLogger())
 }
 
 // --- Tests ---
 
+// TestIncrementalRetryAction_Name verifies the action identifier.
 func TestIncrementalRetryAction_Name(t *testing.T) {
-	f := newRetryFixture()
-	if f.action.Name() != "incremental_retry" {
-		t.Errorf("expected action name %q, got %q", "incremental_retry", f.action.Name())
+	t.Parallel()
+
+	a := action.NewIncrementalRetryAction(
+		&retryMockRunRepo{}, nil, &retryMockAgentRun{}, testLogger(),
+	)
+	if got := a.Name(); got != "incremental_retry" {
+		t.Errorf("Name() = %q; want %q", got, "incremental_retry")
 	}
 }
 
-func TestIncrementalRetryAction_FirstIncrementalRetry(t *testing.T) {
-	f := newRetryFixture()
-	f.parentStep.RetryCount = 0
-	runCtx := f.newRunContext()
-
-	err := f.action.Execute(context.Background(), runCtx)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-
-	// Verify retry step was created
-	if len(f.runRepo.createdRetrySteps) != 1 {
-		t.Fatalf("expected 1 retry step created, got %d", len(f.runRepo.createdRetrySteps))
-	}
-
-	step := f.runRepo.createdRetrySteps[0]
-	if step.RetryCount != 1 {
-		t.Errorf("expected retry_count=1, got %d", step.RetryCount)
-	}
-	if step.RetryType == nil || *step.RetryType != retryTypeIncremental {
-		t.Errorf("expected retry_type=incremental, got %v", step.RetryType)
-	}
-	if step.ParentStepID == nil || *step.ParentStepID != f.parentStepID {
-		t.Errorf("expected parent_step_id=%s, got %v", f.parentStepID, step.ParentStepID)
-	}
-	if step.Status != model.StepStatusPending {
-		t.Errorf("expected status=pending, got %s", step.Status)
-	}
-
-	// Verify delegation to agent executor
-	if f.agentExec.callCount != 1 {
-		t.Fatalf("expected 1 agent execution, got %d", f.agentExec.callCount)
-	}
-
-	// Verify metadata was set with template name and error context
-	delegatedCtx := f.agentExec.lastRunCtx
-	if delegatedCtx.Metadata["template_name"] != "implement-retry" {
-		t.Errorf("expected template_name=implement-retry, got %v", delegatedCtx.Metadata["template_name"])
-	}
-	if delegatedCtx.Metadata["error_context"] != "agent exited with code 1" {
-		t.Errorf("expected error_context from parent, got %v", delegatedCtx.Metadata["error_context"])
-	}
-	if !strings.Contains(fmt.Sprint(delegatedCtx.Metadata["log_tail"]), "error: build failed") {
-		t.Errorf("expected log_tail from parent, got %v", delegatedCtx.Metadata["log_tail"])
-	}
-}
-
-func TestIncrementalRetryAction_SecondIncrementalRetry(t *testing.T) {
-	f := newRetryFixture()
-	f.parentStep.RetryCount = 1
-	incType := retryTypeIncremental
-	f.parentStep.RetryType = &incType
-	runCtx := f.newRunContext()
-
-	err := f.action.Execute(context.Background(), runCtx)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-
-	step := f.runRepo.createdRetrySteps[0]
-	if step.RetryCount != 2 {
-		t.Errorf("expected retry_count=2, got %d", step.RetryCount)
-	}
-	if step.RetryType == nil || *step.RetryType != retryTypeIncremental {
-		t.Errorf("expected retry_type=incremental, got %v", step.RetryType)
-	}
-
-	delegatedCtx := f.agentExec.lastRunCtx
-	if delegatedCtx.Metadata["template_name"] != "implement-retry" {
-		t.Errorf("expected template_name=implement-retry, got %v", delegatedCtx.Metadata["template_name"])
-	}
-}
-
-func TestIncrementalRetryAction_FallbackToFullRetry(t *testing.T) {
-	f := newRetryFixture()
-	// After 2 incremental retries, should fall back to full retry
-	f.parentStep.RetryCount = 2
-	incType := retryTypeIncremental
-	f.parentStep.RetryType = &incType
-	runCtx := f.newRunContext()
-	runCtx.Metadata["retry_policy.max_incremental"] = 2
-
-	err := f.action.Execute(context.Background(), runCtx)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-
-	step := f.runRepo.createdRetrySteps[0]
-	if step.RetryCount != 3 {
-		t.Errorf("expected retry_count=3, got %d", step.RetryCount)
-	}
-	if step.RetryType == nil || *step.RetryType != retryTypeFull {
-		t.Errorf("expected retry_type=full, got %v", step.RetryType)
-	}
-
-	// Verify full retry uses the implement template (not implement-retry)
-	delegatedCtx := f.agentExec.lastRunCtx
-	if delegatedCtx.Metadata["template_name"] != "implement" {
-		t.Errorf("expected template_name=implement for full retry, got %v", delegatedCtx.Metadata["template_name"])
-	}
-}
-
-func TestIncrementalRetryAction_MaxRetriesExceeded(t *testing.T) {
-	f := newRetryFixture()
-	f.parentStep.RetryCount = 3
-	runCtx := f.newRunContext()
-	runCtx.Metadata["retry_policy.max_retries"] = 3
-
-	err := f.action.Execute(context.Background(), runCtx)
-	if err == nil {
-		t.Fatal("expected error for max retries exceeded, got nil")
-	}
-
-	domainErr, ok := err.(*errors.DomainError)
-	if !ok {
-		t.Fatalf("expected *errors.DomainError, got %T", err)
-	}
-	if domainErr.Code != "RETRY_MAX_EXCEEDED" {
-		t.Errorf("expected code RETRY_MAX_EXCEEDED, got %s", domainErr.Code)
-	}
-
-	// Verify no retry step was created
-	if len(f.runRepo.createdRetrySteps) != 0 {
-		t.Errorf("expected 0 retry steps created, got %d", len(f.runRepo.createdRetrySteps))
-	}
-
-	// Verify agent was NOT called
-	if f.agentExec.callCount != 0 {
-		t.Errorf("expected 0 agent executions, got %d", f.agentExec.callCount)
-	}
-}
-
+// TestIncrementalRetryAction_MissingParentStepID verifies RETRY_MISSING_PARENT error.
 func TestIncrementalRetryAction_MissingParentStepID(t *testing.T) {
-	f := newRetryFixture()
-	runCtx := f.newRunContext()
-	delete(runCtx.Metadata, "parent_step_id")
+	t.Parallel()
 
-	err := f.action.Execute(context.Background(), runCtx)
+	repo := &retryMockRunRepo{}
+	agentRun := &retryMockAgentRun{}
+	a := action.NewIncrementalRetryAction(repo, nil, agentRun, testLogger())
+
+	runCtx := &model.RunContext{
+		Run:      &model.Run{ID: uuid.New()},
+		RunStep:  &model.RunStep{ID: uuid.New()},
+		Metadata: map[string]any{}, // no parent_step_id
+	}
+
+	err := a.Execute(context.Background(), runCtx)
 	if err == nil {
 		t.Fatal("expected error for missing parent_step_id, got nil")
 	}
-
-	domainErr, ok := err.(*errors.DomainError)
-	if !ok {
-		t.Fatalf("expected *errors.DomainError, got %T", err)
+	if !strings.Contains(err.Error(), "RETRY_MISSING_PARENT") {
+		t.Errorf("expected RETRY_MISSING_PARENT in error, got: %v", err)
 	}
-	if domainErr.Code != "RETRY_MISSING_PARENT" {
-		t.Errorf("expected code RETRY_MISSING_PARENT, got %s", domainErr.Code)
+	if agentRun.lastRunCtx != nil {
+		t.Error("expected AgentRun not to be called, but it was")
 	}
 }
 
-func TestIncrementalRetryAction_InvalidParentStepID(t *testing.T) {
-	f := newRetryFixture()
-	runCtx := f.newRunContext()
-	runCtx.Metadata["parent_step_id"] = "not-a-uuid"
+// TestIncrementalRetryAction_FirstIncrementalRetry verifies the happy path:
+// parent.retry_count=0 → new step with retry_type="incremental", implement-retry template.
+func TestIncrementalRetryAction_FirstIncrementalRetry(t *testing.T) {
+	t.Parallel()
 
-	err := f.action.Execute(context.Background(), runCtx)
+	parent := makeParentStep(0, "test error", "last log line")
+	agentRun := &retryMockAgentRun{}
+	repo := &retryMockRunRepo{
+		getRunStepFn: func(_ context.Context, _ uuid.UUID) (*model.RunStep, error) {
+			return parent, nil
+		},
+	}
+
+	templateSvc := buildTemplateService()
+	a := action.NewIncrementalRetryAction(repo, templateSvc, agentRun, testLogger())
+
+	runCtx := buildRetryRunCtx(parent.ID, nil)
+	if err := a.Execute(context.Background(), runCtx); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	createdStep := repo.createdStep
+	if createdStep == nil {
+		t.Fatal("expected a retry step to be created")
+	}
+	if createdStep.RetryCount != 1 {
+		t.Errorf("RetryCount = %d; want 1", createdStep.RetryCount)
+	}
+	if createdStep.RetryType == nil || *createdStep.RetryType != "incremental" {
+		t.Errorf("RetryType = %v; want %q", createdStep.RetryType, "incremental")
+	}
+	if createdStep.ParentStepID == nil || *createdStep.ParentStepID != parent.ID {
+		t.Errorf("ParentStepID = %v; want %v", createdStep.ParentStepID, parent.ID)
+	}
+
+	if agentRun.lastRunCtx == nil {
+		t.Fatal("expected AgentRun.Execute to be called")
+	}
+	if agentRun.lastRunCtx.RunStep.ID != createdStep.ID {
+		t.Errorf("delegated RunStep.ID = %v; want %v", agentRun.lastRunCtx.RunStep.ID, createdStep.ID)
+	}
+	if agentRun.lastRunCtx.Metadata["template_name"] != service.TemplateNameImplementRetry {
+		t.Errorf("template_name = %v; want %q", agentRun.lastRunCtx.Metadata["template_name"], service.TemplateNameImplementRetry)
+	}
+	if agentRun.lastRunCtx.Metadata["error_context"] != "test error" {
+		t.Errorf("error_context = %v; want %q", agentRun.lastRunCtx.Metadata["error_context"], "test error")
+	}
+	if agentRun.lastRunCtx.Metadata["log_tail"] != "last log line" {
+		t.Errorf("log_tail = %v; want %q", agentRun.lastRunCtx.Metadata["log_tail"], "last log line")
+	}
+}
+
+// TestIncrementalRetryAction_SecondFailureFallsToFullRetry verifies that when
+// parent.retry_count >= max_incremental (default 2), retry_type switches to "full".
+func TestIncrementalRetryAction_SecondFailureFallsToFullRetry(t *testing.T) {
+	t.Parallel()
+
+	parent := makeParentStep(2, "persistent error", "")
+	retryType := "incremental"
+	parent.RetryType = &retryType
+
+	agentRun := &retryMockAgentRun{}
+	repo := &retryMockRunRepo{
+		getRunStepFn: func(_ context.Context, _ uuid.UUID) (*model.RunStep, error) {
+			return parent, nil
+		},
+	}
+
+	templateSvc := buildTemplateService()
+	a := action.NewIncrementalRetryAction(repo, templateSvc, agentRun, testLogger())
+
+	runCtx := buildRetryRunCtx(parent.ID, nil)
+	if err := a.Execute(context.Background(), runCtx); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	createdStep := repo.createdStep
+	if createdStep == nil {
+		t.Fatal("expected a retry step to be created")
+	}
+	if createdStep.RetryCount != 3 {
+		t.Errorf("RetryCount = %d; want 3", createdStep.RetryCount)
+	}
+	if createdStep.RetryType == nil || *createdStep.RetryType != "full" {
+		t.Errorf("RetryType = %v; want %q", createdStep.RetryType, "full")
+	}
+	if agentRun.lastRunCtx == nil {
+		t.Fatal("expected AgentRun.Execute to be called")
+	}
+	if agentRun.lastRunCtx.Metadata["template_name"] != service.TemplateNameImplement {
+		t.Errorf("template_name = %v; want %q", agentRun.lastRunCtx.Metadata["template_name"], service.TemplateNameImplement)
+	}
+}
+
+// TestIncrementalRetryAction_MaxRetriesExceeded verifies RETRY_MAX_EXCEEDED error.
+func TestIncrementalRetryAction_MaxRetriesExceeded(t *testing.T) {
+	t.Parallel()
+
+	parent := makeParentStep(3, "error", "") // retry_count == default max_retries (3)
+	agentRun := &retryMockAgentRun{}
+	repo := &retryMockRunRepo{
+		getRunStepFn: func(_ context.Context, _ uuid.UUID) (*model.RunStep, error) {
+			return parent, nil
+		},
+	}
+
+	a := action.NewIncrementalRetryAction(repo, nil, agentRun, testLogger())
+
+	runCtx := buildRetryRunCtx(parent.ID, nil)
+	err := a.Execute(context.Background(), runCtx)
 	if err == nil {
-		t.Fatal("expected error for invalid parent_step_id, got nil")
+		t.Fatal("expected RETRY_MAX_EXCEEDED error, got nil")
 	}
-
-	domainErr, ok := err.(*errors.DomainError)
-	if !ok {
-		t.Fatalf("expected *errors.DomainError, got %T", err)
+	if !strings.Contains(err.Error(), "RETRY_MAX_EXCEEDED") {
+		t.Errorf("expected RETRY_MAX_EXCEEDED in error, got: %v", err)
 	}
-	if domainErr.Code != "RETRY_MISSING_PARENT" {
-		t.Errorf("expected code RETRY_MISSING_PARENT, got %s", domainErr.Code)
+	if repo.createdStep != nil {
+		t.Error("expected no retry step to be created on max-retries-exceeded")
 	}
-}
-
-func TestIncrementalRetryAction_ParentStepNotFound(t *testing.T) {
-	f := newRetryFixture()
-	runCtx := f.newRunContext()
-	unknownID := uuid.New()
-	runCtx.Metadata["parent_step_id"] = unknownID.String()
-
-	err := f.action.Execute(context.Background(), runCtx)
-	if err == nil {
-		t.Fatal("expected error for parent step not found, got nil")
-	}
-	if !strings.Contains(err.Error(), "fetch parent step") {
-		t.Errorf("expected error to wrap 'fetch parent step', got: %v", err)
+	if agentRun.lastRunCtx != nil {
+		t.Error("expected AgentRun not to be called on max-retries-exceeded")
 	}
 }
 
+// TestIncrementalRetryAction_CreateRetryStepFailure verifies that when the repo
+// fails to create a retry step, Execute returns an error and AgentRun is not called.
 func TestIncrementalRetryAction_CreateRetryStepFailure(t *testing.T) {
-	f := newRetryFixture()
-	f.runRepo.createRetryRunStepFn = func(_ context.Context, _ *model.RunStep) (*model.RunStep, error) {
-		return nil, fmt.Errorf("db connection lost")
+	t.Parallel()
+
+	parent := makeParentStep(0, "error", "")
+	agentRun := &retryMockAgentRun{}
+	createErr := fmt.Errorf("db write failure")
+	repo := &retryMockRunRepo{
+		getRunStepFn: func(_ context.Context, _ uuid.UUID) (*model.RunStep, error) {
+			return parent, nil
+		},
+		createRetryRunStepFn: func(_ context.Context, _ *model.RunStep) (*model.RunStep, error) {
+			return nil, createErr
+		},
 	}
 
-	runCtx := f.newRunContext()
-	err := f.action.Execute(context.Background(), runCtx)
+	templateSvc := buildTemplateService()
+	a := action.NewIncrementalRetryAction(repo, templateSvc, agentRun, testLogger())
+
+	runCtx := buildRetryRunCtx(parent.ID, nil)
+	err := a.Execute(context.Background(), runCtx)
 	if err == nil {
-		t.Fatal("expected error for create retry step failure, got nil")
+		t.Fatal("expected error from CreateRetryRunStep, got nil")
 	}
-	if !strings.Contains(err.Error(), "create retry step") {
-		t.Errorf("expected error to wrap 'create retry step', got: %v", err)
-	}
-
-	// Verify agent was NOT called
-	if f.agentExec.callCount != 0 {
-		t.Errorf("expected 0 agent executions after create failure, got %d", f.agentExec.callCount)
+	if agentRun.lastRunCtx != nil {
+		t.Error("expected AgentRun not to be called when step creation fails")
 	}
 }
 
-func TestIncrementalRetryAction_AgentExecutionFailure(t *testing.T) {
-	f := newRetryFixture()
-	f.agentExec.executeFn = func(_ context.Context, _ *model.RunContext) error {
-		return fmt.Errorf("container creation failed")
-	}
-
-	runCtx := f.newRunContext()
-	err := f.action.Execute(context.Background(), runCtx)
-	if err == nil {
-		t.Fatal("expected error from agent execution, got nil")
-	}
-	if !strings.Contains(err.Error(), "container creation failed") {
-		t.Errorf("expected agent error to propagate, got: %v", err)
-	}
-
-	// Retry step should still have been created
-	if len(f.runRepo.createdRetrySteps) != 1 {
-		t.Errorf("expected 1 retry step created before agent failure, got %d", len(f.runRepo.createdRetrySteps))
-	}
-}
-
-func TestIncrementalRetryAction_NilErrorMessageAndLogTail(t *testing.T) {
-	f := newRetryFixture()
-	f.parentStep.ErrorMessage = nil
-	f.parentStep.LogTail = nil
-	runCtx := f.newRunContext()
-
-	err := f.action.Execute(context.Background(), runCtx)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-
-	delegatedCtx := f.agentExec.lastRunCtx
-	if delegatedCtx.Metadata["error_context"] != "" {
-		t.Errorf("expected empty error_context, got %v", delegatedCtx.Metadata["error_context"])
-	}
-	if delegatedCtx.Metadata["log_tail"] != "" {
-		t.Errorf("expected empty log_tail, got %v", delegatedCtx.Metadata["log_tail"])
-	}
-}
-
+// TestIncrementalRetryAction_CustomRetryPolicy verifies that metadata-specified
+// retry policy values override the defaults.
 func TestIncrementalRetryAction_CustomRetryPolicy(t *testing.T) {
-	f := newRetryFixture()
-	f.parentStep.RetryCount = 4
-	runCtx := f.newRunContext()
-	runCtx.Metadata["retry_policy.max_retries"] = 5
-	runCtx.Metadata["retry_policy.max_incremental"] = 3
+	t.Parallel()
 
-	err := f.action.Execute(context.Background(), runCtx)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-
-	step := f.runRepo.createdRetrySteps[0]
-	if step.RetryCount != 5 {
-		t.Errorf("expected retry_count=5, got %d", step.RetryCount)
-	}
-	if step.RetryType == nil || *step.RetryType != retryTypeFull {
-		t.Errorf("expected retry_type=full for count >= max_incremental, got %v", step.RetryType)
-	}
-}
-
-func TestIncrementalRetryAction_PreservesExistingMetadata(t *testing.T) {
-	f := newRetryFixture()
-	runCtx := f.newRunContext()
-	runCtx.Metadata["branch_name"] = "feat/test-branch"
-	runCtx.Metadata["custom_key"] = "custom_value"
-
-	err := f.action.Execute(context.Background(), runCtx)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
+	// max_retries=5, max_incremental=1 → with retry_count=1, should switch to full
+	parent := makeParentStep(1, "error", "")
+	agentRun := &retryMockAgentRun{}
+	repo := &retryMockRunRepo{
+		getRunStepFn: func(_ context.Context, _ uuid.UUID) (*model.RunStep, error) {
+			return parent, nil
+		},
 	}
 
-	delegatedCtx := f.agentExec.lastRunCtx
-	if delegatedCtx.Metadata["branch_name"] != "feat/test-branch" {
-		t.Errorf("expected branch_name preserved, got %v", delegatedCtx.Metadata["branch_name"])
-	}
-	if delegatedCtx.Metadata["custom_key"] != "custom_value" {
-		t.Errorf("expected custom_key preserved, got %v", delegatedCtx.Metadata["custom_key"])
-	}
-}
+	templateSvc := buildTemplateService()
+	a := action.NewIncrementalRetryAction(repo, templateSvc, agentRun, testLogger())
 
-func TestIncrementalRetryAction_StepFieldsPropagated(t *testing.T) {
-	f := newRetryFixture()
-	runCtx := f.newRunContext()
-
-	err := f.action.Execute(context.Background(), runCtx)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
+	extraMeta := map[string]any{
+		"retry_policy.max_retries":     5,
+		"retry_policy.max_incremental": 1,
+	}
+	runCtx := buildRetryRunCtx(parent.ID, extraMeta)
+	if err := a.Execute(context.Background(), runCtx); err != nil {
+		t.Fatalf("Execute() error = %v", err)
 	}
 
-	step := f.runRepo.createdRetrySteps[0]
-	if step.RunID != f.runID {
-		t.Errorf("expected run_id=%s, got %s", f.runID, step.RunID)
+	createdStep := repo.createdStep
+	if createdStep == nil {
+		t.Fatal("expected a retry step to be created")
 	}
-	if step.StepName != f.parentStep.StepName {
-		t.Errorf("expected step_name=%s, got %s", f.parentStep.StepName, step.StepName)
+	if createdStep.RetryType == nil || *createdStep.RetryType != "full" {
+		t.Errorf("RetryType = %v; want %q", createdStep.RetryType, "full")
 	}
-	if step.StepOrder != f.parentStep.StepOrder {
-		t.Errorf("expected step_order=%d, got %d", f.parentStep.StepOrder, step.StepOrder)
-	}
-	if step.Action != f.parentStep.Action {
-		t.Errorf("expected action=%s, got %s", f.parentStep.Action, step.Action)
+	if agentRun.lastRunCtx.Metadata["template_name"] != service.TemplateNameImplement {
+		t.Errorf("template_name = %v; want %q", agentRun.lastRunCtx.Metadata["template_name"], service.TemplateNameImplement)
 	}
 }

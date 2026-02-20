@@ -313,8 +313,8 @@ func toDomainRunStep(s RunStep) *model.RunStep {
 		step.RetryType = &s.RetryType.String
 	}
 	if s.ParentStepID.Valid {
-		id := uuid.UUID(s.ParentStepID.Bytes)
-		step.ParentStepID = &id
+		uid := uuid.UUID(s.ParentStepID.Bytes)
+		step.ParentStepID = &uid
 	}
 	return step
 }

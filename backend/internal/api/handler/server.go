@@ -14,11 +14,12 @@ type Server struct {
 	promptTemplates *PromptTemplateHandler
 	runs            *RunHandler
 	pipelineConfig  *PipelineConfigHandler
+	notifications   *NotificationHandler
 }
 
 // NewServer creates a new Server with the given handlers.
-func NewServer(auth *AuthHandler, projects *ProjectHandler, users *UserHandler, epics *EpicHandler, stories *StoryHandler, promptTemplates *PromptTemplateHandler, runs *RunHandler, pipelineConfig *PipelineConfigHandler) *Server {
-	return &Server{auth: auth, projects: projects, users: users, epics: epics, stories: stories, promptTemplates: promptTemplates, runs: runs, pipelineConfig: pipelineConfig}
+func NewServer(auth *AuthHandler, projects *ProjectHandler, users *UserHandler, epics *EpicHandler, stories *StoryHandler, promptTemplates *PromptTemplateHandler, runs *RunHandler, pipelineConfig *PipelineConfigHandler, notifications *NotificationHandler) *Server {
+	return &Server{auth: auth, projects: projects, users: users, epics: epics, stories: stories, promptTemplates: promptTemplates, runs: runs, pipelineConfig: pipelineConfig, notifications: notifications}
 }
 
 // RegisterUser delegates to AuthHandler.
@@ -111,6 +112,16 @@ func (s *Server) DeleteEpic(w http.ResponseWriter, r *http.Request, projectID Pr
 	s.epics.DeleteEpic(w, r, projectID, epicID)
 }
 
+// GetEpicDAG delegates to EpicHandler.
+func (s *Server) GetEpicDAG(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, epicID EpicIdPath) {
+	s.epics.GetEpicDAG(w, r, projectID, epicID)
+}
+
+// LaunchEpicRun delegates to EpicHandler (stub — not yet implemented).
+func (s *Server) LaunchEpicRun(w http.ResponseWriter, _ *http.Request, _ ProjectIdPath, _ EpicIdPath) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // ListStories delegates to StoryHandler.
 func (s *Server) ListStories(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, params ListStoriesParams) {
 	s.stories.ListStories(w, r, projectID, params)
@@ -199,4 +210,24 @@ func (s *Server) GetPipelineConfig(w http.ResponseWriter, r *http.Request, proje
 // UpdatePipelineConfig delegates to PipelineConfigHandler.
 func (s *Server) UpdatePipelineConfig(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath) {
 	s.pipelineConfig.UpdatePipelineConfig(w, r, projectID)
+}
+
+// ListNotificationConfigs delegates to NotificationHandler.
+func (s *Server) ListNotificationConfigs(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath) {
+	s.notifications.ListNotificationConfigs(w, r, projectID)
+}
+
+// CreateNotificationConfig delegates to NotificationHandler.
+func (s *Server) CreateNotificationConfig(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath) {
+	s.notifications.CreateNotificationConfig(w, r, projectID)
+}
+
+// UpdateNotificationConfig delegates to NotificationHandler.
+func (s *Server) UpdateNotificationConfig(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, notificationID NotificationIdPath) {
+	s.notifications.UpdateNotificationConfig(w, r, projectID, notificationID)
+}
+
+// DeleteNotificationConfig delegates to NotificationHandler.
+func (s *Server) DeleteNotificationConfig(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, notificationID NotificationIdPath) {
+	s.notifications.DeleteNotificationConfig(w, r, projectID, notificationID)
 }

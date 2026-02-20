@@ -52,7 +52,7 @@ func mapCategoryToStatus(cat errors.ErrorCategory) int {
 	case errors.CategoryForbidden:
 		return http.StatusForbidden
 	case errors.CategoryInvalidState:
-		return http.StatusConflict
+		return http.StatusUnprocessableEntity
 	default:
 		return http.StatusInternalServerError
 	}

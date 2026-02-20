@@ -101,12 +101,15 @@ func run() error {
 	// Epic service
 	epicRepo := pgadapter.NewEpicRepo(queries)
 	epicService := service.NewEpicService(epicRepo)
-	epicHandler := handler.NewEpicHandler(epicService)
 
 	// Story service
 	storyRepo := pgadapter.NewStoryRepo(queries)
 	storyService := service.NewStoryService(storyRepo)
 	storyHandler := handler.NewStoryHandler(storyService)
+
+	// Scheduler service (DAG computation, pure domain service)
+	schedulerService := service.NewSchedulerService()
+	epicHandler := handler.NewEpicHandler(epicService, schedulerService, storyRepo)
 
 	// Prompt template service
 	promptTemplateRepo := pgadapter.NewPromptTemplateRepo(queries)
@@ -123,6 +126,11 @@ func run() error {
 	// User service
 	userService := service.NewUserService(userRepo)
 	userHandler := handler.NewUserHandler(userService)
+
+	// Notification configs
+	notificationConfigRepo := pgadapter.NewNotificationConfigRepository(queries)
+	notificationConfigService := service.NewNotificationConfigService(notificationConfigRepo)
+	notificationHandler := handler.NewNotificationHandler(notificationConfigService)
 
 	// Application-wide context for background services
 	appCtx, appCancel := context.WithCancel(ctx)
@@ -164,6 +172,10 @@ func run() error {
 	// Action registry
 	actionReg := service.NewActionRegistry()
 
+	// Cost tracking
+	costRepo := pgadapter.NewCostRepo(queries)
+	costSvc := service.NewCostService(costRepo, logger)
+
 	// Agent run action (requires Docker)
 	if containerMgr != nil {
 		logStreamer, logErr := dockeradapter.NewDockerLogStreamerFromHost(cfg.Docker.Host, logger)
@@ -181,14 +193,14 @@ func run() error {
 			agentRunAction := actionadapter.NewAgentRunAction(
 				containerMgr, logStreamer, eventRepo,
 				storyRepo, projectRepo, runRepo,
-				templateSvc, agentCfg, logger,
+				templateSvc, costSvc, agentCfg, logger,
 			)
 			actionReg.Register(agentRunAction)
 			logger.Info("agent_run action registered")
 
 			// Incremental retry action (delegates to agent_run)
 			incrementalRetryAction := actionadapter.NewIncrementalRetryAction(
-				runRepo, agentRunAction, logger,
+				runRepo, templateSvc, agentRunAction, logger,
 			)
 			actionReg.Register(incrementalRetryAction)
 			logger.Info("incremental_retry action registered")
@@ -214,7 +226,7 @@ func run() error {
 		}()
 	}
 
-	server := handler.NewServer(authHandler, projectHandler, userHandler, epicHandler, storyHandler, promptTemplateHandler, runHandler, pipelineConfigHandler)
+	server := handler.NewServer(authHandler, projectHandler, userHandler, epicHandler, storyHandler, promptTemplateHandler, runHandler, pipelineConfigHandler, notificationHandler)
 
 	// Project user handler
 	projectUserHandler := handler.NewProjectUserHandler(projectUserService)

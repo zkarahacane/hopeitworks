@@ -18,25 +18,26 @@ type AgentRunExecutor interface {
 }
 
 // IncrementalRetryAction coordinates retry logic for failed agent steps.
-// It creates a new RunStep record and delegates execution to an AgentRunExecutor.
-// After max_incremental incremental retries, it falls back to a full retry
-// using the original implement template without error context injection.
+// It creates a new RunStep record and delegates execution to AgentRunAction.
 type IncrementalRetryAction struct {
-	runRepo  port.RunRepository
-	agentRun AgentRunExecutor
-	logger   *slog.Logger
+	runRepo     port.RunRepository
+	templateSvc *service.TemplateService
+	agentRun    AgentRunExecutor
+	logger      *slog.Logger
 }
 
 // NewIncrementalRetryAction creates a new IncrementalRetryAction.
 func NewIncrementalRetryAction(
 	runRepo port.RunRepository,
+	templateSvc *service.TemplateService,
 	agentRun AgentRunExecutor,
 	logger *slog.Logger,
 ) *IncrementalRetryAction {
 	return &IncrementalRetryAction{
-		runRepo:  runRepo,
-		agentRun: agentRun,
-		logger:   logger,
+		runRepo:     runRepo,
+		templateSvc: templateSvc,
+		agentRun:    agentRun,
+		logger:      logger,
 	}
 }
 
@@ -45,25 +46,17 @@ func (a *IncrementalRetryAction) Name() string {
 	return "incremental_retry"
 }
 
-// Execute fetches the parent step, evaluates the retry policy, creates a new
-// retry RunStep, and delegates execution to the agent run executor.
+// Execute coordinates retry logic: fetches the parent step, evaluates the retry
+// policy, creates a new retry RunStep, and delegates execution to AgentRunAction.
 func (a *IncrementalRetryAction) Execute(ctx context.Context, runCtx *model.RunContext) error {
 	// 1. Extract parent step ID from metadata
-	parentStepIDStr, ok := runCtx.Metadata["parent_step_id"].(string)
-	if !ok || parentStepIDStr == "" {
-		return &errors.DomainError{
-			Category: errors.CategoryValidation,
-			Code:     "RETRY_MISSING_PARENT",
-			Message:  "missing required metadata key parent_step_id",
-		}
+	parentStepIDStr, _ := runCtx.Metadata["parent_step_id"].(string)
+	if parentStepIDStr == "" {
+		return errors.NewValidation("parent_step_id", "RETRY_MISSING_PARENT: missing required metadata key parent_step_id")
 	}
 	parentStepID, err := uuid.Parse(parentStepIDStr)
 	if err != nil {
-		return &errors.DomainError{
-			Category: errors.CategoryValidation,
-			Code:     "RETRY_MISSING_PARENT",
-			Message:  fmt.Sprintf("invalid UUID format for parent_step_id: %s", parentStepIDStr),
-		}
+		return errors.NewValidation("parent_step_id", "invalid UUID format for parent_step_id")
 	}
 
 	// 2. Fetch parent step
@@ -73,16 +66,13 @@ func (a *IncrementalRetryAction) Execute(ctx context.Context, runCtx *model.RunC
 	}
 
 	// 3. Resolve retry policy from metadata
-	maxRetries := intFromMetadata(runCtx.Metadata, "retry_policy.max_retries", 3)
-	maxIncremental := intFromMetadata(runCtx.Metadata, "retry_policy.max_incremental", 2)
+	maxRetries := a.intFromMetadata(runCtx.Metadata, "retry_policy.max_retries", 3)
+	maxIncremental := a.intFromMetadata(runCtx.Metadata, "retry_policy.max_incremental", 2)
 
 	// 4. Check max retries
 	if parent.RetryCount >= maxRetries {
-		return &errors.DomainError{
-			Category: errors.CategoryValidation,
-			Code:     "RETRY_MAX_EXCEEDED",
-			Message:  fmt.Sprintf("max %d retries reached for step %s", maxRetries, parent.ID),
-		}
+		return errors.NewValidation("retry_count",
+			fmt.Sprintf("RETRY_MAX_EXCEEDED: max %d retries reached for step %s", maxRetries, parent.ID))
 	}
 
 	// 5. Determine retry type and template
@@ -92,13 +82,6 @@ func (a *IncrementalRetryAction) Execute(ctx context.Context, runCtx *model.RunC
 		retryType = "full"
 		templateName = service.TemplateNameImplement
 	}
-
-	a.logger.Info("creating retry step",
-		"parent_step_id", parent.ID,
-		"retry_count", parent.RetryCount+1,
-		"retry_type", retryType,
-		"template", templateName,
-	)
 
 	// 6. Create new RunStep
 	newStep := &model.RunStep{
@@ -143,23 +126,23 @@ func (a *IncrementalRetryAction) Execute(ctx context.Context, runCtx *model.RunC
 		Metadata:  newMetadata,
 	}
 
-	// 8. Delegate to agent run executor
+	// 8. Delegate to AgentRunAction
 	return a.agentRun.Execute(ctx, newRunCtx)
 }
 
-// intFromMetadata reads an integer value from metadata with a default fallback.
-func intFromMetadata(metadata map[string]any, key string, defaultVal int) int {
-	v, ok := metadata[key]
+// intFromMetadata reads an integer from metadata with a fallback default.
+func (a *IncrementalRetryAction) intFromMetadata(metadata map[string]any, key string, defaultVal int) int {
+	val, ok := metadata[key]
 	if !ok {
 		return defaultVal
 	}
-	switch val := v.(type) {
+	switch v := val.(type) {
 	case int:
-		return val
+		return v
 	case int64:
-		return int(val)
+		return int(v)
 	case float64:
-		return int(val)
+		return int(v)
 	default:
 		return defaultVal
 	}

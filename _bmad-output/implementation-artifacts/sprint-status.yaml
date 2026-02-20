@@ -92,19 +92,19 @@ development_status:
   epic-3-retrospective: optional
 
   # Epic 4: Real-time Monitoring & Live Logs
-  epic-4: backlog
-  4-1-sse-streaming-endpoint: backlog
-  4-2-run-progress-tracking-api: backlog
-  4-3-logviewer-component-live-log-page: backlog
+  epic-4: in-progress
+  4-1-sse-streaming-endpoint: done
+  4-2-run-progress-tracking-api: done
+  4-3-logviewer-component-live-log-page: done
   4-4-run-progress-timeline-display: backlog
   epic-4-retrospective: optional
 
   # Epic 5: HITL Gates & Approval Workflow
-  epic-5: backlog
-  5-1-hitl-gate-action-pending-state: backlog
+  epic-5: in-progress
+  5-1-hitl-gate-action-pending-state: done
   5-2-hitl-approval-rejection-api: backlog
   5-3-hitl-cli-approval-support-curl-based: backlog
-  5-4-hitl-approval-page-diffviewer: backlog
+  5-4-hitl-approval-page-diffviewer: done
   5-5-hitl-pending-list-notification-badge: backlog
   epic-5-retrospective: optional
 
@@ -119,29 +119,29 @@ development_status:
   epic-6-retrospective: optional
 
   # Epic 7: Epic Batch Execution & DAG Scheduling
-  epic-7: backlog
-  7-1-dag-builder-topological-sort: backlog
+  epic-7: in-progress
+  7-1-dag-builder-topological-sort: done
   7-2-epic-run-creation-parallel-group-executor: backlog
   7-3-pause-resume-for-story-and-epic-runs: backlog
-  7-4-epic-launch-page-dag-visualization: backlog
+  7-4-epic-launch-page-dag-visualization: done
   7-5-epic-run-monitoring-dashboard: backlog
   epic-7-retrospective: optional
 
   # Epic 8: Retry, CI Polling & Resilience
-  epic-8: backlog
-  8-1-ci-polling-action-via-gitprovider: backlog
-  8-2-incremental-retry-action: backlog
+  epic-8: in-progress
+  8-1-ci-polling-action-via-gitprovider: done
+  8-2-incremental-retry-action: done
   8-3-full-retry-fallback-circuit-breaker: backlog
-  8-4-retry-status-display-circuit-breaker-indicator: backlog
+  8-4-retry-status-display-circuit-breaker-indicator: done
   epic-8-retrospective: optional
 
   # Epic 9: Cost Tracking & Notifications
-  epic-9: backlog
-  9-1-cost-tracking-table-per-step-cost-recording: backlog
+  epic-9: in-progress
+  9-1-cost-tracking-table-per-step-cost-recording: done
   9-2-cost-aggregation-api: backlog
-  9-3-notification-dispatcher-discord-webhook: backlog
-  9-4-cost-dashboard-page: backlog
-  9-5-notification-settings-page: backlog
+  9-3-notification-dispatcher-discord-webhook: done
+  9-4-cost-dashboard-page: done
+  9-5-notification-settings-page: done
   epic-9-retrospective: optional
 
   # Epic 10: Reference Test Project & Validation
@@ -448,62 +448,62 @@ parallel_waves:
       # Epic 4 - Real-time Monitoring
       - key: 4-1-sse-streaming-endpoint
         domain: back
-        status: backlog
+        status: done
         cross_epic_deps: [3-1-runs-runsteps-tables-run-creation-api-state-machine]
       - key: 4-2-run-progress-tracking-api
         domain: back
-        status: backlog
+        status: done
         cross_epic_deps: [3-1-runs-runsteps-tables-run-creation-api-state-machine]
       - key: 4-3-logviewer-component-live-log-page
         domain: front
-        status: backlog
+        status: done
         cross_epic_deps: [1-8-app-shell-layout-header-sidebar-status-bar]
       # Epic 5 - HITL Gates
       - key: 5-1-hitl-gate-action-pending-state
         domain: back
-        status: backlog
+        status: done
         cross_epic_deps: [3-7-pipeline-executor-sequential-step-runner]
       - key: 5-4-hitl-approval-page-diffviewer
         domain: front
-        status: backlog
+        status: done
         cross_epic_deps: [1-8-app-shell-layout-header-sidebar-status-bar]
       # Epic 7 - DAG Scheduling
       - key: 7-1-dag-builder-topological-sort
         domain: back
-        status: backlog
+        status: done
         cross_epic_deps: [3-1-runs-runsteps-tables-run-creation-api-state-machine, 3-7-pipeline-executor-sequential-step-runner]
       - key: 7-4-epic-launch-page-dag-visualization
         domain: front
-        status: backlog
+        status: done
         cross_epic_deps: [1-8-app-shell-layout-header-sidebar-status-bar]
       # Epic 8 - Retry & Resilience
       - key: 8-1-ci-polling-action-via-gitprovider
         domain: back
-        status: backlog
+        status: done
         cross_epic_deps: [3-7-pipeline-executor-sequential-step-runner]
       - key: 8-2-incremental-retry-action
         domain: back
-        status: backlog
+        status: done
         cross_epic_deps: [3-7-pipeline-executor-sequential-step-runner]
       - key: 8-4-retry-status-display-circuit-breaker-indicator
         domain: front
-        status: backlog
+        status: done
         cross_epic_deps: [1-8-app-shell-layout-header-sidebar-status-bar]
       # Epic 9 - Cost & Notifications
       - key: 9-1-cost-tracking-table-per-step-cost-recording
         domain: back
-        status: backlog
+        status: done
         cross_epic_deps: [3-1-runs-runsteps-tables-run-creation-api-state-machine]
       - key: 9-3-notification-dispatcher-discord-webhook
         domain: back
-        status: backlog
+        status: done
       - key: 9-4-cost-dashboard-page
         domain: front
-        status: backlog
+        status: done
         cross_epic_deps: [1-8-app-shell-layout-header-sidebar-status-bar]
       - key: 9-5-notification-settings-page
         domain: front
-        status: backlog
+        status: done
         cross_epic_deps: [1-8-app-shell-layout-header-sidebar-status-bar]
     container_count: 14
     depends_on: [wave-7]

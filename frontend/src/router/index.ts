@@ -54,6 +54,11 @@ const router = createRouter({
           component: () => import('@/views/EpicDetailView.vue'),
         },
         {
+          path: 'epics/:epicId/dag',
+          name: 'epic-dag',
+          component: () => import('@/views/EpicDagView.vue'),
+        },
+        {
           path: 'pipeline',
           name: 'project-pipeline',
           component: PipelineConfigView,
@@ -62,6 +67,11 @@ const router = createRouter({
           path: 'templates',
           name: 'project-templates',
           component: PromptTemplatesView,
+        },
+        {
+          path: 'costs',
+          name: 'project-costs',
+          component: () => import('@/views/CostDashboardView.vue'),
         },
         {
           path: 'templates/new',
@@ -73,6 +83,16 @@ const router = createRouter({
           path: 'templates/:templateId',
           name: 'template-editor',
           component: () => import('@/views/TemplateEditorView.vue'),
+        },
+        {
+          path: 'runs/:runId/approve/:stepId',
+          name: 'hitl-approve',
+          component: () => import('@/views/HITLApprovalView.vue'),
+        },
+        {
+          path: 'settings/notifications',
+          name: 'project-notifications',
+          component: () => import('@/views/NotificationSettingsView.vue'),
         },
       ],
     },

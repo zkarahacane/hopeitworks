@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"slices"
@@ -14,6 +15,11 @@ import (
 	"github.com/zakari/hopeitworks/backend/internal/domain/model"
 	"github.com/zakari/hopeitworks/backend/internal/domain/port"
 )
+
+// errStepSuspended is returned by executeStep when the step transitions
+// to waiting_approval. It is NOT a failure — it signals the executor to
+// stop processing further steps without marking the run as failed.
+var errStepSuspended = errors.New("step suspended for approval")
 
 // PipelineExecutor orchestrates sequential execution of pipeline steps.
 type PipelineExecutor struct {
@@ -107,6 +113,11 @@ func (e *PipelineExecutor) ExecuteRun(ctx context.Context, runID uuid.UUID) erro
 		}
 
 		if err := e.executeStep(ctx, run, step, metadata); err != nil {
+			if errors.Is(err, errStepSuspended) {
+				e.logger.Info("pipeline step suspended for approval",
+					"run_id", run.ID, "step_id", step.ID)
+				return nil
+			}
 			e.handleStepFailure(ctx, run, step, err)
 			// Record failure in circuit breaker
 			if e.circuitBreaker != nil {
@@ -177,6 +188,14 @@ func (e *PipelineExecutor) executeStep(ctx context.Context, run *model.Run, step
 	// Execute action
 	if err := action.Execute(ctx, runCtx); err != nil {
 		return err
+	}
+
+	// Re-fetch step to detect suspension (e.g., hitl_gate sets waiting_approval)
+	refetchedStep, fetchErr := e.runRepo.GetRunStep(ctx, step.ID)
+	if fetchErr != nil {
+		e.logger.Warn("failed to re-fetch step after execute", "step_id", step.ID, "error", fetchErr)
+	} else if refetchedStep.Status == model.StepStatusWaitingApproval {
+		return errStepSuspended
 	}
 
 	// Transition step to "completed"
