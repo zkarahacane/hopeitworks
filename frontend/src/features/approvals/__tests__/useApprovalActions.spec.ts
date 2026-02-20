@@ -14,29 +14,29 @@ describe('useApprovalActions', () => {
     mockPOST.mockReset()
   })
 
-  it('approve calls correct endpoint with hitlRequestId', async () => {
-    const responseData = { id: 'hitl-1', status: 'approved' }
+  it('approve calls correct endpoint with projectId and runId', async () => {
+    const responseData = { run_id: 'run-1', hitl_request_id: 'hitl-1', status: 'running' }
     mockPOST.mockResolvedValue({ data: responseData })
 
     const { approveAction } = useApprovalActions()
-    await approveAction.execute('hitl-1')
+    await approveAction.execute('proj-1', 'run-1')
 
-    expect(mockPOST).toHaveBeenCalledWith('/hitl-requests/{hitlRequestId}/approve', {
-      params: { path: { hitlRequestId: 'hitl-1' } },
+    expect(mockPOST).toHaveBeenCalledWith('/projects/{projectId}/runs/{runId}/hitl/approve', {
+      params: { path: { projectId: 'proj-1', runId: 'run-1' } },
     })
     expect(approveAction.data.value).toEqual(responseData)
     expect(approveAction.error.value).toBeNull()
   })
 
-  it('reject calls correct endpoint with hitlRequestId and reason', async () => {
-    const responseData = { id: 'hitl-1', status: 'rejected' }
+  it('reject calls correct endpoint with projectId, runId and reason', async () => {
+    const responseData = { run_id: 'run-1', hitl_request_id: 'hitl-1', status: 'failed' }
     mockPOST.mockResolvedValue({ data: responseData })
 
     const { rejectAction } = useApprovalActions()
-    await rejectAction.execute('hitl-1', 'this is my rejection reason')
+    await rejectAction.execute('proj-1', 'run-1', 'this is my rejection reason')
 
-    expect(mockPOST).toHaveBeenCalledWith('/hitl-requests/{hitlRequestId}/reject', {
-      params: { path: { hitlRequestId: 'hitl-1' } },
+    expect(mockPOST).toHaveBeenCalledWith('/projects/{projectId}/runs/{runId}/hitl/reject', {
+      params: { path: { projectId: 'proj-1', runId: 'run-1' } },
       body: { reason: 'this is my rejection reason' },
     })
     expect(rejectAction.data.value).toEqual(responseData)
@@ -49,7 +49,7 @@ describe('useApprovalActions', () => {
     })
 
     const { approveAction } = useApprovalActions()
-    await approveAction.execute('hitl-1')
+    await approveAction.execute('proj-1', 'run-1')
 
     expect(approveAction.error.value).toBeInstanceOf(Error)
     expect(approveAction.error.value?.message).toBe('Not found')
@@ -61,7 +61,7 @@ describe('useApprovalActions', () => {
     })
 
     const { rejectAction } = useApprovalActions()
-    await rejectAction.execute('hitl-1', 'some reason here')
+    await rejectAction.execute('proj-1', 'run-1', 'some reason here')
 
     expect(rejectAction.error.value).toBeInstanceOf(Error)
     expect(rejectAction.error.value?.message).toBe('Already processed')
@@ -71,7 +71,7 @@ describe('useApprovalActions', () => {
     mockPOST.mockResolvedValue({ error: {} })
 
     const { approveAction } = useApprovalActions()
-    await approveAction.execute('hitl-1')
+    await approveAction.execute('proj-1', 'run-1')
 
     expect(approveAction.error.value?.message).toBe('Approve failed')
   })
@@ -88,11 +88,11 @@ describe('useApprovalActions', () => {
 
     const { approveAction, rejectAction } = useApprovalActions()
 
-    const approvePromise = approveAction.execute('hitl-1')
+    const approvePromise = approveAction.execute('proj-1', 'run-1')
     expect(approveAction.isLoading.value).toBe(true)
     expect(rejectAction.isLoading.value).toBe(false)
 
-    resolveApprove!({ data: { id: 'hitl-1' } })
+    resolveApprove!({ data: { run_id: 'run-1', hitl_request_id: 'hitl-1', status: 'running' } })
     await approvePromise
 
     expect(approveAction.isLoading.value).toBe(false)
@@ -103,11 +103,11 @@ describe('useApprovalActions', () => {
       }),
     )
 
-    const rejectPromise = rejectAction.execute('hitl-2', 'reason text here')
+    const rejectPromise = rejectAction.execute('proj-1', 'run-2', 'reason text here')
     expect(rejectAction.isLoading.value).toBe(true)
     expect(approveAction.isLoading.value).toBe(false)
 
-    resolveReject!({ data: { id: 'hitl-2' } })
+    resolveReject!({ data: { run_id: 'run-2', hitl_request_id: 'hitl-2', status: 'failed' } })
     await rejectPromise
 
     expect(rejectAction.isLoading.value).toBe(false)

@@ -2,17 +2,17 @@ import { useAsyncAction } from '@/composables/useAsyncAction'
 import { apiClient } from '@/api/client'
 
 export function useApprovalActions() {
-  const approveAction = useAsyncAction(async (hitlRequestId: string) => {
-    const { data, error } = await apiClient.POST('/hitl-requests/{hitlRequestId}/approve', {
-      params: { path: { hitlRequestId } },
+  const approveAction = useAsyncAction(async (projectId: string, runId: string) => {
+    const { data, error } = await apiClient.POST('/projects/{projectId}/runs/{runId}/hitl/approve', {
+      params: { path: { projectId, runId } },
     })
     if (error) throw new Error((error as { error?: { message?: string } }).error?.message ?? 'Approve failed')
     return data
   })
 
-  const rejectAction = useAsyncAction(async (hitlRequestId: string, reason: string) => {
-    const { data, error } = await apiClient.POST('/hitl-requests/{hitlRequestId}/reject', {
-      params: { path: { hitlRequestId } },
+  const rejectAction = useAsyncAction(async (projectId: string, runId: string, reason: string) => {
+    const { data, error } = await apiClient.POST('/projects/{projectId}/runs/{runId}/hitl/reject', {
+      params: { path: { projectId, runId } },
       body: { reason },
     })
     if (error) throw new Error((error as { error?: { message?: string } }).error?.message ?? 'Reject failed')
