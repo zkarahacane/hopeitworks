@@ -118,6 +118,44 @@ describe('useSSE', () => {
     expect(registeredTypes).toContain('step.failed')
     expect(registeredTypes).toContain('log.emitted')
     expect(registeredTypes).toContain('hitl.pending')
+    expect(registeredTypes).toContain('hitl.approved')
+    expect(registeredTypes).toContain('hitl.rejected')
+  })
+
+  it('dispatches hitl.approved event with parsed data', () => {
+    const onEvent = vi.fn()
+    useSSE('proj-123', onEvent)
+
+    const listener = mockInstance.listeners.find(
+      (l) => l.type === 'hitl.approved',
+    )
+    listener!.handler(
+      new MessageEvent('hitl.approved', {
+        data: '{"hitl_request_id":"hr-1"}',
+      }),
+    )
+
+    expect(onEvent).toHaveBeenCalledWith('hitl.approved', {
+      hitl_request_id: 'hr-1',
+    })
+  })
+
+  it('dispatches hitl.rejected event with parsed data', () => {
+    const onEvent = vi.fn()
+    useSSE('proj-123', onEvent)
+
+    const listener = mockInstance.listeners.find(
+      (l) => l.type === 'hitl.rejected',
+    )
+    listener!.handler(
+      new MessageEvent('hitl.rejected', {
+        data: '{"hitl_request_id":"hr-2"}',
+      }),
+    )
+
+    expect(onEvent).toHaveBeenCalledWith('hitl.rejected', {
+      hitl_request_id: 'hr-2',
+    })
   })
 
   it('dispatches named events with parsed data', () => {

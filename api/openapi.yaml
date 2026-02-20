@@ -1066,6 +1066,31 @@ paths:
           $ref: "#/components/responses/NotFound"
 
   # ── HITL Requests ───────────────────────────────────────────────────
+  /hitl-requests:
+    get:
+      operationId: listHITLRequests
+      summary: List HITL requests filtered by status
+      tags: [hitl]
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [pending, approved, rejected]
+          description: Filter by HITL request status
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/PerPageParam"
+      responses:
+        "200":
+          description: Paginated list of HITL requests
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HITLRequestList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
   /hitl-requests/by-step/{stepId}:
     get:
       operationId: getHITLRequestByStep
@@ -2463,6 +2488,19 @@ components:
         created_at:
           type: string
           format: date-time
+
+    HITLRequestList:
+      type: object
+      required:
+        - data
+        - pagination
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/HITLRequest"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
 
     RejectHITLRequest:
       type: object

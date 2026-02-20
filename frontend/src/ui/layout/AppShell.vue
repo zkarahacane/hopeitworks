@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import Button from 'primevue/button'
 import Toast from 'primevue/toast'
@@ -8,42 +8,65 @@ import AppHeader from './AppHeader.vue'
 import AppSidebar from './AppSidebar.vue'
 import AppStatusBar from './AppStatusBar.vue'
 import { useLayoutStore } from '@/stores/layout'
-import { useApprovalsStore, type PendingApproval } from '@/stores/approvals'
+import { useHITLStore } from '@/stores/hitl'
+import { useSSE } from '@/composables/useSSE'
 import { useKeyboard } from '@/composables/useKeyboard'
 import { useBreakpoint } from '@/composables/useBreakpoint'
 
 const layoutStore = useLayoutStore()
-const approvalsStore = useApprovalsStore()
+const hitlStore = useHITLStore()
 const toast = useToast()
 const { isMobile } = useBreakpoint()
 const mobileSidebarOpen = ref(false)
 const router = useRouter()
 
+/** Global SSE subscription for HITL events */
+const { close: closeSSE } = useSSE('', (eventName, data) => {
+  if (eventName === 'hitl.pending') {
+    hitlStore.handlePendingEvent(
+      data as {
+        hitl_request_id: string
+        run_id: string
+        step_id: string
+        project_id: string
+        story_key: string
+        pr_url?: string
+        pending_since?: string
+      },
+    )
+  }
+  if (eventName === 'hitl.approved' || eventName === 'hitl.rejected') {
+    hitlStore.handleResolvedEvent(
+      (data as { hitl_request_id: string }).hitl_request_id,
+    )
+  }
+})
+
+onBeforeUnmount(closeSSE)
+
 /** Watch for new pending approvals and show toast notifications */
 watch(
-  () => approvalsStore.pendingApprovals.length,
-  (newLen, oldLen) => {
-    if (newLen > oldLen) {
-      const latest = approvalsStore.pendingApprovals[newLen - 1]
-      if (latest) showApprovalToast(latest)
+  () => hitlStore.pendingCount,
+  (newCount, oldCount) => {
+    if (newCount > oldCount) {
+      const latest = hitlStore.pendingItems[hitlStore.pendingItems.length - 1]
+      if (latest) {
+        toast.add({
+          severity: 'warn',
+          summary: 'Review Required',
+          detail: `Review required for ${latest.storyKey}`,
+          life: 0,
+          group: 'hitl',
+        })
+      }
     }
   },
 )
 
-function showApprovalToast(approval: PendingApproval) {
-  toast.add({
-    severity: 'warn',
-    summary: 'Review Required',
-    detail: `Review required for ${approval.storyKey}`,
-    life: 0,
-    group: 'hitl',
-  })
-}
-
 function navigateToApproval() {
-  const latest = approvalsStore.pendingApprovals[approvalsStore.pendingApprovals.length - 1]
+  const latest = hitlStore.pendingItems[hitlStore.pendingItems.length - 1]
   if (!latest) return
-  approvalsStore.removePendingApproval(latest.hitlRequestId)
+  hitlStore.handleResolvedEvent(latest.hitlRequestId)
   router.push({
     name: 'hitl-approve',
     params: {
