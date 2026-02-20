@@ -13,7 +13,7 @@ import Button from 'primevue/button'
 import Message from 'primevue/message'
 import { useNotifications, type NotificationConfig } from '@/composables/useNotifications'
 
-export const addChannelSchema = toTypedSchema(
+const addChannelSchema = toTypedSchema(
   z.object({
     channel_type: z.enum(['discord', 'webhook']),
     url: z
