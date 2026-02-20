@@ -13,7 +13,7 @@ import (
 
 // mockCostRepo is a mock implementation of port.CostRepository for testing.
 type mockCostRepo struct {
-	inserted []*model.CostRecord
+	inserted  []*model.CostRecord
 	insertErr error
 }
 
