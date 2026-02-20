@@ -69,10 +69,8 @@ func (r *CostRepo) SumCostByProject(ctx context.Context, projectID uuid.UUID, si
 	}
 
 	totalCost := numericToFloat64(row.TotalCost)
-	totalInput := toInt64(row.TotalInput)
-	totalOutput := toInt64(row.TotalOutput)
 
-	return totalCost, totalInput, totalOutput, nil
+	return totalCost, row.TotalInput, row.TotalOutput, nil
 }
 
 func (r *CostRepo) SumCostByRun(ctx context.Context, runID uuid.UUID) (float64, error) {
@@ -105,22 +103,5 @@ func float64ToNumeric(f float64) pgtype.Numeric {
 		Int:   big.NewInt(millionths),
 		Exp:   -6,
 		Valid: true,
-	}
-}
-
-// toInt64 converts an any value returned by sqlc COALESCE to int64.
-func toInt64(v any) int64 {
-	if v == nil {
-		return 0
-	}
-	switch n := v.(type) {
-	case int64:
-		return n
-	case int32:
-		return int64(n)
-	case float64:
-		return int64(n)
-	default:
-		return 0
 	}
 }
