@@ -42,7 +42,7 @@ const channelTagSeverity: Record<string, 'info' | 'secondary'> = {
       class="flex-1 font-mono text-sm text-surface-600"
       data-testid="masked-url"
     >
-      {{ maskUrl(config.config.url) }}
+      {{ maskUrl(config.config['url'] ?? '') }}
     </span>
 
     <!-- Events filter chips -->

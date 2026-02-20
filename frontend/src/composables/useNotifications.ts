@@ -62,7 +62,12 @@ export function useNotifications(projectId: string) {
       '/projects/{projectId}/notifications/{notificationId}',
       {
         params: { path: { projectId, notificationId: config.id } },
-        body: { enabled: !original },
+        body: {
+          channel_type: config.channel_type,
+          config: config.config,
+          events_filter: config.events_filter,
+          enabled: !original,
+        },
       },
     )
     if (apiErr) {

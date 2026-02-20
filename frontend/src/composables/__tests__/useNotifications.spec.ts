@@ -139,7 +139,12 @@ describe('useNotifications', () => {
       expect(configs.value[0]!.enabled).toBe(false)
       expect(mockPut).toHaveBeenCalledWith('/projects/{projectId}/notifications/{notificationId}', {
         params: { path: { projectId: 'p1', notificationId: 'n1' } },
-        body: { enabled: false },
+        body: {
+          channel_type: 'discord',
+          config: { url: 'https://discord.com/api/webhooks/123/abc123' },
+          events_filter: ['run.completed', 'run.failed'],
+          enabled: false,
+        },
       })
     })
 
