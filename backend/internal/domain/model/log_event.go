@@ -27,4 +27,16 @@ type LogEvent struct {
 
 	// Data contains parsed JSON fields (only populated when IsJSON is true).
 	Data map[string]any `json:"data,omitempty"`
+
+	// Type is populated from Data["type"] when IsJSON is true (e.g., "cost").
+	Type string `json:"type,omitempty"`
+
+	// InputTokens is the number of input tokens (populated when Type == "cost").
+	InputTokens int64 `json:"input_tokens,omitempty"`
+
+	// OutputTokens is the number of output tokens (populated when Type == "cost").
+	OutputTokens int64 `json:"output_tokens,omitempty"`
+
+	// Model is the model name (populated when Type == "cost").
+	Model string `json:"model,omitempty"`
 }

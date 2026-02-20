@@ -167,6 +167,10 @@ func run() error {
 		logger.Warn("docker container manager unavailable, timeout enforcer and orphan cleaner disabled", "error", err)
 	}
 
+	// Cost tracking
+	costRepo := pgadapter.NewCostRepo(queries)
+	costSvc := service.NewCostService(costRepo, logger)
+
 	// Agent run action (requires Docker)
 	if containerMgr != nil {
 		logStreamer, logErr := dockeradapter.NewDockerLogStreamerFromHost(cfg.Docker.Host, logger)
@@ -184,7 +188,7 @@ func run() error {
 			agentRunAction := actionadapter.NewAgentRunAction(
 				containerMgr, logStreamer, eventRepo,
 				storyRepo, projectRepo, runRepo,
-				templateSvc, agentCfg, logger,
+				templateSvc, costSvc, agentCfg, logger,
 			)
 			actionReg.Register(agentRunAction)
 			logger.Info("agent_run action registered")
