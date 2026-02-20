@@ -128,20 +128,20 @@ development_status:
   epic-7-retrospective: optional
 
   # Epic 8: Retry, CI Polling & Resilience
-  epic-8: backlog
-  8-1-ci-polling-action-via-gitprovider: backlog
-  8-2-incremental-retry-action: backlog
+  epic-8: in-progress
+  8-1-ci-polling-action-via-gitprovider: done
+  8-2-incremental-retry-action: done
   8-3-full-retry-fallback-circuit-breaker: backlog
-  8-4-retry-status-display-circuit-breaker-indicator: backlog
+  8-4-retry-status-display-circuit-breaker-indicator: done
   epic-8-retrospective: optional
 
   # Epic 9: Cost Tracking & Notifications
-  epic-9: backlog
-  9-1-cost-tracking-table-per-step-cost-recording: backlog
+  epic-9: in-progress
+  9-1-cost-tracking-table-per-step-cost-recording: done
   9-2-cost-aggregation-api: backlog
-  9-3-notification-dispatcher-discord-webhook: backlog
-  9-4-cost-dashboard-page: backlog
-  9-5-notification-settings-page: backlog
+  9-3-notification-dispatcher-discord-webhook: done
+  9-4-cost-dashboard-page: done
+  9-5-notification-settings-page: done
   epic-9-retrospective: optional
 
   # Epic 10: Reference Test Project & Validation
@@ -479,31 +479,31 @@ parallel_waves:
       # Epic 8 - Retry & Resilience
       - key: 8-1-ci-polling-action-via-gitprovider
         domain: back
-        status: backlog
+        status: done
         cross_epic_deps: [3-7-pipeline-executor-sequential-step-runner]
       - key: 8-2-incremental-retry-action
         domain: back
-        status: backlog
+        status: done
         cross_epic_deps: [3-7-pipeline-executor-sequential-step-runner]
       - key: 8-4-retry-status-display-circuit-breaker-indicator
         domain: front
-        status: backlog
+        status: done
         cross_epic_deps: [1-8-app-shell-layout-header-sidebar-status-bar]
       # Epic 9 - Cost & Notifications
       - key: 9-1-cost-tracking-table-per-step-cost-recording
         domain: back
-        status: backlog
+        status: done
         cross_epic_deps: [3-1-runs-runsteps-tables-run-creation-api-state-machine]
       - key: 9-3-notification-dispatcher-discord-webhook
         domain: back
-        status: backlog
+        status: done
       - key: 9-4-cost-dashboard-page
         domain: front
-        status: backlog
+        status: done
         cross_epic_deps: [1-8-app-shell-layout-header-sidebar-status-bar]
       - key: 9-5-notification-settings-page
         domain: front
-        status: backlog
+        status: done
         cross_epic_deps: [1-8-app-shell-layout-header-sidebar-status-bar]
     container_count: 14
     depends_on: [wave-7]
