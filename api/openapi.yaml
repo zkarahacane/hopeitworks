@@ -495,6 +495,26 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /projects/{projectId}/epic-runs/{epicRunId}:
+    get:
+      operationId: getEpicRun
+      summary: Get an epic run by ID with story statuses
+      tags: [epics]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/EpicRunIdPath"
+      responses:
+        "200":
+          description: Epic run details with story statuses
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EpicRun"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   # ── Stories ──────────────────────────────────────────────────────────
   /projects/{projectId}/stories:
     get:
@@ -1302,6 +1322,15 @@ components:
         format: uuid
       description: HITL request UUID
 
+    EpicRunIdPath:
+      name: epicRunId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Epic run UUID
+
     NotificationIdPath:
       name: notificationId
       in: path
@@ -1695,6 +1724,58 @@ components:
         stories_count:
           type: integer
           example: 5
+
+    EpicRun:
+      type: object
+      required: [id, epic_id, project_id, status, stories, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        epic_id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [scheduling, running, completed, failed]
+          example: running
+        stories:
+          type: array
+          items:
+            $ref: "#/components/schemas/EpicRunStory"
+        created_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    EpicRunStory:
+      type: object
+      required: [story_id, story_key, group_index, status]
+      properties:
+        story_id:
+          type: string
+          format: uuid
+        story_key:
+          type: string
+          example: S-01
+        run_id:
+          type: string
+          format: uuid
+          nullable: true
+        group_index:
+          type: integer
+          description: Zero-based execution layer index
+          example: 0
+        status:
+          type: string
+          enum: [pending, running, completed, failed]
+          example: pending
 
     # ── Story ───────────────────────────────────────────────────────────
     Story:

@@ -35,6 +35,11 @@ export function useSSE(
     'step.failed',
     'log.emitted',
     'hitl.pending',
+    'epic_run.started',
+    'epic_run.group.started',
+    'epic_run.story.completed',
+    'epic_run.completed',
+    'epic_run.failed',
   ]
   for (const name of knownEvents) {
     es.addEventListener(name, (e) => {
