@@ -1107,6 +1107,7 @@ components:
           example: 550e8400-e29b-41d4-a716-446655440000
         circuit_breaker_count:
           type: integer
+          minimum: 0
           description: Number of consecutive pipeline failures
           example: 0
         circuit_breaker_active:
@@ -1115,6 +1116,7 @@ components:
           example: false
         circuit_breaker_max:
           type: integer
+          minimum: 1
           description: Threshold for consecutive failures before tripping
           example: 3
         created_at:
