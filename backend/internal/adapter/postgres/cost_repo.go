@@ -146,7 +146,7 @@ func (r *CostRepo) ListCostsByProjectByRun(ctx context.Context, projectID uuid.U
 }
 
 // ListCostsByProjectByModel returns cost breakdown by model for a project since the given time.
-func (r *CostRepo) ListCostsByProjectByModel(ctx context.Context, projectID uuid.UUID, since time.Time) ([]model.ModelCostBreakdown, error) {
+func (r *CostRepo) ListCostsByProjectByModel(ctx context.Context, projectID uuid.UUID, since time.Time) ([]model.CostByModel, error) {
 	rows, err := r.queries.ListCostsByProjectByModel(ctx, ListCostsByProjectByModelParams{
 		ProjectID: projectID,
 		CreatedAt: since,
@@ -155,9 +155,9 @@ func (r *CostRepo) ListCostsByProjectByModel(ctx context.Context, projectID uuid
 		return nil, apperrors.NewInternal("failed to list costs by project by model", err)
 	}
 
-	results := make([]model.ModelCostBreakdown, len(rows))
+	results := make([]model.CostByModel, len(rows))
 	for i, row := range rows {
-		results[i] = model.ModelCostBreakdown{
+		results[i] = model.CostByModel{
 			Model:        row.Model,
 			TotalCost:    numericToFloat64(row.TotalCost),
 			TokensInput:  toInt64(row.TokensInput),

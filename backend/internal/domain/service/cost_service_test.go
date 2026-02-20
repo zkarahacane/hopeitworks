@@ -24,7 +24,7 @@ type mockCostRepo struct {
 	sumCostByStoryFn            func(ctx context.Context, storyID uuid.UUID) (float64, int64, int64, int, error)
 	listCostsByProjectByStoryFn func(ctx context.Context, projectID uuid.UUID, since time.Time) ([]model.StoryCostBreakdown, error)
 	listCostsByProjectByRunFn   func(ctx context.Context, projectID uuid.UUID, since time.Time) ([]model.RunCostBreakdown, error)
-	listCostsByProjectByModelFn func(ctx context.Context, projectID uuid.UUID, since time.Time) ([]model.ModelCostBreakdown, error)
+	listCostsByProjectByModelFn func(ctx context.Context, projectID uuid.UUID, since time.Time) ([]model.CostByModel, error)
 	listStepCostsByRunFn        func(ctx context.Context, runID uuid.UUID) ([]model.StepCostBreakdown, error)
 
 	insertCalls []model.CostRecord
@@ -81,11 +81,11 @@ func (m *mockCostRepo) ListCostsByProjectByRun(ctx context.Context, projectID uu
 	return []model.RunCostBreakdown{}, nil
 }
 
-func (m *mockCostRepo) ListCostsByProjectByModel(ctx context.Context, projectID uuid.UUID, since time.Time) ([]model.ModelCostBreakdown, error) {
+func (m *mockCostRepo) ListCostsByProjectByModel(ctx context.Context, projectID uuid.UUID, since time.Time) ([]model.CostByModel, error) {
 	if m.listCostsByProjectByModelFn != nil {
 		return m.listCostsByProjectByModelFn(ctx, projectID, since)
 	}
-	return []model.ModelCostBreakdown{}, nil
+	return []model.CostByModel{}, nil
 }
 
 func (m *mockCostRepo) ListStepCostsByRun(ctx context.Context, runID uuid.UUID) ([]model.StepCostBreakdown, error) {
@@ -481,11 +481,11 @@ func TestGetRunCosts_ZeroCosts(t *testing.T) {
 
 func TestComputeCostUSD(t *testing.T) {
 	tests := []struct {
-		name         string
-		model        string
-		inputTokens  int64
-		outputTokens int64
-		expectedCost float64
+		name          string
+		model         string
+		inputTokens   int64
+		outputTokens  int64
+		expectedCost  float64
 		expectedKnown bool
 	}{
 		{"opus", "claude-opus-4-6", 1_000_000, 1_000_000, 15.0 + 75.0, true},
@@ -508,9 +508,9 @@ func TestComputeCostUSD(t *testing.T) {
 
 func TestParsePeriod(t *testing.T) {
 	tests := []struct {
-		period    string
-		wantErr   bool
-		daysAgo   int
+		period  string
+		wantErr bool
+		daysAgo int
 	}{
 		{"7d", false, 7},
 		{"30d", false, 30},

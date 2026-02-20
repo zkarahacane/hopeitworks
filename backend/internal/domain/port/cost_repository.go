@@ -32,7 +32,7 @@ type CostRepository interface {
 	ListCostsByProjectByRun(ctx context.Context, projectID uuid.UUID, since time.Time) ([]model.RunCostBreakdown, error)
 
 	// ListCostsByProjectByModel returns cost breakdown by model for a project since the given time.
-	ListCostsByProjectByModel(ctx context.Context, projectID uuid.UUID, since time.Time) ([]model.ModelCostBreakdown, error)
+	ListCostsByProjectByModel(ctx context.Context, projectID uuid.UUID, since time.Time) ([]model.CostByModel, error)
 
 	// ListStepCostsByRun returns per-step cost breakdown for a run.
 	ListStepCostsByRun(ctx context.Context, runID uuid.UUID) ([]model.StepCostBreakdown, error)
