@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onBeforeUnmount } from 'vue'
+import { ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import Button from 'primevue/button'
 import Toast from 'primevue/toast'
@@ -9,7 +9,6 @@ import AppSidebar from './AppSidebar.vue'
 import AppStatusBar from './AppStatusBar.vue'
 import { useLayoutStore } from '@/stores/layout'
 import { useHITLStore } from '@/stores/hitl'
-import { useSSE } from '@/composables/useSSE'
 import { useKeyboard } from '@/composables/useKeyboard'
 import { useBreakpoint } from '@/composables/useBreakpoint'
 
@@ -20,29 +19,14 @@ const { isMobile } = useBreakpoint()
 const mobileSidebarOpen = ref(false)
 const router = useRouter()
 
-/** Global SSE subscription for HITL events */
-const { close: closeSSE } = useSSE('', (eventName, data) => {
-  if (eventName === 'hitl.pending') {
-    hitlStore.handlePendingEvent(
-      data as {
-        hitl_request_id: string
-        run_id: string
-        step_id: string
-        project_id: string
-        story_key: string
-        pr_url?: string
-        pending_since?: string
-      },
-    )
-  }
-  if (eventName === 'hitl.approved' || eventName === 'hitl.rejected') {
-    hitlStore.handleResolvedEvent(
-      (data as { hitl_request_id: string }).hitl_request_id,
-    )
-  }
-})
-
-onBeforeUnmount(closeSSE)
+/**
+ * NOTE: Global SSE subscription for HITL events is NOT implemented in MVP.
+ * The backend SSE endpoint requires a valid project_id UUID and does not support
+ * global/wildcard subscriptions. For MVP, the HITL badge count is populated by:
+ * 1. ApprovalsView calls fetchPending() when mounted
+ * 2. Project-specific SSE connections in RunDetailView dispatch to useHITLStore
+ * TODO: Phase 2 - implement global SSE endpoint or multi-project SSE aggregation
+ */
 
 /** Watch for new pending approvals and show toast notifications */
 watch(
