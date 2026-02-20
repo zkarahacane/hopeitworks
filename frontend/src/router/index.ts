@@ -90,6 +90,11 @@ const router = createRouter({
           component: () => import('@/views/HITLApprovalView.vue'),
         },
         {
+          path: 'runs/:runId/logs',
+          name: 'run-logs',
+          component: () => import('@/views/RunLogView.vue'),
+        },
+        {
           path: 'settings/notifications',
           name: 'project-notifications',
           component: () => import('@/views/NotificationSettingsView.vue'),
