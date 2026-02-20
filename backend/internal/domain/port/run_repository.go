@@ -28,4 +28,9 @@ type RunRepository interface {
 	// UpdateRunStepContainerInfo updates container_id and/or log_tail on a run step
 	// without changing its status. Nil values are ignored (existing values preserved).
 	UpdateRunStepContainerInfo(ctx context.Context, id uuid.UUID, containerID *string, logTail *string) (*model.RunStep, error)
+
+	// CreateRetryRunStep creates a new run step with retry tracking fields.
+	CreateRetryRunStep(ctx context.Context, step *model.RunStep) (*model.RunStep, error)
+	// ListRetryStepsByParent lists all retry steps for a given parent step.
+	ListRetryStepsByParent(ctx context.Context, parentStepID uuid.UUID) ([]*model.RunStep, error)
 }

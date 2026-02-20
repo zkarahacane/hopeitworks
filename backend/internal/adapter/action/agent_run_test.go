@@ -305,6 +305,14 @@ func (m *mockRunRepo) UpdateRunStepStatus(ctx context.Context, id uuid.UUID, sta
 	return &model.RunStep{ID: id, Status: status}, nil
 }
 
+func (m *mockRunRepo) CreateRetryRunStep(_ context.Context, step *model.RunStep) (*model.RunStep, error) {
+	return step, nil
+}
+
+func (m *mockRunRepo) ListRetryStepsByParent(_ context.Context, _ uuid.UUID) ([]*model.RunStep, error) {
+	return nil, nil
+}
+
 func (m *mockRunRepo) getContainerInfoCalls() []containerInfoCall {
 	m.mu.Lock()
 	defer m.mu.Unlock()

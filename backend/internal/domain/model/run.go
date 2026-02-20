@@ -59,6 +59,9 @@ type RunStep struct {
 	ErrorMessage *string
 	ContainerID  *string
 	LogTail      *string
+	RetryCount   int        // number of retries attempted from this step
+	RetryType    *string    // "incremental" | "full" | nil (original)
+	ParentStepID *uuid.UUID // nil for original steps
 	CreatedAt    time.Time
 }
 

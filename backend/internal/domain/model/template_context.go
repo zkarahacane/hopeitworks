@@ -15,6 +15,8 @@ type TemplateContext struct {
 	AcceptanceCriteria string `json:"acceptance_criteria"`
 	// ErrorContext holds error details (for retry templates).
 	ErrorContext string `json:"error_context"`
+	// LogTail holds the last N log lines from a failed parent step (for retry templates).
+	LogTail string `json:"log_tail"`
 	// DiffContent holds git diff or changes (for review/merge templates).
 	DiffContent string `json:"diff_content"`
 	// BranchName is the git branch name.

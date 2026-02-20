@@ -101,6 +101,9 @@ type RunStep struct {
 	ContainerID  pgtype.Text        `json:"container_id"`
 	LogTail      pgtype.Text        `json:"log_tail"`
 	CreatedAt    time.Time          `json:"created_at"`
+	RetryCount   int32              `json:"retry_count"`
+	RetryType    pgtype.Text        `json:"retry_type"`
+	ParentStepID pgtype.UUID        `json:"parent_step_id"`
 }
 
 type Story struct {

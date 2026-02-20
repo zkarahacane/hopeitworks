@@ -246,16 +246,53 @@ func toDomainRun(r Run) *model.Run {
 	return run
 }
 
+func (r *RunRepo) CreateRetryRunStep(ctx context.Context, step *model.RunStep) (*model.RunStep, error) {
+	params := CreateRetryRunStepParams{
+		ID:         step.ID,
+		RunID:      step.RunID,
+		StepName:   step.StepName,
+		StepOrder:  int32(step.StepOrder),
+		Action:     step.Action,
+		Status:     string(step.Status),
+		RetryCount: int32(step.RetryCount),
+	}
+	if step.RetryType != nil {
+		params.RetryType = pgtype.Text{String: *step.RetryType, Valid: true}
+	}
+	if step.ParentStepID != nil {
+		params.ParentStepID = pgtype.UUID{Bytes: *step.ParentStepID, Valid: true}
+	}
+
+	row, err := r.queries.CreateRetryRunStep(ctx, params)
+	if err != nil {
+		return nil, apperrors.NewInternal("failed to create retry run step", err)
+	}
+	return toDomainRunStep(row), nil
+}
+
+func (r *RunRepo) ListRetryStepsByParent(ctx context.Context, parentStepID uuid.UUID) ([]*model.RunStep, error) {
+	rows, err := r.queries.ListRetryStepsByParent(ctx, pgtype.UUID{Bytes: parentStepID, Valid: true})
+	if err != nil {
+		return nil, apperrors.NewInternal("failed to list retry steps by parent", err)
+	}
+	steps := make([]*model.RunStep, len(rows))
+	for i, row := range rows {
+		steps[i] = toDomainRunStep(row)
+	}
+	return steps, nil
+}
+
 // toDomainRunStep maps a sqlc-generated RunStep to a domain RunStep.
 func toDomainRunStep(s RunStep) *model.RunStep {
 	step := &model.RunStep{
-		ID:        s.ID,
-		RunID:     s.RunID,
-		StepName:  s.StepName,
-		StepOrder: int(s.StepOrder),
-		Action:    s.Action,
-		Status:    model.StepStatus(s.Status),
-		CreatedAt: s.CreatedAt,
+		ID:         s.ID,
+		RunID:      s.RunID,
+		StepName:   s.StepName,
+		StepOrder:  int(s.StepOrder),
+		Action:     s.Action,
+		Status:     model.StepStatus(s.Status),
+		RetryCount: int(s.RetryCount),
+		CreatedAt:  s.CreatedAt,
 	}
 	if s.StartedAt.Valid {
 		step.StartedAt = &s.StartedAt.Time
@@ -271,6 +308,13 @@ func toDomainRunStep(s RunStep) *model.RunStep {
 	}
 	if s.LogTail.Valid {
 		step.LogTail = &s.LogTail.String
+	}
+	if s.RetryType.Valid {
+		step.RetryType = &s.RetryType.String
+	}
+	if s.ParentStepID.Valid {
+		id := uuid.UUID(s.ParentStepID.Bytes)
+		step.ParentStepID = &id
 	}
 	return step
 }

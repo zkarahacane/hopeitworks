@@ -185,6 +185,13 @@ func run() error {
 			)
 			actionReg.Register(agentRunAction)
 			logger.Info("agent_run action registered")
+
+			// Incremental retry action (delegates to agent_run)
+			incrementalRetryAction := actionadapter.NewIncrementalRetryAction(
+				runRepo, agentRunAction, logger,
+			)
+			actionReg.Register(incrementalRetryAction)
+			logger.Info("incremental_retry action registered")
 		}
 	}
 
