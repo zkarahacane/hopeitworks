@@ -46,3 +46,12 @@ func (q *JobQueue) EnqueueExecuteRun(ctx context.Context, runID uuid.UUID) error
 	}
 	return nil
 }
+
+// EnqueueResumeRun enqueues a job to resume a suspended pipeline run from a specific step.
+func (q *JobQueue) EnqueueResumeRun(ctx context.Context, runID, stepID uuid.UUID) error {
+	_, err := q.client.Insert(ctx, ResumeRunArgs{RunID: runID, StepID: stepID}, nil)
+	if err != nil {
+		return fmt.Errorf("enqueue resume_run job: %w", err)
+	}
+	return nil
+}

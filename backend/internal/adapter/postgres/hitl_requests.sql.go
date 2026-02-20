@@ -73,6 +73,32 @@ func (q *Queries) GetHITLRequestByRunStepID(ctx context.Context, runStepID uuid.
 	return i, err
 }
 
+const getPendingHITLRequestByRunID = `-- name: GetPendingHITLRequestByRunID :one
+SELECT hr.id, hr.run_step_id, hr.gate_type, hr.diff_content, hr.status, hr.resolved_at, hr.resolved_by, hr.rejection_reason, hr.created_at
+FROM hitl_requests hr
+JOIN run_steps rs ON rs.id = hr.run_step_id
+WHERE rs.run_id = $1
+  AND hr.status = 'pending'
+LIMIT 1
+`
+
+func (q *Queries) GetPendingHITLRequestByRunID(ctx context.Context, runID uuid.UUID) (HitlRequest, error) {
+	row := q.db.QueryRow(ctx, getPendingHITLRequestByRunID, runID)
+	var i HitlRequest
+	err := row.Scan(
+		&i.ID,
+		&i.RunStepID,
+		&i.GateType,
+		&i.DiffContent,
+		&i.Status,
+		&i.ResolvedAt,
+		&i.ResolvedBy,
+		&i.RejectionReason,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const updateHITLRequestStatus = `-- name: UpdateHITLRequestStatus :one
 UPDATE hitl_requests
 SET status = $2, resolved_at = $3, resolved_by = $4, rejection_reason = $5

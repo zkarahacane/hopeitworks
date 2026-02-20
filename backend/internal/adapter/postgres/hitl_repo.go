@@ -61,6 +61,18 @@ func (r *HITLRepo) GetByRunStepID(ctx context.Context, runStepID uuid.UUID) (*mo
 	return toDomainHITLRequest(row), nil
 }
 
+// GetPendingByRunID returns the pending HITL request for a given run.
+func (r *HITLRepo) GetPendingByRunID(ctx context.Context, runID uuid.UUID) (*model.HITLRequest, error) {
+	row, err := r.queries.GetPendingHITLRequestByRunID(ctx, runID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, apperrors.NewNotFound("hitl_request", runID)
+		}
+		return nil, apperrors.NewInternal("failed to get pending HITL request by run", err)
+	}
+	return toDomainHITLRequest(row), nil
+}
+
 // UpdateStatus transitions a HITL request to approved or rejected.
 func (r *HITLRepo) UpdateStatus(ctx context.Context, id uuid.UUID, status model.HITLStatus, resolvedBy *uuid.UUID, rejectionReason *string, resolvedAt time.Time) (*model.HITLRequest, error) {
 	params := UpdateHITLRequestStatusParams{

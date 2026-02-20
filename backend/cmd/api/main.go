@@ -145,6 +145,7 @@ func run() error {
 	// River job queue for async pipeline execution
 	workers := river.NewWorkers()
 	river.AddWorker(workers, riveradapter.NewExecuteRunWorker(pipelineExecutor))
+	river.AddWorker(workers, riveradapter.NewResumeRunWorker(pipelineExecutor))
 
 	jobQueue, err := riveradapter.NewJobQueue(pool, workers)
 	if err != nil {
@@ -256,7 +257,11 @@ func run() error {
 	// SSE handler for real-time event streaming
 	sseHandler := handler.NewSSEHandler(eventBus, eventRepo, projectUserRepo, logger)
 
-	server := handler.NewServer(authHandler, projectHandler, userHandler, epicHandler, storyHandler, promptTemplateHandler, runHandler, pipelineConfigHandler, notificationHandler)
+	// HITL service and handler
+	hitlService := service.NewHITLService(hitlRepo, runRepo, eventRepo, jobQueue, logger)
+	hitlHandler := handler.NewHITLHandler(hitlService, projectUserService)
+
+	server := handler.NewServer(authHandler, projectHandler, userHandler, epicHandler, storyHandler, promptTemplateHandler, runHandler, pipelineConfigHandler, notificationHandler, hitlHandler)
 
 	// Project user handler
 	projectUserHandler := handler.NewProjectUserHandler(projectUserService)

@@ -167,14 +167,30 @@ func (m *mockPipelineConfigRepoForRun) Upsert(_ context.Context, _ *model.Pipeli
 	return nil, nil
 }
 
+// resumeRunCall records a call to EnqueueResumeRun.
+type resumeRunCall struct {
+	RunID  uuid.UUID
+	StepID uuid.UUID
+}
+
 // mockJobQueue implements port.JobQueue for testing.
 type mockJobQueue struct {
 	enqueueExecuteRunFn func(ctx context.Context, runID uuid.UUID) error
+	enqueueResumeRunFn  func(ctx context.Context, runID, stepID uuid.UUID) error
+	enqueuedResumes     []resumeRunCall
 }
 
 func (m *mockJobQueue) EnqueueExecuteRun(ctx context.Context, runID uuid.UUID) error {
 	if m.enqueueExecuteRunFn != nil {
 		return m.enqueueExecuteRunFn(ctx, runID)
+	}
+	return nil
+}
+
+func (m *mockJobQueue) EnqueueResumeRun(ctx context.Context, runID, stepID uuid.UUID) error {
+	m.enqueuedResumes = append(m.enqueuedResumes, resumeRunCall{RunID: runID, StepID: stepID})
+	if m.enqueueResumeRunFn != nil {
+		return m.enqueueResumeRunFn(ctx, runID, stepID)
 	}
 	return nil
 }

@@ -15,11 +15,12 @@ type Server struct {
 	runs            *RunHandler
 	pipelineConfig  *PipelineConfigHandler
 	notifications   *NotificationHandler
+	hitl            *HITLHandler
 }
 
 // NewServer creates a new Server with the given handlers.
-func NewServer(auth *AuthHandler, projects *ProjectHandler, users *UserHandler, epics *EpicHandler, stories *StoryHandler, promptTemplates *PromptTemplateHandler, runs *RunHandler, pipelineConfig *PipelineConfigHandler, notifications *NotificationHandler) *Server {
-	return &Server{auth: auth, projects: projects, users: users, epics: epics, stories: stories, promptTemplates: promptTemplates, runs: runs, pipelineConfig: pipelineConfig, notifications: notifications}
+func NewServer(auth *AuthHandler, projects *ProjectHandler, users *UserHandler, epics *EpicHandler, stories *StoryHandler, promptTemplates *PromptTemplateHandler, runs *RunHandler, pipelineConfig *PipelineConfigHandler, notifications *NotificationHandler, hitl *HITLHandler) *Server {
+	return &Server{auth: auth, projects: projects, users: users, epics: epics, stories: stories, promptTemplates: promptTemplates, runs: runs, pipelineConfig: pipelineConfig, notifications: notifications, hitl: hitl}
 }
 
 // RegisterUser delegates to AuthHandler.
@@ -230,4 +231,14 @@ func (s *Server) UpdateNotificationConfig(w http.ResponseWriter, r *http.Request
 // DeleteNotificationConfig delegates to NotificationHandler.
 func (s *Server) DeleteNotificationConfig(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, notificationID NotificationIdPath) {
 	s.notifications.DeleteNotificationConfig(w, r, projectID, notificationID)
+}
+
+// ApproveHITLGate delegates to HITLHandler.
+func (s *Server) ApproveHITLGate(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, runID RunIdPath) {
+	s.hitl.ApproveHITLGate(w, r, projectID, runID)
+}
+
+// RejectHITLGate delegates to HITLHandler.
+func (s *Server) RejectHITLGate(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, runID RunIdPath) {
+	s.hitl.RejectHITLGate(w, r, projectID, runID)
 }

@@ -114,6 +114,72 @@ func (e *PipelineExecutor) ExecuteRun(ctx context.Context, runID uuid.UUID) erro
 	return nil
 }
 
+// ResumeRun resumes a suspended pipeline run from the given step.
+// It continues executing steps sequentially from the resumed step's order.
+func (e *PipelineExecutor) ResumeRun(ctx context.Context, runID, stepID uuid.UUID) error {
+	run, err := e.runRepo.GetRun(ctx, runID)
+	if err != nil {
+		return err
+	}
+
+	steps, err := e.runRepo.ListRunStepsByRun(ctx, runID)
+	if err != nil {
+		return err
+	}
+
+	slices.SortFunc(steps, func(a, b *model.RunStep) int {
+		return cmp.Compare(a.StepOrder, b.StepOrder)
+	})
+
+	// Find the resumed step's order and start executing from the next step
+	var resumeOrder int
+	for _, s := range steps {
+		if s.ID == stepID {
+			resumeOrder = s.StepOrder
+			break
+		}
+	}
+
+	metadata := make(map[string]any)
+	for i := range steps {
+		step := steps[i]
+		if step.StepOrder <= resumeOrder {
+			continue
+		}
+
+		select {
+		case <-ctx.Done():
+			e.handleCancellation(run, step)
+			return ctx.Err()
+		default:
+		}
+
+		if err := e.executeStep(ctx, run, step, metadata); err != nil {
+			if errors.Is(err, errStepSuspended) {
+				e.logger.Info("pipeline step suspended for approval",
+					"run_id", run.ID, "step_id", step.ID)
+				return nil
+			}
+			e.handleStepFailure(ctx, run, step, err)
+			return err
+		}
+	}
+
+	// All remaining steps completed
+	completedAt := time.Now()
+	if _, err := e.runRepo.UpdateRunStatus(ctx, runID, model.RunStatusCompleted, nil, &completedAt, nil); err != nil {
+		return err
+	}
+
+	e.publishEvent(ctx, run.ProjectID, "run", run.ID, "completed", map[string]any{
+		"run_id":       runID.String(),
+		"status":       string(model.RunStatusCompleted),
+		"completed_at": completedAt.Format(time.RFC3339),
+	})
+
+	return nil
+}
+
 // executeStep executes a single pipeline step.
 func (e *PipelineExecutor) executeStep(ctx context.Context, run *model.Run, step *model.RunStep, metadata map[string]any) error {
 	// Transition step to "running"
