@@ -9,6 +9,7 @@ import ApprovalsView from '@/views/ApprovalsView.vue'
 import PipelineConfigView from '@/views/PipelineConfigView.vue'
 import PromptTemplatesView from '@/views/PromptTemplatesView.vue'
 import BoardView from '@/views/BoardView.vue'
+import NotFoundView from '@/views/NotFoundView.vue'
 import ProjectOverview from '@/features/projects/ProjectOverview.vue'
 import { setupAuthGuard, setupAdminGuard } from './guards'
 
@@ -124,6 +125,12 @@ const router = createRouter({
       name: 'admin-users',
       component: () => import('@/views/admin/UserManagementView.vue'),
       meta: { requiresAuth: true, requiresAdmin: true },
+    },
+    {
+      path: '/:pathMatch(.*)*',
+      name: 'not-found',
+      component: NotFoundView,
+      meta: { requiresAuth: false },
     },
   ],
 })
