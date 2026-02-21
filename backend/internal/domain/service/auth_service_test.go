@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 
@@ -103,7 +104,7 @@ func (e *pgDuplicateKeyError) SQLState() string { return "23505" }
 
 func TestRegister_Success(t *testing.T) {
 	repo := newMockRepo()
-	svc := NewAuthService(repo, "test-secret", 24*time.Hour)
+	svc := NewAuthService(repo, nil, "test-secret", 24*time.Hour)
 
 	user, token, err := svc.Register(context.Background(), "test@example.com", "secureP@ss1", "Test User")
 	if err != nil {
@@ -133,7 +134,7 @@ func TestRegister_Success(t *testing.T) {
 
 func TestRegister_DuplicateEmail(t *testing.T) {
 	repo := newMockRepo()
-	svc := NewAuthService(repo, "test-secret", 24*time.Hour)
+	svc := NewAuthService(repo, nil, "test-secret", 24*time.Hour)
 
 	_, _, err := svc.Register(context.Background(), "test@example.com", "secureP@ss1", "Test User")
 	if err != nil {
@@ -148,7 +149,7 @@ func TestRegister_DuplicateEmail(t *testing.T) {
 
 func TestRegister_ValidationError(t *testing.T) {
 	repo := newMockRepo()
-	svc := NewAuthService(repo, "test-secret", 24*time.Hour)
+	svc := NewAuthService(repo, nil, "test-secret", 24*time.Hour)
 
 	tests := []struct {
 		name     string
@@ -174,7 +175,7 @@ func TestRegister_ValidationError(t *testing.T) {
 
 func TestLogin_Success(t *testing.T) {
 	repo := newMockRepo()
-	svc := NewAuthService(repo, "test-secret", 24*time.Hour)
+	svc := NewAuthService(repo, nil, "test-secret", 24*time.Hour)
 
 	_, _, err := svc.Register(context.Background(), "test@example.com", "secureP@ss1", "Test User")
 	if err != nil {
@@ -198,7 +199,7 @@ func TestLogin_Success(t *testing.T) {
 
 func TestLogin_WrongPassword(t *testing.T) {
 	repo := newMockRepo()
-	svc := NewAuthService(repo, "test-secret", 24*time.Hour)
+	svc := NewAuthService(repo, nil, "test-secret", 24*time.Hour)
 
 	_, _, err := svc.Register(context.Background(), "test@example.com", "secureP@ss1", "Test User")
 	if err != nil {
@@ -213,7 +214,7 @@ func TestLogin_WrongPassword(t *testing.T) {
 
 func TestLogin_NonexistentUser(t *testing.T) {
 	repo := newMockRepo()
-	svc := NewAuthService(repo, "test-secret", 24*time.Hour)
+	svc := NewAuthService(repo, nil, "test-secret", 24*time.Hour)
 
 	_, _, err := svc.Login(context.Background(), "nonexistent@example.com", "secureP@ss1")
 	if !errors.Is(err, ErrInvalidCredentials) {
@@ -223,7 +224,7 @@ func TestLogin_NonexistentUser(t *testing.T) {
 
 func TestValidateToken_Success(t *testing.T) {
 	repo := newMockRepo()
-	svc := NewAuthService(repo, "test-secret", 24*time.Hour)
+	svc := NewAuthService(repo, nil, "test-secret", 24*time.Hour)
 
 	_, token, err := svc.Register(context.Background(), "test@example.com", "secureP@ss1", "Test User")
 	if err != nil {
@@ -244,7 +245,7 @@ func TestValidateToken_Success(t *testing.T) {
 
 func TestValidateToken_InvalidToken(t *testing.T) {
 	repo := newMockRepo()
-	svc := NewAuthService(repo, "test-secret", 24*time.Hour)
+	svc := NewAuthService(repo, nil, "test-secret", 24*time.Hour)
 
 	_, err := svc.ValidateToken("invalid-token")
 	if err == nil {
@@ -254,8 +255,8 @@ func TestValidateToken_InvalidToken(t *testing.T) {
 
 func TestValidateToken_WrongSecret(t *testing.T) {
 	repo := newMockRepo()
-	svc1 := NewAuthService(repo, "secret-1", 24*time.Hour)
-	svc2 := NewAuthService(repo, "secret-2", 24*time.Hour)
+	svc1 := NewAuthService(repo, nil, "secret-1", 24*time.Hour)
+	svc2 := NewAuthService(repo, nil, "secret-2", 24*time.Hour)
 
 	_, token, err := svc1.Register(context.Background(), "test@example.com", "secureP@ss1", "Test User")
 	if err != nil {
@@ -271,7 +272,7 @@ func TestValidateToken_WrongSecret(t *testing.T) {
 func TestValidateToken_ExpiredToken(t *testing.T) {
 	repo := newMockRepo()
 	// Use negative expiration to create immediately expired tokens
-	svc := NewAuthService(repo, "test-secret", -1*time.Hour)
+	svc := NewAuthService(repo, nil, "test-secret", -1*time.Hour)
 
 	_, token, err := svc.Register(context.Background(), "test@example.com", "secureP@ss1", "Test User")
 	if err != nil {
@@ -281,5 +282,128 @@ func TestValidateToken_ExpiredToken(t *testing.T) {
 	_, err = svc.ValidateToken(token)
 	if err == nil {
 		t.Error("expected error for expired token")
+	}
+}
+
+// mockBlacklistRepo is a test double for port.TokenBlacklistRepository.
+type mockBlacklistRepo struct {
+	revoked   map[string]bool
+	revokeFn  func(ctx context.Context, jti string, expiresAt time.Time) error
+	revokedFn func(ctx context.Context, jti string) (bool, error)
+}
+
+func newMockBlacklistRepo() *mockBlacklistRepo {
+	return &mockBlacklistRepo{revoked: make(map[string]bool)}
+}
+
+func (m *mockBlacklistRepo) Revoke(ctx context.Context, jti string, expiresAt time.Time) error {
+	if m.revokeFn != nil {
+		return m.revokeFn(ctx, jti, expiresAt)
+	}
+	m.revoked[jti] = true
+	return nil
+}
+
+func (m *mockBlacklistRepo) IsRevoked(ctx context.Context, jti string) (bool, error) {
+	if m.revokedFn != nil {
+		return m.revokedFn(ctx, jti)
+	}
+	return m.revoked[jti], nil
+}
+
+func (m *mockBlacklistRepo) DeleteExpired(_ context.Context) error {
+	return nil
+}
+
+func TestGenerateToken_HasJTI(t *testing.T) {
+	repo := newMockRepo()
+	svc := NewAuthService(repo, nil, "test-secret", 24*time.Hour)
+
+	_, token, err := svc.Register(context.Background(), "test@example.com", "secureP@ss1", "Test User")
+	if err != nil {
+		t.Fatalf("register failed: %v", err)
+	}
+
+	claims, err := svc.ValidateToken(token)
+	if err != nil {
+		t.Fatalf("validate failed: %v", err)
+	}
+
+	if claims.ID == "" {
+		t.Error("expected non-empty JTI (claims.ID)")
+	}
+}
+
+func TestAuthService_Logout_RevokesToken(t *testing.T) {
+	repo := newMockRepo()
+	blacklist := newMockBlacklistRepo()
+	svc := NewAuthService(repo, blacklist, "test-secret", 24*time.Hour)
+
+	_, token, err := svc.Register(context.Background(), "test@example.com", "secureP@ss1", "Test User")
+	if err != nil {
+		t.Fatalf("register failed: %v", err)
+	}
+
+	// Parse claims to get the JTI
+	claims, err := svc.ValidateToken(token)
+	if err != nil {
+		t.Fatalf("validate failed: %v", err)
+	}
+
+	err = svc.Logout(context.Background(), token)
+	if err != nil {
+		t.Fatalf("logout failed: %v", err)
+	}
+
+	if !blacklist.revoked[claims.ID] {
+		t.Error("expected token JTI to be revoked in blacklist")
+	}
+}
+
+func TestAuthService_Logout_InvalidToken_Noop(t *testing.T) {
+	repo := newMockRepo()
+	blacklist := newMockBlacklistRepo()
+	svc := NewAuthService(repo, blacklist, "test-secret", 24*time.Hour)
+
+	// Logout with invalid token should not error and should not call Revoke
+	err := svc.Logout(context.Background(), "invalid-token")
+	if err != nil {
+		t.Fatalf("expected no error for invalid token, got %v", err)
+	}
+
+	if len(blacklist.revoked) != 0 {
+		t.Error("expected no revocations for invalid token")
+	}
+}
+
+func TestAuthService_Logout_EmptyJTI_Noop(t *testing.T) {
+	repo := newMockRepo()
+	blacklist := newMockBlacklistRepo()
+	// Create a service that generates tokens WITHOUT JTI for this test.
+	// We simulate a legacy token by creating one without JTI.
+	svc := NewAuthService(repo, blacklist, "test-secret", 24*time.Hour)
+
+	// Generate a token without JTI manually
+	legacyClaims := &Claims{
+		UserID: uuid.New(),
+		Role:   "user",
+	}
+	legacyClaims.ExpiresAt = jwt.NewNumericDate(time.Now().Add(24 * time.Hour))
+	legacyClaims.IssuedAt = jwt.NewNumericDate(time.Now())
+	// ID intentionally left empty
+
+	legacyToken := jwt.NewWithClaims(jwt.SigningMethodHS256, legacyClaims)
+	tokenStr, err := legacyToken.SignedString([]byte("test-secret"))
+	if err != nil {
+		t.Fatalf("sign failed: %v", err)
+	}
+
+	err = svc.Logout(context.Background(), tokenStr)
+	if err != nil {
+		t.Fatalf("expected no error for empty JTI, got %v", err)
+	}
+
+	if len(blacklist.revoked) != 0 {
+		t.Error("expected no revocations for token without JTI")
 	}
 }

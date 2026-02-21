@@ -79,7 +79,7 @@ func (e *pgDupError) SQLState() string { return "23505" }
 
 func newTestHandler() (*AuthHandler, *mockRepo) {
 	repo := newMockRepo()
-	authSvc := service.NewAuthService(repo, "test-secret-key", 24*time.Hour)
+	authSvc := service.NewAuthService(repo, nil, "test-secret-key", 24*time.Hour)
 	handler := NewAuthHandler(authSvc, repo, false)
 	return handler, repo
 }

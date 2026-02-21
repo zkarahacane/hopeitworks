@@ -17,6 +17,7 @@ var (
 	ErrInvalidCredentials = errors.New("invalid credentials")
 	ErrEmailAlreadyExists = errors.New("email already exists")
 	ErrValidation         = errors.New("validation error")
+	ErrTokenRevoked       = errors.New("token has been revoked")
 )
 
 // Claims represents the JWT claims payload.
@@ -29,13 +30,17 @@ type Claims struct {
 // AuthService handles user authentication logic.
 type AuthService struct {
 	repo          port.UserRepository
+	blacklistRepo port.TokenBlacklistRepository
 	jwtSecret     []byte
 	jwtExpiration time.Duration
 }
 
-func NewAuthService(repo port.UserRepository, jwtSecret string, jwtExpiration time.Duration) *AuthService {
+// NewAuthService creates a new AuthService. blacklistRepo may be nil for
+// backwards compatibility (tests, environments without token revocation).
+func NewAuthService(repo port.UserRepository, blacklistRepo port.TokenBlacklistRepository, jwtSecret string, jwtExpiration time.Duration) *AuthService {
 	return &AuthService{
 		repo:          repo,
+		blacklistRepo: blacklistRepo,
 		jwtSecret:     []byte(jwtSecret),
 		jwtExpiration: jwtExpiration,
 	}
@@ -125,12 +130,32 @@ func (s *AuthService) JWTExpiration() time.Duration {
 	return s.jwtExpiration
 }
 
+// Logout invalidates the given JWT token string by adding its JTI to the blacklist.
+func (s *AuthService) Logout(ctx context.Context, tokenString string) error {
+	claims, err := s.ValidateToken(tokenString)
+	if err != nil {
+		return nil //nolint:nilerr // intentional: expired/invalid tokens don't need revocation
+	}
+	jti := claims.ID
+	if jti == "" {
+		return nil // legacy token without JTI — skip
+	}
+	expiresAt := claims.ExpiresAt.Time
+	return s.blacklistRepo.Revoke(ctx, jti, expiresAt)
+}
+
+// PurgeExpiredTokens removes expired entries from the token blacklist.
+func (s *AuthService) PurgeExpiredTokens(ctx context.Context) error {
+	return s.blacklistRepo.DeleteExpired(ctx)
+}
+
 func (s *AuthService) generateToken(userID uuid.UUID, role model.Role) (string, error) {
 	now := time.Now()
 	claims := &Claims{
 		UserID: userID,
 		Role:   role,
 		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        uuid.New().String(),
 			ExpiresAt: jwt.NewNumericDate(now.Add(s.jwtExpiration)),
 			IssuedAt:  jwt.NewNumericDate(now),
 		},

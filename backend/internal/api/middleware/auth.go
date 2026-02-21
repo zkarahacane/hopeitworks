@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/zakari/hopeitworks/backend/internal/domain/model"
+	"github.com/zakari/hopeitworks/backend/internal/domain/port"
 	"github.com/zakari/hopeitworks/backend/internal/domain/service"
 )
 
@@ -59,9 +60,9 @@ func isPublicPath(path string) bool {
 	return false
 }
 
-// Auth returns middleware that validates JWT tokens and injects user context.
+// Auth returns middleware that validates JWT tokens, checks the blacklist, and injects user context.
 // Public paths (healthz, register, login) are skipped.
-func Auth(authService *service.AuthService) func(http.Handler) http.Handler {
+func Auth(authService *service.AuthService, blacklistRepo port.TokenBlacklistRepository) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if isPublicPath(r.URL.Path) {
@@ -81,6 +82,19 @@ func Auth(authService *service.AuthService) func(http.Handler) http.Handler {
 				return
 			}
 
+			// Check blacklist (token revoked via logout)
+			if claims.ID != "" && blacklistRepo != nil {
+				revoked, blErr := blacklistRepo.IsRevoked(r.Context(), claims.ID)
+				if blErr != nil {
+					writeUnauthorized(w)
+					return
+				}
+				if revoked {
+					writeTokenRevoked(w)
+					return
+				}
+			}
+
 			ctx := context.WithValue(r.Context(), ContextKeyUserID, claims.UserID)
 			ctx = context.WithValue(ctx, ContextKeyRole, claims.Role)
 			next.ServeHTTP(w, r.WithContext(ctx))
@@ -92,4 +106,10 @@ func writeUnauthorized(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusUnauthorized)
 	_, _ = w.Write([]byte(`{"error":{"code":"UNAUTHORIZED","message":"Authentication required"}}`))
+}
+
+func writeTokenRevoked(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusUnauthorized)
+	_, _ = w.Write([]byte(`{"error":{"code":"TOKEN_REVOKED","message":"Token has been revoked"}}`))
 }

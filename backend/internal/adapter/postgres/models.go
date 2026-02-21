@@ -174,6 +174,11 @@ type PromptTemplate struct {
 	UpdatedAt       time.Time `json:"updated_at"`
 }
 
+type RevokedToken struct {
+	Jti       string    `json:"jti"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
 type Run struct {
 	ID                     uuid.UUID          `json:"id"`
 	ProjectID              uuid.UUID          `json:"project_id"`

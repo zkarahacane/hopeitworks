@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -74,9 +75,10 @@ func run() error {
 
 	// Auth service and middleware
 	userRepo := pgadapter.NewUserRepository(pool)
+	blacklistRepo := pgadapter.NewTokenBlacklistRepo(pool)
 	jwtSecret := getEnvOrDefault("JWT_SECRET", "dev-secret-key-change-in-production")
 	jwtExpiration := 24 * time.Hour
-	authService := service.NewAuthService(userRepo, jwtSecret, jwtExpiration)
+	authService := service.NewAuthService(userRepo, blacklistRepo, jwtSecret, jwtExpiration)
 
 	// Project repository (shared)
 	projectRepo := pgadapter.NewProjectRepo(queries)
@@ -134,6 +136,9 @@ func run() error {
 	// Application-wide context for background services
 	appCtx, appCancel := context.WithCancel(ctx)
 	defer appCancel()
+
+	// Background cleanup of expired revoked tokens
+	startTokenCleanup(appCtx, authService, logger)
 
 	// Run service and job queue
 	runRepo := pgadapter.NewRunRepo(queries)
@@ -269,7 +274,7 @@ func run() error {
 	r.Use(chimiddleware.RequestID)
 
 	// Auth middleware skips public paths
-	r.Use(authmw.Auth(authService))
+	r.Use(authmw.Auth(authService, blacklistRepo))
 
 	// Health check (skipped by auth middleware)
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
@@ -341,4 +346,24 @@ func getEnvOrDefault(key, defaultVal string) string {
 		return val
 	}
 	return defaultVal
+}
+
+// startTokenCleanup launches a goroutine that periodically purges expired revoked tokens.
+func startTokenCleanup(ctx context.Context, authService *service.AuthService, logger *slog.Logger) {
+	go func() {
+		ticker := time.NewTicker(1 * time.Hour)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if err := authService.PurgeExpiredTokens(ctx); err != nil {
+					logger.Warn("failed to purge expired revoked tokens", "error", err)
+				} else {
+					logger.Debug("purged expired revoked tokens")
+				}
+			}
+		}
+	}()
 }
