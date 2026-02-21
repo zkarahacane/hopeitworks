@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import { apiClient } from '@/api/client'
 
 export interface User {
   id: string
@@ -120,6 +121,35 @@ export const useAuthStore = defineStore('auth', {
       } finally {
         this.loading = false
       }
+    },
+
+    async fetchMe(): Promise<void> {
+      this.loading = true
+      this.error = null
+      try {
+        const { data, error: apiError } = await apiClient.GET('/users/me')
+        if (apiError) {
+          this.error = 'Failed to load profile'
+          return
+        }
+        this.user = { ...data, role: data.role ?? 'member' } as User
+      } catch {
+        this.error = 'Network error. Please try again.'
+      } finally {
+        this.loading = false
+      }
+    },
+
+    async updateMe(payload: { name?: string; email?: string }): Promise<User> {
+      const { data, error: apiError } = await apiClient.PUT('/users/me', {
+        body: payload,
+      })
+      if (apiError || !data) {
+        throw new Error('Failed to update profile')
+      }
+      const updated = { ...data, role: data.role ?? 'member' } as User
+      this.user = updated
+      return updated
     },
   },
 })

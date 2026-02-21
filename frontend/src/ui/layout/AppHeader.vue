@@ -31,6 +31,11 @@ const menuItems = computed<MenuItem[]>(() => [
   },
   { separator: true },
   {
+    label: 'My Profile',
+    icon: 'pi pi-user-edit',
+    command: () => router.push({ name: 'profile' }),
+  },
+  {
     label: 'Logout',
     icon: 'pi pi-sign-out',
     command: async () => {
