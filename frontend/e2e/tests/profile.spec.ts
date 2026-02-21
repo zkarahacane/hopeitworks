@@ -162,11 +162,13 @@ test.describe('Profile Page', () => {
     await page.locator('#new-password').fill('newpassword123')
     await page.locator('#confirm-password').fill('differentpassword')
 
-    // Try to submit - button should be disabled due to validation
-    // Trigger validation by clicking submit anyway
-    await page.getByRole('button', { name: 'Update Password' }).click()
+    // Trigger validation by blurring the field
+    await page.locator('#confirm-password').blur()
 
     // Check validation error
     await expect(page.getByText('Passwords do not match')).toBeVisible()
+
+    // Button should be disabled
+    await expect(page.getByRole('button', { name: 'Update Password' })).toBeDisabled()
   })
 })
