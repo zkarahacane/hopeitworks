@@ -11,5 +11,7 @@ export function useAuth() {
     login: store.login.bind(store),
     logout: store.logout.bind(store),
     checkAuth: store.checkAuth.bind(store),
+    forgotPassword: store.forgotPassword.bind(store),
+    resetPassword: store.resetPassword.bind(store),
   }
 }

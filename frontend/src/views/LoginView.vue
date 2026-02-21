@@ -39,6 +39,10 @@ const onSubmit = handleSubmit(async (values) => {
     <div class="flex w-full max-w-md flex-col gap-6">
       <h1 class="text-center text-3xl font-bold">hopeitworks</h1>
 
+      <Message v-if="route.query.reset === 'success'" severity="success" :closable="false">
+        Password reset successfully. Please sign in.
+      </Message>
+
       <form class="flex flex-col gap-4" @submit.prevent="onSubmit">
         <div class="flex flex-col gap-1">
           <label for="email" class="text-sm font-medium">Email</label>
@@ -53,7 +57,10 @@ const onSubmit = handleSubmit(async (values) => {
         </div>
 
         <div class="flex flex-col gap-1">
-          <label for="password" class="text-sm font-medium">Password</label>
+          <div class="flex items-center justify-between">
+            <label for="password" class="text-sm font-medium">Password</label>
+            <RouterLink to="/forgot-password" class="text-sm">Forgot password?</RouterLink>
+          </div>
           <Password
             inputId="password"
             v-model="password"
