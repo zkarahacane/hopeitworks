@@ -60,6 +60,49 @@ export const useAuthStore = defineStore('auth', {
       this.error = null
     },
 
+    async forgotPassword(email: string): Promise<boolean> {
+      this.loading = true
+      this.error = null
+      try {
+        await fetch('/api/v1/auth/forgot-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email }),
+        })
+        // Always return true — never disclose whether email is registered
+        return true
+      } catch {
+        // Network error: still return true to avoid disclosure
+        return true
+      } finally {
+        this.loading = false
+      }
+    },
+
+    async resetPassword(token: string, password: string): Promise<boolean> {
+      this.loading = true
+      this.error = null
+      try {
+        const res = await fetch('/api/v1/auth/reset-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token, password }),
+        })
+        if (!res.ok) {
+          const body = await res.json().catch(() => null)
+          this.error =
+            body?.error?.message ?? 'Token expired or invalid. Please request a new link.'
+          return false
+        }
+        return true
+      } catch {
+        this.error = 'Network error. Please try again.'
+        return false
+      } finally {
+        this.loading = false
+      }
+    },
+
     async checkAuth(): Promise<void> {
       this.loading = true
       try {
