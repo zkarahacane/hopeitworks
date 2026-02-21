@@ -71,6 +71,201 @@ func (q *Queries) InsertCostRecord(ctx context.Context, arg InsertCostRecordPara
 	return i, err
 }
 
+const listCostsByProjectByModel = `-- name: ListCostsByProjectByModel :many
+SELECT cr.model,
+       COALESCE(SUM(cr.cost_usd), 0)::DECIMAL(10,6) AS total_cost,
+       COALESCE(SUM(cr.tokens_input), 0)             AS tokens_input,
+       COALESCE(SUM(cr.tokens_output), 0)            AS tokens_output
+FROM cost_records cr
+WHERE cr.project_id = $1 AND cr.created_at >= $2
+GROUP BY cr.model
+ORDER BY total_cost DESC
+`
+
+type ListCostsByProjectByModelParams struct {
+	ProjectID uuid.UUID `json:"project_id"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type ListCostsByProjectByModelRow struct {
+	Model        string         `json:"model"`
+	TotalCost    pgtype.Numeric `json:"total_cost"`
+	TokensInput  interface{}    `json:"tokens_input"`
+	TokensOutput interface{}    `json:"tokens_output"`
+}
+
+func (q *Queries) ListCostsByProjectByModel(ctx context.Context, arg ListCostsByProjectByModelParams) ([]ListCostsByProjectByModelRow, error) {
+	rows, err := q.db.Query(ctx, listCostsByProjectByModel, arg.ProjectID, arg.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCostsByProjectByModelRow{}
+	for rows.Next() {
+		var i ListCostsByProjectByModelRow
+		if err := rows.Scan(
+			&i.Model,
+			&i.TotalCost,
+			&i.TokensInput,
+			&i.TokensOutput,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCostsByProjectByRun = `-- name: ListCostsByProjectByRun :many
+SELECT rs2.run_id,
+       s.key AS story_key,
+       r.status,
+       COALESCE(SUM(cr.cost_usd), 0)::DECIMAL(10,6) AS total_cost,
+       r.created_at
+FROM cost_records cr
+JOIN run_steps rs2 ON rs2.id = cr.run_step_id
+JOIN runs r ON r.id = rs2.run_id
+JOIN stories s ON s.id = r.story_id
+WHERE cr.project_id = $1 AND cr.created_at >= $2
+GROUP BY rs2.run_id, s.key, r.status, r.created_at
+ORDER BY r.created_at DESC
+`
+
+type ListCostsByProjectByRunParams struct {
+	ProjectID uuid.UUID `json:"project_id"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type ListCostsByProjectByRunRow struct {
+	RunID     uuid.UUID      `json:"run_id"`
+	StoryKey  string         `json:"story_key"`
+	Status    string         `json:"status"`
+	TotalCost pgtype.Numeric `json:"total_cost"`
+	CreatedAt time.Time      `json:"created_at"`
+}
+
+func (q *Queries) ListCostsByProjectByRun(ctx context.Context, arg ListCostsByProjectByRunParams) ([]ListCostsByProjectByRunRow, error) {
+	rows, err := q.db.Query(ctx, listCostsByProjectByRun, arg.ProjectID, arg.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCostsByProjectByRunRow{}
+	for rows.Next() {
+		var i ListCostsByProjectByRunRow
+		if err := rows.Scan(
+			&i.RunID,
+			&i.StoryKey,
+			&i.Status,
+			&i.TotalCost,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCostsByProjectByStory = `-- name: ListCostsByProjectByStory :many
+SELECT r.story_id,
+       s.key AS story_key,
+       COALESCE(SUM(cr.cost_usd), 0)::DECIMAL(10,6) AS total_cost
+FROM cost_records cr
+JOIN run_steps rs ON rs.id = cr.run_step_id
+JOIN runs r ON r.id = rs.run_id
+JOIN stories s ON s.id = r.story_id
+WHERE cr.project_id = $1 AND cr.created_at >= $2
+GROUP BY r.story_id, s.key
+ORDER BY total_cost DESC
+`
+
+type ListCostsByProjectByStoryParams struct {
+	ProjectID uuid.UUID `json:"project_id"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type ListCostsByProjectByStoryRow struct {
+	StoryID   uuid.UUID      `json:"story_id"`
+	StoryKey  string         `json:"story_key"`
+	TotalCost pgtype.Numeric `json:"total_cost"`
+}
+
+func (q *Queries) ListCostsByProjectByStory(ctx context.Context, arg ListCostsByProjectByStoryParams) ([]ListCostsByProjectByStoryRow, error) {
+	rows, err := q.db.Query(ctx, listCostsByProjectByStory, arg.ProjectID, arg.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCostsByProjectByStoryRow{}
+	for rows.Next() {
+		var i ListCostsByProjectByStoryRow
+		if err := rows.Scan(&i.StoryID, &i.StoryKey, &i.TotalCost); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listStepCostsByRun = `-- name: ListStepCostsByRun :many
+SELECT cr.run_step_id AS step_id,
+       rs.step_name,
+       cr.model,
+       cr.tokens_input,
+       cr.tokens_output,
+       cr.cost_usd
+FROM cost_records cr
+JOIN run_steps rs ON rs.id = cr.run_step_id
+WHERE rs.run_id = $1
+ORDER BY rs.step_order ASC
+`
+
+type ListStepCostsByRunRow struct {
+	StepID       uuid.UUID      `json:"step_id"`
+	StepName     string         `json:"step_name"`
+	Model        string         `json:"model"`
+	TokensInput  int64          `json:"tokens_input"`
+	TokensOutput int64          `json:"tokens_output"`
+	CostUsd      pgtype.Numeric `json:"cost_usd"`
+}
+
+func (q *Queries) ListStepCostsByRun(ctx context.Context, runID uuid.UUID) ([]ListStepCostsByRunRow, error) {
+	rows, err := q.db.Query(ctx, listStepCostsByRun, runID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListStepCostsByRunRow{}
+	for rows.Next() {
+		var i ListStepCostsByRunRow
+		if err := rows.Scan(
+			&i.StepID,
+			&i.StepName,
+			&i.Model,
+			&i.TokensInput,
+			&i.TokensOutput,
+			&i.CostUsd,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const sumCostByProject = `-- name: SumCostByProject :one
 SELECT COALESCE(SUM(cost_usd), 0)::DECIMAL(10,6) AS total_cost,
        COALESCE(SUM(tokens_input), 0)::BIGINT     AS total_input,
@@ -109,4 +304,34 @@ func (q *Queries) SumCostByRun(ctx context.Context, runID uuid.UUID) (pgtype.Num
 	var total_cost pgtype.Numeric
 	err := row.Scan(&total_cost)
 	return total_cost, err
+}
+
+const sumCostByStory = `-- name: SumCostByStory :one
+SELECT COALESCE(SUM(cr.cost_usd), 0)::DECIMAL(10,6) AS total_cost,
+       COALESCE(SUM(cr.tokens_input), 0)             AS total_input,
+       COALESCE(SUM(cr.tokens_output), 0)            AS total_output,
+       COUNT(DISTINCT rs.run_id)::INT                 AS run_count
+FROM cost_records cr
+JOIN run_steps rs ON rs.id = cr.run_step_id
+JOIN runs r ON r.id = rs.run_id
+WHERE r.story_id = $1
+`
+
+type SumCostByStoryRow struct {
+	TotalCost   pgtype.Numeric `json:"total_cost"`
+	TotalInput  interface{}    `json:"total_input"`
+	TotalOutput interface{}    `json:"total_output"`
+	RunCount    int32          `json:"run_count"`
+}
+
+func (q *Queries) SumCostByStory(ctx context.Context, storyID uuid.UUID) (SumCostByStoryRow, error) {
+	row := q.db.QueryRow(ctx, sumCostByStory, storyID)
+	var i SumCostByStoryRow
+	err := row.Scan(
+		&i.TotalCost,
+		&i.TotalInput,
+		&i.TotalOutput,
+		&i.RunCount,
+	)
+	return i, err
 }

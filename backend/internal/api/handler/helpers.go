@@ -64,6 +64,7 @@ func toAPIProject(p *model.Project) Project {
 		Id:                   p.ID,
 		Name:                 p.Name,
 		OwnerId:              uuid.Nil,
+		MaxBudget:            p.MaxBudget,
 		CircuitBreakerCount:  p.CircuitBreakerCount,
 		CircuitBreakerActive: p.CircuitBreakerActive,
 		CircuitBreakerMax:    p.CircuitBreakerMax,

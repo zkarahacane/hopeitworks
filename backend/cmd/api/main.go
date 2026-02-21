@@ -162,6 +162,11 @@ func run() error {
 	runService := service.NewRunService(runRepo, projectRepo, storyRepo, pipelineConfigRepo, jobQueue)
 	runHandler := handler.NewRunHandler(runService)
 
+	// Cost service
+	costRepo := pgadapter.NewCostRepo(queries)
+	costService := service.NewCostService(costRepo, projectRepo, storyRepo, runRepo, logger)
+	costHandler := handler.NewCostHandler(costService)
+
 	// Container manager (Docker adapter)
 	containerMgr, err := dockeradapter.NewDockerContainerManager(cfg.Docker.Host, logger)
 	if err != nil {
@@ -171,9 +176,8 @@ func run() error {
 	// Action registry
 	actionReg := service.NewActionRegistry()
 
-	// Cost tracking
-	costRepo := pgadapter.NewCostRepo(queries)
-	costSvc := service.NewCostService(costRepo, logger)
+	// Cost tracking (for agent_run action)
+	costSvc := costService
 
 	// Agent run action (requires Docker)
 	if containerMgr != nil {
@@ -248,7 +252,7 @@ func run() error {
 	epicRunService := service.NewEpicRunService(epicRunRepo, storyRepo, epicRepo, schedulerService, parallelGroupExecutor, eventRepo, logger)
 	epicRunHandler := handler.NewEpicRunHandler(epicRunService)
 
-	server := handler.NewServer(authHandler, projectHandler, userHandler, epicHandler, storyHandler, promptTemplateHandler, runHandler, pipelineConfigHandler, notificationHandler, epicRunHandler)
+	server := handler.NewServer(authHandler, projectHandler, userHandler, epicHandler, storyHandler, promptTemplateHandler, runHandler, pipelineConfigHandler, costHandler, notificationHandler, epicRunHandler)
 
 	// Project user handler
 	projectUserHandler := handler.NewProjectUserHandler(projectUserService)

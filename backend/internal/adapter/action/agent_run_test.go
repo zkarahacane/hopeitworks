@@ -367,6 +367,21 @@ func (m *mockCostRepo) SumCostByProject(_ context.Context, _ uuid.UUID, _ time.T
 func (m *mockCostRepo) SumCostByRun(_ context.Context, _ uuid.UUID) (float64, error) {
 	return 0, nil
 }
+func (m *mockCostRepo) SumCostByStory(_ context.Context, _ uuid.UUID) (float64, int64, int64, int, error) {
+	return 0, 0, 0, 0, nil
+}
+func (m *mockCostRepo) ListCostsByProjectByStory(_ context.Context, _ uuid.UUID, _ time.Time) ([]model.StoryCostBreakdown, error) {
+	return nil, nil
+}
+func (m *mockCostRepo) ListCostsByProjectByRun(_ context.Context, _ uuid.UUID, _ time.Time) ([]model.RunCostBreakdown, error) {
+	return nil, nil
+}
+func (m *mockCostRepo) ListCostsByProjectByModel(_ context.Context, _ uuid.UUID, _ time.Time) ([]model.CostByModel, error) {
+	return nil, nil
+}
+func (m *mockCostRepo) ListStepCostsByRun(_ context.Context, _ uuid.UUID) ([]model.StepCostBreakdown, error) {
+	return nil, nil
+}
 
 type agentRunFixture struct {
 	projectID uuid.UUID
@@ -488,7 +503,7 @@ func newAgentRunFixture(t *testing.T) *agentRunFixture {
 	f.templateSvc = service.NewTemplateService(promptTemplateRepo, renderer, testLogger())
 
 	// Create a CostService with a no-op mock repository
-	f.costSvc = service.NewCostService(&mockCostRepo{}, testLogger())
+	f.costSvc = service.NewCostService(&mockCostRepo{}, nil, nil, nil, testLogger())
 
 	agentCfg := action.AgentConfig{
 		DefaultImage:  "hopeitworks/agent:latest",

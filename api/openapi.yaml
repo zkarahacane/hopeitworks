@@ -960,6 +960,38 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  # ── Costs ──────────────────────────────────────────────────────────────
+  /projects/{projectId}/costs:
+    get:
+      operationId: getProjectCosts
+      summary: Get aggregated cost data for a project
+      description: >
+        Returns aggregated cost data for the specified project over a time period,
+        with breakdowns by story, run, and model. Budget limits are included for
+        informational display alongside usage.
+      tags: [costs]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - name: period
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [7d, 30d, 90d]
+            default: 7d
+          description: Time period for aggregation
+      responses:
+        "200":
+          description: Aggregated project cost data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectCostSummary"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   # ── Notification Configs ─────────────────────────────────────────────
   /projects/{projectId}/notifications:
     get:
@@ -1165,16 +1197,36 @@ paths:
           required: false
           schema:
             type: string
-            enum: [7d, 30d]
+            enum: [7d, 30d, 90d]
             default: 7d
-          description: Time period for cost aggregation
+          description: Time period for aggregation
       responses:
         "200":
-          description: Cost summary
+          description: Aggregated project cost data
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/CostSummary"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /projects/{projectId}/stories/{storyId}/costs:
+    get:
+      operationId: getStoryCosts
+      summary: Get total costs for a story across all runs
+      tags: [costs]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/StoryIdPath"
+      responses:
+        "200":
+          description: Story cost summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoryCostSummary"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "404":
@@ -1204,6 +1256,26 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/CostDataPoint"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /projects/{projectId}/runs/{runId}/costs:
+    get:
+      operationId: getRunCosts
+      summary: Get total costs for a run with per-step breakdown
+      tags: [costs]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/RunIdPath"
+      responses:
+        "200":
+          description: Run cost detail with per-step breakdown
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunCostDetail"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "404":
@@ -1245,6 +1317,7 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
+
 
   /hitl-requests/{hitlRequestId}/reject:
     post:
@@ -1535,6 +1608,12 @@ components:
           type: string
           format: uuid
           example: 550e8400-e29b-41d4-a716-446655440000
+        max_budget:
+          type: number
+          format: double
+          nullable: true
+          description: Maximum budget for the project in USD (informational only)
+          example: 100.00
         circuit_breaker_count:
           type: integer
           minimum: 0
@@ -1585,6 +1664,12 @@ components:
           type: string
           maxLength: 1000
           example: Updated description
+        max_budget:
+          type: number
+          format: double
+          nullable: true
+          description: Maximum budget for the project in USD (informational only)
+          example: 100.00
 
     ProjectList:
       type: object
@@ -2330,7 +2415,7 @@ components:
           $ref: "#/components/schemas/Pagination"
 
 
-    # ── Notification Config ───────────────────────────────────────────
+    # ── Notification Config ────────────────────────────────────────────
     NotificationConfig:
       type: object
       required: [id, project_id, channel_type, config, events_filter, enabled, created_at, updated_at]
@@ -2423,7 +2508,69 @@ components:
           items:
             $ref: "#/components/schemas/NotificationConfig"
 
-    # ── HITL Request ──────────────────────────────────────────────────
+    # ── Cost ──────────────────────────────────────────────────────────
+    ProjectCostSummary:
+      type: object
+      required:
+        - total_cost
+        - total_input
+        - total_output
+        - by_story
+        - by_run
+        - by_model
+      properties:
+        total_cost:
+          type: number
+          format: double
+          description: Total cost in USD for the period
+          example: 12.50
+        total_input:
+          type: integer
+          format: int64
+          description: Total input tokens for the period
+          example: 500000
+        total_output:
+          type: integer
+          format: int64
+          description: Total output tokens for the period
+          example: 100000
+        max_budget:
+          type: number
+          format: double
+          nullable: true
+          description: Project budget limit in USD (informational only)
+          example: 100.00
+        by_story:
+          type: array
+          items:
+            $ref: "#/components/schemas/StoryCostBreakdown"
+        by_run:
+          type: array
+          items:
+            $ref: "#/components/schemas/RunCostBreakdown"
+        by_model:
+          type: array
+          items:
+            $ref: "#/components/schemas/ModelCostBreakdown"
+
+    StoryCostBreakdown:
+      type: object
+      required:
+        - story_id
+        - story_key
+        - total_cost
+      properties:
+        story_id:
+          type: string
+          format: uuid
+        story_key:
+          type: string
+          example: S-01
+        total_cost:
+          type: number
+          format: double
+          example: 5.25
+
     HITLRequest:
       type: object
       required:
@@ -2584,6 +2731,144 @@ components:
         status:
           type: string
           example: completed
+        started_at:
+          type: string
+          format: date-time
+          example: "2026-02-10T10:30:00Z"
+        total_cost_usd:
+          type: number
+          format: double
+          example: 0.01234
+
+    RunCostBreakdown:
+      type: object
+      required:
+        - run_id
+        - story_key
+        - status
+        - total_cost
+        - created_at
+      properties:
+        run_id:
+          type: string
+          format: uuid
+        story_key:
+          type: string
+          example: S-01
+        status:
+          type: string
+          example: completed
+        total_cost:
+          type: number
+          format: double
+          example: 3.15
+        created_at:
+          type: string
+          format: date-time
+
+    ModelCostBreakdown:
+      type: object
+      required:
+        - model
+        - total_cost
+        - tokens_input
+        - tokens_output
+      properties:
+        model:
+          type: string
+          example: claude-opus-4-6
+        total_cost:
+          type: number
+          format: double
+          example: 10.00
+        tokens_input:
+          type: integer
+          format: int64
+          example: 300000
+        tokens_output:
+          type: integer
+          format: int64
+          example: 50000
+
+    StoryCostSummary:
+      type: object
+      required:
+        - story_id
+        - total_cost
+        - total_input
+        - total_output
+        - run_count
+      properties:
+        story_id:
+          type: string
+          format: uuid
+        total_cost:
+          type: number
+          format: double
+          example: 5.25
+        total_input:
+          type: integer
+          format: int64
+          example: 200000
+        total_output:
+          type: integer
+          format: int64
+          example: 40000
+        run_count:
+          type: integer
+          description: Number of distinct runs that incurred costs
+          example: 3
+
+    RunCostDetail:
+      type: object
+      required:
+        - run_id
+        - total_cost
+        - steps
+      properties:
+        run_id:
+          type: string
+          format: uuid
+        total_cost:
+          type: number
+          format: double
+          example: 3.15
+        steps:
+          type: array
+          items:
+            $ref: "#/components/schemas/StepCostBreakdown"
+
+    StepCostBreakdown:
+      type: object
+      required:
+        - step_id
+        - step_name
+        - model
+        - tokens_input
+        - tokens_output
+        - cost_usd
+      properties:
+        step_id:
+          type: string
+          format: uuid
+        step_name:
+          type: string
+          example: implement
+        model:
+          type: string
+          example: claude-opus-4-6
+        tokens_input:
+          type: integer
+          format: int64
+          example: 100000
+        tokens_output:
+          type: integer
+          format: int64
+          example: 20000
+        cost_usd:
+          type: number
+          format: double
+          example: 3.00
         started_at:
           type: string
           format: date-time
