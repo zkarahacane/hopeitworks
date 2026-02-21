@@ -82,6 +82,13 @@ func (r *UserRepository) Update(ctx context.Context, user *model.User) (*model.U
 	return toDomainUser(row), nil
 }
 
+func (r *UserRepository) UpdatePasswordHash(ctx context.Context, id uuid.UUID, hash string) error {
+	return r.q.UpdateUserPasswordHash(ctx, UpdateUserPasswordHashParams{
+		ID:           id,
+		PasswordHash: hash,
+	})
+}
+
 func (r *UserRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	return r.q.DeleteUser(ctx, id)
 }

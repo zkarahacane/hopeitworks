@@ -78,6 +78,16 @@ func (m *mockUserRepo) Update(_ context.Context, user *model.User) (*model.User,
 	return user, nil
 }
 
+func (m *mockUserRepo) UpdatePasswordHash(_ context.Context, id uuid.UUID, hash string) error {
+	u, ok := m.users[id]
+	if !ok {
+		return errors.NewNotFound("user", id)
+	}
+	u.PasswordHash = hash
+	u.UpdatedAt = time.Now()
+	return nil
+}
+
 func (m *mockUserRepo) Delete(_ context.Context, id uuid.UUID) error {
 	delete(m.users, id)
 	return nil

@@ -80,6 +80,8 @@ func (m *mockRepo) Update(_ context.Context, user *model.User) (*model.User, err
 	return existing, nil
 }
 
+func (m *mockRepo) UpdatePasswordHash(_ context.Context, _ uuid.UUID, _ string) error { return nil }
+
 func (m *mockRepo) Delete(_ context.Context, _ uuid.UUID) error { return nil }
 
 type pgDupError struct{}

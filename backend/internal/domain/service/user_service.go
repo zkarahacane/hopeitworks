@@ -4,10 +4,15 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
+
 	"github.com/zakari/hopeitworks/backend/internal/domain/model"
 	"github.com/zakari/hopeitworks/backend/internal/domain/port"
 	"github.com/zakari/hopeitworks/backend/pkg/errors"
 )
+
+// ErrInvalidCurrentPassword is returned when the current password does not match.
+var ErrInvalidCurrentPassword = errors.NewUnauthorized("current password is incorrect")
 
 // UserService provides business logic for user management (admin CRUD).
 type UserService struct {
@@ -105,6 +110,71 @@ func (s *UserService) Update(ctx context.Context, params UpdateUserParams) (*mod
 	}
 
 	return s.repo.Update(ctx, existing)
+}
+
+// UpdateProfileParams holds parameters for self-service profile updates.
+// Role is intentionally excluded — users cannot change their own role.
+type UpdateProfileParams struct {
+	ID    uuid.UUID
+	Name  *string
+	Email *string
+}
+
+// UpdateProfile validates and applies a self-service profile update.
+func (s *UserService) UpdateProfile(ctx context.Context, params UpdateProfileParams) (*model.User, error) {
+	existing, err := s.repo.GetByID(ctx, params.ID)
+	if err != nil {
+		return nil, errors.NewUnauthorized("user not found")
+	}
+
+	if params.Name != nil {
+		if *params.Name == "" {
+			return nil, errors.NewValidation("name", "must not be empty")
+		}
+		if len(*params.Name) > 255 {
+			return nil, errors.NewValidation("name", "must be 255 characters or less")
+		}
+		existing.Name = *params.Name
+	}
+
+	if params.Email != nil {
+		if *params.Email == "" {
+			return nil, errors.NewValidation("email", "must not be empty")
+		}
+		existing.Email = *params.Email
+	}
+
+	updated, err := s.repo.Update(ctx, existing)
+	if err != nil {
+		if isDuplicateKeyError(err) {
+			return nil, errors.NewConflict("email", *params.Email)
+		}
+		return nil, err
+	}
+	return updated, nil
+}
+
+// ChangePassword verifies the current password and sets a new bcrypt hash.
+func (s *UserService) ChangePassword(ctx context.Context, userID uuid.UUID, currentPassword, newPassword string) error {
+	user, err := s.repo.GetByID(ctx, userID)
+	if err != nil {
+		return errors.NewUnauthorized("user not found")
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(currentPassword)); err != nil {
+		return ErrInvalidCurrentPassword
+	}
+
+	if len(newPassword) < 8 {
+		return errors.NewValidation("new_password", "must be at least 8 characters")
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return errors.NewInternal("failed to hash password", err)
+	}
+
+	return s.repo.UpdatePasswordHash(ctx, userID, string(hash))
 }
 
 // Delete soft-deletes a user by ID.

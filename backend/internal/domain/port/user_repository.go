@@ -15,5 +15,6 @@ type UserRepository interface {
 	List(ctx context.Context, limit, offset int32) ([]*model.User, error)
 	Count(ctx context.Context) (int64, error)
 	Update(ctx context.Context, user *model.User) (*model.User, error)
+	UpdatePasswordHash(ctx context.Context, id uuid.UUID, hash string) error
 	Delete(ctx context.Context, id uuid.UUID) error
 }

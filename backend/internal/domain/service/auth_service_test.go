@@ -89,6 +89,15 @@ func (m *mockUserRepository) Update(_ context.Context, user *model.User) (*model
 	return existing, nil
 }
 
+func (m *mockUserRepository) UpdatePasswordHash(_ context.Context, id uuid.UUID, hash string) error {
+	u, ok := m.users[id.String()]
+	if !ok {
+		return errors.New("no rows")
+	}
+	u.PasswordHash = hash
+	return nil
+}
+
 func (m *mockUserRepository) Delete(_ context.Context, id uuid.UUID) error {
 	u, ok := m.users[id.String()]
 	if !ok {
