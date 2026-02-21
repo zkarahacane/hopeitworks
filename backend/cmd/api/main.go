@@ -18,6 +18,7 @@ import (
 	hbadapter "github.com/zakari/hopeitworks/backend/internal/adapter/handlebars"
 	pgadapter "github.com/zakari/hopeitworks/backend/internal/adapter/postgres"
 	riveradapter "github.com/zakari/hopeitworks/backend/internal/adapter/river"
+	smtpadapter "github.com/zakari/hopeitworks/backend/internal/adapter/smtp"
 	webhookadapter "github.com/zakari/hopeitworks/backend/internal/adapter/webhook"
 	"github.com/zakari/hopeitworks/backend/internal/api/handler"
 	authmw "github.com/zakari/hopeitworks/backend/internal/api/middleware"
@@ -74,9 +75,11 @@ func run() error {
 
 	// Auth service and middleware
 	userRepo := pgadapter.NewUserRepository(pool)
+	passwordResetTokenRepo := pgadapter.NewPasswordResetTokenRepository(pool)
+	emailSender := smtpadapter.NewEmailSender(cfg.SMTP)
 	jwtSecret := getEnvOrDefault("JWT_SECRET", "dev-secret-key-change-in-production")
 	jwtExpiration := 24 * time.Hour
-	authService := service.NewAuthService(userRepo, jwtSecret, jwtExpiration)
+	authService := service.NewAuthService(userRepo, passwordResetTokenRepo, emailSender, cfg.SMTP.FrontendURL, jwtSecret, jwtExpiration)
 
 	// Project repository (shared)
 	projectRepo := pgadapter.NewProjectRepo(queries)

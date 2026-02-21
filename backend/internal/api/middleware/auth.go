@@ -47,6 +47,8 @@ var publicPaths = []string{
 	"/healthz",
 	"/api/v1/auth/register",
 	"/api/v1/auth/login",
+	"/api/v1/auth/forgot-password",
+	"/api/v1/auth/reset-password",
 }
 
 // isPublicPath checks if the request path is a public route.
