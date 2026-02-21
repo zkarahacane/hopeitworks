@@ -305,31 +305,31 @@ INSERT INTO pipeline_configs (id, project_id, config_yaml, version)
 VALUES (
     '00000000-0000-0000-0000-000000000401',
     '00000000-0000-0000-0000-000000000101',
-    'version: 1
-steps:
-  - name: git-branch
-    action: git_branch
-  - name: dev-agent
-    action: agent_run
-    config:
-      model: claude-sonnet-4-20250514
-      prompt_template: implement
-      max_tokens: 8192
-  - name: ci-wait
-    action: ci_poll
-    config:
-      timeout_minutes: 30
-  - name: review-agent
-    action: agent_run
-    config:
-      model: claude-sonnet-4-20250514
-      prompt_template: review
-  - name: hitl-gate
-    action: hitl_gate
-    config:
-      gate_type: approval
-  - name: merge
-    action: git_merge
+    'steps:
+  - id: 10000000-0000-0000-0000-000000000001
+    name: implement
+    action_type: implement
+    model: claude-sonnet-4-5
+    auto_approve: false
+    retry_policy:
+      max_retries: 2
+      retry_type: on-failure
+  - id: 10000000-0000-0000-0000-000000000002
+    name: review
+    action_type: review
+    model: claude-sonnet-4-5
+    auto_approve: true
+    retry_policy:
+      max_retries: 1
+      retry_type: on-failure
+  - id: 10000000-0000-0000-0000-000000000003
+    name: merge
+    action_type: merge
+    model: claude-sonnet-4-5
+    auto_approve: false
+    retry_policy:
+      max_retries: 0
+      retry_type: none
 ',
     1
 ) ON CONFLICT (project_id) DO UPDATE SET

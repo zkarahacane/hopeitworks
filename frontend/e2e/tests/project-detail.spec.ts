@@ -59,11 +59,11 @@ test.describe('Project Detail — Tabbed Navigation', () => {
       })
     })
 
-    await page.route('**/api/v1/projects/p1/pipeline-configs*', async (route) => {
+    await page.route('**/api/v1/projects/p1/pipeline', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ data: [], pagination: { total: 0, page: 1, per_page: 20 } }),
+        body: JSON.stringify({ project_id: 'p1', steps: [], updated_at: '2026-01-01T00:00:00Z' }),
       })
     })
 

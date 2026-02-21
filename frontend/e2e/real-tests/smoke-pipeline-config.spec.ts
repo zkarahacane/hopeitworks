@@ -47,35 +47,24 @@ test.describe('Pipeline config smoke tests (real backend)', () => {
     await expect(pipelineContent).toBeVisible({ timeout: 10000 })
   })
 
-  test('pipeline config API returns 200 with config_yaml field', async ({ context }) => {
+  test('pipeline config API returns 200 with steps array', async ({ context }) => {
     await loginViaAPI(context, 'admin')
 
     const response = await context.request.get(
-      `/api/v1/projects/${TODO_APP_ID}/pipeline-config`,
+      `/api/v1/projects/${TODO_APP_ID}/pipeline`,
     )
 
     expect(
       response.status(),
-      `GET /api/v1/projects/${TODO_APP_ID}/pipeline-config should return 200`,
+      `GET /api/v1/projects/${TODO_APP_ID}/pipeline should return 200`,
     ).toBe(200)
 
     const body = await response.json()
 
-    // The response must include a config_yaml field (may be empty string if not yet set)
-    expect(
-      body,
-      'Response body should be an object',
-    ).toEqual(expect.objectContaining({}))
-
-    expect(
-      'config_yaml' in body,
-      'Response should contain a config_yaml field',
-    ).toBe(true)
-
-    // config_yaml should be a string (even if empty)
-    expect(
-      typeof body.config_yaml,
-      'config_yaml field should be a string',
-    ).toBe('string')
+    // The response must include project_id and steps fields per the OpenAPI spec
+    expect(body, 'Response should contain project_id').toHaveProperty('project_id')
+    expect(body, 'Response should contain steps').toHaveProperty('steps')
+    expect(Array.isArray(body.steps), 'steps field should be an array').toBe(true)
+    expect(body.steps.length, 'steps array should have at least one entry').toBeGreaterThan(0)
   })
 })
