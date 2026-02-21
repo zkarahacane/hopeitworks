@@ -13,13 +13,17 @@ import (
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/riverqueue/river"
 	actionadapter "github.com/zakari/hopeitworks/backend/internal/adapter/action"
+	discordadapter "github.com/zakari/hopeitworks/backend/internal/adapter/discord"
 	dockeradapter "github.com/zakari/hopeitworks/backend/internal/adapter/docker"
 	hbadapter "github.com/zakari/hopeitworks/backend/internal/adapter/handlebars"
 	pgadapter "github.com/zakari/hopeitworks/backend/internal/adapter/postgres"
 	riveradapter "github.com/zakari/hopeitworks/backend/internal/adapter/river"
+	webhookadapter "github.com/zakari/hopeitworks/backend/internal/adapter/webhook"
 	"github.com/zakari/hopeitworks/backend/internal/api/handler"
 	authmw "github.com/zakari/hopeitworks/backend/internal/api/middleware"
 	internalconfig "github.com/zakari/hopeitworks/backend/internal/config"
+	"github.com/zakari/hopeitworks/backend/internal/domain/model"
+	"github.com/zakari/hopeitworks/backend/internal/domain/port"
 	"github.com/zakari/hopeitworks/backend/internal/domain/service"
 	pkglog "github.com/zakari/hopeitworks/backend/pkg/log"
 )
@@ -126,11 +130,6 @@ func run() error {
 	// User service
 	userService := service.NewUserService(userRepo)
 	userHandler := handler.NewUserHandler(userService)
-
-	// Notification configs
-	notificationConfigRepo := pgadapter.NewNotificationConfigRepository(queries)
-	notificationConfigService := service.NewNotificationConfigService(notificationConfigRepo)
-	notificationHandler := handler.NewNotificationHandler(notificationConfigService)
 
 	// Application-wide context for background services
 	appCtx, appCancel := context.WithCancel(ctx)
@@ -270,6 +269,9 @@ func run() error {
 	})
 
 	handler.HandlerFromMuxWithBaseURL(server, r, "/api/v1")
+
+	// SSE endpoint for real-time event streaming
+	r.Get("/api/v1/events/stream", sseHandler.ServeHTTP)
 
 	// Mount project_users routes (manually registered, not in OpenAPI spec yet)
 	r.Route("/api/v1/projects/{id}/users", func(r chi.Router) {
