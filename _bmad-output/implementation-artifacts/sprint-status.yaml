@@ -153,7 +153,7 @@ development_status:
 
   # Post-MVP: Bug Fixes from E2E Testing
   post-mvp-fixes: in-progress
-  fix-1-migrations-numbering-conflict: ready-for-dev
+  fix-1-migrations-numbering-conflict: done
   fix-2-password-input-accessibility: ready-for-dev
   fix-3-catch-all-404-route: ready-for-dev
   fix-4-e2e-test-helpers: ready-for-dev
@@ -621,7 +621,7 @@ parallel_waves:
     stories:
       - key: fix-1-migrations-numbering-conflict
         domain: back
-        status: ready-for-dev
+        status: done
     container_count: 1
     depends_on: [wave-15]
     notes: "P0 blocker: fix migration numbering conflict — all project routes return 500"
