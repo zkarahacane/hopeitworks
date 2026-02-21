@@ -696,6 +696,111 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /projects/{projectId}/runs/{runId}/pause:
+    post:
+      operationId: pauseRun
+      summary: Pause a running story run
+      description: >
+        Sets the run status to paused. The currently executing step continues
+        to completion, but no new steps are launched. Returns 409 if the run
+        is not in a pausable state (must be running).
+      tags: [runs]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/RunIdPath"
+      responses:
+        "200":
+          description: Run paused successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Run"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /projects/{projectId}/runs/{runId}/resume:
+    post:
+      operationId: resumeRun
+      summary: Resume a paused story run
+      description: >
+        Resumes execution of a paused run from the last completed step.
+        Returns 409 if the run is not in paused state.
+      tags: [runs]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/RunIdPath"
+      responses:
+        "200":
+          description: Run resumed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Run"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /projects/{projectId}/epics/{epicId}/runs/{runId}/pause:
+    post:
+      operationId: pauseEpicRun
+      summary: Pause an in-progress epic run
+      description: >
+        Pauses an epic run. Child runs that have not started are held,
+        while currently running child runs continue to completion.
+        Returns 409 if the epic run is not in a pausable state.
+      tags: [runs]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/EpicIdPath"
+        - $ref: "#/components/parameters/RunIdPath"
+      responses:
+        "200":
+          description: Epic run paused successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Run"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /projects/{projectId}/epics/{epicId}/runs/{runId}/resume:
+    post:
+      operationId: resumeEpicRun
+      summary: Resume a paused epic run
+      description: >
+        Resumes a paused epic run. Paused child runs are resumed and
+        execution continues with the next dependency group.
+        Returns 409 if the epic run is not in paused state.
+      tags: [runs]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/EpicIdPath"
+        - $ref: "#/components/parameters/RunIdPath"
+      responses:
+        "200":
+          description: Epic run resumed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Run"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
   # ── Prompt Templates ──────────────────────────────────────────────────
   /projects/{projectId}/templates:
     get:
@@ -1610,7 +1715,7 @@ components:
           format: uuid
         status:
           type: string
-          enum: [pending, running, completed, failed, cancelled]
+          enum: [pending, running, paused, completed, failed, cancelled]
           example: pending
         pipeline_config_snapshot:
           type: object

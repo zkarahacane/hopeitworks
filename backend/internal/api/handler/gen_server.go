@@ -93,6 +93,7 @@ const (
 	RunStatusCancelled RunStatus = "cancelled"
 	RunStatusCompleted RunStatus = "completed"
 	RunStatusFailed    RunStatus = "failed"
+	RunStatusPaused    RunStatus = "paused"
 	RunStatusPending   RunStatus = "pending"
 	RunStatusRunning   RunStatus = "running"
 )
@@ -111,6 +112,7 @@ const (
 	RunWithStepsStatusCancelled RunWithStepsStatus = "cancelled"
 	RunWithStepsStatusCompleted RunWithStepsStatus = "completed"
 	RunWithStepsStatusFailed    RunWithStepsStatus = "failed"
+	RunWithStepsStatusPaused    RunWithStepsStatus = "paused"
 	RunWithStepsStatusPending   RunWithStepsStatus = "pending"
 	RunWithStepsStatusRunning   RunWithStepsStatus = "running"
 )
@@ -815,6 +817,12 @@ type ServerInterface interface {
 	// Update an epic
 	// (PUT /projects/{projectId}/epics/{epicId})
 	UpdateEpic(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, epicId EpicIdPath)
+	// Pause an in-progress epic run
+	// (POST /projects/{projectId}/epics/{epicId}/runs/{runId}/pause)
+	PauseEpicRun(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, epicId EpicIdPath, runId RunIdPath)
+	// Resume a paused epic run
+	// (POST /projects/{projectId}/epics/{epicId}/runs/{runId}/resume)
+	ResumeEpicRun(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, epicId EpicIdPath, runId RunIdPath)
 	// Get the pipeline configuration for a project
 	// (GET /projects/{projectId}/pipeline)
 	GetPipelineConfig(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath)
@@ -827,6 +835,12 @@ type ServerInterface interface {
 	// Create a new pipeline run for a project
 	// (POST /projects/{projectId}/runs)
 	CreateRun(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath)
+	// Pause a running story run
+	// (POST /projects/{projectId}/runs/{runId}/pause)
+	PauseRun(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, runId RunIdPath)
+	// Resume a paused story run
+	// (POST /projects/{projectId}/runs/{runId}/resume)
+	ResumeRun(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, runId RunIdPath)
 	// List stories for a project with optional status filtering
 	// (GET /projects/{projectId}/stories)
 	ListStories(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, params ListStoriesParams)
@@ -971,6 +985,18 @@ func (_ Unimplemented) UpdateEpic(w http.ResponseWriter, r *http.Request, projec
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Pause an in-progress epic run
+// (POST /projects/{projectId}/epics/{epicId}/runs/{runId}/pause)
+func (_ Unimplemented) PauseEpicRun(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, epicId EpicIdPath, runId RunIdPath) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Resume a paused epic run
+// (POST /projects/{projectId}/epics/{epicId}/runs/{runId}/resume)
+func (_ Unimplemented) ResumeEpicRun(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, epicId EpicIdPath, runId RunIdPath) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Get the pipeline configuration for a project
 // (GET /projects/{projectId}/pipeline)
 func (_ Unimplemented) GetPipelineConfig(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath) {
@@ -992,6 +1018,18 @@ func (_ Unimplemented) ListRunsByProject(w http.ResponseWriter, r *http.Request,
 // Create a new pipeline run for a project
 // (POST /projects/{projectId}/runs)
 func (_ Unimplemented) CreateRun(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Pause a running story run
+// (POST /projects/{projectId}/runs/{runId}/pause)
+func (_ Unimplemented) PauseRun(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, runId RunIdPath) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Resume a paused story run
+// (POST /projects/{projectId}/runs/{runId}/resume)
+func (_ Unimplemented) ResumeRun(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, runId RunIdPath) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1551,6 +1589,104 @@ func (siw *ServerInterfaceWrapper) UpdateEpic(w http.ResponseWriter, r *http.Req
 	handler.ServeHTTP(w, r)
 }
 
+// PauseEpicRun operation middleware
+func (siw *ServerInterfaceWrapper) PauseEpicRun(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "projectId" -------------
+	var projectId ProjectIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectId", chi.URLParam(r, "projectId"), &projectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "epicId" -------------
+	var epicId EpicIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "epicId", chi.URLParam(r, "epicId"), &epicId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "epicId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "runId" -------------
+	var runId RunIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "runId", chi.URLParam(r, "runId"), &runId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "runId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PauseEpicRun(w, r, projectId, epicId, runId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ResumeEpicRun operation middleware
+func (siw *ServerInterfaceWrapper) ResumeEpicRun(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "projectId" -------------
+	var projectId ProjectIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectId", chi.URLParam(r, "projectId"), &projectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "epicId" -------------
+	var epicId EpicIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "epicId", chi.URLParam(r, "epicId"), &epicId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "epicId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "runId" -------------
+	var runId RunIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "runId", chi.URLParam(r, "runId"), &runId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "runId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ResumeEpicRun(w, r, projectId, epicId, runId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetPipelineConfig operation middleware
 func (siw *ServerInterfaceWrapper) GetPipelineConfig(w http.ResponseWriter, r *http.Request) {
 
@@ -1685,6 +1821,86 @@ func (siw *ServerInterfaceWrapper) CreateRun(w http.ResponseWriter, r *http.Requ
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateRun(w, r, projectId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PauseRun operation middleware
+func (siw *ServerInterfaceWrapper) PauseRun(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "projectId" -------------
+	var projectId ProjectIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectId", chi.URLParam(r, "projectId"), &projectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "runId" -------------
+	var runId RunIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "runId", chi.URLParam(r, "runId"), &runId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "runId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PauseRun(w, r, projectId, runId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ResumeRun operation middleware
+func (siw *ServerInterfaceWrapper) ResumeRun(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "projectId" -------------
+	var projectId ProjectIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectId", chi.URLParam(r, "projectId"), &projectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "runId" -------------
+	var runId RunIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "runId", chi.URLParam(r, "runId"), &runId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "runId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ResumeRun(w, r, projectId, runId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2562,6 +2778,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Put(options.BaseURL+"/projects/{projectId}/epics/{epicId}", wrapper.UpdateEpic)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/projects/{projectId}/epics/{epicId}/runs/{runId}/pause", wrapper.PauseEpicRun)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/projects/{projectId}/epics/{epicId}/runs/{runId}/resume", wrapper.ResumeEpicRun)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/projects/{projectId}/pipeline", wrapper.GetPipelineConfig)
 	})
 	r.Group(func(r chi.Router) {
@@ -2572,6 +2794,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/projects/{projectId}/runs", wrapper.CreateRun)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/projects/{projectId}/runs/{runId}/pause", wrapper.PauseRun)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/projects/{projectId}/runs/{runId}/resume", wrapper.ResumeRun)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/projects/{projectId}/stories", wrapper.ListStories)
@@ -2634,82 +2862,88 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
+	"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",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

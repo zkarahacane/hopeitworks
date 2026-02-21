@@ -191,6 +191,26 @@ func (s *Server) ListRunsByStory(w http.ResponseWriter, r *http.Request, storyID
 	s.runs.ListRunsByStory(w, r, storyID, params)
 }
 
+// PauseRun delegates to RunHandler.
+func (s *Server) PauseRun(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, runID RunIdPath) {
+	s.runs.PauseRun(w, r, projectID, runID)
+}
+
+// ResumeRun delegates to RunHandler.
+func (s *Server) ResumeRun(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, runID RunIdPath) {
+	s.runs.ResumeRun(w, r, projectID, runID)
+}
+
+// PauseEpicRun delegates to RunHandler.
+func (s *Server) PauseEpicRun(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, epicID EpicIdPath, runID RunIdPath) {
+	s.runs.PauseEpicRun(w, r, projectID, epicID, runID)
+}
+
+// ResumeEpicRun delegates to RunHandler.
+func (s *Server) ResumeEpicRun(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, epicID EpicIdPath, runID RunIdPath) {
+	s.runs.ResumeEpicRun(w, r, projectID, epicID, runID)
+}
+
 // GetPipelineConfig delegates to PipelineConfigHandler.
 func (s *Server) GetPipelineConfig(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath) {
 	s.pipelineConfig.GetPipelineConfig(w, r, projectID)

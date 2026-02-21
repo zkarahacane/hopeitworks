@@ -139,7 +139,7 @@ func (t *TimeoutEnforcer) CheckTimeouts(ctx context.Context) error {
 		}
 
 		runErrMsg := containerTimeoutReason
-		if _, err := t.runRepo.UpdateRunStatus(ctx, runID, model.RunStatusFailed, nil, &now, &runErrMsg); err != nil {
+		if _, err := t.runRepo.UpdateRunStatus(ctx, runID, model.RunStatusFailed, nil, &now, nil, &runErrMsg); err != nil {
 			t.logger.Error("failed to update run status", "run_id", runID, "error", err)
 		}
 

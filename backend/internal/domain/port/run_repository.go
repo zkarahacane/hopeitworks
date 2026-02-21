@@ -16,7 +16,7 @@ type RunRepository interface {
 	GetActiveRunByStory(ctx context.Context, storyID uuid.UUID) (*model.Run, error)
 	ListRunsByProject(ctx context.Context, projectID uuid.UUID, limit, offset int32) ([]*model.Run, error)
 	ListRunsByStory(ctx context.Context, storyID uuid.UUID, limit, offset int32) ([]*model.Run, error)
-	UpdateRunStatus(ctx context.Context, id uuid.UUID, status model.RunStatus, startedAt, completedAt *time.Time, errorMsg *string) (*model.Run, error)
+	UpdateRunStatus(ctx context.Context, id uuid.UUID, status model.RunStatus, startedAt, completedAt, pausedAt *time.Time, errorMsg *string) (*model.Run, error)
 	CountRunsByProject(ctx context.Context, projectID uuid.UUID) (int64, error)
 	CountRunsByStory(ctx context.Context, storyID uuid.UUID) (int64, error)
 

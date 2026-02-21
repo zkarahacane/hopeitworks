@@ -15,6 +15,7 @@ type RunStatus string
 const (
 	RunStatusPending   RunStatus = "pending"
 	RunStatusRunning   RunStatus = "running"
+	RunStatusPaused    RunStatus = "paused"
 	RunStatusCompleted RunStatus = "completed"
 	RunStatusFailed    RunStatus = "failed"
 	RunStatusCancelled RunStatus = "cancelled"
@@ -40,6 +41,7 @@ type Run struct {
 	PipelineConfigSnapshot json.RawMessage
 	StartedAt              *time.Time
 	CompletedAt            *time.Time
+	PausedAt               *time.Time
 	ErrorMessage           *string
 	CreatedAt              time.Time
 	UpdatedAt              time.Time
@@ -64,7 +66,8 @@ type RunStep struct {
 
 var validRunTransitions = map[RunStatus][]RunStatus{
 	RunStatusPending: {RunStatusRunning, RunStatusCancelled},
-	RunStatusRunning: {RunStatusCompleted, RunStatusFailed, RunStatusCancelled},
+	RunStatusRunning: {RunStatusPaused, RunStatusCompleted, RunStatusFailed, RunStatusCancelled},
+	RunStatusPaused:  {RunStatusRunning, RunStatusCancelled},
 }
 
 var validStepTransitions = map[StepStatus][]StepStatus{
@@ -76,7 +79,7 @@ var validStepTransitions = map[StepStatus][]StepStatus{
 func ValidateRunTransition(from, to RunStatus) error {
 	allowed, ok := validRunTransitions[from]
 	if !ok {
-		return errors.NewInvalidState("INVALID_STATE_TRANSITION",
+		return errors.NewInvalidState(errors.ErrCodeInvalidStateTransition,
 			fmt.Sprintf("no transitions allowed from run status: %s", from))
 	}
 	for _, valid := range allowed {
@@ -84,7 +87,7 @@ func ValidateRunTransition(from, to RunStatus) error {
 			return nil
 		}
 	}
-	return errors.NewInvalidState("INVALID_STATE_TRANSITION",
+	return errors.NewInvalidState(errors.ErrCodeInvalidStateTransition,
 		fmt.Sprintf("cannot transition run from %s to %s", from, to))
 }
 
@@ -92,7 +95,7 @@ func ValidateRunTransition(from, to RunStatus) error {
 func ValidateStepTransition(from, to StepStatus) error {
 	allowed, ok := validStepTransitions[from]
 	if !ok {
-		return errors.NewInvalidState("INVALID_STATE_TRANSITION",
+		return errors.NewInvalidState(errors.ErrCodeInvalidStateTransition,
 			fmt.Sprintf("no transitions allowed from step status: %s", from))
 	}
 	for _, valid := range allowed {
@@ -100,6 +103,6 @@ func ValidateStepTransition(from, to StepStatus) error {
 			return nil
 		}
 	}
-	return errors.NewInvalidState("INVALID_STATE_TRANSITION",
+	return errors.NewInvalidState(errors.ErrCodeInvalidStateTransition,
 		fmt.Sprintf("cannot transition step from %s to %s", from, to))
 }

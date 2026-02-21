@@ -170,7 +170,7 @@ func newExecutorTestFixture(stepCount int) *executorTestFixture {
 			}
 			return nil, nil
 		},
-		updateRunStatusFn: func(_ context.Context, id uuid.UUID, status model.RunStatus, startedAt, completedAt *time.Time, errorMsg *string) (*model.Run, error) {
+		updateRunStatusFn: func(_ context.Context, id uuid.UUID, status model.RunStatus, startedAt, completedAt, pausedAt *time.Time, errorMsg *string) (*model.Run, error) {
 			f.mu.Lock()
 			f.runStatusCalls = append(f.runStatusCalls, runStatusCall{
 				ID: id, Status: status, StartedAt: startedAt, CompletedAt: completedAt, ErrorMsg: errorMsg,
@@ -184,6 +184,9 @@ func newExecutorTestFixture(stepCount int) *executorTestFixture {
 			}
 			if completedAt != nil {
 				run.CompletedAt = completedAt
+			}
+			if pausedAt != nil {
+				run.PausedAt = pausedAt
 			}
 			if errorMsg != nil {
 				run.ErrorMessage = errorMsg
@@ -786,5 +789,97 @@ func TestActionRegistry_RegisterOverwrites(t *testing.T) {
 	execErr := result.Execute(context.Background(), nil)
 	if execErr == nil || execErr.Error() != "action2" {
 		t.Errorf("expected action2 error, got %v", execErr)
+	}
+}
+
+func TestExecuteRun_PauseStopsExecution(t *testing.T) {
+	f := newExecutorTestFixture(3)
+
+	// After step 0 succeeds, the run will be marked as paused in the DB
+	step0Executed := false
+	step2Executed := false
+
+	f.actionReg.Register(&mockAction{
+		name: f.steps[0].Action,
+		executeFn: func(_ context.Context, _ *model.RunContext) error {
+			step0Executed = true
+			return nil
+		},
+	})
+	f.actionReg.Register(&mockAction{
+		name: f.steps[1].Action,
+		executeFn: func(_ context.Context, _ *model.RunContext) error {
+			return nil
+		},
+	})
+	f.actionReg.Register(&mockAction{
+		name: f.steps[2].Action,
+		executeFn: func(_ context.Context, _ *model.RunContext) error {
+			step2Executed = true
+			return nil
+		},
+	})
+
+	// Override getRunFn to return paused status after step 0 completes
+	callCount := 0
+	f.runRepo.getRunFn = func(_ context.Context, id uuid.UUID) (*model.Run, error) {
+		callCount++
+		if id == f.runID {
+			run := *f.run
+			// First call is the initial verify, second call is the pause check before step 0
+			// Third call (pause check before step 1) returns paused
+			if callCount >= 3 {
+				run.Status = model.RunStatusPaused
+			}
+			return &run, nil
+		}
+		return nil, fmt.Errorf("run not found: %s", id)
+	}
+
+	err := f.executor.ExecuteRun(context.Background(), f.runID)
+	if err != ErrRunPaused {
+		t.Errorf("expected ErrRunPaused, got %v", err)
+	}
+
+	if !step0Executed {
+		t.Error("expected step 0 to be executed")
+	}
+	if step2Executed {
+		t.Error("expected step 2 not to be executed after pause")
+	}
+}
+
+func TestExecuteRun_ResumeSkipsCompletedSteps(t *testing.T) {
+	f := newExecutorTestFixture(3)
+
+	// Mark step 0 as already completed (simulating resume)
+	f.steps[0].Status = model.StepStatusCompleted
+
+	var executedSteps []string
+	for _, step := range f.steps {
+		stepName := step.StepName
+		f.actionReg.Register(&mockAction{
+			name: step.Action,
+			executeFn: func(_ context.Context, _ *model.RunContext) error {
+				executedSteps = append(executedSteps, stepName)
+				return nil
+			},
+		})
+	}
+
+	err := f.executor.ExecuteRun(context.Background(), f.runID)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	// Step 0 should be skipped since it's completed
+	if len(executedSteps) != 2 {
+		t.Fatalf("expected 2 steps executed (skipping completed step 0), got %d: %v", len(executedSteps), executedSteps)
+	}
+	if executedSteps[0] != "step-1" {
+		t.Errorf("expected first executed step to be step-1, got %s", executedSteps[0])
+	}
+	if executedSteps[1] != "step-2" {
+		t.Errorf("expected second executed step to be step-2, got %s", executedSteps[1])
 	}
 }

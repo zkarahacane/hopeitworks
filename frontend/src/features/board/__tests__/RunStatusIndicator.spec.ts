@@ -15,7 +15,7 @@ vi.mock('@vueuse/core', () => ({
 let wrapper: VueWrapper<any>
 
 function mountComponent(props: {
-  status: 'running' | 'completed' | 'failed' | 'backlog' | null
+  status: 'running' | 'completed' | 'failed' | 'paused' | 'backlog' | null
   completedAt?: string
   errorMessage?: string
 }) {
@@ -114,6 +114,35 @@ describe('RunStatusIndicator', () => {
 
       await wrapper.find('[data-testid="run-status-indicator"]').trigger('click')
       expect(wrapper.emitted('errorClick')).toHaveLength(1)
+    })
+  })
+
+  describe('paused state', () => {
+    it('renders a pause circle icon in yellow with "Paused" text', () => {
+      mountComponent({ status: 'paused' })
+
+      const icon = wrapper.find('[data-testid="run-status-icon"]')
+      expect(icon.exists()).toBe(true)
+      expect(icon.classes()).toContain('pi')
+      expect(icon.classes()).toContain('pi-pause-circle')
+      expect(icon.classes()).toContain('text-yellow-500')
+
+      const text = wrapper.find('[data-testid="run-status-text"]')
+      expect(text.exists()).toBe(true)
+      expect(text.text()).toBe('Paused')
+      expect(text.classes()).toContain('text-yellow-500')
+    })
+
+    it('does not render a spinner', () => {
+      mountComponent({ status: 'paused' })
+      expect(wrapper.find('[data-testid="run-status-spinner"]').exists()).toBe(false)
+    })
+
+    it('does not have cursor-pointer class', () => {
+      mountComponent({ status: 'paused' })
+
+      const root = wrapper.find('[data-testid="run-status-indicator"]')
+      expect(root.classes()).not.toContain('cursor-pointer')
     })
   })
 

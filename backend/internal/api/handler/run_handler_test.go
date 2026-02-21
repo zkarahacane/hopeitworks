@@ -22,6 +22,8 @@ type runHandlerRunRepo struct {
 	createRunFn           func(ctx context.Context, run *model.Run) (*model.Run, error)
 	createRunStepFn       func(ctx context.Context, step *model.RunStep) (*model.RunStep, error)
 	getActiveRunByStoryFn func(ctx context.Context, storyID uuid.UUID) (*model.Run, error)
+	getRunFn              func(ctx context.Context, id uuid.UUID) (*model.Run, error)
+	updateRunStatusFn     func(ctx context.Context, id uuid.UUID, status model.RunStatus, startedAt, completedAt, pausedAt *time.Time, errMsg *string) (*model.Run, error)
 }
 
 var _ port.RunRepository = (*runHandlerRunRepo)(nil)
@@ -35,7 +37,10 @@ func (m *runHandlerRunRepo) CreateRun(ctx context.Context, run *model.Run) (*mod
 	run.UpdatedAt = time.Now()
 	return run, nil
 }
-func (m *runHandlerRunRepo) GetRun(_ context.Context, id uuid.UUID) (*model.Run, error) {
+func (m *runHandlerRunRepo) GetRun(ctx context.Context, id uuid.UUID) (*model.Run, error) {
+	if m.getRunFn != nil {
+		return m.getRunFn(ctx, id)
+	}
 	return nil, errors.NewNotFound("run", id)
 }
 func (m *runHandlerRunRepo) GetActiveRunByStory(ctx context.Context, storyID uuid.UUID) (*model.Run, error) {
@@ -50,7 +55,10 @@ func (m *runHandlerRunRepo) ListRunsByProject(_ context.Context, _ uuid.UUID, _,
 func (m *runHandlerRunRepo) ListRunsByStory(_ context.Context, _ uuid.UUID, _, _ int32) ([]*model.Run, error) {
 	return nil, nil
 }
-func (m *runHandlerRunRepo) UpdateRunStatus(_ context.Context, _ uuid.UUID, _ model.RunStatus, _, _ *time.Time, _ *string) (*model.Run, error) {
+func (m *runHandlerRunRepo) UpdateRunStatus(ctx context.Context, id uuid.UUID, status model.RunStatus, startedAt, completedAt, pausedAt *time.Time, errMsg *string) (*model.Run, error) {
+	if m.updateRunStatusFn != nil {
+		return m.updateRunStatusFn(ctx, id, status, startedAt, completedAt, pausedAt, errMsg)
+	}
 	return nil, nil
 }
 func (m *runHandlerRunRepo) CountRunsByProject(_ context.Context, _ uuid.UUID) (int64, error) {
@@ -327,5 +335,246 @@ func TestLaunchRunHandler_AlreadyCompleted(t *testing.T) {
 
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("expected status 400, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// ── PauseRun handler tests ──────────────────────────────────────────────────
+
+func TestPauseRunHandler_Success(t *testing.T) {
+	projectID := uuid.New()
+	runID := uuid.New()
+
+	runRepo := &runHandlerRunRepo{
+		getRunFn: func(_ context.Context, id uuid.UUID) (*model.Run, error) {
+			return &model.Run{
+				ID:        id,
+				ProjectID: projectID,
+				Status:    model.RunStatusRunning,
+				CreatedAt: time.Now(),
+				UpdatedAt: time.Now(),
+			}, nil
+		},
+		updateRunStatusFn: func(_ context.Context, id uuid.UUID, status model.RunStatus, _, _, pausedAt *time.Time, _ *string) (*model.Run, error) {
+			return &model.Run{
+				ID:        id,
+				ProjectID: projectID,
+				Status:    status,
+				PausedAt:  pausedAt,
+				CreatedAt: time.Now(),
+				UpdatedAt: time.Now(),
+			}, nil
+		},
+	}
+
+	h := setupRunHandler(runRepo, &runHandlerStoryRepo{}, &runHandlerPipelineConfigRepo{}, &runHandlerJobQueue{})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/projects/"+projectID.String()+"/runs/"+runID.String()+"/pause", nil)
+	rec := httptest.NewRecorder()
+
+	h.PauseRun(rec, req, projectID, runID)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(rec.Body).Decode(&result); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if result["status"] != "paused" {
+		t.Errorf("expected run status 'paused', got %v", result["status"])
+	}
+}
+
+func TestPauseRunHandler_NotFound(t *testing.T) {
+	projectID := uuid.New()
+	runID := uuid.New()
+
+	h := setupRunHandler(&runHandlerRunRepo{}, &runHandlerStoryRepo{}, &runHandlerPipelineConfigRepo{}, &runHandlerJobQueue{})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/projects/"+projectID.String()+"/runs/"+runID.String()+"/pause", nil)
+	rec := httptest.NewRecorder()
+
+	h.PauseRun(rec, req, projectID, runID)
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("expected status 404, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestPauseRunHandler_InvalidState(t *testing.T) {
+	projectID := uuid.New()
+	runID := uuid.New()
+
+	runRepo := &runHandlerRunRepo{
+		getRunFn: func(_ context.Context, id uuid.UUID) (*model.Run, error) {
+			return &model.Run{
+				ID:        id,
+				ProjectID: projectID,
+				Status:    model.RunStatusCompleted,
+				CreatedAt: time.Now(),
+				UpdatedAt: time.Now(),
+			}, nil
+		},
+	}
+
+	h := setupRunHandler(runRepo, &runHandlerStoryRepo{}, &runHandlerPipelineConfigRepo{}, &runHandlerJobQueue{})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/projects/"+projectID.String()+"/runs/"+runID.String()+"/pause", nil)
+	rec := httptest.NewRecorder()
+
+	h.PauseRun(rec, req, projectID, runID)
+
+	if rec.Code != http.StatusConflict {
+		t.Errorf("expected status 409, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestPauseRunHandler_WrongProject(t *testing.T) {
+	projectID := uuid.New()
+	otherProjectID := uuid.New()
+	runID := uuid.New()
+
+	runRepo := &runHandlerRunRepo{
+		getRunFn: func(_ context.Context, id uuid.UUID) (*model.Run, error) {
+			return &model.Run{
+				ID:        id,
+				ProjectID: otherProjectID,
+				Status:    model.RunStatusRunning,
+				CreatedAt: time.Now(),
+				UpdatedAt: time.Now(),
+			}, nil
+		},
+	}
+
+	h := setupRunHandler(runRepo, &runHandlerStoryRepo{}, &runHandlerPipelineConfigRepo{}, &runHandlerJobQueue{})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/projects/"+projectID.String()+"/runs/"+runID.String()+"/pause", nil)
+	rec := httptest.NewRecorder()
+
+	h.PauseRun(rec, req, projectID, runID)
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("expected status 404, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// ── ResumeRun handler tests ──────────────────────────────────────────────────
+
+func TestResumeRunHandler_Success(t *testing.T) {
+	projectID := uuid.New()
+	runID := uuid.New()
+
+	runRepo := &runHandlerRunRepo{
+		getRunFn: func(_ context.Context, id uuid.UUID) (*model.Run, error) {
+			return &model.Run{
+				ID:        id,
+				ProjectID: projectID,
+				Status:    model.RunStatusPaused,
+				CreatedAt: time.Now(),
+				UpdatedAt: time.Now(),
+			}, nil
+		},
+		updateRunStatusFn: func(_ context.Context, id uuid.UUID, status model.RunStatus, _, _, _ *time.Time, _ *string) (*model.Run, error) {
+			return &model.Run{
+				ID:        id,
+				ProjectID: projectID,
+				Status:    status,
+				CreatedAt: time.Now(),
+				UpdatedAt: time.Now(),
+			}, nil
+		},
+	}
+
+	h := setupRunHandler(runRepo, &runHandlerStoryRepo{}, &runHandlerPipelineConfigRepo{}, &runHandlerJobQueue{})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/projects/"+projectID.String()+"/runs/"+runID.String()+"/resume", nil)
+	rec := httptest.NewRecorder()
+
+	h.ResumeRun(rec, req, projectID, runID)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(rec.Body).Decode(&result); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if result["status"] != "running" {
+		t.Errorf("expected run status 'running', got %v", result["status"])
+	}
+}
+
+func TestResumeRunHandler_NotFound(t *testing.T) {
+	projectID := uuid.New()
+	runID := uuid.New()
+
+	h := setupRunHandler(&runHandlerRunRepo{}, &runHandlerStoryRepo{}, &runHandlerPipelineConfigRepo{}, &runHandlerJobQueue{})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/projects/"+projectID.String()+"/runs/"+runID.String()+"/resume", nil)
+	rec := httptest.NewRecorder()
+
+	h.ResumeRun(rec, req, projectID, runID)
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("expected status 404, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestResumeRunHandler_InvalidState(t *testing.T) {
+	projectID := uuid.New()
+	runID := uuid.New()
+
+	runRepo := &runHandlerRunRepo{
+		getRunFn: func(_ context.Context, id uuid.UUID) (*model.Run, error) {
+			return &model.Run{
+				ID:        id,
+				ProjectID: projectID,
+				Status:    model.RunStatusRunning,
+				CreatedAt: time.Now(),
+				UpdatedAt: time.Now(),
+			}, nil
+		},
+	}
+
+	h := setupRunHandler(runRepo, &runHandlerStoryRepo{}, &runHandlerPipelineConfigRepo{}, &runHandlerJobQueue{})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/projects/"+projectID.String()+"/runs/"+runID.String()+"/resume", nil)
+	rec := httptest.NewRecorder()
+
+	h.ResumeRun(rec, req, projectID, runID)
+
+	if rec.Code != http.StatusConflict {
+		t.Errorf("expected status 409, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestResumeRunHandler_WrongProject(t *testing.T) {
+	projectID := uuid.New()
+	otherProjectID := uuid.New()
+	runID := uuid.New()
+
+	runRepo := &runHandlerRunRepo{
+		getRunFn: func(_ context.Context, id uuid.UUID) (*model.Run, error) {
+			return &model.Run{
+				ID:        id,
+				ProjectID: otherProjectID,
+				Status:    model.RunStatusPaused,
+				CreatedAt: time.Now(),
+				UpdatedAt: time.Now(),
+			}, nil
+		},
+	}
+
+	h := setupRunHandler(runRepo, &runHandlerStoryRepo{}, &runHandlerPipelineConfigRepo{}, &runHandlerJobQueue{})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/projects/"+projectID.String()+"/runs/"+runID.String()+"/resume", nil)
+	rec := httptest.NewRecorder()
+
+	h.ResumeRun(rec, req, projectID, runID)
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("expected status 404, got %d. Body: %s", rec.Code, rec.Body.String())
 	}
 }
