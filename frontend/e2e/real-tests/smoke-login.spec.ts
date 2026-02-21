@@ -71,7 +71,7 @@ test.describe('Auth smoke tests (real backend)', () => {
     // PrimeVue Password wraps the input — fall back to CSS selector if getByLabel fails
     const pwByLabel = page.getByLabel(/password/i)
     const pwBySelector = page.locator('input[type="password"]')
-    const pwField = (await pwByLabel.isVisible().catch(() => false)) ? pwByLabel : pwBySelector
+    const pwField = (await pwByLabel.count()) > 0 ? pwByLabel : pwBySelector
     await pwField.fill('this-is-the-wrong-password')
 
     await page.getByRole('button', { name: /sign in|log in|login/i }).click()

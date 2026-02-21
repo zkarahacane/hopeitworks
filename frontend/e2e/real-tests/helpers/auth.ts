@@ -46,7 +46,7 @@ export async function loginViaUI(page: Page, userKey: SeedUserKey): Promise<void
   // Try label association first, fall back to the raw input[type="password"] selector.
   const passwordByLabel = page.getByLabel(/password/i)
   const passwordBySelector = page.locator('input[type="password"]')
-  const passwordField = (await passwordByLabel.isVisible().catch(() => false))
+  const passwordField = (await passwordByLabel.count()) > 0
     ? passwordByLabel
     : passwordBySelector
   await passwordField.fill(user.password)
