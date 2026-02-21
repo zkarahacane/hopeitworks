@@ -100,10 +100,10 @@ development_status:
   epic-4-retrospective: optional
 
   # Epic 5: HITL Gates & Approval Workflow
-  epic-5: in-progress
+  epic-5: done
   5-1-hitl-gate-action-pending-state: done
   5-2-hitl-approval-rejection-api: done
-  5-3-hitl-cli-approval-support-curl-based: backlog
+  5-3-hitl-cli-approval-support-curl-based: done
   5-4-hitl-approval-page-diffviewer: done
   5-5-hitl-pending-list-notification-badge: done
   epic-5-retrospective: optional
@@ -119,10 +119,10 @@ development_status:
   epic-6-retrospective: optional
 
   # Epic 7: Epic Batch Execution & DAG Scheduling
-  epic-7: in-progress
+  epic-7: done
   7-1-dag-builder-topological-sort: done
   7-2-epic-run-creation-parallel-group-executor: done
-  7-3-pause-resume-for-story-and-epic-runs: review
+  7-3-pause-resume-for-story-and-epic-runs: done
   7-4-epic-launch-page-dag-visualization: done
   7-5-epic-run-monitoring-dashboard: done
   epic-7-retrospective: optional
@@ -145,7 +145,7 @@ development_status:
   epic-9-retrospective: optional
 
   # Epic 10: Reference Test Project & Validation
-  epic-10: backlog
+  epic-10: in-progress
   10-1-todo-app-reference-project-structure: backlog
   10-2-todo-app-ci-pipeline-seed-data: backlog
   10-3-pipeline-validation-stories-integration-test: backlog
@@ -555,12 +555,12 @@ parallel_waves:
       # Epic 5
       - key: 5-3-hitl-cli-approval-support-curl-based
         domain: back
-        status: backlog
+        status: done
         explicit_deps: [5-2-hitl-approval-rejection-api]
       # Epic 7
       - key: 7-3-pause-resume-for-story-and-epic-runs
         domain: back
-        status: backlog
+        status: done
         explicit_deps: [7-2-epic-run-creation-parallel-group-executor]
     container_count: 2
     depends_on: [wave-11]
