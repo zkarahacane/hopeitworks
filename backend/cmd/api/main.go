@@ -159,7 +159,7 @@ func run() error {
 		}()
 	}
 
-	runService := service.NewRunService(runRepo, projectRepo, storyRepo, pipelineConfigRepo, jobQueue)
+	runService := service.NewRunService(runRepo, projectRepo, storyRepo, pipelineConfigRepo, jobQueue, eventRepo)
 	runHandler := handler.NewRunHandler(runService)
 
 	// Cost service

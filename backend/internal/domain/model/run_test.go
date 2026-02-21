@@ -52,8 +52,8 @@ func TestValidateRunTransition(t *testing.T) {
 				if !ok {
 					t.Errorf("expected *errors.DomainError, got %T", err)
 				}
-				if domainErr.Code != "INVALID_STATE_TRANSITION" {
-					t.Errorf("expected code INVALID_STATE_TRANSITION, got %s", domainErr.Code)
+				if domainErr.Code != errors.ErrCodeInvalidStateTransition {
+					t.Errorf("expected code %s, got %s", errors.ErrCodeInvalidStateTransition, domainErr.Code)
 				}
 				if domainErr.Category != errors.CategoryInvalidState {
 					t.Errorf("expected category invalid_state, got %s", domainErr.Category)
@@ -197,8 +197,8 @@ func TestValidateStepTransition(t *testing.T) {
 				if !ok {
 					t.Errorf("expected *errors.DomainError, got %T", err)
 				}
-				if domainErr.Code != "INVALID_STATE_TRANSITION" {
-					t.Errorf("expected code INVALID_STATE_TRANSITION, got %s", domainErr.Code)
+				if domainErr.Code != errors.ErrCodeInvalidStateTransition {
+					t.Errorf("expected code %s, got %s", errors.ErrCodeInvalidStateTransition, domainErr.Code)
 				}
 				if domainErr.Category != errors.CategoryInvalidState {
 					t.Errorf("expected category invalid_state, got %s", domainErr.Category)

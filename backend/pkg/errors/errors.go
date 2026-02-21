@@ -32,6 +32,11 @@ const (
 	ErrCodeOrphanCleanupFailed      = "ORPHAN_CLEANUP_FAILED"
 )
 
+// Error codes for state transition operations.
+const (
+	ErrCodeInvalidStateTransition = "INVALID_STATE_TRANSITION"
+)
+
 // DomainError represents a structured error from the domain layer.
 type DomainError struct {
 	Category ErrorCategory

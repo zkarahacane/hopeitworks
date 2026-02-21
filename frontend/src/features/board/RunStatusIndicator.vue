@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import ProgressSpinner from 'primevue/progressspinner'
 import { useRelativeTime } from '@/composables/useRelativeTime'
 
-export type RunStatus = 'running' | 'completed' | 'failed' | 'backlog' | null
+export type RunStatus = 'running' | 'completed' | 'failed' | 'paused' | 'backlog' | null
 
 interface Props {
   status: RunStatus
@@ -46,6 +46,13 @@ const statusConfigMap = new Map<string, StatusConfig>([
     spinner: false,
     text: null,
     color: 'text-green-500',
+    clickable: false,
+  }],
+  ['paused', {
+    icon: 'pi pi-pause-circle',
+    spinner: false,
+    text: 'Paused',
+    color: 'text-yellow-500',
     clickable: false,
   }],
   ['failed', {

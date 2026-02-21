@@ -122,7 +122,7 @@ development_status:
   epic-7: in-progress
   7-1-dag-builder-topological-sort: done
   7-2-epic-run-creation-parallel-group-executor: done
-  7-3-pause-resume-for-story-and-epic-runs: backlog
+  7-3-pause-resume-for-story-and-epic-runs: review
   7-4-epic-launch-page-dag-visualization: done
   7-5-epic-run-monitoring-dashboard: done
   epic-7-retrospective: optional
