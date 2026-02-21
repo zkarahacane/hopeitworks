@@ -15,11 +15,13 @@ type Server struct {
 	runs            *RunHandler
 	pipelineConfig  *PipelineConfigHandler
 	costs           *CostHandler
+	notifications   *NotificationHandler
+	epicRuns        *EpicRunHandler
 }
 
 // NewServer creates a new Server with the given handlers.
-func NewServer(auth *AuthHandler, projects *ProjectHandler, users *UserHandler, epics *EpicHandler, stories *StoryHandler, promptTemplates *PromptTemplateHandler, runs *RunHandler, pipelineConfig *PipelineConfigHandler, costs *CostHandler) *Server {
-	return &Server{auth: auth, projects: projects, users: users, epics: epics, stories: stories, promptTemplates: promptTemplates, runs: runs, pipelineConfig: pipelineConfig, costs: costs}
+func NewServer(auth *AuthHandler, projects *ProjectHandler, users *UserHandler, epics *EpicHandler, stories *StoryHandler, promptTemplates *PromptTemplateHandler, runs *RunHandler, pipelineConfig *PipelineConfigHandler, costs *CostHandler, notifications *NotificationHandler, epicRuns *EpicRunHandler) *Server {
+	return &Server{auth: auth, projects: projects, users: users, epics: epics, stories: stories, promptTemplates: promptTemplates, runs: runs, pipelineConfig: pipelineConfig, costs: costs, notifications: notifications, epicRuns: epicRuns}
 }
 
 // RegisterUser delegates to AuthHandler.
@@ -110,6 +112,21 @@ func (s *Server) UpdateEpic(w http.ResponseWriter, r *http.Request, projectID Pr
 // DeleteEpic delegates to EpicHandler.
 func (s *Server) DeleteEpic(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, epicID EpicIdPath) {
 	s.epics.DeleteEpic(w, r, projectID, epicID)
+}
+
+// GetEpicDAG delegates to EpicHandler.
+func (s *Server) GetEpicDAG(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, epicID EpicIdPath) {
+	s.epics.GetEpicDAG(w, r, projectID, epicID)
+}
+
+// LaunchEpicRun delegates to EpicRunHandler.
+func (s *Server) LaunchEpicRun(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, epicID EpicIdPath) {
+	s.epicRuns.LaunchEpicRun(w, r, projectID, epicID)
+}
+
+// GetEpicRun delegates to EpicRunHandler.
+func (s *Server) GetEpicRun(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, epicRunID EpicRunIdPath) {
+	s.epicRuns.GetEpicRun(w, r, projectID, epicRunID)
 }
 
 // ListStories delegates to StoryHandler.
@@ -215,4 +232,24 @@ func (s *Server) GetStoryCosts(w http.ResponseWriter, r *http.Request, projectID
 // GetRunCosts delegates to CostHandler.
 func (s *Server) GetRunCosts(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, runID RunIdPath) {
 	s.costs.GetRunCosts(w, r, projectID, runID)
+}
+
+// ListNotificationConfigs delegates to NotificationHandler.
+func (s *Server) ListNotificationConfigs(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath) {
+	s.notifications.ListNotificationConfigs(w, r, projectID)
+}
+
+// CreateNotificationConfig delegates to NotificationHandler.
+func (s *Server) CreateNotificationConfig(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath) {
+	s.notifications.CreateNotificationConfig(w, r, projectID)
+}
+
+// UpdateNotificationConfig delegates to NotificationHandler.
+func (s *Server) UpdateNotificationConfig(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, notificationID NotificationIdPath) {
+	s.notifications.UpdateNotificationConfig(w, r, projectID, notificationID)
+}
+
+// DeleteNotificationConfig delegates to NotificationHandler.
+func (s *Server) DeleteNotificationConfig(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, notificationID NotificationIdPath) {
+	s.notifications.DeleteNotificationConfig(w, r, projectID, notificationID)
 }

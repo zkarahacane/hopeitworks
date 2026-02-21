@@ -100,6 +100,9 @@ func getDefaultTemplate(name string) string {
 ## Previous Error
 {{error_context}}
 
+## Log Tail
+{{log_tail}}
+
 ## Existing Changes
 {{diff_content}}
 

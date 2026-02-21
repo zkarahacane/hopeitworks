@@ -13,9 +13,10 @@ type CostRecord struct {
 	ProjectID    uuid.UUID
 	TokensInput  int64
 	TokensOutput int64
-	CostUSD      float64
-	Model        string
-	CreatedAt    time.Time
+	// CostUSD is the total cost in US dollars for this step.
+	CostUSD   float64
+	Model     string
+	CreatedAt time.Time
 }
 
 // CostEvent is an intermediate accumulation type parsed from agent NDJSON output.

@@ -5,11 +5,58 @@
 package postgres
 
 import (
+	"database/sql/driver"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
+
+type EpicRunStatus string
+
+const (
+	EpicRunStatusPending   EpicRunStatus = "pending"
+	EpicRunStatusRunning   EpicRunStatus = "running"
+	EpicRunStatusCompleted EpicRunStatus = "completed"
+	EpicRunStatusFailed    EpicRunStatus = "failed"
+	EpicRunStatusPaused    EpicRunStatus = "paused"
+)
+
+func (e *EpicRunStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = EpicRunStatus(s)
+	case string:
+		*e = EpicRunStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for EpicRunStatus: %T", src)
+	}
+	return nil
+}
+
+type NullEpicRunStatus struct {
+	EpicRunStatus EpicRunStatus `json:"epic_run_status"`
+	Valid         bool          `json:"valid"` // Valid is true if EpicRunStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullEpicRunStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.EpicRunStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.EpicRunStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullEpicRunStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.EpicRunStatus), nil
+}
 
 type CostRecord struct {
 	ID           uuid.UUID      `json:"id"`
@@ -32,6 +79,23 @@ type Epic struct {
 	UpdatedAt   time.Time   `json:"updated_at"`
 }
 
+type EpicRun struct {
+	ID          uuid.UUID          `json:"id"`
+	ProjectID   uuid.UUID          `json:"project_id"`
+	EpicID      uuid.UUID          `json:"epic_id"`
+	Status      EpicRunStatus      `json:"status"`
+	CreatedAt   time.Time          `json:"created_at"`
+	CompletedAt pgtype.Timestamptz `json:"completed_at"`
+}
+
+type EpicRunStory struct {
+	EpicRunID  uuid.UUID   `json:"epic_run_id"`
+	StoryID    uuid.UUID   `json:"story_id"`
+	RunID      pgtype.UUID `json:"run_id"`
+	GroupIndex int32       `json:"group_index"`
+	Status     string      `json:"status"`
+}
+
 type Event struct {
 	ID         uuid.UUID `json:"id"`
 	ProjectID  uuid.UUID `json:"project_id"`
@@ -40,6 +104,29 @@ type Event struct {
 	Action     string    `json:"action"`
 	Payload    []byte    `json:"payload"`
 	CreatedAt  time.Time `json:"created_at"`
+}
+
+type HitlRequest struct {
+	ID              uuid.UUID          `json:"id"`
+	RunStepID       uuid.UUID          `json:"run_step_id"`
+	GateType        string             `json:"gate_type"`
+	DiffContent     pgtype.Text        `json:"diff_content"`
+	Status          string             `json:"status"`
+	ResolvedAt      pgtype.Timestamptz `json:"resolved_at"`
+	ResolvedBy      pgtype.UUID        `json:"resolved_by"`
+	RejectionReason pgtype.Text        `json:"rejection_reason"`
+	CreatedAt       time.Time          `json:"created_at"`
+}
+
+type NotificationConfig struct {
+	ID           uuid.UUID `json:"id"`
+	ProjectID    uuid.UUID `json:"project_id"`
+	ChannelType  string    `json:"channel_type"`
+	Config       []byte    `json:"config"`
+	EventsFilter []byte    `json:"events_filter"`
+	Enabled      bool      `json:"enabled"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 type PipelineConfig struct {
@@ -52,18 +139,21 @@ type PipelineConfig struct {
 }
 
 type Project struct {
-	ID           uuid.UUID      `json:"id"`
-	Name         string         `json:"name"`
-	Description  pgtype.Text    `json:"description"`
-	OwnerID      pgtype.UUID    `json:"owner_id"`
-	RepoUrl      pgtype.Text    `json:"repo_url"`
-	GitProvider  string         `json:"git_provider"`
-	GitTokenEnv  pgtype.Text    `json:"git_token_env"`
-	AgentRuntime string         `json:"agent_runtime"`
-	DefaultModel pgtype.Text    `json:"default_model"`
-	MaxBudget    pgtype.Numeric `json:"max_budget"`
-	CreatedAt    time.Time      `json:"created_at"`
-	UpdatedAt    time.Time      `json:"updated_at"`
+	ID                   uuid.UUID      `json:"id"`
+	Name                 string         `json:"name"`
+	Description          pgtype.Text    `json:"description"`
+	OwnerID              pgtype.UUID    `json:"owner_id"`
+	RepoUrl              pgtype.Text    `json:"repo_url"`
+	GitProvider          string         `json:"git_provider"`
+	GitTokenEnv          pgtype.Text    `json:"git_token_env"`
+	AgentRuntime         string         `json:"agent_runtime"`
+	DefaultModel         pgtype.Text    `json:"default_model"`
+	MaxBudget            pgtype.Numeric `json:"max_budget"`
+	CreatedAt            time.Time      `json:"created_at"`
+	UpdatedAt            time.Time      `json:"updated_at"`
+	CircuitBreakerCount  int32          `json:"circuit_breaker_count"`
+	CircuitBreakerActive bool           `json:"circuit_breaker_active"`
+	CircuitBreakerMax    int32          `json:"circuit_breaker_max"`
 }
 
 type ProjectUser struct {
@@ -109,6 +199,9 @@ type RunStep struct {
 	ContainerID  pgtype.Text        `json:"container_id"`
 	LogTail      pgtype.Text        `json:"log_tail"`
 	CreatedAt    time.Time          `json:"created_at"`
+	RetryCount   int32              `json:"retry_count"`
+	RetryType    pgtype.Text        `json:"retry_type"`
+	ParentStepID pgtype.UUID        `json:"parent_step_id"`
 }
 
 type Story struct {

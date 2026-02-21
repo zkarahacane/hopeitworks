@@ -2,7 +2,8 @@
 set -euo pipefail
 
 # BMAD Story Pipeline - runs inside a container
-# Chains: dev-story (opus) → code-review (sonnet) → merge-story (opus)
+# Chains: dev-story → code-review → merge-story
+# Models: MODEL_DEV (default: opus), MODEL_REVIEW (default: sonnet), MODEL_MERGE (default: opus)
 #
 # Each phase runs Claude Code with the appropriate workflow.
 # If a phase fails (non-zero exit), the pipeline stops.
@@ -17,6 +18,9 @@ set -euo pipefail
 STORY_KEY="${STORY_KEY:-unknown}"
 BASE_BRANCH="${BASE_BRANCH:-main}"
 SKIP_MERGE="${SKIP_MERGE:-false}"
+MODEL_DEV="${MODEL_DEV:-opus}"
+MODEL_REVIEW="${MODEL_REVIEW:-sonnet}"
+MODEL_MERGE="${MODEL_MERGE:-opus}"
 LOG_PREFIX="[pipeline:${STORY_KEY}]"
 
 log() { echo "$LOG_PREFIX $1"; }
@@ -34,14 +38,14 @@ Feature branch: feat/${STORY_KEY}
 Base branch: ${BASE_BRANCH}
 IMPORTANT: Do NOT ask questions. Act autonomously. Pick story ${STORY_KEY} automatically."
 
-# Phase 1: Dev Story (Opus)
-log "=== Phase 1/3: dev-story (opus) ==="
+# Phase 1: Dev Story
+log "=== Phase 1/3: dev-story ($MODEL_DEV) ==="
 DEV_PROMPT="${STORY_CONTEXT}
 Execute /bmad-bmm-dev-story for story ${STORY_KEY}.
 The story file is at _bmad-output/implementation-artifacts/${STORY_KEY}.md
 Work on branch feat/${STORY_KEY}. Commit and push all code. Create a PR targeting ${BASE_BRANCH}."
 
-if echo "$DEV_PROMPT" | claude --dangerously-skip-permissions --model opus "$@"; then
+if echo "$DEV_PROMPT" | claude --dangerously-skip-permissions --model "$MODEL_DEV" "$@"; then
     log "✅ dev-story complete"
 else
     log "❌ dev-story failed (exit $?)"
@@ -50,14 +54,14 @@ fi
 
 log ""
 
-# Phase 2: Code Review (Sonnet)
-log "=== Phase 2/3: code-review (sonnet) ==="
+# Phase 2: Code Review
+log "=== Phase 2/3: code-review ($MODEL_REVIEW) ==="
 REVIEW_PROMPT="${STORY_CONTEXT}
 Execute /bmad-bmm-code-review for story ${STORY_KEY}.
 The story file is at _bmad-output/implementation-artifacts/${STORY_KEY}.md
 Review ALL code changes on branch feat/${STORY_KEY} vs ${BASE_BRANCH}. Fix any issues found. Push fixes and ensure CI is green."
 
-if echo "$REVIEW_PROMPT" | claude --dangerously-skip-permissions --model sonnet "$@"; then
+if echo "$REVIEW_PROMPT" | claude --dangerously-skip-permissions --model "$MODEL_REVIEW" "$@"; then
     log "✅ code-review complete"
 else
     log "❌ code-review failed (exit $?)"
@@ -70,12 +74,12 @@ log ""
 if [ "$SKIP_MERGE" = "true" ]; then
     log "=== Phase 3/3: merge-story SKIPPED (SKIP_MERGE=true) ==="
 else
-    log "=== Phase 3/3: merge-story (opus) ==="
+    log "=== Phase 3/3: merge-story ($MODEL_MERGE) ==="
     MERGE_PROMPT="${STORY_CONTEXT}
 Execute /bmad-bmm-merge-story for story ${STORY_KEY}.
 Merge the PR for feat/${STORY_KEY} into ${BASE_BRANCH} via squash merge. Ensure CI is green before merging."
 
-    if echo "$MERGE_PROMPT" | claude --dangerously-skip-permissions --model opus "$@"; then
+    if echo "$MERGE_PROMPT" | claude --dangerously-skip-permissions --model "$MODEL_MERGE" "$@"; then
         log "✅ merge-story complete"
     else
         log "❌ merge-story failed (exit $?)"

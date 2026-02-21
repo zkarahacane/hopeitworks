@@ -120,6 +120,12 @@ func (m *mockProjectRepoForCost) Update(_ context.Context, p *model.Project) (*m
 	return p, nil
 }
 func (m *mockProjectRepoForCost) Delete(_ context.Context, _ uuid.UUID) error { return nil }
+func (m *mockProjectRepoForCost) IncrementCircuitBreakerCount(_ context.Context, _ uuid.UUID) (*model.Project, error) {
+	return nil, nil
+}
+func (m *mockProjectRepoForCost) ResetCircuitBreaker(_ context.Context, _ uuid.UUID) (*model.Project, error) {
+	return nil, nil
+}
 
 type mockStoryRepoForCost struct {
 	story *model.Story
@@ -209,6 +215,12 @@ func (m *mockRunRepoForCost) UpdateRunStepStatus(_ context.Context, _ uuid.UUID,
 	return nil, nil
 }
 func (m *mockRunRepoForCost) UpdateRunStepContainerInfo(_ context.Context, _ uuid.UUID, _ *string, _ *string) (*model.RunStep, error) {
+	return nil, nil
+}
+func (m *mockRunRepoForCost) CreateRetryRunStep(_ context.Context, s *model.RunStep) (*model.RunStep, error) {
+	return s, nil
+}
+func (m *mockRunRepoForCost) ListRetryStepsByParent(_ context.Context, _ uuid.UUID) ([]*model.RunStep, error) {
 	return nil, nil
 }
 

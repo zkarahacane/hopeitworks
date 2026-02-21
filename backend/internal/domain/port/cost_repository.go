@@ -25,7 +25,7 @@ type CostRepository interface {
 	// SumCostByStory returns aggregated cost totals for a story across all runs.
 	SumCostByStory(ctx context.Context, storyID uuid.UUID) (totalCost float64, totalInput, totalOutput int64, runCount int, err error)
 
-	// ListCostsByProject returns cost breakdown by story for a project since the given time.
+	// ListCostsByProjectByStory returns cost breakdown by story for a project since the given time.
 	ListCostsByProjectByStory(ctx context.Context, projectID uuid.UUID, since time.Time) ([]model.StoryCostBreakdown, error)
 
 	// ListCostsByProjectByRun returns cost breakdown by run for a project since the given time.

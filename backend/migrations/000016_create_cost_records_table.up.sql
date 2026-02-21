@@ -5,7 +5,7 @@ CREATE TABLE cost_records (
     tokens_input  BIGINT NOT NULL DEFAULT 0,
     tokens_output BIGINT NOT NULL DEFAULT 0,
     cost_usd      DECIMAL(10,6) NOT NULL DEFAULT 0,
-    model         VARCHAR(100) NOT NULL,
+    model         VARCHAR NOT NULL,
     created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

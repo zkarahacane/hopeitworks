@@ -13,13 +13,17 @@ import (
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/riverqueue/river"
 	actionadapter "github.com/zakari/hopeitworks/backend/internal/adapter/action"
+	discordadapter "github.com/zakari/hopeitworks/backend/internal/adapter/discord"
 	dockeradapter "github.com/zakari/hopeitworks/backend/internal/adapter/docker"
 	hbadapter "github.com/zakari/hopeitworks/backend/internal/adapter/handlebars"
 	pgadapter "github.com/zakari/hopeitworks/backend/internal/adapter/postgres"
 	riveradapter "github.com/zakari/hopeitworks/backend/internal/adapter/river"
+	webhookadapter "github.com/zakari/hopeitworks/backend/internal/adapter/webhook"
 	"github.com/zakari/hopeitworks/backend/internal/api/handler"
 	authmw "github.com/zakari/hopeitworks/backend/internal/api/middleware"
 	internalconfig "github.com/zakari/hopeitworks/backend/internal/config"
+	"github.com/zakari/hopeitworks/backend/internal/domain/model"
+	"github.com/zakari/hopeitworks/backend/internal/domain/port"
 	"github.com/zakari/hopeitworks/backend/internal/domain/service"
 	pkglog "github.com/zakari/hopeitworks/backend/pkg/log"
 )
@@ -89,17 +93,27 @@ func run() error {
 	// Project service (with pipeline config seeding on creation)
 	projectService := service.NewProjectService(projectRepo)
 	projectService.SetPipelineConfigService(pipelineConfigService)
-	projectHandler := handler.NewProjectHandler(projectService, projectUserService)
+
+	// Event publisher (for persisting events to DB) — needed by circuit breaker
+	eventRepo := pgadapter.NewEventRepo(queries)
+
+	// Circuit breaker service
+	circuitBreakerService := service.NewCircuitBreakerService(projectRepo, eventRepo, logger)
+
+	projectHandler := handler.NewProjectHandler(projectService, projectUserService, circuitBreakerService)
 
 	// Epic service
 	epicRepo := pgadapter.NewEpicRepo(queries)
 	epicService := service.NewEpicService(epicRepo)
-	epicHandler := handler.NewEpicHandler(epicService)
 
 	// Story service
 	storyRepo := pgadapter.NewStoryRepo(queries)
 	storyService := service.NewStoryService(storyRepo)
 	storyHandler := handler.NewStoryHandler(storyService)
+
+	// Scheduler service (DAG computation, pure domain service)
+	schedulerService := service.NewSchedulerService()
+	epicHandler := handler.NewEpicHandler(epicService, schedulerService, storyRepo)
 
 	// Prompt template service
 	promptTemplateRepo := pgadapter.NewPromptTemplateRepo(queries)
@@ -127,6 +141,7 @@ func run() error {
 	// Pipeline executor (will be used by River workers)
 	// NOTE: event publisher and action registry wiring deferred to later story
 	pipelineExecutor := service.NewPipelineExecutor(runRepo, nil, nil, logger)
+	pipelineExecutor.SetCircuitBreaker(circuitBreakerService)
 
 	// River job queue for async pipeline execution
 	workers := river.NewWorkers()
@@ -158,11 +173,11 @@ func run() error {
 		logger.Warn("docker container manager unavailable, timeout enforcer and orphan cleaner disabled", "error", err)
 	}
 
-	// Event publisher (for persisting events to DB)
-	eventRepo := pgadapter.NewEventRepo(queries)
-
 	// Action registry
 	actionReg := service.NewActionRegistry()
+
+	// Cost tracking (for agent_run action)
+	costSvc := costService
 
 	// Agent run action (requires Docker)
 	if containerMgr != nil {
@@ -181,10 +196,17 @@ func run() error {
 			agentRunAction := actionadapter.NewAgentRunAction(
 				containerMgr, logStreamer, eventRepo,
 				storyRepo, projectRepo, runRepo,
-				templateSvc, agentCfg, logger,
+				templateSvc, costSvc, agentCfg, logger,
 			)
 			actionReg.Register(agentRunAction)
 			logger.Info("agent_run action registered")
+
+			// Incremental retry action (delegates to agent_run)
+			incrementalRetryAction := actionadapter.NewIncrementalRetryAction(
+				runRepo, templateSvc, agentRunAction, logger,
+			)
+			actionReg.Register(incrementalRetryAction)
+			logger.Info("incremental_retry action registered")
 		}
 	}
 
@@ -207,7 +229,30 @@ func run() error {
 		}()
 	}
 
-	server := handler.NewServer(authHandler, projectHandler, userHandler, epicHandler, storyHandler, promptTemplateHandler, runHandler, pipelineConfigHandler, costHandler)
+	// Notification configs
+	notificationConfigRepo := pgadapter.NewNotificationConfigRepository(queries)
+	notificationConfigService := service.NewNotificationConfigService(notificationConfigRepo)
+	notificationHandler := handler.NewNotificationHandler(notificationConfigService)
+
+	// Notification dispatcher (background goroutine)
+	notifiers := map[string]port.Notifier{
+		model.ChannelTypeDiscord: discordadapter.NewNotifier(),
+		model.ChannelTypeWebhook: webhookadapter.NewNotifier(),
+	}
+	notificationDispatcher := service.NewNotificationDispatcher(eventBus, notificationConfigRepo, projectRepo, notifiers)
+	notificationDispatcher.Start(appCtx)
+	logger.Info("notification dispatcher started")
+
+	// SSE handler for real-time event streaming
+	sseHandler := handler.NewSSEHandler(eventBus, eventRepo, projectUserRepo, logger)
+
+	// Epic run orchestration
+	epicRunRepo := pgadapter.NewEpicRunRepo(queries)
+	parallelGroupExecutor := service.NewParallelGroupExecutor(epicRunRepo, runService, pipelineExecutor, eventRepo, logger)
+	epicRunService := service.NewEpicRunService(epicRunRepo, storyRepo, epicRepo, schedulerService, parallelGroupExecutor, eventRepo, logger)
+	epicRunHandler := handler.NewEpicRunHandler(epicRunService)
+
+	server := handler.NewServer(authHandler, projectHandler, userHandler, epicHandler, storyHandler, promptTemplateHandler, runHandler, pipelineConfigHandler, costHandler, notificationHandler, epicRunHandler)
 
 	// Project user handler
 	projectUserHandler := handler.NewProjectUserHandler(projectUserService)
@@ -228,6 +273,9 @@ func run() error {
 	})
 
 	handler.HandlerFromMuxWithBaseURL(server, r, "/api/v1")
+
+	// SSE endpoint for real-time event streaming
+	r.Get("/api/v1/events/stream", sseHandler.ServeHTTP)
 
 	// Mount project_users routes (manually registered, not in OpenAPI spec yet)
 	r.Route("/api/v1/projects/{id}/users", func(r chi.Router) {

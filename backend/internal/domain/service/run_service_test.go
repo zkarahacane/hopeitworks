@@ -104,6 +104,12 @@ func (m *mockRunRepo) UpdateRunStepStatus(ctx context.Context, id uuid.UUID, sta
 func (m *mockRunRepo) UpdateRunStepContainerInfo(_ context.Context, id uuid.UUID, _ *string, _ *string) (*model.RunStep, error) {
 	return &model.RunStep{ID: id}, nil
 }
+func (m *mockRunRepo) CreateRetryRunStep(_ context.Context, step *model.RunStep) (*model.RunStep, error) {
+	return step, nil
+}
+func (m *mockRunRepo) ListRetryStepsByParent(_ context.Context, _ uuid.UUID) ([]*model.RunStep, error) {
+	return nil, nil
+}
 
 // mockStoryRepoForRun implements port.StoryRepository for testing.
 type mockStoryRepoForRun struct {
@@ -856,5 +862,153 @@ func TestLaunchRun_JobEnqueueFails(t *testing.T) {
 	}
 	if domainErr.Category != errors.CategoryInternal {
 		t.Errorf("expected internal category, got %s", domainErr.Category)
+	}
+}
+
+// ── Progress Computation Tests ───────────────────────────────────────────────
+
+func TestGetRun_ProgressComputed(t *testing.T) {
+	runID := uuid.New()
+
+	tests := []struct {
+		name             string
+		steps            []*model.RunStep
+		expectedProgress int
+	}{
+		{
+			name:             "no steps returns 0",
+			steps:            []*model.RunStep{},
+			expectedProgress: 0,
+		},
+		{
+			name: "1 of 2 completed returns 50",
+			steps: []*model.RunStep{
+				{ID: uuid.New(), Status: model.StepStatusCompleted},
+				{ID: uuid.New(), Status: model.StepStatusRunning},
+			},
+			expectedProgress: 50,
+		},
+		{
+			name: "2 of 3 completed returns 66",
+			steps: []*model.RunStep{
+				{ID: uuid.New(), Status: model.StepStatusCompleted},
+				{ID: uuid.New(), Status: model.StepStatusCompleted},
+				{ID: uuid.New(), Status: model.StepStatusRunning},
+			},
+			expectedProgress: 66,
+		},
+		{
+			name: "all completed returns 100",
+			steps: []*model.RunStep{
+				{ID: uuid.New(), Status: model.StepStatusCompleted},
+				{ID: uuid.New(), Status: model.StepStatusCompleted},
+			},
+			expectedProgress: 100,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runRepo := &mockRunRepo{
+				getRunFn: func(_ context.Context, _ uuid.UUID) (*model.Run, error) {
+					return &model.Run{
+						ID:     runID,
+						Status: model.RunStatusRunning,
+					}, nil
+				},
+				listRunStepsByRunFn: func(_ context.Context, _ uuid.UUID) ([]*model.RunStep, error) {
+					return tt.steps, nil
+				},
+			}
+			svc := newRunServiceForTest(runRepo, newMockProjectRepoForService())
+
+			run, err := svc.GetRun(context.Background(), runID)
+			if err != nil {
+				t.Fatalf("expected no error, got %v", err)
+			}
+			if run.Progress != tt.expectedProgress {
+				t.Errorf("expected progress %d, got %d", tt.expectedProgress, run.Progress)
+			}
+		})
+	}
+}
+
+func TestListRunsByProject_ProgressPopulated(t *testing.T) {
+	projectID := uuid.New()
+	run1ID := uuid.New()
+	run2ID := uuid.New()
+
+	runRepo := &mockRunRepo{
+		listRunsByProjectFn: func(_ context.Context, _ uuid.UUID, _, _ int32) ([]*model.Run, error) {
+			return []*model.Run{
+				{ID: run1ID, Status: model.RunStatusRunning},
+				{ID: run2ID, Status: model.RunStatusCompleted},
+			}, nil
+		},
+		listRunStepsByRunFn: func(_ context.Context, rID uuid.UUID) ([]*model.RunStep, error) {
+			if rID == run1ID {
+				return []*model.RunStep{
+					{ID: uuid.New(), Status: model.StepStatusCompleted},
+					{ID: uuid.New(), Status: model.StepStatusPending},
+				}, nil
+			}
+			return []*model.RunStep{
+				{ID: uuid.New(), Status: model.StepStatusCompleted},
+				{ID: uuid.New(), Status: model.StepStatusCompleted},
+			}, nil
+		},
+		countRunsByProjectFn: func(_ context.Context, _ uuid.UUID) (int64, error) {
+			return 2, nil
+		},
+	}
+	svc := newRunServiceForTest(runRepo, newMockProjectRepoForService())
+
+	result, err := svc.ListRunsByProject(context.Background(), projectID, 1, 20)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(result.Runs) != 2 {
+		t.Fatalf("expected 2 runs, got %d", len(result.Runs))
+	}
+	if result.Runs[0].Progress != 50 {
+		t.Errorf("run1: expected progress 50, got %d", result.Runs[0].Progress)
+	}
+	if result.Runs[1].Progress != 100 {
+		t.Errorf("run2: expected progress 100, got %d", result.Runs[1].Progress)
+	}
+}
+
+func TestListRunsByStory_ProgressPopulated(t *testing.T) {
+	storyID := uuid.New()
+	run1ID := uuid.New()
+
+	runRepo := &mockRunRepo{
+		listRunsByStoryFn: func(_ context.Context, _ uuid.UUID, _, _ int32) ([]*model.Run, error) {
+			return []*model.Run{
+				{ID: run1ID, Status: model.RunStatusRunning},
+			}, nil
+		},
+		listRunStepsByRunFn: func(_ context.Context, _ uuid.UUID) ([]*model.RunStep, error) {
+			return []*model.RunStep{
+				{ID: uuid.New(), Status: model.StepStatusCompleted},
+				{ID: uuid.New(), Status: model.StepStatusCompleted},
+				{ID: uuid.New(), Status: model.StepStatusPending},
+			}, nil
+		},
+		countRunsByStoryFn: func(_ context.Context, _ uuid.UUID) (int64, error) {
+			return 1, nil
+		},
+	}
+	svc := newRunServiceForTest(runRepo, newMockProjectRepoForService())
+
+	result, err := svc.ListRunsByStory(context.Background(), storyID, 1, 20)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(result.Runs) != 1 {
+		t.Fatalf("expected 1 run, got %d", len(result.Runs))
+	}
+	if result.Runs[0].Progress != 66 {
+		t.Errorf("expected progress 66, got %d", result.Runs[0].Progress)
 	}
 }

@@ -268,8 +268,8 @@ func (q *Queries) ListStepCostsByRun(ctx context.Context, runID uuid.UUID) ([]Li
 
 const sumCostByProject = `-- name: SumCostByProject :one
 SELECT COALESCE(SUM(cost_usd), 0)::DECIMAL(10,6) AS total_cost,
-       COALESCE(SUM(tokens_input), 0)             AS total_input,
-       COALESCE(SUM(tokens_output), 0)            AS total_output
+       COALESCE(SUM(tokens_input), 0)::BIGINT     AS total_input,
+       COALESCE(SUM(tokens_output), 0)::BIGINT    AS total_output
 FROM cost_records
 WHERE project_id = $1 AND created_at >= $2
 `
@@ -281,8 +281,8 @@ type SumCostByProjectParams struct {
 
 type SumCostByProjectRow struct {
 	TotalCost   pgtype.Numeric `json:"total_cost"`
-	TotalInput  interface{}    `json:"total_input"`
-	TotalOutput interface{}    `json:"total_output"`
+	TotalInput  int64          `json:"total_input"`
+	TotalOutput int64          `json:"total_output"`
 }
 
 func (q *Queries) SumCostByProject(ctx context.Context, arg SumCostByProjectParams) (SumCostByProjectRow, error) {

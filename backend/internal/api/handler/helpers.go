@@ -52,7 +52,7 @@ func mapCategoryToStatus(cat errors.ErrorCategory) int {
 	case errors.CategoryForbidden:
 		return http.StatusForbidden
 	case errors.CategoryInvalidState:
-		return http.StatusConflict
+		return http.StatusUnprocessableEntity
 	default:
 		return http.StatusInternalServerError
 	}
@@ -61,12 +61,15 @@ func mapCategoryToStatus(cat errors.ErrorCategory) int {
 // toAPIProject converts a domain Project to the API Project type.
 func toAPIProject(p *model.Project) Project {
 	proj := Project{
-		Id:        p.ID,
-		Name:      p.Name,
-		OwnerId:   uuid.Nil,
-		MaxBudget: p.MaxBudget,
-		CreatedAt: p.CreatedAt,
-		UpdatedAt: p.UpdatedAt,
+		Id:                   p.ID,
+		Name:                 p.Name,
+		OwnerId:              uuid.Nil,
+		MaxBudget:            p.MaxBudget,
+		CircuitBreakerCount:  p.CircuitBreakerCount,
+		CircuitBreakerActive: p.CircuitBreakerActive,
+		CircuitBreakerMax:    p.CircuitBreakerMax,
+		CreatedAt:            p.CreatedAt,
+		UpdatedAt:            p.UpdatedAt,
 	}
 	if p.Description != nil {
 		proj.Description = p.Description
