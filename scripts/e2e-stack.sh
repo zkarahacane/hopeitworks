@@ -106,9 +106,48 @@ cmd_status() {
 }
 
 cmd_reset() {
-  log_info "Resetting database..."
-  (cd "${PROJECT_ROOT}/backend" && make reset-db)
+  local container="hopeitworks-postgres"
+  local db_user="${POSTGRES_USER:-hopeitworks}"
+  local db_name="${POSTGRES_DB:-hopeitworks_dev}"
+
+  log_info "Resetting database via docker exec (no local psql tools required)..."
+
+  # Verify the postgres container is running
+  if ! docker exec "${container}" pg_isready -U "${db_user}" > /dev/null 2>&1; then
+    log_error "Postgres container '${container}' is not running or not ready."
+    return 1
+  fi
+
+  # Terminate active connections and drop/recreate database
+  log_info "Dropping database ${db_name}..."
+  docker exec "${container}" psql -U "${db_user}" -d postgres \
+    -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${db_name}' AND pid <> pg_backend_pid();" \
+    > /dev/null 2>&1 || true
+  docker exec "${container}" psql -U "${db_user}" -d postgres \
+    -c "DROP DATABASE IF EXISTS ${db_name};"
+
+  log_info "Creating database ${db_name}..."
+  docker exec "${container}" psql -U "${db_user}" -d postgres \
+    -c "CREATE DATABASE ${db_name} OWNER ${db_user};"
+
+  # Run migrations (sorted order)
+  log_info "Running migrations..."
+  local migration_dir="${PROJECT_ROOT}/backend/migrations"
+  local migration_count=0
+  for f in "${migration_dir}"/*.up.sql; do
+    [ -f "$f" ] || continue
+    docker exec -i "${container}" psql -U "${db_user}" -d "${db_name}" --set ON_ERROR_STOP=1 < "$f"
+    migration_count=$((migration_count + 1))
+  done
+  log_info "Applied ${migration_count} migrations."
+
+  # Seed dev data
+  log_info "Seeding dev data..."
+  docker exec -i "${container}" psql -U "${db_user}" -d "${db_name}" --set ON_ERROR_STOP=1 \
+    < "${PROJECT_ROOT}/backend/testdata/seed.sql"
+
   log_success "Database reset complete."
+  log_info "Credentials: admin@hopeitworks.dev/admin123, dev@hopeitworks.dev/dev123, alice@hopeitworks.dev/alice123"
 }
 
 cmd_up() {
