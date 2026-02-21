@@ -161,6 +161,16 @@ development_status:
   fix-6-e2e-selector-refinements: done
   fix-7-pipeline-config-seed-data: done
 
+  # Post-MVP: Auth Enhancements
+  post-mvp-auth: backlog
+  fix-8-nav-visible-unauthenticated: backlog
+  feat-1-logout-api: backlog
+  feat-2-user-profile-api: backlog
+  feat-3-reset-password-api: backlog
+  feat-4-logout-ui: backlog
+  feat-5-user-profile-page: backlog
+  feat-6-reset-password-pages: backlog
+
 # PARALLEL EXECUTION WAVES
 # ========================
 # Stories in the same wave can run simultaneously in separate containers.
@@ -176,6 +186,8 @@ development_status:
 #   Phase 2 (Waves 5-9):  Core Platform - Epics 2, 3, 6 in parallel
 #   Phase 3 (Waves 10-12): Extensions - Epics 4, 5, 7, 8, 9
 #   Phase 4 (Waves 13-15): Validation - Epic 10
+#   Phase 5 (Waves 16-19): Post-MVP Bug Fixes
+#   Phase 6 (Waves 20-21): Auth Enhancements
 #
 # Launch a single story in a container:
 #   ./scripts/bmad-dev.sh -p "/bmad-bmm-dev-story"
@@ -666,3 +678,49 @@ parallel_waves:
     container_count: 2
     depends_on: [wave-18]
     notes: "Final test fixes: selector refinements + pipeline config 404 — parallel"
+
+  # ============================================================
+  # PHASE 6: AUTH ENHANCEMENTS (Post-MVP features)
+  # ============================================================
+
+  wave-20:
+    phase: 6-auth-enhancements
+    stories:
+      - key: fix-8-nav-visible-unauthenticated
+        domain: front
+        status: backlog
+        cross_epic_deps: [1-9-login-page-auth-guard, 1-8-app-shell-layout-header-sidebar-status-bar]
+      - key: feat-1-logout-api
+        domain: back
+        status: backlog
+        cross_epic_deps: [1-3-users-table-jwt-auth-api-register-login-auth-middleware]
+      - key: feat-2-user-profile-api
+        domain: back
+        status: backlog
+        cross_epic_deps: [1-3-users-table-jwt-auth-api-register-login-auth-middleware]
+      - key: feat-3-reset-password-api
+        domain: back
+        status: backlog
+        cross_epic_deps: [1-3-users-table-jwt-auth-api-register-login-auth-middleware]
+    container_count: 4
+    depends_on: [wave-19]
+    notes: "Auth enhancements: nav fix (front), logout+profile+reset-password APIs (back) — all parallel"
+
+  wave-21:
+    phase: 6-auth-enhancements
+    stories:
+      - key: feat-4-logout-ui
+        domain: front
+        status: backlog
+        explicit_deps: [feat-1-logout-api]
+      - key: feat-5-user-profile-page
+        domain: front
+        status: backlog
+        explicit_deps: [feat-2-user-profile-api]
+      - key: feat-6-reset-password-pages
+        domain: front
+        status: backlog
+        explicit_deps: [feat-3-reset-password-api]
+    container_count: 3
+    depends_on: [wave-20]
+    notes: "Auth frontend: logout button, profile page, forgot/reset password pages — all parallel"
