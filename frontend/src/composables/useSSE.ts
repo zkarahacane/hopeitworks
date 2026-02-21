@@ -31,6 +31,7 @@ export function useSSE(
   const knownEvents = [
     'run.started',
     'run.completed',
+    'run.step.updated',
     'step.completed',
     'step.failed',
     'log.emitted',

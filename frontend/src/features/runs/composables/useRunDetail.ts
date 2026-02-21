@@ -24,7 +24,7 @@ export interface RunStep {
   step_name: string
   step_order: number
   action: string
-  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'waiting_approval'
   started_at?: string
   completed_at?: string
   error_message?: string
