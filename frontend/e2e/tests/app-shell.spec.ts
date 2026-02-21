@@ -121,6 +121,59 @@ test.describe('App Shell Layout', () => {
     })
   })
 
+  test.describe('Logout flow', () => {
+    test('should logout and redirect to /login on success', async ({ page }) => {
+      await page.route('**/api/v1/auth/logout', async (route) => {
+        await route.fulfill({ status: 204 })
+      })
+      // After logout, /me should return 401 so guard redirects
+      await page.unroute('**/api/v1/auth/me')
+      await page.route('**/api/v1/auth/me', async (route) => {
+        await route.fulfill({ status: 401 })
+      })
+      await page.getByTestId('user-menu-button').click()
+      await page.getByRole('menuitem', { name: 'Logout' }).click()
+      await expect(page).toHaveURL('/login')
+    })
+
+    test('should logout even when backend returns 500', async ({ page }) => {
+      await page.route('**/api/v1/auth/logout', async (route) => {
+        await route.fulfill({ status: 500 })
+      })
+      await page.unroute('**/api/v1/auth/me')
+      await page.route('**/api/v1/auth/me', async (route) => {
+        await route.fulfill({ status: 401 })
+      })
+      await page.getByTestId('user-menu-button').click()
+      await page.getByRole('menuitem', { name: 'Logout' }).click()
+      await expect(page).toHaveURL('/login')
+    })
+
+    test('should redirect to /login with redirect param after logout', async ({ page }) => {
+      await page.route('**/api/v1/auth/logout', async (route) => {
+        await route.fulfill({ status: 204 })
+      })
+      await page.unroute('**/api/v1/auth/me')
+      await page.route('**/api/v1/auth/me', async (route) => {
+        await route.fulfill({ status: 401 })
+      })
+      // Logout first
+      await page.getByTestId('user-menu-button').click()
+      await page.getByRole('menuitem', { name: 'Logout' }).click()
+      await expect(page).toHaveURL('/login')
+      // Try to navigate to a protected route
+      await page.goto('/')
+      await expect(page).toHaveURL(/\/login\?redirect=/)
+    })
+
+    test('should display user name and email in user menu', async ({ page }) => {
+      await page.getByTestId('user-menu-button').click()
+      const userMenu = page.getByTestId('user-menu')
+      await expect(userMenu).toContainText('Test')
+      await expect(userMenu).toContainText('test@test.com')
+    })
+  })
+
   test.describe('Layout Integration', () => {
     test('should render Dashboard view at root route', async ({ page }) => {
       // Already at root route from beforeEach

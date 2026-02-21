@@ -160,4 +160,35 @@ describe('useAuthStore', () => {
       expect(store.loading).toBe(false)
     })
   })
+
+  describe('logout()', () => {
+    it('clears user and error state on success', async () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 200 }))
+      const store = useAuthStore()
+      store.user = { id: '1', email: 'a@b.com', name: 'A', role: 'member' }
+      store.error = 'some previous error'
+      await store.logout()
+      expect(store.user).toBeNull()
+      expect(store.error).toBeNull()
+    })
+
+    it('clears user state even when fetch throws', async () => {
+      vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Network error'))
+      const store = useAuthStore()
+      store.user = { id: '1', email: 'a@b.com', name: 'A', role: 'member' }
+      await store.logout()
+      expect(store.user).toBeNull()
+      expect(store.error).toBeNull()
+    })
+
+    it('calls POST /api/v1/auth/logout with credentials include', async () => {
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 200 }))
+      const store = useAuthStore()
+      await store.logout()
+      expect(fetchSpy).toHaveBeenCalledWith('/api/v1/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+      })
+    })
+  })
 })
