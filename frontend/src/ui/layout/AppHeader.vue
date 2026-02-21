@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import Button from 'primevue/button'
 import Menu from 'primevue/menu'
@@ -18,7 +18,18 @@ const router = useRouter()
 const authStore = useAuthStore()
 const userMenu = ref<InstanceType<typeof Menu> | null>(null)
 
-const menuItems: MenuItem[] = [
+const menuItems = computed<MenuItem[]>(() => [
+  {
+    label: authStore.user?.name ?? 'User',
+    disabled: true,
+    class: 'font-semibold',
+  },
+  {
+    label: authStore.user?.email ?? '',
+    disabled: true,
+    class: 'text-surface-500 text-sm',
+  },
+  { separator: true },
   {
     label: 'Logout',
     icon: 'pi pi-sign-out',
@@ -27,7 +38,7 @@ const menuItems: MenuItem[] = [
       router.push('/login')
     },
   },
-]
+])
 
 function toggleUserMenu(event: Event) {
   userMenu.value?.toggle(event)
