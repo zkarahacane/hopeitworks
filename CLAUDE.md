@@ -440,3 +440,18 @@ Both sides generate types and clients from the same OpenAPI spec. Never manually
 2. **Backend <-> Postgres**: sqlc queries + pgxlisten + River jobs. Everything goes through ports.
 3. **Backend <-> Docker**: Docker API via socket-proxy. AgentRuntime port.
 4. **Backend <-> GitHub**: `gh` CLI via CommandRunner. GitProvider port.
+
+## E2E Testing
+
+### Commands
+- `./scripts/e2e-stack.sh up|down|reset|status` — lifecycle stack de test
+- `./scripts/e2e-smoke.sh` — lance la suite smoke complète avec rapport
+- `npm run test:e2e:real` (dans frontend/) — lance uniquement les tests Playwright
+
+### Delegation rules
+When testing the app:
+1. **ALWAYS delegate** test execution to a Task agent (Sonnet or Haiku)
+2. **ALWAYS delegate** log/report analysis to a Task agent
+3. **ALWAYS delegate** Playwright MCP exploration to a Task agent
+4. Main thread only coordinates and synthesizes results
+5. If an agent finds bugs, launch a fix agent per bug (Task Sonnet)
