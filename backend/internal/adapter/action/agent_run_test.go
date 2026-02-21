@@ -190,6 +190,12 @@ func (m *mockProjectRepo) Update(_ context.Context, p *model.Project) (*model.Pr
 	return p, nil
 }
 func (m *mockProjectRepo) Delete(_ context.Context, _ uuid.UUID) error { return nil }
+func (m *mockProjectRepo) IncrementCircuitBreakerCount(_ context.Context, _ uuid.UUID) (*model.Project, error) {
+	return &model.Project{}, nil
+}
+func (m *mockProjectRepo) ResetCircuitBreaker(_ context.Context, _ uuid.UUID) (*model.Project, error) {
+	return &model.Project{}, nil
+}
 
 type mockRunRepo struct {
 	updateRunStepContainerInfoFn func(ctx context.Context, id uuid.UUID, containerID *string, logTail *string) (*model.RunStep, error)

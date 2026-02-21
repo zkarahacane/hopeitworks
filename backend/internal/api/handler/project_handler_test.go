@@ -70,6 +70,14 @@ func (m *mockProjectRepo) Delete(_ context.Context, id uuid.UUID) error {
 	return nil
 }
 
+func (m *mockProjectRepo) IncrementCircuitBreakerCount(_ context.Context, _ uuid.UUID) (*model.Project, error) {
+	return &model.Project{}, nil
+}
+
+func (m *mockProjectRepo) ResetCircuitBreaker(_ context.Context, _ uuid.UUID) (*model.Project, error) {
+	return &model.Project{}, nil
+}
+
 // mockProjectUserRepoForHandler is a mock implementation of port.ProjectUserRepository for handler tests.
 type mockProjectUserRepoForHandler struct {
 	assignments map[string]model.ProjectRole // key: "projectID:userID"
@@ -167,7 +175,7 @@ func setupHandler() (*ProjectHandler, *mockProjectRepo) {
 	puRepo := newMockProjectUserRepoForHandler()
 	userRepo := newMockUserRepoForHandler()
 	puSvc := service.NewProjectUserService(puRepo, repo, userRepo)
-	handler := NewProjectHandler(svc, puSvc)
+	handler := NewProjectHandler(svc, puSvc, nil)
 	return handler, repo
 }
 
@@ -306,7 +314,7 @@ func TestListProjects_NonAdmin_ReturnsAssigned(t *testing.T) {
 	puRepo := newMockProjectUserRepoForHandler()
 	userRepo := newMockUserRepoForHandler()
 	puSvc := service.NewProjectUserService(puRepo, repo, userRepo)
-	h := NewProjectHandler(svc, puSvc)
+	h := NewProjectHandler(svc, puSvc, nil)
 
 	userID := uuid.New()
 

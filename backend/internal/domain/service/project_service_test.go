@@ -64,6 +64,14 @@ func (m *mockProjectRepo) Delete(_ context.Context, id uuid.UUID) error {
 	return nil
 }
 
+func (m *mockProjectRepo) IncrementCircuitBreakerCount(_ context.Context, _ uuid.UUID) (*model.Project, error) {
+	return &model.Project{}, nil
+}
+
+func (m *mockProjectRepo) ResetCircuitBreaker(_ context.Context, _ uuid.UUID) (*model.Project, error) {
+	return &model.Project{}, nil
+}
+
 func TestProjectService_Create(t *testing.T) {
 	tests := []struct {
 		name    string
