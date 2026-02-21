@@ -158,7 +158,7 @@ development_status:
   fix-3-catch-all-404-route: ready-for-dev
   fix-4-e2e-test-helpers: ready-for-dev
   fix-5-e2e-stack-docker-reset: ready-for-dev
-  fix-6-e2e-selector-refinements: ready-for-dev
+  fix-6-e2e-selector-refinements: done
   fix-7-pipeline-config-seed-data: ready-for-dev
 
 # PARALLEL EXECUTION WAVES
@@ -659,7 +659,7 @@ parallel_waves:
     stories:
       - key: fix-6-e2e-selector-refinements
         domain: front
-        status: ready-for-dev
+        status: done
       - key: fix-7-pipeline-config-seed-data
         domain: shared
         status: ready-for-dev
