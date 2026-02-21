@@ -165,6 +165,57 @@ test.describe('Login Page', () => {
     await expect(page).toHaveURL(/\/login\?redirect=/)
   })
 
+  test('should not render AppHeader or AppSidebar on /login when unauthenticated', async ({
+    page,
+  }) => {
+    await page.goto('/login')
+
+    // Login form should be visible
+    await expect(page.locator('h1')).toHaveText('hopeitworks')
+
+    // Header and sidebar should not be present
+    await expect(page.locator('header')).toHaveCount(0)
+    await expect(page.locator('aside')).toHaveCount(0)
+
+    // Status bar footer should not be present
+    await expect(page.locator('footer')).toHaveCount(0)
+
+    // Mobile navigation should not be present
+    await expect(page.locator('nav[aria-label="Mobile navigation"]')).toHaveCount(0)
+  })
+
+  test('should render AppHeader and AppSidebar after successful login', async ({ page }) => {
+    // Mock successful login
+    await page.route('**/api/v1/auth/login', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          id: '1',
+          email: 'test@test.com',
+          name: 'Test User',
+        }),
+      })
+    })
+
+    await page.goto('/login')
+
+    // Verify no shell chrome before login
+    await expect(page.locator('header')).toHaveCount(0)
+
+    // Fill valid credentials and submit
+    await page.locator('#email').fill('test@test.com')
+    await page.locator('#password').fill('password123')
+    await page.getByRole('button', { name: 'Sign In' }).click()
+
+    // Should redirect to dashboard
+    await expect(page).toHaveURL('/')
+
+    // Header and sidebar should now be visible
+    await expect(page.locator('header')).toBeVisible()
+    await expect(page.locator('aside')).toBeVisible()
+  })
+
   test('should redirect authenticated users from /login to / (already logged in)', async ({
     page,
   }) => {
