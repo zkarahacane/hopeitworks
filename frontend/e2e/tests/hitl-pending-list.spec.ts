@@ -76,10 +76,11 @@ test.describe('HITL Pending List and Notification Badge', () => {
     await expect(heading).toHaveText('Approvals')
 
     // Verify table rows are rendered
-    await expect(page.getByText('S-01')).toBeVisible()
-    await expect(page.getByText('S-02')).toBeVisible()
-    await expect(page.getByText('Implement login page')).toBeVisible()
-    await expect(page.getByText('Add dashboard')).toBeVisible()
+    const table = page.locator('[data-testid="hitl-pending-table"]')
+    await expect(table.getByText('S-01')).toBeVisible()
+    await expect(table.getByText('S-02')).toBeVisible()
+    await expect(table.getByText('Implement login page')).toBeVisible()
+    await expect(table.getByText('Add dashboard')).toBeVisible()
   })
 
   test('clicking Review navigates to the approval page', async ({ page }) => {
@@ -104,7 +105,7 @@ test.describe('HITL Pending List and Notification Badge', () => {
     await page.goto('/approvals')
 
     // Wait for table to load
-    await expect(page.getByText('S-01')).toBeVisible()
+    await expect(page.locator('[data-testid="hitl-pending-table"]').getByText('S-01')).toBeVisible()
 
     // Click the first Review button
     const reviewButtons = page.getByRole('button', { name: 'Review' })
