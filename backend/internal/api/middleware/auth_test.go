@@ -40,7 +40,7 @@ func (r *noopRepo) Update(_ context.Context, _ *model.User) (*model.User, error)
 	return nil, nil
 }
 func (r *noopRepo) UpdatePasswordHash(_ context.Context, _ uuid.UUID, _ string) error { return nil }
-func (r *noopRepo) Delete(_ context.Context, _ uuid.UUID) error                      { return nil }
+func (r *noopRepo) Delete(_ context.Context, _ uuid.UUID) error                       { return nil }
 
 type noopTokenRepo struct{}
 

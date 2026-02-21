@@ -14,11 +14,11 @@ import (
 
 // mockUserRepo is a mock implementation of port.UserRepository for testing.
 type mockUserRepo struct {
-	users              map[uuid.UUID]*model.User
-	createFn           func(ctx context.Context, u *model.User) (*model.User, error)
-	updateFn           func(ctx context.Context, u *model.User) (*model.User, error)
-	deleteFn           func(ctx context.Context, id uuid.UUID) error
-	updatePasswordFn   func(ctx context.Context, id uuid.UUID, hash string) error
+	users            map[uuid.UUID]*model.User
+	createFn         func(ctx context.Context, u *model.User) (*model.User, error)
+	updateFn         func(ctx context.Context, u *model.User) (*model.User, error)
+	deleteFn         func(ctx context.Context, id uuid.UUID) error
+	updatePasswordFn func(ctx context.Context, id uuid.UUID, hash string) error
 }
 
 func newMockUserRepo() *mockUserRepo {
