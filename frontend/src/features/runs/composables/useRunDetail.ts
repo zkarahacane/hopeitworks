@@ -7,7 +7,7 @@ export interface RunWithSteps {
   id: string
   project_id: string
   story_id: string
-  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
+  status: 'pending' | 'running' | 'paused' | 'completed' | 'failed' | 'cancelled'
   pipeline_config_snapshot?: Record<string, unknown>
   started_at?: string
   completed_at?: string
