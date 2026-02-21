@@ -103,25 +103,12 @@ test.describe('Auth smoke tests (real backend)', () => {
     // Wait until we are past the login page
     await expect(page).not.toHaveURL(/\/login/)
 
-    // Locate the logout trigger — could be a button, a user menu item, etc.
-    // Try common patterns: a "Logout" or "Sign out" button, or a user avatar menu.
-    const logoutButton = page
-      .getByRole('button', { name: /logout|sign out/i })
-      .or(page.getByText(/logout|sign out/i))
-      .first()
+    // The logout is inside a PrimeVue popup Menu triggered by the "User menu" button.
+    // Click the user menu button to open the popup.
+    await page.getByTestId('user-menu-button').click()
 
-    // Some UIs hide logout behind a user menu click — try to open it first.
-    const userMenu = page
-      .getByRole('button', { name: /user|account|profile|menu/i })
-      .or(page.getByText(SEED_USERS.dev.name))
-      .first()
-
-    // If logout button is not immediately visible, click the user menu first.
-    if (!(await logoutButton.isVisible())) {
-      await userMenu.click()
-    }
-
-    await logoutButton.click()
+    // PrimeVue Menu renders items as <a role="menuitem"> — click the Logout item
+    await page.getByRole('menuitem', { name: /logout/i }).click()
 
     await expect(page).toHaveURL(/\/login/, { timeout: 8000 })
   })
