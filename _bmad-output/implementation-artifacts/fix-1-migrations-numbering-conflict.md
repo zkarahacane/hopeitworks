@@ -1,6 +1,6 @@
 # Story fix-1: Fix migration numbering conflict and apply missing migrations
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -45,3 +45,7 @@ Two migration files share the `000013` prefix. The `000013_add_circuit_breaker_t
   - [ ] Confirm no gaps and no duplicates remain in the sequence
 - [ ] Task 4: Test end-to-end
   - [ ] Run `make seed` and verify it completes without error after the migration fix
+
+## Change Log
+
+- Merged to develop via PR #98 (2026-02-21)
