@@ -190,6 +190,12 @@ func (m *mockProjectRepo) Update(_ context.Context, p *model.Project) (*model.Pr
 	return p, nil
 }
 func (m *mockProjectRepo) Delete(_ context.Context, _ uuid.UUID) error { return nil }
+func (m *mockProjectRepo) IncrementCircuitBreakerCount(_ context.Context, _ uuid.UUID) (*model.Project, error) {
+	return &model.Project{}, nil
+}
+func (m *mockProjectRepo) ResetCircuitBreaker(_ context.Context, _ uuid.UUID) (*model.Project, error) {
+	return &model.Project{}, nil
+}
 
 type mockRunRepo struct {
 	updateRunStepContainerInfoFn func(ctx context.Context, id uuid.UUID, containerID *string, logTail *string) (*model.RunStep, error)
@@ -201,7 +207,7 @@ type mockRunRepo struct {
 	getActiveRunByStoryFn func(ctx context.Context, storyID uuid.UUID) (*model.Run, error)
 	listRunsByProjectFn   func(ctx context.Context, projectID uuid.UUID, limit, offset int32) ([]*model.Run, error)
 	listRunsByStoryFn     func(ctx context.Context, storyID uuid.UUID, limit, offset int32) ([]*model.Run, error)
-	updateRunStatusFn     func(ctx context.Context, id uuid.UUID, status model.RunStatus, startedAt, completedAt *time.Time, errorMsg *string) (*model.Run, error)
+	updateRunStatusFn     func(ctx context.Context, id uuid.UUID, status model.RunStatus, startedAt, completedAt, pausedAt *time.Time, errorMsg *string) (*model.Run, error)
 	countRunsByProjectFn  func(ctx context.Context, projectID uuid.UUID) (int64, error)
 	countRunsByStoryFn    func(ctx context.Context, storyID uuid.UUID) (int64, error)
 	createRunStepFn       func(ctx context.Context, step *model.RunStep) (*model.RunStep, error)
@@ -256,9 +262,9 @@ func (m *mockRunRepo) ListRunsByStory(ctx context.Context, storyID uuid.UUID, li
 	}
 	return nil, nil
 }
-func (m *mockRunRepo) UpdateRunStatus(ctx context.Context, id uuid.UUID, status model.RunStatus, startedAt, completedAt *time.Time, errorMsg *string) (*model.Run, error) {
+func (m *mockRunRepo) UpdateRunStatus(ctx context.Context, id uuid.UUID, status model.RunStatus, startedAt, completedAt, pausedAt *time.Time, errorMsg *string) (*model.Run, error) {
 	if m.updateRunStatusFn != nil {
-		return m.updateRunStatusFn(ctx, id, status, startedAt, completedAt, errorMsg)
+		return m.updateRunStatusFn(ctx, id, status, startedAt, completedAt, pausedAt, errorMsg)
 	}
 	return &model.Run{ID: id, Status: status}, nil
 }
@@ -297,6 +303,14 @@ func (m *mockRunRepo) UpdateRunStepStatus(ctx context.Context, id uuid.UUID, sta
 		return m.updateRunStepStatusFn(ctx, id, status, startedAt, completedAt, errorMsg)
 	}
 	return &model.RunStep{ID: id, Status: status}, nil
+}
+
+func (m *mockRunRepo) CreateRetryRunStep(_ context.Context, step *model.RunStep) (*model.RunStep, error) {
+	return step, nil
+}
+
+func (m *mockRunRepo) ListRetryStepsByParent(_ context.Context, _ uuid.UUID) ([]*model.RunStep, error) {
+	return nil, nil
 }
 
 func (m *mockRunRepo) getContainerInfoCalls() []containerInfoCall {
@@ -338,6 +352,37 @@ func (m *mockTemplateRenderer) Render(templateContent string, _ *model.TemplateC
 
 // --- Test fixture ---
 
+// mockCostRepo is a no-op CostRepository for use in AgentRunAction tests.
+type mockCostRepo struct{}
+
+func (m *mockCostRepo) InsertCostRecord(_ context.Context, r *model.CostRecord) (*model.CostRecord, error) {
+	return r, nil
+}
+func (m *mockCostRepo) GetCostByRunStep(_ context.Context, _ uuid.UUID) (*model.CostRecord, error) {
+	return nil, nil
+}
+func (m *mockCostRepo) SumCostByProject(_ context.Context, _ uuid.UUID, _ time.Time) (float64, int64, int64, error) {
+	return 0, 0, 0, nil
+}
+func (m *mockCostRepo) SumCostByRun(_ context.Context, _ uuid.UUID) (float64, error) {
+	return 0, nil
+}
+func (m *mockCostRepo) SumCostByStory(_ context.Context, _ uuid.UUID) (float64, int64, int64, int, error) {
+	return 0, 0, 0, 0, nil
+}
+func (m *mockCostRepo) ListCostsByProjectByStory(_ context.Context, _ uuid.UUID, _ time.Time) ([]model.StoryCostBreakdown, error) {
+	return nil, nil
+}
+func (m *mockCostRepo) ListCostsByProjectByRun(_ context.Context, _ uuid.UUID, _ time.Time) ([]model.RunCostBreakdown, error) {
+	return nil, nil
+}
+func (m *mockCostRepo) ListCostsByProjectByModel(_ context.Context, _ uuid.UUID, _ time.Time) ([]model.CostByModel, error) {
+	return nil, nil
+}
+func (m *mockCostRepo) ListStepCostsByRun(_ context.Context, _ uuid.UUID) ([]model.StepCostBreakdown, error) {
+	return nil, nil
+}
+
 type agentRunFixture struct {
 	projectID uuid.UUID
 	storyID   uuid.UUID
@@ -356,6 +401,7 @@ type agentRunFixture struct {
 	projectRepo  *mockProjectRepo
 	runRepo      *mockRunRepo
 	templateSvc  *service.TemplateService
+	costSvc      *service.CostService
 
 	action *action.AgentRunAction
 }
@@ -456,6 +502,9 @@ func newAgentRunFixture(t *testing.T) *agentRunFixture {
 	renderer := &mockTemplateRenderer{}
 	f.templateSvc = service.NewTemplateService(promptTemplateRepo, renderer, testLogger())
 
+	// Create a CostService with a no-op mock repository
+	f.costSvc = service.NewCostService(&mockCostRepo{}, nil, nil, nil, testLogger())
+
 	agentCfg := action.AgentConfig{
 		DefaultImage:  "hopeitworks/agent:latest",
 		DefaultMemory: 4294967296,
@@ -473,6 +522,7 @@ func newAgentRunFixture(t *testing.T) *agentRunFixture {
 		f.projectRepo,
 		f.runRepo,
 		f.templateSvc,
+		f.costSvc,
 		agentCfg,
 		testLogger(),
 	)

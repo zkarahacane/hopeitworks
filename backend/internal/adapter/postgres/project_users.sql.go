@@ -112,7 +112,7 @@ func (q *Queries) ListProjectUsers(ctx context.Context, projectID uuid.UUID) ([]
 }
 
 const listProjectsByUser = `-- name: ListProjectsByUser :many
-SELECT p.id, p.name, p.description, p.owner_id, p.repo_url, p.git_provider, p.git_token_env, p.agent_runtime, p.default_model, p.max_budget, p.created_at, p.updated_at FROM projects p
+SELECT p.id, p.name, p.description, p.owner_id, p.repo_url, p.git_provider, p.git_token_env, p.agent_runtime, p.default_model, p.max_budget, p.created_at, p.updated_at, p.circuit_breaker_count, p.circuit_breaker_active, p.circuit_breaker_max FROM projects p
 INNER JOIN project_users pu ON pu.project_id = p.id
 WHERE pu.user_id = $1
 ORDER BY p.created_at DESC
@@ -147,6 +147,9 @@ func (q *Queries) ListProjectsByUser(ctx context.Context, arg ListProjectsByUser
 			&i.MaxBudget,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.CircuitBreakerCount,
+			&i.CircuitBreakerActive,
+			&i.CircuitBreakerMax,
 		); err != nil {
 			return nil, err
 		}

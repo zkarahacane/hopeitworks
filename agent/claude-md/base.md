@@ -80,6 +80,21 @@ chore(deploy): update docker-compose health checks
 - Backend: `golangci-lint run ./...`
 - Frontend: `npm run lint`
 
+### Pre-push Validation (ENFORCED)
+
+A git pre-push hook automatically runs lint + unit tests before every push.
+If they fail, the push is BLOCKED. Run these commands proactively to avoid wasting time:
+
+**Backend** (if you modified files in `backend/`):
+```bash
+cd backend && golangci-lint run ./... && go test ./... -short
+```
+
+**Frontend** (if you modified files in `frontend/`):
+```bash
+cd frontend && npm run lint && npm run type-check
+```
+
 ## Testing Principles
 
 - Every new feature has tests

@@ -8,6 +8,7 @@ export interface Project {
   name: string
   description?: string
   owner_id: string
+  circuit_breaker_active?: boolean
   created_at: string
   updated_at: string
 }

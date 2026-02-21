@@ -119,15 +119,43 @@ func (r *ProjectRepo) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
+// IncrementCircuitBreakerCount increments the circuit breaker failure count for a project.
+// If the count reaches the max threshold, the circuit breaker is activated.
+func (r *ProjectRepo) IncrementCircuitBreakerCount(ctx context.Context, id uuid.UUID) (*model.Project, error) {
+	row, err := r.queries.IncrementCircuitBreakerCount(ctx, id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, apperrors.NewNotFound("project", id)
+		}
+		return nil, apperrors.NewInternal("failed to increment circuit breaker count", err)
+	}
+	return toDomainProject(row), nil
+}
+
+// ResetCircuitBreaker resets the circuit breaker state for a project.
+func (r *ProjectRepo) ResetCircuitBreaker(ctx context.Context, id uuid.UUID) (*model.Project, error) {
+	row, err := r.queries.ResetCircuitBreaker(ctx, id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, apperrors.NewNotFound("project", id)
+		}
+		return nil, apperrors.NewInternal("failed to reset circuit breaker", err)
+	}
+	return toDomainProject(row), nil
+}
+
 // toDomainProject maps a sqlc-generated Project to a domain Project.
 func toDomainProject(p Project) *model.Project {
 	project := &model.Project{
-		ID:           p.ID,
-		Name:         p.Name,
-		GitProvider:  p.GitProvider,
-		AgentRuntime: p.AgentRuntime,
-		CreatedAt:    p.CreatedAt,
-		UpdatedAt:    p.UpdatedAt,
+		ID:                   p.ID,
+		Name:                 p.Name,
+		GitProvider:          p.GitProvider,
+		AgentRuntime:         p.AgentRuntime,
+		CircuitBreakerCount:  int(p.CircuitBreakerCount),
+		CircuitBreakerActive: p.CircuitBreakerActive,
+		CircuitBreakerMax:    int(p.CircuitBreakerMax),
+		CreatedAt:            p.CreatedAt,
+		UpdatedAt:            p.UpdatedAt,
 	}
 	if p.Description.Valid {
 		project.Description = &p.Description.String

@@ -29,3 +29,27 @@ RETURNING *;
 
 -- name: DeleteProject :exec
 DELETE FROM projects WHERE id = $1;
+
+-- name: IncrementCircuitBreakerCount :one
+UPDATE projects
+SET circuit_breaker_count = circuit_breaker_count + 1,
+    circuit_breaker_active = CASE
+        WHEN circuit_breaker_count + 1 >= circuit_breaker_max THEN true
+        ELSE circuit_breaker_active
+    END,
+    updated_at = now()
+WHERE id = $1
+RETURNING *;
+
+-- name: ResetCircuitBreaker :one
+UPDATE projects
+SET circuit_breaker_count = 0,
+    circuit_breaker_active = false,
+    updated_at = now()
+WHERE id = $1
+RETURNING *;
+
+-- name: GetCircuitBreakerState :one
+SELECT id, circuit_breaker_count, circuit_breaker_active, circuit_breaker_max
+FROM projects
+WHERE id = $1;

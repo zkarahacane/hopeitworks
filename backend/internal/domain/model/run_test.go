@@ -52,12 +52,102 @@ func TestValidateRunTransition(t *testing.T) {
 				if !ok {
 					t.Errorf("expected *errors.DomainError, got %T", err)
 				}
-				if domainErr.Code != "INVALID_STATE_TRANSITION" {
-					t.Errorf("expected code INVALID_STATE_TRANSITION, got %s", domainErr.Code)
+				if domainErr.Code != errors.ErrCodeInvalidStateTransition {
+					t.Errorf("expected code %s, got %s", errors.ErrCodeInvalidStateTransition, domainErr.Code)
 				}
 				if domainErr.Category != errors.CategoryInvalidState {
 					t.Errorf("expected category invalid_state, got %s", domainErr.Category)
 				}
+			}
+		})
+	}
+}
+
+func TestComputeProgress(t *testing.T) {
+	tests := []struct {
+		name     string
+		steps    []RunStep
+		expected int
+	}{
+		{
+			name:     "zero steps returns 0",
+			steps:    []RunStep{},
+			expected: 0,
+		},
+		{
+			name:     "nil steps returns 0",
+			steps:    nil,
+			expected: 0,
+		},
+		{
+			name: "no completed steps returns 0",
+			steps: []RunStep{
+				{Status: StepStatusPending},
+				{Status: StepStatusRunning},
+				{Status: StepStatusPending},
+			},
+			expected: 0,
+		},
+		{
+			name: "2 of 3 completed returns 66",
+			steps: []RunStep{
+				{Status: StepStatusCompleted},
+				{Status: StepStatusCompleted},
+				{Status: StepStatusRunning},
+			},
+			expected: 66,
+		},
+		{
+			name: "all 3 completed returns 100",
+			steps: []RunStep{
+				{Status: StepStatusCompleted},
+				{Status: StepStatusCompleted},
+				{Status: StepStatusCompleted},
+			},
+			expected: 100,
+		},
+		{
+			name: "1 of 1 completed returns 100",
+			steps: []RunStep{
+				{Status: StepStatusCompleted},
+			},
+			expected: 100,
+		},
+		{
+			name: "1 of 2 completed returns 50",
+			steps: []RunStep{
+				{Status: StepStatusCompleted},
+				{Status: StepStatusPending},
+			},
+			expected: 50,
+		},
+		{
+			name: "1 of 3 completed returns 33",
+			steps: []RunStep{
+				{Status: StepStatusCompleted},
+				{Status: StepStatusFailed},
+				{Status: StepStatusPending},
+			},
+			expected: 33,
+		},
+		{
+			name: "mixed statuses with cancelled",
+			steps: []RunStep{
+				{Status: StepStatusCompleted},
+				{Status: StepStatusCancelled},
+				{Status: StepStatusPending},
+				{Status: StepStatusPending},
+			},
+			expected: 25,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := &Run{}
+			result := r.ComputeProgress(tt.steps)
+			if result != tt.expected {
+				t.Errorf("ComputeProgress() = %d, want %d", result, tt.expected)
 			}
 		})
 	}
@@ -78,6 +168,16 @@ func TestValidateStepTransition(t *testing.T) {
 		{"running to completed", StepStatusRunning, StepStatusCompleted, false},
 		{"running to failed", StepStatusRunning, StepStatusFailed, false},
 		{"running to cancelled", StepStatusRunning, StepStatusCancelled, false},
+		{"running to waiting_approval", StepStatusRunning, StepStatusWaitingApproval, false},
+
+		// Valid transitions from waiting_approval
+		{"waiting_approval to running", StepStatusWaitingApproval, StepStatusRunning, false},
+		{"waiting_approval to completed", StepStatusWaitingApproval, StepStatusCompleted, false},
+		{"waiting_approval to failed", StepStatusWaitingApproval, StepStatusFailed, false},
+		{"waiting_approval to cancelled", StepStatusWaitingApproval, StepStatusCancelled, false},
+
+		// Invalid transitions from waiting_approval
+		{"waiting_approval to pending", StepStatusWaitingApproval, StepStatusPending, true},
 
 		// Invalid transitions from pending
 		{"pending to completed", StepStatusPending, StepStatusCompleted, true},
@@ -107,8 +207,8 @@ func TestValidateStepTransition(t *testing.T) {
 				if !ok {
 					t.Errorf("expected *errors.DomainError, got %T", err)
 				}
-				if domainErr.Code != "INVALID_STATE_TRANSITION" {
-					t.Errorf("expected code INVALID_STATE_TRANSITION, got %s", domainErr.Code)
+				if domainErr.Code != errors.ErrCodeInvalidStateTransition {
+					t.Errorf("expected code %s, got %s", errors.ErrCodeInvalidStateTransition, domainErr.Code)
 				}
 				if domainErr.Category != errors.CategoryInvalidState {
 					t.Errorf("expected category invalid_state, got %s", domainErr.Category)

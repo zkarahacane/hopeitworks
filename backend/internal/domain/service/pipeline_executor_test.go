@@ -170,7 +170,7 @@ func newExecutorTestFixture(stepCount int) *executorTestFixture {
 			}
 			return nil, nil
 		},
-		updateRunStatusFn: func(_ context.Context, id uuid.UUID, status model.RunStatus, startedAt, completedAt *time.Time, errorMsg *string) (*model.Run, error) {
+		updateRunStatusFn: func(_ context.Context, id uuid.UUID, status model.RunStatus, startedAt, completedAt, pausedAt *time.Time, errorMsg *string) (*model.Run, error) {
 			f.mu.Lock()
 			f.runStatusCalls = append(f.runStatusCalls, runStatusCall{
 				ID: id, Status: status, StartedAt: startedAt, CompletedAt: completedAt, ErrorMsg: errorMsg,
@@ -184,6 +184,9 @@ func newExecutorTestFixture(stepCount int) *executorTestFixture {
 			}
 			if completedAt != nil {
 				run.CompletedAt = completedAt
+			}
+			if pausedAt != nil {
+				run.PausedAt = pausedAt
 			}
 			if errorMsg != nil {
 				run.ErrorMessage = errorMsg
@@ -726,6 +729,85 @@ func TestExecuteRun_FailureEventOrder(t *testing.T) {
 }
 
 // TestActionRegistry tests the mock ActionRegistry behavior (AC #3, #9).
+func TestExecuteRun_StepSuspendedForApproval(t *testing.T) {
+	f := newExecutorTestFixture(3)
+
+	// step 0 succeeds normally
+	f.actionReg.Register(&mockAction{name: f.steps[0].Action})
+
+	// step 1 simulates hitl_gate: action returns nil, but the step is
+	// transitioned to waiting_approval during execution
+	f.actionReg.Register(&mockAction{
+		name: f.steps[1].Action,
+		executeFn: func(_ context.Context, _ *model.RunContext) error {
+			// Simulate what HITLGateAction does: update step status to waiting_approval
+			// The executor re-fetches step after Execute() returns nil
+			return nil
+		},
+	})
+
+	// Override GetRunStep to return waiting_approval for step 1
+	f.runRepo.getRunStepFn = func(_ context.Context, id uuid.UUID) (*model.RunStep, error) {
+		if id == f.steps[1].ID {
+			return &model.RunStep{
+				ID:     id,
+				RunID:  f.runID,
+				Status: model.StepStatusWaitingApproval,
+			}, nil
+		}
+		// For other steps, return normal status
+		for _, s := range f.steps {
+			if s.ID == id {
+				cp := *s
+				return &cp, nil
+			}
+		}
+		return nil, errors.NewNotFound("run_step", id)
+	}
+
+	var step2Executed bool
+	f.actionReg.Register(&mockAction{
+		name: f.steps[2].Action,
+		executeFn: func(_ context.Context, _ *model.RunContext) error {
+			step2Executed = true
+			return nil
+		},
+	})
+
+	err := f.executor.ExecuteRun(context.Background(), f.runID)
+	// ExecuteRun should return nil (suspension is not an error)
+	if err != nil {
+		t.Fatalf("expected nil error (suspension), got %v", err)
+	}
+
+	// Step 2 should NOT have been executed
+	if step2Executed {
+		t.Error("step 2 should not have been executed after step 1 was suspended")
+	}
+
+	// Run should NOT be marked as completed (it's still running, waiting for approval)
+	var runCompleted bool
+	for _, call := range f.runStatusCalls {
+		if call.Status == model.RunStatusCompleted {
+			runCompleted = true
+		}
+	}
+	if runCompleted {
+		t.Error("run should not be marked as completed when a step is suspended")
+	}
+
+	// Run should NOT be marked as failed
+	var runFailed bool
+	for _, call := range f.runStatusCalls {
+		if call.Status == model.RunStatusFailed {
+			runFailed = true
+		}
+	}
+	if runFailed {
+		t.Error("run should not be marked as failed when a step is suspended")
+	}
+}
+
 func TestActionRegistry_RegisterAndGet(t *testing.T) {
 	reg := newMockActionRegistry()
 
@@ -786,5 +868,197 @@ func TestActionRegistry_RegisterOverwrites(t *testing.T) {
 	execErr := result.Execute(context.Background(), nil)
 	if execErr == nil || execErr.Error() != "action2" {
 		t.Errorf("expected action2 error, got %v", execErr)
+	}
+}
+
+func TestExecuteRun_PauseStopsExecution(t *testing.T) {
+	f := newExecutorTestFixture(3)
+
+	// After step 0 succeeds, the run will be marked as paused in the DB
+	step0Executed := false
+	step2Executed := false
+
+	f.actionReg.Register(&mockAction{
+		name: f.steps[0].Action,
+		executeFn: func(_ context.Context, _ *model.RunContext) error {
+			step0Executed = true
+			return nil
+		},
+	})
+	f.actionReg.Register(&mockAction{
+		name: f.steps[1].Action,
+		executeFn: func(_ context.Context, _ *model.RunContext) error {
+			return nil
+		},
+	})
+	f.actionReg.Register(&mockAction{
+		name: f.steps[2].Action,
+		executeFn: func(_ context.Context, _ *model.RunContext) error {
+			step2Executed = true
+			return nil
+		},
+	})
+
+	// Override getRunFn to return paused status after step 0 completes
+	callCount := 0
+	f.runRepo.getRunFn = func(_ context.Context, id uuid.UUID) (*model.Run, error) {
+		callCount++
+		if id == f.runID {
+			run := *f.run
+			// First call is the initial verify, second call is the pause check before step 0
+			// Third call (pause check before step 1) returns paused
+			if callCount >= 3 {
+				run.Status = model.RunStatusPaused
+			}
+			return &run, nil
+		}
+		return nil, fmt.Errorf("run not found: %s", id)
+	}
+
+	err := f.executor.ExecuteRun(context.Background(), f.runID)
+	if err != ErrRunPaused {
+		t.Errorf("expected ErrRunPaused, got %v", err)
+	}
+
+	if !step0Executed {
+		t.Error("expected step 0 to be executed")
+	}
+	if step2Executed {
+		t.Error("expected step 2 not to be executed after pause")
+	}
+}
+
+func TestExecuteRun_ResumeSkipsCompletedSteps(t *testing.T) {
+	f := newExecutorTestFixture(3)
+
+	// Mark step 0 as already completed (simulating resume)
+	f.steps[0].Status = model.StepStatusCompleted
+
+	var executedSteps []string
+	for _, step := range f.steps {
+		stepName := step.StepName
+		f.actionReg.Register(&mockAction{
+			name: step.Action,
+			executeFn: func(_ context.Context, _ *model.RunContext) error {
+				executedSteps = append(executedSteps, stepName)
+				return nil
+			},
+		})
+	}
+
+	err := f.executor.ExecuteRun(context.Background(), f.runID)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	// Step 0 should be skipped since it's completed
+	if len(executedSteps) != 2 {
+		t.Fatalf("expected 2 steps executed (skipping completed step 0), got %d: %v", len(executedSteps), executedSteps)
+	}
+	if executedSteps[0] != "step-1" {
+		t.Errorf("expected first executed step to be step-1, got %s", executedSteps[0])
+	}
+	if executedSteps[1] != "step-2" {
+		t.Errorf("expected second executed step to be step-2, got %s", executedSteps[1])
+	}
+}
+
+func TestExecuteRun_CircuitBreakerBlocksExecution(t *testing.T) {
+	f := newExecutorTestFixture(1)
+	f.registerSuccessActions()
+
+	// Set up circuit breaker that is already open
+	cbRepo := newCBMockProjectRepo()
+	p := &model.Project{
+		ID:                   f.projectID,
+		CircuitBreakerCount:  3,
+		CircuitBreakerActive: true,
+		CircuitBreakerMax:    3,
+	}
+	cbRepo.projects[f.projectID] = p
+
+	cbEventPub := newCBMockEventPublisher()
+	cbSvc := NewCircuitBreakerService(cbRepo, cbEventPub, testLogger())
+	f.executor.SetCircuitBreaker(cbSvc)
+
+	err := f.executor.ExecuteRun(context.Background(), f.runID)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+
+	domainErr, ok := err.(*errors.DomainError)
+	if !ok {
+		t.Fatalf("expected *errors.DomainError, got %T", err)
+	}
+	if domainErr.Code != circuitBreakerOpenCode {
+		t.Errorf("expected code CIRCUIT_BREAKER_OPEN, got %s", domainErr.Code)
+	}
+
+	// Run should be marked as failed
+	if len(f.runStatusCalls) != 1 {
+		t.Fatalf("expected 1 run status update, got %d", len(f.runStatusCalls))
+	}
+	if f.runStatusCalls[0].Status != model.RunStatusFailed {
+		t.Errorf("expected run status failed, got %s", f.runStatusCalls[0].Status)
+	}
+}
+
+func TestExecuteRun_CircuitBreakerRecordsFailure(t *testing.T) {
+	f := newExecutorTestFixture(1)
+
+	// Register action that fails
+	f.actionReg.Register(&mockAction{
+		name: f.steps[0].Action,
+		executeFn: func(_ context.Context, _ *model.RunContext) error {
+			return fmt.Errorf("build failed")
+		},
+	})
+
+	cbRepo := newCBMockProjectRepo()
+	p := &model.Project{
+		ID:                   f.projectID,
+		CircuitBreakerCount:  0,
+		CircuitBreakerActive: false,
+		CircuitBreakerMax:    3,
+	}
+	cbRepo.projects[f.projectID] = p
+
+	cbEventPub := newCBMockEventPublisher()
+	cbSvc := NewCircuitBreakerService(cbRepo, cbEventPub, testLogger())
+	f.executor.SetCircuitBreaker(cbSvc)
+
+	_ = f.executor.ExecuteRun(context.Background(), f.runID)
+
+	// Verify circuit breaker count was incremented
+	if cbRepo.projects[f.projectID].CircuitBreakerCount != 1 {
+		t.Errorf("expected circuit breaker count 1, got %d", cbRepo.projects[f.projectID].CircuitBreakerCount)
+	}
+}
+
+func TestExecuteRun_CircuitBreakerRecordsSuccess(t *testing.T) {
+	f := newExecutorTestFixture(1)
+	f.registerSuccessActions()
+
+	cbRepo := newCBMockProjectRepo()
+	p := &model.Project{
+		ID:                   f.projectID,
+		CircuitBreakerCount:  2,
+		CircuitBreakerActive: false,
+		CircuitBreakerMax:    3,
+	}
+	cbRepo.projects[f.projectID] = p
+
+	cbEventPub := newCBMockEventPublisher()
+	cbSvc := NewCircuitBreakerService(cbRepo, cbEventPub, testLogger())
+	f.executor.SetCircuitBreaker(cbSvc)
+
+	err := f.executor.ExecuteRun(context.Background(), f.runID)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	// Verify circuit breaker count was reset to 0
+	if cbRepo.projects[f.projectID].CircuitBreakerCount != 0 {
+		t.Errorf("expected circuit breaker count 0, got %d", cbRepo.projects[f.projectID].CircuitBreakerCount)
 	}
 }

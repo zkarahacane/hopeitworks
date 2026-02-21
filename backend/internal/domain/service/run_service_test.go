@@ -19,7 +19,7 @@ type mockRunRepo struct {
 	getActiveRunByStoryFn func(ctx context.Context, storyID uuid.UUID) (*model.Run, error)
 	listRunsByProjectFn   func(ctx context.Context, projectID uuid.UUID, limit, offset int32) ([]*model.Run, error)
 	listRunsByStoryFn     func(ctx context.Context, storyID uuid.UUID, limit, offset int32) ([]*model.Run, error)
-	updateRunStatusFn     func(ctx context.Context, id uuid.UUID, status model.RunStatus, startedAt, completedAt *time.Time, errorMsg *string) (*model.Run, error)
+	updateRunStatusFn     func(ctx context.Context, id uuid.UUID, status model.RunStatus, startedAt, completedAt, pausedAt *time.Time, errorMsg *string) (*model.Run, error)
 	countRunsByProjectFn  func(ctx context.Context, projectID uuid.UUID) (int64, error)
 	countRunsByStoryFn    func(ctx context.Context, storyID uuid.UUID) (int64, error)
 	createRunStepFn       func(ctx context.Context, step *model.RunStep) (*model.RunStep, error)
@@ -58,9 +58,9 @@ func (m *mockRunRepo) ListRunsByStory(ctx context.Context, storyID uuid.UUID, li
 	}
 	return nil, nil
 }
-func (m *mockRunRepo) UpdateRunStatus(ctx context.Context, id uuid.UUID, status model.RunStatus, startedAt, completedAt *time.Time, errorMsg *string) (*model.Run, error) {
+func (m *mockRunRepo) UpdateRunStatus(ctx context.Context, id uuid.UUID, status model.RunStatus, startedAt, completedAt, pausedAt *time.Time, errorMsg *string) (*model.Run, error) {
 	if m.updateRunStatusFn != nil {
-		return m.updateRunStatusFn(ctx, id, status, startedAt, completedAt, errorMsg)
+		return m.updateRunStatusFn(ctx, id, status, startedAt, completedAt, pausedAt, errorMsg)
 	}
 	return nil, nil
 }
@@ -103,6 +103,12 @@ func (m *mockRunRepo) UpdateRunStepStatus(ctx context.Context, id uuid.UUID, sta
 }
 func (m *mockRunRepo) UpdateRunStepContainerInfo(_ context.Context, id uuid.UUID, _ *string, _ *string) (*model.RunStep, error) {
 	return &model.RunStep{ID: id}, nil
+}
+func (m *mockRunRepo) CreateRetryRunStep(_ context.Context, step *model.RunStep) (*model.RunStep, error) {
+	return step, nil
+}
+func (m *mockRunRepo) ListRetryStepsByParent(_ context.Context, _ uuid.UUID) ([]*model.RunStep, error) {
+	return nil, nil
 }
 
 // mockStoryRepoForRun implements port.StoryRepository for testing.
@@ -359,7 +365,7 @@ func TestTransitionRun_ValidTransitions(t *testing.T) {
 						Status: tt.fromStatus,
 					}, nil
 				},
-				updateRunStatusFn: func(_ context.Context, _ uuid.UUID, status model.RunStatus, startedAt, completedAt *time.Time, _ *string) (*model.Run, error) {
+				updateRunStatusFn: func(_ context.Context, _ uuid.UUID, status model.RunStatus, startedAt, completedAt, _ *time.Time, _ *string) (*model.Run, error) {
 					run := &model.Run{
 						ID:     runID,
 						Status: status,
@@ -412,8 +418,8 @@ func TestTransitionRun_InvalidTransition(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected *errors.DomainError, got %T", err)
 	}
-	if domainErr.Code != "INVALID_STATE_TRANSITION" {
-		t.Errorf("expected INVALID_STATE_TRANSITION code, got %s", domainErr.Code)
+	if domainErr.Code != errors.ErrCodeInvalidStateTransition {
+		t.Errorf("expected %s code, got %s", errors.ErrCodeInvalidStateTransition, domainErr.Code)
 	}
 }
 
@@ -486,8 +492,8 @@ func TestTransitionRunStep_InvalidTransition(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected *errors.DomainError, got %T", err)
 	}
-	if domainErr.Code != "INVALID_STATE_TRANSITION" {
-		t.Errorf("expected INVALID_STATE_TRANSITION code, got %s", domainErr.Code)
+	if domainErr.Code != errors.ErrCodeInvalidStateTransition {
+		t.Errorf("expected %s code, got %s", errors.ErrCodeInvalidStateTransition, domainErr.Code)
 	}
 }
 
@@ -856,5 +862,475 @@ func TestLaunchRun_JobEnqueueFails(t *testing.T) {
 	}
 	if domainErr.Category != errors.CategoryInternal {
 		t.Errorf("expected internal category, got %s", domainErr.Category)
+	}
+}
+
+// ── PauseRun Tests ───────────────────────────────────────────────────────────
+
+func TestPauseRun_Success(t *testing.T) {
+	projectID := uuid.New()
+	runID := uuid.New()
+
+	runRepo := &mockRunRepo{
+		getRunFn: func(_ context.Context, id uuid.UUID) (*model.Run, error) {
+			return &model.Run{
+				ID:        id,
+				ProjectID: projectID,
+				Status:    model.RunStatusRunning,
+			}, nil
+		},
+		updateRunStatusFn: func(_ context.Context, id uuid.UUID, status model.RunStatus, _, _, pausedAt *time.Time, _ *string) (*model.Run, error) {
+			return &model.Run{
+				ID:        id,
+				ProjectID: projectID,
+				Status:    status,
+				PausedAt:  pausedAt,
+			}, nil
+		},
+	}
+
+	eventPub := newMockEventPublisher()
+	svc := NewRunService(runRepo, newMockProjectRepoForService(), nil, nil, nil, eventPub)
+
+	run, err := svc.PauseRun(context.Background(), projectID, runID)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if run.Status != model.RunStatusPaused {
+		t.Errorf("expected status paused, got %s", run.Status)
+	}
+	if run.PausedAt == nil {
+		t.Error("expected paused_at to be set")
+	}
+
+	events := eventPub.getEvents()
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(events))
+	}
+	if events[0].Event.EventName() != "run.paused" {
+		t.Errorf("expected run.paused event, got %s", events[0].Event.EventName())
+	}
+}
+
+func TestPauseRun_InvalidState(t *testing.T) {
+	projectID := uuid.New()
+	runID := uuid.New()
+
+	tests := []struct {
+		name   string
+		status model.RunStatus
+	}{
+		{"pending run", model.RunStatusPending},
+		{"completed run", model.RunStatusCompleted},
+		{"failed run", model.RunStatusFailed},
+		{"cancelled run", model.RunStatusCancelled},
+		{"already paused run", model.RunStatusPaused},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runRepo := &mockRunRepo{
+				getRunFn: func(_ context.Context, id uuid.UUID) (*model.Run, error) {
+					return &model.Run{
+						ID:        id,
+						ProjectID: projectID,
+						Status:    tt.status,
+					}, nil
+				},
+			}
+
+			svc := NewRunService(runRepo, newMockProjectRepoForService(), nil, nil, nil)
+			_, err := svc.PauseRun(context.Background(), projectID, runID)
+			if err == nil {
+				t.Fatal("expected error for invalid state transition")
+			}
+			domainErr, ok := err.(*errors.DomainError)
+			if !ok {
+				t.Fatalf("expected *errors.DomainError, got %T", err)
+			}
+			if domainErr.Code != errors.ErrCodeInvalidStateTransition {
+				t.Errorf("expected %s code, got %s", errors.ErrCodeInvalidStateTransition, domainErr.Code)
+			}
+		})
+	}
+}
+
+func TestPauseRun_WrongProject(t *testing.T) {
+	projectID := uuid.New()
+	otherProjectID := uuid.New()
+	runID := uuid.New()
+
+	runRepo := &mockRunRepo{
+		getRunFn: func(_ context.Context, id uuid.UUID) (*model.Run, error) {
+			return &model.Run{
+				ID:        id,
+				ProjectID: otherProjectID,
+				Status:    model.RunStatusRunning,
+			}, nil
+		},
+	}
+
+	svc := NewRunService(runRepo, newMockProjectRepoForService(), nil, nil, nil)
+	_, err := svc.PauseRun(context.Background(), projectID, runID)
+	if err == nil {
+		t.Fatal("expected error for wrong project")
+	}
+	domainErr, ok := err.(*errors.DomainError)
+	if !ok {
+		t.Fatalf("expected *errors.DomainError, got %T", err)
+	}
+	if domainErr.Category != errors.CategoryNotFound {
+		t.Errorf("expected not_found category, got %s", domainErr.Category)
+	}
+}
+
+// ── ResumeRun Tests ──────────────────────────────────────────────────────────
+
+func TestResumeRun_Success(t *testing.T) {
+	projectID := uuid.New()
+	runID := uuid.New()
+
+	runRepo := &mockRunRepo{
+		getRunFn: func(_ context.Context, id uuid.UUID) (*model.Run, error) {
+			return &model.Run{
+				ID:        id,
+				ProjectID: projectID,
+				Status:    model.RunStatusPaused,
+			}, nil
+		},
+		updateRunStatusFn: func(_ context.Context, id uuid.UUID, status model.RunStatus, _, _, _ *time.Time, _ *string) (*model.Run, error) {
+			return &model.Run{
+				ID:        id,
+				ProjectID: projectID,
+				Status:    status,
+			}, nil
+		},
+	}
+
+	var enqueuedRunID uuid.UUID
+	jobQueue := &mockJobQueue{
+		enqueueExecuteRunFn: func(_ context.Context, id uuid.UUID) error {
+			enqueuedRunID = id
+			return nil
+		},
+	}
+
+	eventPub := newMockEventPublisher()
+	svc := NewRunService(runRepo, newMockProjectRepoForService(), nil, nil, jobQueue, eventPub)
+
+	run, err := svc.ResumeRun(context.Background(), projectID, runID)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if run.Status != model.RunStatusRunning {
+		t.Errorf("expected status running, got %s", run.Status)
+	}
+	if enqueuedRunID != runID {
+		t.Errorf("expected enqueued run ID %s, got %s", runID, enqueuedRunID)
+	}
+
+	events := eventPub.getEvents()
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(events))
+	}
+	if events[0].Event.EventName() != "run.resumed" {
+		t.Errorf("expected run.resumed event, got %s", events[0].Event.EventName())
+	}
+}
+
+func TestResumeRun_InvalidState(t *testing.T) {
+	projectID := uuid.New()
+	runID := uuid.New()
+
+	tests := []struct {
+		name   string
+		status model.RunStatus
+	}{
+		{"pending run", model.RunStatusPending},
+		{"running run", model.RunStatusRunning},
+		{"completed run", model.RunStatusCompleted},
+		{"failed run", model.RunStatusFailed},
+		{"cancelled run", model.RunStatusCancelled},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runRepo := &mockRunRepo{
+				getRunFn: func(_ context.Context, id uuid.UUID) (*model.Run, error) {
+					return &model.Run{
+						ID:        id,
+						ProjectID: projectID,
+						Status:    tt.status,
+					}, nil
+				},
+			}
+
+			svc := NewRunService(runRepo, newMockProjectRepoForService(), nil, nil, nil)
+			_, err := svc.ResumeRun(context.Background(), projectID, runID)
+			if err == nil {
+				t.Fatal("expected error for invalid state transition")
+			}
+		})
+	}
+}
+
+func TestResumeRun_WrongProject(t *testing.T) {
+	projectID := uuid.New()
+	otherProjectID := uuid.New()
+	runID := uuid.New()
+
+	runRepo := &mockRunRepo{
+		getRunFn: func(_ context.Context, id uuid.UUID) (*model.Run, error) {
+			return &model.Run{
+				ID:        id,
+				ProjectID: otherProjectID,
+				Status:    model.RunStatusPaused,
+			}, nil
+		},
+	}
+
+	svc := NewRunService(runRepo, newMockProjectRepoForService(), nil, nil, nil)
+	_, err := svc.ResumeRun(context.Background(), projectID, runID)
+	if err == nil {
+		t.Fatal("expected error for wrong project")
+	}
+	domainErr, ok := err.(*errors.DomainError)
+	if !ok {
+		t.Fatalf("expected *errors.DomainError, got %T", err)
+	}
+	if domainErr.Category != errors.CategoryNotFound {
+		t.Errorf("expected not_found category, got %s", domainErr.Category)
+	}
+}
+
+// ── Transition Tests with Paused ─────────────────────────────────────────────
+
+func TestTransitionRun_PauseAndResume(t *testing.T) {
+	runID := uuid.New()
+
+	tests := []struct {
+		name       string
+		fromStatus model.RunStatus
+		toStatus   model.RunStatus
+	}{
+		{"running to paused", model.RunStatusRunning, model.RunStatusPaused},
+		{"paused to running", model.RunStatusPaused, model.RunStatusRunning},
+		{"paused to cancelled", model.RunStatusPaused, model.RunStatusCancelled},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runRepo := &mockRunRepo{
+				getRunFn: func(_ context.Context, _ uuid.UUID) (*model.Run, error) {
+					return &model.Run{
+						ID:     runID,
+						Status: tt.fromStatus,
+					}, nil
+				},
+				updateRunStatusFn: func(_ context.Context, _ uuid.UUID, status model.RunStatus, _, _, _ *time.Time, _ *string) (*model.Run, error) {
+					return &model.Run{
+						ID:     runID,
+						Status: status,
+					}, nil
+				},
+			}
+			svc := newRunServiceForTest(runRepo, newMockProjectRepoForService())
+
+			result, err := svc.TransitionRun(context.Background(), runID, tt.toStatus)
+			if err != nil {
+				t.Fatalf("expected no error, got %v", err)
+			}
+			if result.Status != tt.toStatus {
+				t.Errorf("expected status %s, got %s", tt.toStatus, result.Status)
+			}
+		})
+	}
+}
+
+func TestTransitionRun_PausedInvalidTransitions(t *testing.T) {
+	runID := uuid.New()
+
+	tests := []struct {
+		name       string
+		fromStatus model.RunStatus
+		toStatus   model.RunStatus
+	}{
+		{"paused to completed", model.RunStatusPaused, model.RunStatusCompleted},
+		{"paused to failed", model.RunStatusPaused, model.RunStatusFailed},
+		{"pending to paused", model.RunStatusPending, model.RunStatusPaused},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runRepo := &mockRunRepo{
+				getRunFn: func(_ context.Context, _ uuid.UUID) (*model.Run, error) {
+					return &model.Run{
+						ID:     runID,
+						Status: tt.fromStatus,
+					}, nil
+				},
+			}
+			svc := newRunServiceForTest(runRepo, newMockProjectRepoForService())
+
+			_, err := svc.TransitionRun(context.Background(), runID, tt.toStatus)
+			if err == nil {
+				t.Fatalf("expected error for invalid transition from %s to %s", tt.fromStatus, tt.toStatus)
+			}
+			domainErr, ok := err.(*errors.DomainError)
+			if !ok {
+				t.Fatalf("expected *errors.DomainError, got %T", err)
+			}
+			if domainErr.Code != errors.ErrCodeInvalidStateTransition {
+				t.Errorf("expected %s code, got %s", errors.ErrCodeInvalidStateTransition, domainErr.Code)
+			}
+		})
+	}
+}
+
+// ── Progress Computation Tests ───────────────────────────────────────────────
+
+func TestGetRun_ProgressComputed(t *testing.T) {
+	runID := uuid.New()
+
+	tests := []struct {
+		name             string
+		steps            []*model.RunStep
+		expectedProgress int
+	}{
+		{
+			name:             "no steps returns 0",
+			steps:            []*model.RunStep{},
+			expectedProgress: 0,
+		},
+		{
+			name: "1 of 2 completed returns 50",
+			steps: []*model.RunStep{
+				{ID: uuid.New(), Status: model.StepStatusCompleted},
+				{ID: uuid.New(), Status: model.StepStatusRunning},
+			},
+			expectedProgress: 50,
+		},
+		{
+			name: "2 of 3 completed returns 66",
+			steps: []*model.RunStep{
+				{ID: uuid.New(), Status: model.StepStatusCompleted},
+				{ID: uuid.New(), Status: model.StepStatusCompleted},
+				{ID: uuid.New(), Status: model.StepStatusRunning},
+			},
+			expectedProgress: 66,
+		},
+		{
+			name: "all completed returns 100",
+			steps: []*model.RunStep{
+				{ID: uuid.New(), Status: model.StepStatusCompleted},
+				{ID: uuid.New(), Status: model.StepStatusCompleted},
+			},
+			expectedProgress: 100,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runRepo := &mockRunRepo{
+				getRunFn: func(_ context.Context, _ uuid.UUID) (*model.Run, error) {
+					return &model.Run{
+						ID:     runID,
+						Status: model.RunStatusRunning,
+					}, nil
+				},
+				listRunStepsByRunFn: func(_ context.Context, _ uuid.UUID) ([]*model.RunStep, error) {
+					return tt.steps, nil
+				},
+			}
+			svc := newRunServiceForTest(runRepo, newMockProjectRepoForService())
+
+			run, err := svc.GetRun(context.Background(), runID)
+			if err != nil {
+				t.Fatalf("expected no error, got %v", err)
+			}
+			if run.Progress != tt.expectedProgress {
+				t.Errorf("expected progress %d, got %d", tt.expectedProgress, run.Progress)
+			}
+		})
+	}
+}
+
+func TestListRunsByProject_ProgressPopulated(t *testing.T) {
+	projectID := uuid.New()
+	run1ID := uuid.New()
+	run2ID := uuid.New()
+
+	runRepo := &mockRunRepo{
+		listRunsByProjectFn: func(_ context.Context, _ uuid.UUID, _, _ int32) ([]*model.Run, error) {
+			return []*model.Run{
+				{ID: run1ID, Status: model.RunStatusRunning},
+				{ID: run2ID, Status: model.RunStatusCompleted},
+			}, nil
+		},
+		listRunStepsByRunFn: func(_ context.Context, rID uuid.UUID) ([]*model.RunStep, error) {
+			if rID == run1ID {
+				return []*model.RunStep{
+					{ID: uuid.New(), Status: model.StepStatusCompleted},
+					{ID: uuid.New(), Status: model.StepStatusPending},
+				}, nil
+			}
+			return []*model.RunStep{
+				{ID: uuid.New(), Status: model.StepStatusCompleted},
+				{ID: uuid.New(), Status: model.StepStatusCompleted},
+			}, nil
+		},
+		countRunsByProjectFn: func(_ context.Context, _ uuid.UUID) (int64, error) {
+			return 2, nil
+		},
+	}
+	svc := newRunServiceForTest(runRepo, newMockProjectRepoForService())
+
+	result, err := svc.ListRunsByProject(context.Background(), projectID, 1, 20)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(result.Runs) != 2 {
+		t.Fatalf("expected 2 runs, got %d", len(result.Runs))
+	}
+	if result.Runs[0].Progress != 50 {
+		t.Errorf("run1: expected progress 50, got %d", result.Runs[0].Progress)
+	}
+	if result.Runs[1].Progress != 100 {
+		t.Errorf("run2: expected progress 100, got %d", result.Runs[1].Progress)
+	}
+}
+
+func TestListRunsByStory_ProgressPopulated(t *testing.T) {
+	storyID := uuid.New()
+	run1ID := uuid.New()
+
+	runRepo := &mockRunRepo{
+		listRunsByStoryFn: func(_ context.Context, _ uuid.UUID, _, _ int32) ([]*model.Run, error) {
+			return []*model.Run{
+				{ID: run1ID, Status: model.RunStatusRunning},
+			}, nil
+		},
+		listRunStepsByRunFn: func(_ context.Context, _ uuid.UUID) ([]*model.RunStep, error) {
+			return []*model.RunStep{
+				{ID: uuid.New(), Status: model.StepStatusCompleted},
+				{ID: uuid.New(), Status: model.StepStatusCompleted},
+				{ID: uuid.New(), Status: model.StepStatusPending},
+			}, nil
+		},
+		countRunsByStoryFn: func(_ context.Context, _ uuid.UUID) (int64, error) {
+			return 1, nil
+		},
+	}
+	svc := newRunServiceForTest(runRepo, newMockProjectRepoForService())
+
+	result, err := svc.ListRunsByStory(context.Background(), storyID, 1, 20)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(result.Runs) != 1 {
+		t.Fatalf("expected 1 run, got %d", len(result.Runs))
+	}
+	if result.Runs[0].Progress != 66 {
+		t.Errorf("expected progress 66, got %d", result.Runs[0].Progress)
 	}
 }

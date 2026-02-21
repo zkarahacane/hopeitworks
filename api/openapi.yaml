@@ -35,6 +35,12 @@ tags:
     description: Story management endpoints
   - name: pipeline-configs
     description: Pipeline configuration endpoints
+  - name: hitl
+    description: Human-in-the-loop approval endpoints
+  - name: notifications
+    description: Notification configuration endpoints
+  - name: costs
+    description: Cost tracking and observability endpoints
 
 paths:
   # ── Auth ────────────────────────────────────────────────────────────────
@@ -425,6 +431,79 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  # ── Epic DAG ────────────────────────────────────────────────────────
+  /projects/{projectId}/epics/{epicId}/dag:
+    get:
+      operationId: getEpicDAG
+      summary: Get the dependency graph (DAG) for an epic
+      tags: [epics]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/EpicIdPath"
+      responses:
+        "200":
+          description: DAG with nodes and edges
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EpicDAGResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          description: Cycle detected in story dependencies
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /projects/{projectId}/epics/{epicId}/runs:
+    post:
+      operationId: launchEpicRun
+      summary: Launch a batch run for all stories in an epic (async)
+      tags: [epics]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/EpicIdPath"
+      responses:
+        "202":
+          description: Epic run scheduling accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EpicRunAccepted"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          description: Cycle detected in story dependencies
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /projects/{projectId}/epic-runs/{epicRunId}:
+    get:
+      operationId: getEpicRun
+      summary: Get an epic run by ID with per-story status
+      tags: [epics]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/EpicRunIdPath"
+      responses:
+        "200":
+          description: Epic run details with per-story status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EpicRunDetail"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   # ── Stories ──────────────────────────────────────────────────────────
   /projects/{projectId}/stories:
     get:
@@ -696,6 +775,111 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /projects/{projectId}/runs/{runId}/pause:
+    post:
+      operationId: pauseRun
+      summary: Pause a running story run
+      description: >
+        Sets the run status to paused. The currently executing step continues
+        to completion, but no new steps are launched. Returns 409 if the run
+        is not in a pausable state (must be running).
+      tags: [runs]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/RunIdPath"
+      responses:
+        "200":
+          description: Run paused successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Run"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /projects/{projectId}/runs/{runId}/resume:
+    post:
+      operationId: resumeRun
+      summary: Resume a paused story run
+      description: >
+        Resumes execution of a paused run from the last completed step.
+        Returns 409 if the run is not in paused state.
+      tags: [runs]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/RunIdPath"
+      responses:
+        "200":
+          description: Run resumed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Run"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /projects/{projectId}/epics/{epicId}/runs/{runId}/pause:
+    post:
+      operationId: pauseEpicRun
+      summary: Pause an in-progress epic run
+      description: >
+        Pauses an epic run. Child runs that have not started are held,
+        while currently running child runs continue to completion.
+        Returns 409 if the epic run is not in a pausable state.
+      tags: [runs]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/EpicIdPath"
+        - $ref: "#/components/parameters/RunIdPath"
+      responses:
+        "200":
+          description: Epic run paused successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Run"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /projects/{projectId}/epics/{epicId}/runs/{runId}/resume:
+    post:
+      operationId: resumeEpicRun
+      summary: Resume a paused epic run
+      description: >
+        Resumes a paused epic run. Paused child runs are resumed and
+        execution continues with the next dependency group.
+        Returns 409 if the epic run is not in paused state.
+      tags: [runs]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/EpicIdPath"
+        - $ref: "#/components/parameters/RunIdPath"
+      responses:
+        "200":
+          description: Epic run resumed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Run"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
   # ── Prompt Templates ──────────────────────────────────────────────────
   /projects/{projectId}/templates:
     get:
@@ -812,6 +996,27 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  # ── Circuit Breaker ─────────────────────────────────────────────────
+  /projects/{id}/circuit-breaker/reset:
+    post:
+      operationId: resetCircuitBreaker
+      summary: Reset the circuit breaker for a project
+      description: >
+        Resets the circuit breaker state (count=0, active=false) so that
+        pipeline runs can be attempted again. Admin-only endpoint.
+      tags: [projects]
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "204":
+          description: Circuit breaker reset successfully
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   # ── Pipeline Configs ─────────────────────────────────────────────────
   /projects/{projectId}/pipeline:
     get:
@@ -859,6 +1064,418 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+
+  # ── Costs ──────────────────────────────────────────────────────────────
+  /projects/{projectId}/costs:
+    get:
+      operationId: getProjectCosts
+      summary: Get aggregated cost data for a project
+      description: >
+        Returns aggregated cost data for the specified project over a time period,
+        with breakdowns by story, run, and model. Budget limits are included for
+        informational display alongside usage.
+      tags: [costs]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - name: period
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [7d, 30d, 90d]
+            default: 7d
+          description: Time period for aggregation
+      responses:
+        "200":
+          description: Aggregated project cost data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectCostSummary"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ── Notification Configs ─────────────────────────────────────────────
+  /projects/{projectId}/notifications:
+    get:
+      operationId: listNotificationConfigs
+      summary: List notification configs for a project
+      tags: [notifications]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+      responses:
+        "200":
+          description: List of notification configs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationConfigList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    post:
+      operationId: createNotificationConfig
+      summary: Create a notification config for a project
+      tags: [notifications]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateNotificationConfigRequest"
+      responses:
+        "201":
+          description: Notification config created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationConfig"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /projects/{projectId}/notifications/{notificationId}:
+    put:
+      operationId: updateNotificationConfig
+      summary: Update a notification config
+      tags: [notifications]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/NotificationIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateNotificationConfigRequest"
+      responses:
+        "200":
+          description: Notification config updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationConfig"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    delete:
+      operationId: deleteNotificationConfig
+      summary: Delete a notification config
+      tags: [notifications]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/NotificationIdPath"
+      responses:
+        "204":
+          description: Notification config deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /projects/{projectId}/notifications/{notificationId}/test:
+    post:
+      operationId: testNotificationConfig
+      summary: Send a test notification
+      tags: [notifications]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/NotificationIdPath"
+      responses:
+        "204":
+          description: Test notification sent
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ── HITL ──────────────────────────────────────────────────────────────
+  /projects/{projectId}/hitl/pending:
+    get:
+      operationId: listPendingHITLRequests
+      summary: List pending HITL approval requests for a project
+      description: >
+        Returns all pipeline steps currently waiting for human approval.
+        Designed for curl-based CLI workflows — authenticate with a JWT cookie
+        and call this endpoint to see what needs review.
+      tags: [hitl]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+      responses:
+        "200":
+          description: List of pending HITL requests
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PendingHITLRequestList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  # ── HITL Requests ───────────────────────────────────────────────────
+  /hitl-requests:
+    get:
+      operationId: listHITLRequests
+      summary: List HITL requests filtered by status
+      tags: [hitl]
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [pending, approved, rejected]
+          description: Filter by HITL request status
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/PerPageParam"
+      responses:
+        "200":
+          description: Paginated list of HITL requests
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HITLRequestList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /hitl-requests/by-step/{stepId}:
+    get:
+      operationId: getHITLRequestByStep
+      summary: Get the HITL request for a run step
+      tags: [hitl]
+      parameters:
+        - $ref: "#/components/parameters/StepIdPath"
+      responses:
+        "200":
+          description: HITL request details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HITLRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /hitl-requests/{hitlRequestId}:
+    get:
+      operationId: getHITLRequest
+      summary: Get a HITL request by ID
+      tags: [hitl]
+      parameters:
+        - $ref: "#/components/parameters/HITLRequestIdPath"
+      responses:
+        "200":
+          description: HITL request details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HITLRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /hitl-requests/{hitlRequestId}/approve:
+    post:
+      operationId: approveHITLRequest
+      summary: Approve a HITL request
+      tags: [hitl]
+      parameters:
+        - $ref: "#/components/parameters/HITLRequestIdPath"
+      responses:
+        "200":
+          description: HITL request approved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HITLRequest"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  # ── Costs ─────────────────────────────────────────────────────────────
+  /projects/{projectId}/costs/summary:
+    get:
+      operationId: getProjectCostSummary
+      summary: Get cost summary for a project
+      tags: [costs]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - name: period
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [7d, 30d, 90d]
+            default: 7d
+          description: Time period for aggregation
+      responses:
+        "200":
+          description: Aggregated project cost data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CostSummary"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /projects/{projectId}/stories/{storyId}/costs:
+    get:
+      operationId: getStoryCosts
+      summary: Get total costs for a story across all runs
+      tags: [costs]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/StoryIdPath"
+      responses:
+        "200":
+          description: Story cost summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoryCostSummary"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /projects/{projectId}/costs/chart:
+    get:
+      operationId: getProjectCostChart
+      summary: Get daily cost data points for chart rendering
+      tags: [costs]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - name: period
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [7d, 30d]
+            default: 7d
+          description: Time period for cost chart data
+      responses:
+        "200":
+          description: Daily cost data points
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CostDataPoint"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /projects/{projectId}/runs/{runId}/costs:
+    get:
+      operationId: getRunCosts
+      summary: Get total costs for a run with per-step breakdown
+      tags: [costs]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/RunIdPath"
+      responses:
+        "200":
+          description: Run cost detail with per-step breakdown
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunCostDetail"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /projects/{projectId}/costs/runs:
+    get:
+      operationId: getProjectCostRuns
+      summary: Get run-level cost breakdown for a project
+      tags: [costs]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - name: period
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [7d, 30d]
+            default: 7d
+          description: Time period for run cost data
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/PerPageParam"
+      responses:
+        "200":
+          description: Paginated list of run cost rows
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, pagination]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/RunCostRow"
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+
+  /hitl-requests/{hitlRequestId}/reject:
+    post:
+      operationId: rejectHITLRequest
+      summary: Reject a HITL request
+      tags: [hitl]
+      parameters:
+        - $ref: "#/components/parameters/HITLRequestIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RejectHITLRequest"
+      responses:
+        "200":
+          description: HITL request rejected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HITLRequest"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
 
 # ── Components ──────────────────────────────────────────────────────────
 components:
@@ -923,6 +1540,42 @@ components:
         type: string
         format: uuid
       description: Story UUID
+
+    StepIdPath:
+      name: stepId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Run step UUID
+
+    HITLRequestIdPath:
+      name: hitlRequestId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: HITL request UUID
+
+    EpicRunIdPath:
+      name: epicRunId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Epic run UUID
+
+    NotificationIdPath:
+      name: notificationId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Notification config UUID
 
     PageParam:
       name: page
@@ -1064,6 +1717,9 @@ components:
         - id
         - name
         - owner_id
+        - circuit_breaker_count
+        - circuit_breaker_active
+        - circuit_breaker_max
         - created_at
         - updated_at
       properties:
@@ -1081,6 +1737,26 @@ components:
           type: string
           format: uuid
           example: 550e8400-e29b-41d4-a716-446655440000
+        max_budget:
+          type: number
+          format: double
+          nullable: true
+          description: Maximum budget for the project in USD (informational only)
+          example: 100.00
+        circuit_breaker_count:
+          type: integer
+          minimum: 0
+          description: Number of consecutive pipeline failures
+          example: 0
+        circuit_breaker_active:
+          type: boolean
+          description: Whether the circuit breaker is currently tripped
+          example: false
+        circuit_breaker_max:
+          type: integer
+          minimum: 1
+          description: Threshold for consecutive failures before tripping
+          example: 3
         created_at:
           type: string
           format: date-time
@@ -1117,6 +1793,12 @@ components:
           type: string
           maxLength: 1000
           example: Updated description
+        max_budget:
+          type: number
+          format: double
+          nullable: true
+          description: Maximum budget for the project in USD (informational only)
+          example: 100.00
 
     ProjectList:
       type: object
@@ -1240,6 +1922,122 @@ components:
             $ref: "#/components/schemas/Epic"
         pagination:
           $ref: "#/components/schemas/Pagination"
+
+    # ── Epic DAG ─────────────────────────────────────────────────────
+    EpicDAGNode:
+      type: object
+      required: [id, key, title, status, layer]
+      properties:
+        id:
+          type: string
+          format: uuid
+        key:
+          type: string
+          example: S-01
+        title:
+          type: string
+          example: Implement login page
+        status:
+          type: string
+          example: backlog
+        layer:
+          type: integer
+          description: Zero-based execution layer index
+          example: 0
+
+    EpicDAGEdge:
+      type: object
+      required: [source, target]
+      properties:
+        source:
+          type: string
+          description: Source story key (dependency)
+          example: S-01
+        target:
+          type: string
+          description: Target story key (dependent)
+          example: S-02
+
+    EpicDAGResponse:
+      type: object
+      required: [nodes, edges]
+      properties:
+        nodes:
+          type: array
+          items:
+            $ref: "#/components/schemas/EpicDAGNode"
+        edges:
+          type: array
+          items:
+            $ref: "#/components/schemas/EpicDAGEdge"
+
+    EpicRunAccepted:
+      type: object
+      required: [epic_run_id, status, stories_count]
+      properties:
+        epic_run_id:
+          type: string
+          format: uuid
+          example: 990e8400-e29b-41d4-a716-446655440000
+        status:
+          type: string
+          enum: [scheduling]
+          example: scheduling
+        stories_count:
+          type: integer
+          example: 5
+
+    EpicRunStory:
+      type: object
+      required: [story_id, group_index, status]
+      properties:
+        story_id:
+          type: string
+          format: uuid
+        story_key:
+          type: string
+          example: S-01
+          description: Unique story identifier within project (e.g., S-01)
+        run_id:
+          type: string
+          format: uuid
+          nullable: true
+        group_index:
+          type: integer
+          description: Zero-based execution layer index
+          example: 0
+        status:
+          type: string
+          example: pending
+
+    EpicRunDetail:
+      type: object
+      required: [id, project_id, epic_id, status, created_at, stories]
+      properties:
+        id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        epic_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, running, completed, failed, paused]
+          example: pending
+        created_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        stories:
+          type: array
+          items:
+            $ref: "#/components/schemas/EpicRunStory"
 
     # ── Story ───────────────────────────────────────────────────────────
     Story:
@@ -1596,6 +2394,7 @@ components:
         - project_id
         - story_id
         - status
+        - progress
         - created_at
         - updated_at
       properties:
@@ -1610,8 +2409,13 @@ components:
           format: uuid
         status:
           type: string
-          enum: [pending, running, completed, failed, cancelled]
+          enum: [pending, running, paused, completed, failed, cancelled]
           example: pending
+        progress:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: Percentage of completed steps (0–100), computed at query time.
         pipeline_config_snapshot:
           type: object
           additionalProperties: true
@@ -1655,7 +2459,7 @@ components:
           type: string
         status:
           type: string
-          enum: [pending, running, completed, failed, cancelled]
+          enum: [pending, running, completed, failed, cancelled, waiting_approval]
           example: pending
         started_at:
           type: string
@@ -1669,6 +2473,20 @@ components:
           type: string
         log_tail:
           type: string
+        parent_step_id:
+          type: string
+          format: uuid
+          description: ID of the original step this is a retry of; null for root steps
+          nullable: true
+        retry_count:
+          type: integer
+          description: Which retry attempt this is (1-based); null for root steps
+          nullable: true
+        retry_type:
+          type: string
+          enum: [incremental, full]
+          description: Retry strategy used for this attempt; null for root steps
+          nullable: true
         created_at:
           type: string
           format: date-time
@@ -1725,6 +2543,512 @@ components:
         pagination:
           $ref: "#/components/schemas/Pagination"
 
+
+    # ── Notification Config ────────────────────────────────────────────
+    NotificationConfig:
+      type: object
+      required: [id, project_id, channel_type, config, events_filter, enabled, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 770e8400-e29b-41d4-a716-446655440000
+        project_id:
+          type: string
+          format: uuid
+          example: 660e8400-e29b-41d4-a716-446655440000
+        channel_type:
+          type: string
+          enum: [discord, webhook]
+          example: discord
+        config:
+          type: object
+          additionalProperties:
+            type: string
+          example: {"url": "https://discord.com/api/webhooks/..."}
+        events_filter:
+          type: array
+          items:
+            type: string
+          example: ["run.completed", "run.failed"]
+        enabled:
+          type: boolean
+          example: true
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-01-15T10:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2026-01-15T10:30:00Z"
+
+    CreateNotificationConfigRequest:
+      type: object
+      required: [channel_type, config, events_filter]
+      properties:
+        channel_type:
+          type: string
+          enum: [discord, webhook]
+          example: discord
+        config:
+          type: object
+          additionalProperties:
+            type: string
+          example: {"url": "https://discord.com/api/webhooks/..."}
+        events_filter:
+          type: array
+          items:
+            type: string
+          example: ["run.completed", "run.failed"]
+        enabled:
+          type: boolean
+          default: true
+          example: true
+
+    UpdateNotificationConfigRequest:
+      type: object
+      required: [channel_type, config, events_filter, enabled]
+      properties:
+        channel_type:
+          type: string
+          enum: [discord, webhook]
+          example: discord
+        config:
+          type: object
+          additionalProperties:
+            type: string
+          example: {"url": "https://discord.com/api/webhooks/..."}
+        events_filter:
+          type: array
+          items:
+            type: string
+          example: ["run.completed", "run.failed"]
+        enabled:
+          type: boolean
+          example: true
+
+    NotificationConfigList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/NotificationConfig"
+
+    # ── Cost ──────────────────────────────────────────────────────────
+    ProjectCostSummary:
+      type: object
+      required:
+        - total_cost
+        - total_input
+        - total_output
+        - by_story
+        - by_run
+        - by_model
+      properties:
+        total_cost:
+          type: number
+          format: double
+          description: Total cost in USD for the period
+          example: 12.50
+        total_input:
+          type: integer
+          format: int64
+          description: Total input tokens for the period
+          example: 500000
+        total_output:
+          type: integer
+          format: int64
+          description: Total output tokens for the period
+          example: 100000
+        max_budget:
+          type: number
+          format: double
+          nullable: true
+          description: Project budget limit in USD (informational only)
+          example: 100.00
+        by_story:
+          type: array
+          items:
+            $ref: "#/components/schemas/StoryCostBreakdown"
+        by_run:
+          type: array
+          items:
+            $ref: "#/components/schemas/RunCostBreakdown"
+        by_model:
+          type: array
+          items:
+            $ref: "#/components/schemas/ModelCostBreakdown"
+
+    StoryCostBreakdown:
+      type: object
+      required:
+        - story_id
+        - story_key
+        - total_cost
+      properties:
+        story_id:
+          type: string
+          format: uuid
+        story_key:
+          type: string
+          example: S-01
+        total_cost:
+          type: number
+          format: double
+          example: 5.25
+
+    PendingHITLRequestItem:
+      type: object
+      required:
+        - id
+        - run_id
+        - step_id
+        - story_key
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: HITL request ID
+        run_id:
+          type: string
+          format: uuid
+        step_id:
+          type: string
+          format: uuid
+        story_key:
+          type: string
+          example: S-01
+        diff_url:
+          type: string
+          description: URL to view the diff (if PR exists)
+        created_at:
+          type: string
+          format: date-time
+
+    PendingHITLRequestList:
+      type: object
+      required:
+        - data
+        - total
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/PendingHITLRequestItem"
+        total:
+          type: integer
+          example: 3
+
+    HITLRequest:
+      type: object
+      required:
+        - id
+        - run_step_id
+        - step_id
+        - story_key
+        - story_title
+        - gate_type
+        - status
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        run_step_id:
+          type: string
+          format: uuid
+        step_id:
+          type: string
+          format: uuid
+        run_id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        gate_type:
+          type: string
+          example: approval
+        status:
+          type: string
+          enum: [pending, approved, rejected]
+          example: pending
+        story_key:
+          type: string
+          example: S-01
+        story_title:
+          type: string
+          example: Implement login page
+        story_objective:
+          type: string
+        diff_content:
+          type: string
+          description: Unified diff content from the agent run
+          nullable: true
+        reviewer_id:
+          type: string
+          format: uuid
+          nullable: true
+        rejection_reason:
+          type: string
+          nullable: true
+        resolved_at:
+          type: string
+          format: date-time
+          nullable: true
+        reviewed_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    HITLRequestList:
+      type: object
+      required:
+        - data
+        - pagination
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/HITLRequest"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+
+    RejectHITLRequest:
+      type: object
+      required:
+        - reason
+      properties:
+        reason:
+          type: string
+          minLength: 10
+          description: Reason for rejecting the HITL request
+
+
+    # ── Costs ──────────────────────────────────────────────────────────
+    CostSummary:
+      type: object
+      required:
+        - total_cost_usd
+        - period_start
+        - period_end
+        - avg_cost_per_story_usd
+      properties:
+        total_cost_usd:
+          type: number
+          format: double
+          example: 1.2345
+        total_cost_week_usd:
+          type: number
+          format: double
+          example: 0.5678
+        total_cost_month_usd:
+          type: number
+          format: double
+          example: 3.4567
+        avg_cost_per_story_usd:
+          type: number
+          format: double
+          example: 0.1234
+        budget_limit_usd:
+          type: number
+          format: double
+          example: 10.0
+        period_start:
+          type: string
+          format: date-time
+          example: "2026-02-10T00:00:00Z"
+        period_end:
+          type: string
+          format: date-time
+          example: "2026-02-17T00:00:00Z"
+
+    CostDataPoint:
+      type: object
+      required:
+        - date
+        - total_cost_usd
+      properties:
+        date:
+          type: string
+          format: date
+          example: "2026-02-10"
+        total_cost_usd:
+          type: number
+          format: double
+          example: 0.1234
+
+    RunCostRow:
+      type: object
+      required:
+        - run_id
+        - story_key
+        - status
+        - started_at
+        - total_cost_usd
+      properties:
+        run_id:
+          type: string
+          format: uuid
+        story_key:
+          type: string
+          example: S-01
+        status:
+          type: string
+          example: completed
+        started_at:
+          type: string
+          format: date-time
+          example: "2026-02-10T10:30:00Z"
+        total_cost_usd:
+          type: number
+          format: double
+          example: 0.01234
+
+    RunCostBreakdown:
+      type: object
+      required:
+        - run_id
+        - story_key
+        - status
+        - total_cost
+        - created_at
+      properties:
+        run_id:
+          type: string
+          format: uuid
+        story_key:
+          type: string
+          example: S-01
+        status:
+          type: string
+          example: completed
+        total_cost:
+          type: number
+          format: double
+          example: 3.15
+        created_at:
+          type: string
+          format: date-time
+
+    ModelCostBreakdown:
+      type: object
+      required:
+        - model
+        - total_cost
+        - tokens_input
+        - tokens_output
+      properties:
+        model:
+          type: string
+          example: claude-opus-4-6
+        total_cost:
+          type: number
+          format: double
+          example: 10.00
+        tokens_input:
+          type: integer
+          format: int64
+          example: 300000
+        tokens_output:
+          type: integer
+          format: int64
+          example: 50000
+
+    StoryCostSummary:
+      type: object
+      required:
+        - story_id
+        - total_cost
+        - total_input
+        - total_output
+        - run_count
+      properties:
+        story_id:
+          type: string
+          format: uuid
+        total_cost:
+          type: number
+          format: double
+          example: 5.25
+        total_input:
+          type: integer
+          format: int64
+          example: 200000
+        total_output:
+          type: integer
+          format: int64
+          example: 40000
+        run_count:
+          type: integer
+          description: Number of distinct runs that incurred costs
+          example: 3
+
+    RunCostDetail:
+      type: object
+      required:
+        - run_id
+        - total_cost
+        - steps
+      properties:
+        run_id:
+          type: string
+          format: uuid
+        total_cost:
+          type: number
+          format: double
+          example: 3.15
+        steps:
+          type: array
+          items:
+            $ref: "#/components/schemas/StepCostBreakdown"
+
+    StepCostBreakdown:
+      type: object
+      required:
+        - step_id
+        - step_name
+        - model
+        - tokens_input
+        - tokens_output
+        - cost_usd
+      properties:
+        step_id:
+          type: string
+          format: uuid
+        step_name:
+          type: string
+          example: implement
+        model:
+          type: string
+          example: claude-opus-4-6
+        tokens_input:
+          type: integer
+          format: int64
+          example: 100000
+        tokens_output:
+          type: integer
+          format: int64
+          example: 20000
+        cost_usd:
+          type: number
+          format: double
+          example: 3.00
+        started_at:
+          type: string
+          format: date-time
+          example: "2026-02-10T10:30:00Z"
+        total_cost_usd:
+          type: number
+          format: double
+          example: 0.01234
 
     # ── Shared ─────────────────────────────────────────────────────────
     Pagination:

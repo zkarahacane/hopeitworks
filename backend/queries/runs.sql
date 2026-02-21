@@ -26,7 +26,7 @@ SELECT COUNT(*) FROM runs WHERE story_id = $1;
 
 -- name: GetActiveRunByStory :one
 SELECT * FROM runs
-WHERE story_id = $1 AND status IN ('pending', 'running')
+WHERE story_id = $1 AND status IN ('pending', 'running', 'paused')
 ORDER BY created_at DESC
 LIMIT 1;
 
@@ -35,7 +35,13 @@ UPDATE runs
 SET status = $2,
     started_at = COALESCE(sqlc.narg('started_at'), started_at),
     completed_at = COALESCE(sqlc.narg('completed_at'), completed_at),
+    paused_at = COALESCE(sqlc.narg('paused_at'), paused_at),
     error_message = COALESCE(sqlc.narg('error_message'), error_message),
     updated_at = now()
 WHERE id = $1
 RETURNING *;
+
+-- name: ListChildRunsByParent :many
+SELECT * FROM runs
+WHERE project_id = $1 AND pipeline_config_snapshot @> sqlc.arg('parent_filter')::jsonb
+ORDER BY created_at ASC;

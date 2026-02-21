@@ -33,4 +33,8 @@ type GitProvider interface {
 	// Returns: "pass" (all checks successful), "fail" (any check failed),
 	//          "pending" (checks running), "no_checks" (no CI configured).
 	GetCIStatus(ctx context.Context, workDir string) (status string, err error)
+
+	// GetPRDiff returns the diff content for the given pull request URL.
+	// prURL: full PR URL (e.g., "https://github.com/owner/repo/pull/123").
+	GetPRDiff(ctx context.Context, prURL string) (string, error)
 }

@@ -2,6 +2,19 @@
 # test users and projects. Run `cd backend && make reset-db` to drop, recreate, and seed.
 
 services:
+  socket-proxy:
+    image: tecnativa/docker-socket-proxy:0.3.0
+    container_name: hopeitworks-socket-proxy
+    environment:
+      CONTAINERS: 1
+      NETWORKS: 1
+      POST: 1
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - hopeitworks
+    restart: on-failure
+
   postgres:
     image: postgres:16-alpine
     container_name: hopeitworks-postgres
@@ -37,11 +50,15 @@ services:
       DB_USER: ${POSTGRES_USER:-hopeitworks}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-hopeitworks_dev_password}
       DB_SSLMODE: disable
+      DOCKER_HOST: tcp://socket-proxy:2375
+      DOCKER_AGENT_NETWORK: ${DOCKER_AGENT_NETWORK:-deploy_hopeitworks_agent-network}
     ports:
       - "${SERVER_PORT:-8080}:8080"
     depends_on:
       postgres:
         condition: service_healthy
+      socket-proxy:
+        condition: service_started
     restart: on-failure
     networks:
       - hopeitworks
