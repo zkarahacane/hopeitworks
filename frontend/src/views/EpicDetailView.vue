@@ -140,6 +140,12 @@ watch(
         @click="router.push({ name: 'project-board', params: { id: projectId } })"
       />
       <h1 class="m-0 text-2xl font-bold">Epic Stories</h1>
+      <Button
+        icon="pi pi-sitemap"
+        label="View DAG"
+        severity="secondary"
+        @click="router.push({ name: 'epic-dag', params: { id: projectId, epicId } })"
+      />
     </div>
 
     <div v-if="isLoading && stories.length === 0" class="flex gap-4 flex-1">

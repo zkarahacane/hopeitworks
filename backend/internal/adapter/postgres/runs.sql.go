@@ -37,7 +37,7 @@ func (q *Queries) CountRunsByStory(ctx context.Context, storyID uuid.UUID) (int6
 const createRun = `-- name: CreateRun :one
 INSERT INTO runs (project_id, story_id, status, pipeline_config_snapshot)
 VALUES ($1, $2, $3, $4)
-RETURNING id, project_id, story_id, status, pipeline_config_snapshot, started_at, completed_at, error_message, created_at, updated_at
+RETURNING id, project_id, story_id, status, pipeline_config_snapshot, started_at, completed_at, error_message, created_at, updated_at, paused_at
 `
 
 type CreateRunParams struct {
@@ -66,13 +66,14 @@ func (q *Queries) CreateRun(ctx context.Context, arg CreateRunParams) (Run, erro
 		&i.ErrorMessage,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PausedAt,
 	)
 	return i, err
 }
 
 const getActiveRunByStory = `-- name: GetActiveRunByStory :one
-SELECT id, project_id, story_id, status, pipeline_config_snapshot, started_at, completed_at, error_message, created_at, updated_at FROM runs
-WHERE story_id = $1 AND status IN ('pending', 'running')
+SELECT id, project_id, story_id, status, pipeline_config_snapshot, started_at, completed_at, error_message, created_at, updated_at, paused_at FROM runs
+WHERE story_id = $1 AND status IN ('pending', 'running', 'paused')
 ORDER BY created_at DESC
 LIMIT 1
 `
@@ -91,12 +92,13 @@ func (q *Queries) GetActiveRunByStory(ctx context.Context, storyID uuid.UUID) (R
 		&i.ErrorMessage,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PausedAt,
 	)
 	return i, err
 }
 
 const getRun = `-- name: GetRun :one
-SELECT id, project_id, story_id, status, pipeline_config_snapshot, started_at, completed_at, error_message, created_at, updated_at FROM runs WHERE id = $1
+SELECT id, project_id, story_id, status, pipeline_config_snapshot, started_at, completed_at, error_message, created_at, updated_at, paused_at FROM runs WHERE id = $1
 `
 
 func (q *Queries) GetRun(ctx context.Context, id uuid.UUID) (Run, error) {
@@ -113,12 +115,56 @@ func (q *Queries) GetRun(ctx context.Context, id uuid.UUID) (Run, error) {
 		&i.ErrorMessage,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PausedAt,
 	)
 	return i, err
 }
 
+const listChildRunsByParent = `-- name: ListChildRunsByParent :many
+SELECT id, project_id, story_id, status, pipeline_config_snapshot, started_at, completed_at, error_message, created_at, updated_at, paused_at FROM runs
+WHERE project_id = $1 AND pipeline_config_snapshot @> $2::jsonb
+ORDER BY created_at ASC
+`
+
+type ListChildRunsByParentParams struct {
+	ProjectID    uuid.UUID `json:"project_id"`
+	ParentFilter []byte    `json:"parent_filter"`
+}
+
+func (q *Queries) ListChildRunsByParent(ctx context.Context, arg ListChildRunsByParentParams) ([]Run, error) {
+	rows, err := q.db.Query(ctx, listChildRunsByParent, arg.ProjectID, arg.ParentFilter)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Run{}
+	for rows.Next() {
+		var i Run
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProjectID,
+			&i.StoryID,
+			&i.Status,
+			&i.PipelineConfigSnapshot,
+			&i.StartedAt,
+			&i.CompletedAt,
+			&i.ErrorMessage,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.PausedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRunsByProject = `-- name: ListRunsByProject :many
-SELECT id, project_id, story_id, status, pipeline_config_snapshot, started_at, completed_at, error_message, created_at, updated_at FROM runs
+SELECT id, project_id, story_id, status, pipeline_config_snapshot, started_at, completed_at, error_message, created_at, updated_at, paused_at FROM runs
 WHERE project_id = $1
 ORDER BY created_at DESC
 LIMIT $2 OFFSET $3
@@ -150,6 +196,7 @@ func (q *Queries) ListRunsByProject(ctx context.Context, arg ListRunsByProjectPa
 			&i.ErrorMessage,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.PausedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -162,7 +209,7 @@ func (q *Queries) ListRunsByProject(ctx context.Context, arg ListRunsByProjectPa
 }
 
 const listRunsByStory = `-- name: ListRunsByStory :many
-SELECT id, project_id, story_id, status, pipeline_config_snapshot, started_at, completed_at, error_message, created_at, updated_at FROM runs
+SELECT id, project_id, story_id, status, pipeline_config_snapshot, started_at, completed_at, error_message, created_at, updated_at, paused_at FROM runs
 WHERE story_id = $1
 ORDER BY created_at DESC
 LIMIT $2 OFFSET $3
@@ -194,6 +241,7 @@ func (q *Queries) ListRunsByStory(ctx context.Context, arg ListRunsByStoryParams
 			&i.ErrorMessage,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.PausedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -210,10 +258,11 @@ UPDATE runs
 SET status = $2,
     started_at = COALESCE($3, started_at),
     completed_at = COALESCE($4, completed_at),
-    error_message = COALESCE($5, error_message),
+    paused_at = COALESCE($5, paused_at),
+    error_message = COALESCE($6, error_message),
     updated_at = now()
 WHERE id = $1
-RETURNING id, project_id, story_id, status, pipeline_config_snapshot, started_at, completed_at, error_message, created_at, updated_at
+RETURNING id, project_id, story_id, status, pipeline_config_snapshot, started_at, completed_at, error_message, created_at, updated_at, paused_at
 `
 
 type UpdateRunStatusParams struct {
@@ -221,6 +270,7 @@ type UpdateRunStatusParams struct {
 	Status       string             `json:"status"`
 	StartedAt    pgtype.Timestamptz `json:"started_at"`
 	CompletedAt  pgtype.Timestamptz `json:"completed_at"`
+	PausedAt     pgtype.Timestamptz `json:"paused_at"`
 	ErrorMessage pgtype.Text        `json:"error_message"`
 }
 
@@ -230,6 +280,7 @@ func (q *Queries) UpdateRunStatus(ctx context.Context, arg UpdateRunStatusParams
 		arg.Status,
 		arg.StartedAt,
 		arg.CompletedAt,
+		arg.PausedAt,
 		arg.ErrorMessage,
 	)
 	var i Run
@@ -244,6 +295,7 @@ func (q *Queries) UpdateRunStatus(ctx context.Context, arg UpdateRunStatusParams
 		&i.ErrorMessage,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PausedAt,
 	)
 	return i, err
 }

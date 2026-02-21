@@ -41,6 +41,7 @@ type AgentRunAction struct {
 	projectRepo  port.ProjectRepository
 	runRepo      port.RunRepository
 	templateSvc  *service.TemplateService
+	costSvc      *service.CostService
 	composer     *CLAUDEMDComposer
 	config       AgentConfig
 	logger       *slog.Logger
@@ -55,6 +56,7 @@ func NewAgentRunAction(
 	projectRepo port.ProjectRepository,
 	runRepo port.RunRepository,
 	templateSvc *service.TemplateService,
+	costSvc *service.CostService,
 	config AgentConfig,
 	logger *slog.Logger,
 ) *AgentRunAction {
@@ -66,6 +68,7 @@ func NewAgentRunAction(
 		projectRepo:  projectRepo,
 		runRepo:      runRepo,
 		templateSvc:  templateSvc,
+		costSvc:      costSvc,
 		composer:     NewCLAUDEMDComposer(config.ClaudeMDPath),
 		config:       config,
 		logger:       logger,
@@ -220,6 +223,9 @@ func (a *AgentRunAction) streamAndWait(
 	}
 	logTail := make([]string, 0, tailSize)
 
+	// Accumulate cost events emitted by the agent container.
+	var costEvents []model.CostEvent
+
 	// Consume logs in goroutine
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -231,6 +237,16 @@ func (a *AgentRunAction) streamAndWait(
 				logTail = logTail[1:]
 			}
 			logTail = append(logTail, logEvent.Message)
+
+			// Accumulate cost events; do not forward cost lines to the event system.
+			if logEvent.Type == "cost" {
+				costEvents = append(costEvents, model.CostEvent{
+					InputTokens:  logEvent.InputTokens,
+					OutputTokens: logEvent.OutputTokens,
+					Model:        logEvent.Model,
+				})
+				continue
+			}
 
 			// Forward to event system
 			a.publishLogEvent(ctx, runCtx, logEvent)
@@ -255,6 +271,15 @@ func (a *AgentRunAction) streamAndWait(
 	if exitCode != 0 {
 		tail := strings.Join(logTail, "\n")
 		a.persistLogTail(ctx, runCtx.RunStep.ID, tail)
+	}
+
+	// Record accumulated cost events, regardless of exit code.
+	// Cost recording failure is non-fatal.
+	if len(costEvents) > 0 {
+		if err := a.costSvc.RecordStepCost(ctx, runCtx.RunStep.ID, runCtx.ProjectID, costEvents); err != nil {
+			a.logger.Warn("failed to record step cost",
+				"step_id", stepID, "error", err)
+		}
 	}
 
 	return exitCode, nil

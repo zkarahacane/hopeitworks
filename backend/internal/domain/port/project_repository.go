@@ -15,4 +15,11 @@ type ProjectRepository interface {
 	Count(ctx context.Context) (int64, error)
 	Update(ctx context.Context, project *model.Project) (*model.Project, error)
 	Delete(ctx context.Context, id uuid.UUID) error
+
+	// IncrementCircuitBreakerCount increments the failure count for a project.
+	// If the count reaches the configured max, the circuit breaker is activated.
+	IncrementCircuitBreakerCount(ctx context.Context, id uuid.UUID) (*model.Project, error)
+
+	// ResetCircuitBreaker resets the circuit breaker state (count=0, active=false).
+	ResetCircuitBreaker(ctx context.Context, id uuid.UUID) (*model.Project, error)
 }

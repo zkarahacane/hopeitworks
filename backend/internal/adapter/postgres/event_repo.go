@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
@@ -12,6 +13,9 @@ import (
 
 // Ensure EventRepo implements port.EventPublisher at compile time.
 var _ port.EventPublisher = (*EventRepo)(nil)
+
+// Ensure EventRepo implements port.EventRepository at compile time.
+var _ port.EventRepository = (*EventRepo)(nil)
 
 // EventRepo implements port.EventPublisher using sqlc-generated queries.
 type EventRepo struct {
@@ -56,4 +60,31 @@ func (r *EventRepo) Publish(ctx context.Context, event model.Event) error {
 		return apperrors.NewInternal("failed to publish event", err)
 	}
 	return nil
+}
+
+// GetEventsSince returns all events for the project created after the event
+// identified by afterEventID. Returns empty slice if afterEventID is unknown
+// (the subquery returns no rows, so the WHERE clause matches nothing).
+func (r *EventRepo) GetEventsSince(ctx context.Context, projectID uuid.UUID, afterEventID uuid.UUID) ([]*model.Event, error) {
+	rows, err := r.queries.GetEventsSince(ctx, GetEventsSinceParams{
+		ProjectID: projectID,
+		ID:        afterEventID,
+	})
+	if err != nil {
+		return nil, apperrors.NewInternal("failed to query events since", err)
+	}
+
+	events := make([]*model.Event, 0, len(rows))
+	for _, row := range rows {
+		events = append(events, &model.Event{
+			ID:         row.ID,
+			ProjectID:  row.ProjectID,
+			EntityType: row.EntityType,
+			EntityID:   row.EntityID,
+			Action:     row.Action,
+			Payload:    json.RawMessage(row.Payload),
+			CreatedAt:  row.CreatedAt,
+		})
+	}
+	return events, nil
 }
