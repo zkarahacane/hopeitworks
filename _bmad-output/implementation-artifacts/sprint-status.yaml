@@ -145,10 +145,10 @@ development_status:
   epic-9-retrospective: optional
 
   # Epic 10: Reference Test Project & Validation
-  epic-10: in-progress
-  10-1-todo-app-reference-project-structure: backlog
-  10-2-todo-app-ci-pipeline-seed-data: review
-  10-3-pipeline-validation-stories-integration-test: backlog
+  epic-10: done
+  10-1-todo-app-reference-project-structure: done
+  10-2-todo-app-ci-pipeline-seed-data: done
+  10-3-pipeline-validation-stories-integration-test: done
   epic-10-retrospective: optional
 
 # PARALLEL EXECUTION WAVES
@@ -576,7 +576,7 @@ parallel_waves:
     stories:
       - key: 10-1-todo-app-reference-project-structure
         domain: shared
-        status: backlog
+        status: done
         cross_epic_deps: [3-8-agent-run-action-compose-claude-md-launch-container-stream-logs, 6-1-pipeline-configs-table-default-pipeline-seed-crud-api]
     container_count: 1
     depends_on: [wave-7]
@@ -587,7 +587,7 @@ parallel_waves:
     stories:
       - key: 10-2-todo-app-ci-pipeline-seed-data
         domain: shared
-        status: backlog
+        status: done
         explicit_deps: [10-1-todo-app-reference-project-structure]
     container_count: 1
     depends_on: [wave-13]
@@ -598,7 +598,7 @@ parallel_waves:
     stories:
       - key: 10-3-pipeline-validation-stories-integration-test
         domain: shared
-        status: backlog
+        status: done
         explicit_deps: [10-2-todo-app-ci-pipeline-seed-data]
     container_count: 1
     depends_on: [wave-14]
