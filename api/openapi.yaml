@@ -1202,6 +1202,30 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  # ── HITL ──────────────────────────────────────────────────────────────
+  /projects/{projectId}/hitl/pending:
+    get:
+      operationId: listPendingHITLRequests
+      summary: List pending HITL approval requests for a project
+      description: >
+        Returns all pipeline steps currently waiting for human approval.
+        Designed for curl-based CLI workflows — authenticate with a JWT cookie
+        and call this endpoint to see what needs review.
+      tags: [hitl]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+      responses:
+        "200":
+          description: List of pending HITL requests
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PendingHITLRequestList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
   # ── HITL Requests ───────────────────────────────────────────────────
   /hitl-requests:
     get:
@@ -2675,6 +2699,49 @@ components:
           type: number
           format: double
           example: 5.25
+
+    PendingHITLRequestItem:
+      type: object
+      required:
+        - id
+        - run_id
+        - step_id
+        - story_key
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: HITL request ID
+        run_id:
+          type: string
+          format: uuid
+        step_id:
+          type: string
+          format: uuid
+        story_key:
+          type: string
+          example: S-01
+        diff_url:
+          type: string
+          description: URL to view the diff (if PR exists)
+        created_at:
+          type: string
+          format: date-time
+
+    PendingHITLRequestList:
+      type: object
+      required:
+        - data
+        - total
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/PendingHITLRequestItem"
+        total:
+          type: integer
+          example: 3
 
     HITLRequest:
       type: object

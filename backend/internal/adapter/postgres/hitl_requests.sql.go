@@ -13,10 +13,26 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countPendingHITLRequestsByProject = `-- name: CountPendingHITLRequestsByProject :one
+SELECT COUNT(*)
+FROM hitl_requests hr
+JOIN run_steps rs ON rs.id = hr.run_step_id
+JOIN runs r ON r.id = rs.run_id
+WHERE r.project_id = $1
+  AND hr.status = 'pending'
+`
+
+func (q *Queries) CountPendingHITLRequestsByProject(ctx context.Context, projectID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countPendingHITLRequestsByProject, projectID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createHITLRequest = `-- name: CreateHITLRequest :one
 INSERT INTO hitl_requests (id, run_step_id, gate_type, diff_content, status, created_at)
-VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, run_step_id, gate_type, diff_content, status, resolved_at, resolved_by, rejection_reason, created_at
+VALUES ($1, $2, $3, $4, $5, now())
+RETURNING id, run_step_id, gate_type, diff_content, status, resolved_at, resolved_by, rejection_reason, created_at, diff_url
 `
 
 type CreateHITLRequestParams struct {
@@ -25,7 +41,6 @@ type CreateHITLRequestParams struct {
 	GateType    string      `json:"gate_type"`
 	DiffContent pgtype.Text `json:"diff_content"`
 	Status      string      `json:"status"`
-	CreatedAt   time.Time   `json:"created_at"`
 }
 
 func (q *Queries) CreateHITLRequest(ctx context.Context, arg CreateHITLRequestParams) (HitlRequest, error) {
@@ -35,7 +50,6 @@ func (q *Queries) CreateHITLRequest(ctx context.Context, arg CreateHITLRequestPa
 		arg.GateType,
 		arg.DiffContent,
 		arg.Status,
-		arg.CreatedAt,
 	)
 	var i HitlRequest
 	err := row.Scan(
@@ -48,12 +62,35 @@ func (q *Queries) CreateHITLRequest(ctx context.Context, arg CreateHITLRequestPa
 		&i.ResolvedBy,
 		&i.RejectionReason,
 		&i.CreatedAt,
+		&i.DiffUrl,
+	)
+	return i, err
+}
+
+const getHITLRequest = `-- name: GetHITLRequest :one
+SELECT id, run_step_id, gate_type, diff_content, status, resolved_at, resolved_by, rejection_reason, created_at, diff_url FROM hitl_requests WHERE id = $1
+`
+
+func (q *Queries) GetHITLRequest(ctx context.Context, id uuid.UUID) (HitlRequest, error) {
+	row := q.db.QueryRow(ctx, getHITLRequest, id)
+	var i HitlRequest
+	err := row.Scan(
+		&i.ID,
+		&i.RunStepID,
+		&i.GateType,
+		&i.DiffContent,
+		&i.Status,
+		&i.ResolvedAt,
+		&i.ResolvedBy,
+		&i.RejectionReason,
+		&i.CreatedAt,
+		&i.DiffUrl,
 	)
 	return i, err
 }
 
 const getHITLRequestByRunStepID = `-- name: GetHITLRequestByRunStepID :one
-SELECT id, run_step_id, gate_type, diff_content, status, resolved_at, resolved_by, rejection_reason, created_at FROM hitl_requests WHERE run_step_id = $1 LIMIT 1
+SELECT id, run_step_id, gate_type, diff_content, status, resolved_at, resolved_by, rejection_reason, created_at, diff_url FROM hitl_requests WHERE run_step_id = $1 LIMIT 1
 `
 
 func (q *Queries) GetHITLRequestByRunStepID(ctx context.Context, runStepID uuid.UUID) (HitlRequest, error) {
@@ -69,15 +106,69 @@ func (q *Queries) GetHITLRequestByRunStepID(ctx context.Context, runStepID uuid.
 		&i.ResolvedBy,
 		&i.RejectionReason,
 		&i.CreatedAt,
+		&i.DiffUrl,
 	)
 	return i, err
+}
+
+const listPendingHITLRequestsByProject = `-- name: ListPendingHITLRequestsByProject :many
+SELECT
+    hr.id,
+    rs.run_id,
+    rs.id AS step_id,
+    s.key AS story_key,
+    hr.diff_url,
+    hr.created_at
+FROM hitl_requests hr
+JOIN run_steps rs ON rs.id = hr.run_step_id
+JOIN runs r ON r.id = rs.run_id
+JOIN stories s ON s.id = r.story_id
+WHERE r.project_id = $1
+  AND hr.status = 'pending'
+ORDER BY hr.created_at DESC
+`
+
+type ListPendingHITLRequestsByProjectRow struct {
+	ID        uuid.UUID   `json:"id"`
+	RunID     uuid.UUID   `json:"run_id"`
+	StepID    uuid.UUID   `json:"step_id"`
+	StoryKey  string      `json:"story_key"`
+	DiffUrl   pgtype.Text `json:"diff_url"`
+	CreatedAt time.Time   `json:"created_at"`
+}
+
+func (q *Queries) ListPendingHITLRequestsByProject(ctx context.Context, projectID uuid.UUID) ([]ListPendingHITLRequestsByProjectRow, error) {
+	rows, err := q.db.Query(ctx, listPendingHITLRequestsByProject, projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPendingHITLRequestsByProjectRow{}
+	for rows.Next() {
+		var i ListPendingHITLRequestsByProjectRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.RunID,
+			&i.StepID,
+			&i.StoryKey,
+			&i.DiffUrl,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const updateHITLRequestStatus = `-- name: UpdateHITLRequestStatus :one
 UPDATE hitl_requests
 SET status = $2, resolved_at = $3, resolved_by = $4, rejection_reason = $5
 WHERE id = $1
-RETURNING id, run_step_id, gate_type, diff_content, status, resolved_at, resolved_by, rejection_reason, created_at
+RETURNING id, run_step_id, gate_type, diff_content, status, resolved_at, resolved_by, rejection_reason, created_at, diff_url
 `
 
 type UpdateHITLRequestStatusParams struct {
@@ -107,6 +198,7 @@ func (q *Queries) UpdateHITLRequestStatus(ctx context.Context, arg UpdateHITLReq
 		&i.ResolvedBy,
 		&i.RejectionReason,
 		&i.CreatedAt,
+		&i.DiffUrl,
 	)
 	return i, err
 }

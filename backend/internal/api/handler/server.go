@@ -14,14 +14,15 @@ type Server struct {
 	promptTemplates *PromptTemplateHandler
 	runs            *RunHandler
 	pipelineConfig  *PipelineConfigHandler
+	hitl            *HITLHandler
 	costs           *CostHandler
 	notifications   *NotificationHandler
 	epicRuns        *EpicRunHandler
 }
 
 // NewServer creates a new Server with the given handlers.
-func NewServer(auth *AuthHandler, projects *ProjectHandler, users *UserHandler, epics *EpicHandler, stories *StoryHandler, promptTemplates *PromptTemplateHandler, runs *RunHandler, pipelineConfig *PipelineConfigHandler, costs *CostHandler, notifications *NotificationHandler, epicRuns *EpicRunHandler) *Server {
-	return &Server{auth: auth, projects: projects, users: users, epics: epics, stories: stories, promptTemplates: promptTemplates, runs: runs, pipelineConfig: pipelineConfig, costs: costs, notifications: notifications, epicRuns: epicRuns}
+func NewServer(auth *AuthHandler, projects *ProjectHandler, users *UserHandler, epics *EpicHandler, stories *StoryHandler, promptTemplates *PromptTemplateHandler, runs *RunHandler, pipelineConfig *PipelineConfigHandler, hitl *HITLHandler, costs *CostHandler, notifications *NotificationHandler, epicRuns *EpicRunHandler) *Server {
+	return &Server{auth: auth, projects: projects, users: users, epics: epics, stories: stories, promptTemplates: promptTemplates, runs: runs, pipelineConfig: pipelineConfig, hitl: hitl, costs: costs, notifications: notifications, epicRuns: epicRuns}
 }
 
 // RegisterUser delegates to AuthHandler.
@@ -237,6 +238,26 @@ func (s *Server) GetPipelineConfig(w http.ResponseWriter, r *http.Request, proje
 // UpdatePipelineConfig delegates to PipelineConfigHandler.
 func (s *Server) UpdatePipelineConfig(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath) {
 	s.pipelineConfig.UpdatePipelineConfig(w, r, projectID)
+}
+
+// ListPendingHITLRequests delegates to HITLHandler.
+func (s *Server) ListPendingHITLRequests(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath) {
+	s.hitl.ListPendingHITLRequests(w, r, projectID)
+}
+
+// GetHITLRequest delegates to HITLHandler.
+func (s *Server) GetHITLRequest(w http.ResponseWriter, r *http.Request, hitlRequestID HITLRequestIdPath) {
+	s.hitl.GetHITLRequest(w, r, hitlRequestID)
+}
+
+// ApproveHITLRequest delegates to HITLHandler.
+func (s *Server) ApproveHITLRequest(w http.ResponseWriter, r *http.Request, hitlRequestID HITLRequestIdPath) {
+	s.hitl.ApproveHITLRequest(w, r, hitlRequestID)
+}
+
+// RejectHITLRequest delegates to HITLHandler.
+func (s *Server) RejectHITLRequest(w http.ResponseWriter, r *http.Request, hitlRequestID HITLRequestIdPath) {
+	s.hitl.RejectHITLRequest(w, r, hitlRequestID)
 }
 
 // GetProjectCosts delegates to CostHandler.

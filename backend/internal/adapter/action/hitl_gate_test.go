@@ -32,12 +32,24 @@ func (m *hitlMockHITLRepo) Create(ctx context.Context, req *model.HITLRequest) (
 	return req, nil
 }
 
+func (m *hitlMockHITLRepo) GetByID(_ context.Context, _ uuid.UUID) (*model.HITLRequest, error) {
+	return nil, apperrors.NewNotFound("hitl_request", uuid.Nil)
+}
+
 func (m *hitlMockHITLRepo) GetByRunStepID(_ context.Context, _ uuid.UUID) (*model.HITLRequest, error) {
 	return nil, apperrors.NewNotFound("hitl_request", uuid.Nil)
 }
 
 func (m *hitlMockHITLRepo) UpdateStatus(_ context.Context, _ uuid.UUID, _ model.HITLStatus, _ *uuid.UUID, _ *string, _ time.Time) (*model.HITLRequest, error) {
 	return nil, nil
+}
+
+func (m *hitlMockHITLRepo) ListPendingByProject(_ context.Context, _ uuid.UUID) ([]*model.PendingHITLRequest, error) {
+	return nil, nil
+}
+
+func (m *hitlMockHITLRepo) CountPendingByProject(_ context.Context, _ uuid.UUID) (int64, error) {
+	return 0, nil
 }
 
 func (m *hitlMockHITLRepo) getCreated() []*model.HITLRequest {

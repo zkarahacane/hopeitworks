@@ -33,7 +33,6 @@ func (r *HITLRepo) Create(ctx context.Context, req *model.HITLRequest) (*model.H
 		RunStepID: req.RunStepID,
 		GateType:  req.GateType,
 		Status:    string(req.Status),
-		CreatedAt: req.CreatedAt,
 	}
 	if req.DiffContent != nil {
 		params.DiffContent = pgtype.Text{String: *req.DiffContent, Valid: true}
@@ -49,6 +48,18 @@ func (r *HITLRepo) Create(ctx context.Context, req *model.HITLRequest) (*model.H
 	return toDomainHITLRequest(row), nil
 }
 
+// GetByID returns a HITL request by its ID.
+func (r *HITLRepo) GetByID(ctx context.Context, id uuid.UUID) (*model.HITLRequest, error) {
+	row, err := r.queries.GetHITLRequest(ctx, id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, apperrors.NewNotFound("hitl_request", id)
+		}
+		return nil, apperrors.NewInternal("failed to get HITL request", err)
+	}
+	return toDomainHITLRequest(row), nil
+}
+
 // GetByRunStepID returns the HITL request for the given run step.
 func (r *HITLRepo) GetByRunStepID(ctx context.Context, runStepID uuid.UUID) (*model.HITLRequest, error) {
 	row, err := r.queries.GetHITLRequestByRunStepID(ctx, runStepID)
@@ -56,12 +67,12 @@ func (r *HITLRepo) GetByRunStepID(ctx context.Context, runStepID uuid.UUID) (*mo
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, apperrors.NewNotFound("hitl_request", runStepID)
 		}
-		return nil, apperrors.NewInternal("failed to get HITL request by run step", err)
+		return nil, apperrors.NewInternal("failed to get HITL request by run step ID", err)
 	}
 	return toDomainHITLRequest(row), nil
 }
 
-// UpdateStatus transitions a HITL request to approved or rejected.
+// UpdateStatus transitions the HITL request to approved or rejected.
 func (r *HITLRepo) UpdateStatus(ctx context.Context, id uuid.UUID, status model.HITLStatus, resolvedBy *uuid.UUID, rejectionReason *string, resolvedAt time.Time) (*model.HITLRequest, error) {
 	params := UpdateHITLRequestStatusParams{
 		ID:         id,
@@ -85,27 +96,58 @@ func (r *HITLRepo) UpdateStatus(ctx context.Context, id uuid.UUID, status model.
 	return toDomainHITLRequest(row), nil
 }
 
+// ListPendingByProject returns all pending HITL requests for a project.
+func (r *HITLRepo) ListPendingByProject(ctx context.Context, projectID uuid.UUID) ([]*model.PendingHITLRequest, error) {
+	rows, err := r.queries.ListPendingHITLRequestsByProject(ctx, projectID)
+	if err != nil {
+		return nil, apperrors.NewInternal("failed to list pending HITL requests", err)
+	}
+	result := make([]*model.PendingHITLRequest, len(rows))
+	for i, row := range rows {
+		result[i] = &model.PendingHITLRequest{
+			ID:        row.ID,
+			RunID:     row.RunID,
+			StepID:    row.StepID,
+			StoryKey:  row.StoryKey,
+			CreatedAt: row.CreatedAt,
+		}
+		if row.DiffUrl.Valid {
+			result[i].DiffURL = &row.DiffUrl.String
+		}
+	}
+	return result, nil
+}
+
+// CountPendingByProject returns the count of pending HITL requests for a project.
+func (r *HITLRepo) CountPendingByProject(ctx context.Context, projectID uuid.UUID) (int64, error) {
+	count, err := r.queries.CountPendingHITLRequestsByProject(ctx, projectID)
+	if err != nil {
+		return 0, apperrors.NewInternal("failed to count pending HITL requests", err)
+	}
+	return count, nil
+}
+
 // toDomainHITLRequest maps a sqlc-generated HitlRequest to a domain HITLRequest.
-func toDomainHITLRequest(r HitlRequest) *model.HITLRequest {
+func toDomainHITLRequest(row HitlRequest) *model.HITLRequest {
 	req := &model.HITLRequest{
-		ID:        r.ID,
-		RunStepID: r.RunStepID,
-		GateType:  r.GateType,
-		Status:    model.HITLStatus(r.Status),
-		CreatedAt: r.CreatedAt,
+		ID:        row.ID,
+		RunStepID: row.RunStepID,
+		GateType:  row.GateType,
+		Status:    model.HITLStatus(row.Status),
+		CreatedAt: row.CreatedAt,
 	}
-	if r.DiffContent.Valid {
-		req.DiffContent = &r.DiffContent.String
+	if row.DiffContent.Valid {
+		req.DiffContent = &row.DiffContent.String
 	}
-	if r.ResolvedAt.Valid {
-		req.ResolvedAt = &r.ResolvedAt.Time
+	if row.ResolvedAt.Valid {
+		req.ResolvedAt = &row.ResolvedAt.Time
 	}
-	if r.ResolvedBy.Valid {
-		id := uuid.UUID(r.ResolvedBy.Bytes)
+	if row.ResolvedBy.Valid {
+		id := uuid.UUID(row.ResolvedBy.Bytes)
 		req.ResolvedBy = &id
 	}
-	if r.RejectionReason.Valid {
-		req.RejectionReason = &r.RejectionReason.String
+	if row.RejectionReason.Valid {
+		req.RejectionReason = &row.RejectionReason.String
 	}
 	return req
 }

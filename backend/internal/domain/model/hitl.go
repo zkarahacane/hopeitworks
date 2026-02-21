@@ -27,3 +27,14 @@ type HITLRequest struct {
 	RejectionReason *string
 	CreatedAt       time.Time
 }
+
+// PendingHITLRequest is a denormalized view of a pending HITL request
+// including run and story context for the pending listing endpoint.
+type PendingHITLRequest struct {
+	ID        uuid.UUID
+	RunID     uuid.UUID
+	StepID    uuid.UUID
+	StoryKey  string
+	DiffURL   *string
+	CreatedAt time.Time
+}

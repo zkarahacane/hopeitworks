@@ -229,6 +229,11 @@ func run() error {
 		}()
 	}
 
+	// HITL service and handler
+	hitlRepo := pgadapter.NewHITLRepo(queries)
+	hitlService := service.NewHITLService(hitlRepo, runRepo, eventRepo, logger)
+	hitlHandler := handler.NewHITLHandler(hitlService)
+
 	// Notification configs
 	notificationConfigRepo := pgadapter.NewNotificationConfigRepository(queries)
 	notificationConfigService := service.NewNotificationConfigService(notificationConfigRepo)
@@ -252,7 +257,7 @@ func run() error {
 	epicRunService := service.NewEpicRunService(epicRunRepo, storyRepo, epicRepo, schedulerService, parallelGroupExecutor, eventRepo, logger)
 	epicRunHandler := handler.NewEpicRunHandler(epicRunService)
 
-	server := handler.NewServer(authHandler, projectHandler, userHandler, epicHandler, storyHandler, promptTemplateHandler, runHandler, pipelineConfigHandler, costHandler, notificationHandler, epicRunHandler)
+	server := handler.NewServer(authHandler, projectHandler, userHandler, epicHandler, storyHandler, promptTemplateHandler, runHandler, pipelineConfigHandler, hitlHandler, costHandler, notificationHandler, epicRunHandler)
 
 	// Project user handler
 	projectUserHandler := handler.NewProjectUserHandler(projectUserService)
