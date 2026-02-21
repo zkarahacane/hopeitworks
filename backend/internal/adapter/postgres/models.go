@@ -5,11 +5,58 @@
 package postgres
 
 import (
+	"database/sql/driver"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
+
+type EpicRunStatus string
+
+const (
+	EpicRunStatusPending   EpicRunStatus = "pending"
+	EpicRunStatusRunning   EpicRunStatus = "running"
+	EpicRunStatusCompleted EpicRunStatus = "completed"
+	EpicRunStatusFailed    EpicRunStatus = "failed"
+	EpicRunStatusPaused    EpicRunStatus = "paused"
+)
+
+func (e *EpicRunStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = EpicRunStatus(s)
+	case string:
+		*e = EpicRunStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for EpicRunStatus: %T", src)
+	}
+	return nil
+}
+
+type NullEpicRunStatus struct {
+	EpicRunStatus EpicRunStatus `json:"epic_run_status"`
+	Valid         bool          `json:"valid"` // Valid is true if EpicRunStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullEpicRunStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.EpicRunStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.EpicRunStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullEpicRunStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.EpicRunStatus), nil
+}
 
 type CostRecord struct {
 	ID           uuid.UUID      `json:"id"`
@@ -30,6 +77,23 @@ type Epic struct {
 	Status      string      `json:"status"`
 	CreatedAt   time.Time   `json:"created_at"`
 	UpdatedAt   time.Time   `json:"updated_at"`
+}
+
+type EpicRun struct {
+	ID          uuid.UUID          `json:"id"`
+	ProjectID   uuid.UUID          `json:"project_id"`
+	EpicID      uuid.UUID          `json:"epic_id"`
+	Status      EpicRunStatus      `json:"status"`
+	CreatedAt   time.Time          `json:"created_at"`
+	CompletedAt pgtype.Timestamptz `json:"completed_at"`
+}
+
+type EpicRunStory struct {
+	EpicRunID  uuid.UUID   `json:"epic_run_id"`
+	StoryID    uuid.UUID   `json:"story_id"`
+	RunID      pgtype.UUID `json:"run_id"`
+	GroupIndex int32       `json:"group_index"`
+	Status     string      `json:"status"`
 }
 
 type Event struct {
@@ -75,18 +139,21 @@ type PipelineConfig struct {
 }
 
 type Project struct {
-	ID           uuid.UUID      `json:"id"`
-	Name         string         `json:"name"`
-	Description  pgtype.Text    `json:"description"`
-	OwnerID      pgtype.UUID    `json:"owner_id"`
-	RepoUrl      pgtype.Text    `json:"repo_url"`
-	GitProvider  string         `json:"git_provider"`
-	GitTokenEnv  pgtype.Text    `json:"git_token_env"`
-	AgentRuntime string         `json:"agent_runtime"`
-	DefaultModel pgtype.Text    `json:"default_model"`
-	MaxBudget    pgtype.Numeric `json:"max_budget"`
-	CreatedAt    time.Time      `json:"created_at"`
-	UpdatedAt    time.Time      `json:"updated_at"`
+	ID                   uuid.UUID      `json:"id"`
+	Name                 string         `json:"name"`
+	Description          pgtype.Text    `json:"description"`
+	OwnerID              pgtype.UUID    `json:"owner_id"`
+	RepoUrl              pgtype.Text    `json:"repo_url"`
+	GitProvider          string         `json:"git_provider"`
+	GitTokenEnv          pgtype.Text    `json:"git_token_env"`
+	AgentRuntime         string         `json:"agent_runtime"`
+	DefaultModel         pgtype.Text    `json:"default_model"`
+	MaxBudget            pgtype.Numeric `json:"max_budget"`
+	CreatedAt            time.Time      `json:"created_at"`
+	UpdatedAt            time.Time      `json:"updated_at"`
+	CircuitBreakerCount  int32          `json:"circuit_breaker_count"`
+	CircuitBreakerActive bool           `json:"circuit_breaker_active"`
+	CircuitBreakerMax    int32          `json:"circuit_breaker_max"`
 }
 
 type ProjectUser struct {

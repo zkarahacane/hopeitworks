@@ -314,23 +314,6 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
-  /projects/{id}/circuit-breaker/reset:
-    post:
-      operationId: resetCircuitBreaker
-      summary: Reset circuit breaker for a project
-      tags: [projects]
-      parameters:
-        - $ref: "#/components/parameters/IdPath"
-      responses:
-        "204":
-          description: Circuit breaker reset successfully
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          $ref: "#/components/responses/NotFound"
-
   # ── Epics ──────────────────────────────────────────────────────────────
   /projects/{projectId}/epics:
     get:
@@ -494,22 +477,28 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
+        "422":
+          description: Cycle detected in story dependencies
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 
   /projects/{projectId}/epic-runs/{epicRunId}:
     get:
       operationId: getEpicRun
-      summary: Get an epic run by ID with story statuses
+      summary: Get an epic run by ID with per-story status
       tags: [epics]
       parameters:
         - $ref: "#/components/parameters/ProjectIdPath"
         - $ref: "#/components/parameters/EpicRunIdPath"
       responses:
         "200":
-          description: Epic run details with story statuses
+          description: Epic run details with per-story status
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/EpicRun"
+                $ref: "#/components/schemas/EpicRunDetail"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "404":
@@ -895,6 +884,27 @@ paths:
       responses:
         "204":
           description: Prompt template deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ── Circuit Breaker ─────────────────────────────────────────────────
+  /projects/{id}/circuit-breaker/reset:
+    post:
+      operationId: resetCircuitBreaker
+      summary: Reset the circuit breaker for a project
+      description: >
+        Resets the circuit breaker state (count=0, active=false) so that
+        pipeline runs can be attempted again. Admin-only endpoint.
+      tags: [projects]
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "204":
+          description: Circuit breaker reset successfully
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -1480,6 +1490,9 @@ components:
         - id
         - name
         - owner_id
+        - circuit_breaker_count
+        - circuit_breaker_active
+        - circuit_breaker_max
         - created_at
         - updated_at
       properties:
@@ -1497,10 +1510,20 @@ components:
           type: string
           format: uuid
           example: 550e8400-e29b-41d4-a716-446655440000
+        circuit_breaker_count:
+          type: integer
+          minimum: 0
+          description: Number of consecutive pipeline failures
+          example: 0
         circuit_breaker_active:
           type: boolean
-          description: Whether the circuit breaker is active, pausing all pipeline runs
+          description: Whether the circuit breaker is currently tripped
           example: false
+        circuit_breaker_max:
+          type: integer
+          minimum: 1
+          description: Threshold for consecutive failures before tripping
+          example: 3
         created_at:
           type: string
           format: date-time
@@ -1725,38 +1748,9 @@ components:
           type: integer
           example: 5
 
-    EpicRun:
-      type: object
-      required: [id, epic_id, project_id, status, stories, created_at]
-      properties:
-        id:
-          type: string
-          format: uuid
-        epic_id:
-          type: string
-          format: uuid
-        project_id:
-          type: string
-          format: uuid
-        status:
-          type: string
-          enum: [scheduling, running, completed, failed]
-          example: running
-        stories:
-          type: array
-          items:
-            $ref: "#/components/schemas/EpicRunStory"
-        created_at:
-          type: string
-          format: date-time
-        completed_at:
-          type: string
-          format: date-time
-          nullable: true
-
     EpicRunStory:
       type: object
-      required: [story_id, story_key, group_index, status]
+      required: [story_id, group_index, status]
       properties:
         story_id:
           type: string
@@ -1764,6 +1758,7 @@ components:
         story_key:
           type: string
           example: S-01
+          description: Unique story identifier within project (e.g., S-01)
         run_id:
           type: string
           format: uuid
@@ -1776,6 +1771,35 @@ components:
           type: string
           enum: [pending, running, completed, failed]
           example: pending
+
+    EpicRunDetail:
+      type: object
+      required: [id, project_id, epic_id, status, created_at, stories]
+      properties:
+        id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        epic_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, running, completed, failed, paused]
+          example: pending
+        created_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        stories:
+          type: array
+          items:
+            $ref: "#/components/schemas/EpicRunStory"
 
     # ── Story ───────────────────────────────────────────────────────────
     Story:

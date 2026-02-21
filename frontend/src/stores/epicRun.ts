@@ -4,7 +4,7 @@ import { apiClient } from '@/api/client'
 import type { components } from '@/api/schema'
 
 /** Epic run entity from the generated API schema */
-export type EpicRun = components['schemas']['EpicRun']
+export type EpicRun = components['schemas']['EpicRunDetail']
 
 /** Story within an epic run */
 export type EpicRunStory = components['schemas']['EpicRunStory']

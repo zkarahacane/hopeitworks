@@ -23,13 +23,14 @@ export function useEpicRunMonitor(projectId: string, epicRunId: string) {
     return stories.map((s) => {
       const pos = groupCounters.get(s.group_index) ?? 0
       groupCounters.set(s.group_index, pos + 1)
+      const storyKey = s.story_key ?? s.story_id
       return {
-        id: s.story_key,
+        id: storyKey,
         type: 'epicRunStatus',
         position: { x: s.group_index * 250, y: pos * 120 },
         data: {
-          key: s.story_key,
-          title: s.story_key,
+          key: storyKey,
+          title: storyKey,
           status: s.status,
           runId: s.run_id ?? null,
         },

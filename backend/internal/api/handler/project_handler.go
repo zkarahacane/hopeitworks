@@ -12,13 +12,14 @@ import (
 
 // ProjectHandler implements project-related HTTP handlers.
 type ProjectHandler struct {
-	service     *service.ProjectService
-	userService *service.ProjectUserService
+	service        *service.ProjectService
+	userService    *service.ProjectUserService
+	circuitBreaker *service.CircuitBreakerService
 }
 
 // NewProjectHandler creates a new ProjectHandler.
-func NewProjectHandler(svc *service.ProjectService, userSvc *service.ProjectUserService) *ProjectHandler {
-	return &ProjectHandler{service: svc, userService: userSvc}
+func NewProjectHandler(svc *service.ProjectService, userSvc *service.ProjectUserService, cbSvc *service.CircuitBreakerService) *ProjectHandler {
+	return &ProjectHandler{service: svc, userService: userSvc, circuitBreaker: cbSvc}
 }
 
 // checkProjectAccess verifies the current user has access to the given project.
@@ -167,6 +168,22 @@ func (h *ProjectHandler) DeleteProject(w http.ResponseWriter, r *http.Request, i
 	}
 
 	if err := h.service.Delete(r.Context(), id); err != nil {
+		writeErrorResponse(w, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// ResetCircuitBreaker handles POST /projects/{id}/circuit-breaker/reset.
+// Only admin users can reset the circuit breaker.
+func (h *ProjectHandler) ResetCircuitBreaker(w http.ResponseWriter, r *http.Request, id IdPath) {
+	if !middleware.IsAdmin(r.Context()) {
+		writeErrorResponse(w, errors.NewForbidden("Admin access required"))
+		return
+	}
+
+	if err := h.circuitBreaker.Reset(r.Context(), id); err != nil {
 		writeErrorResponse(w, err)
 		return
 	}
