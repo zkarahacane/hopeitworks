@@ -35,6 +35,8 @@ export function useSSE(
     'step.failed',
     'log.emitted',
     'hitl.pending',
+    'hitl.approved',
+    'hitl.rejected',
     'epic_run.started',
     'epic_run.group.started',
     'epic_run.story.completed',
