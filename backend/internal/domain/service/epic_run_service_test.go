@@ -179,7 +179,7 @@ func TestLaunchEpicRun_HappyPath(t *testing.T) {
 		listRunStepsByRunFn: func(_ context.Context, _ uuid.UUID) ([]*model.RunStep, error) {
 			return []*model.RunStep{}, nil
 		},
-		updateRunStatusFn: func(_ context.Context, id uuid.UUID, status model.RunStatus, _ *time.Time, _ *time.Time, _ *string) (*model.Run, error) {
+		updateRunStatusFn: func(_ context.Context, id uuid.UUID, status model.RunStatus, _ *time.Time, _ *time.Time, _ *time.Time, _ *string) (*model.Run, error) {
 			return &model.Run{ID: id, Status: status}, nil
 		},
 	}

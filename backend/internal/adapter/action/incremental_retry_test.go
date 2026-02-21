@@ -54,7 +54,7 @@ func (m *retryMockRunRepo) ListRunsByProject(_ context.Context, _ uuid.UUID, _, 
 func (m *retryMockRunRepo) ListRunsByStory(_ context.Context, _ uuid.UUID, _, _ int32) ([]*model.Run, error) {
 	return nil, nil
 }
-func (m *retryMockRunRepo) UpdateRunStatus(_ context.Context, id uuid.UUID, status model.RunStatus, _, _ *time.Time, _ *string) (*model.Run, error) {
+func (m *retryMockRunRepo) UpdateRunStatus(_ context.Context, id uuid.UUID, status model.RunStatus, _, _, _ *time.Time, _ *string) (*model.Run, error) {
 	return &model.Run{ID: id, Status: status}, nil
 }
 func (m *retryMockRunRepo) CountRunsByProject(_ context.Context, _ uuid.UUID) (int64, error) {

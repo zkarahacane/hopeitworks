@@ -185,6 +185,7 @@ type Run struct {
 	ErrorMessage           pgtype.Text        `json:"error_message"`
 	CreatedAt              time.Time          `json:"created_at"`
 	UpdatedAt              time.Time          `json:"updated_at"`
+	PausedAt               pgtype.Timestamptz `json:"paused_at"`
 }
 
 type RunStep struct {

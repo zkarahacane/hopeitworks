@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import Skeleton from 'primevue/skeleton'
 import Message from 'primevue/message'
@@ -7,13 +7,19 @@ import Tag from 'primevue/tag'
 import ProgressBar from 'primevue/progressbar'
 import Timeline from 'primevue/timeline'
 import Button from 'primevue/button'
+import { useToast } from 'primevue/usetoast'
 import { differenceInSeconds } from 'date-fns'
 import { useRunDetail } from '@/features/runs/composables/useRunDetail'
+import { useRunsStore } from '@/stores/runs'
 import RunLogViewer from '@/features/runs/RunLogViewer.vue'
 import type { RunStep } from '@/features/runs/composables/useRunDetail'
 
 const route = useRoute()
 const runId = computed(() => route.params.id as string)
+const projectId = computed(() => route.query.projectId as string ?? '')
+
+const runsStore = useRunsStore()
+const toast = useToast()
 
 const { run: runRef, isLoading, error, retry } = useRunDetail(runId.value)
 const run = computed(() => runRef.value)
@@ -21,6 +27,7 @@ const run = computed(() => runRef.value)
 const runStatusSeverity: Record<string, 'info' | 'success' | 'warn' | 'danger' | 'secondary'> = {
   pending: 'secondary',
   running: 'info',
+  paused: 'warn',
   completed: 'success',
   failed: 'danger',
   cancelled: 'warn',
@@ -32,6 +39,35 @@ const stepSeverity: Record<string, string> = {
   failed: 'danger',
   pending: 'secondary',
   cancelled: 'warn',
+}
+
+const canPause = computed(() => run.value?.status === 'running')
+const canResume = computed(() => run.value?.status === 'paused')
+
+const pauseError = ref<string | null>(null)
+
+async function handlePause() {
+  if (!projectId.value || !runId.value) return
+  pauseError.value = null
+  try {
+    await runsStore.pauseRun(projectId.value, runId.value)
+    toast.add({ severity: 'success', summary: 'Run paused', life: 3000 })
+  } catch (err) {
+    pauseError.value = err instanceof Error ? err.message : 'Failed to pause run'
+    toast.add({ severity: 'error', summary: 'Failed to pause run', detail: pauseError.value, life: 5000 })
+  }
+}
+
+async function handleResume() {
+  if (!projectId.value || !runId.value) return
+  pauseError.value = null
+  try {
+    await runsStore.resumeRun(projectId.value, runId.value)
+    toast.add({ severity: 'success', summary: 'Run resumed', life: 3000 })
+  } catch (err) {
+    pauseError.value = err instanceof Error ? err.message : 'Failed to resume run'
+    toast.add({ severity: 'error', summary: 'Failed to resume run', detail: pauseError.value, life: 5000 })
+  }
 }
 
 /** Compute progress from completed steps ratio (0-100). */
@@ -69,7 +105,27 @@ function formatDuration(step: RunStep): string | null {
           {{ run.id }}
         </code>
       </div>
-      <Tag v-if="run" :value="run.status" :severity="runStatusSeverity[run.status]" />
+      <div class="flex items-center gap-3">
+        <Tag v-if="run" :value="run.status" :severity="runStatusSeverity[run.status]" />
+        <Button
+          v-if="canPause"
+          label="Pause"
+          icon="pi pi-pause"
+          severity="warn"
+          :loading="runsStore.isPausing"
+          data-testid="pause-run-btn"
+          @click="handlePause"
+        />
+        <Button
+          v-if="canResume"
+          label="Resume"
+          icon="pi pi-play"
+          severity="success"
+          :loading="runsStore.isResuming"
+          data-testid="resume-run-btn"
+          @click="handleResume"
+        />
+      </div>
     </div>
 
     <!-- Loading state -->

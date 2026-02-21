@@ -134,6 +134,50 @@ func (h *RunHandler) GetRun(w http.ResponseWriter, r *http.Request, runID RunIdP
 	writeJSON(w, http.StatusOK, toAPIRunWithSteps(run))
 }
 
+// PauseRun handles POST /projects/{projectId}/runs/{runId}/pause.
+func (h *RunHandler) PauseRun(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, runID RunIdPath) {
+	run, err := h.service.PauseRun(r.Context(), projectID, runID)
+	if err != nil {
+		writeErrorResponse(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, toAPIRun(run))
+}
+
+// ResumeRun handles POST /projects/{projectId}/runs/{runId}/resume.
+func (h *RunHandler) ResumeRun(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, runID RunIdPath) {
+	run, err := h.service.ResumeRun(r.Context(), projectID, runID)
+	if err != nil {
+		writeErrorResponse(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, toAPIRun(run))
+}
+
+// PauseEpicRun handles POST /projects/{projectId}/epics/{epicId}/runs/{runId}/pause.
+func (h *RunHandler) PauseEpicRun(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, epicID EpicIdPath, runID RunIdPath) {
+	run, err := h.service.PauseEpicRun(r.Context(), projectID, epicID, runID)
+	if err != nil {
+		writeErrorResponse(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, toAPIRun(run))
+}
+
+// ResumeEpicRun handles POST /projects/{projectId}/epics/{epicId}/runs/{runId}/resume.
+func (h *RunHandler) ResumeEpicRun(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, epicID EpicIdPath, runID RunIdPath) {
+	run, err := h.service.ResumeEpicRun(r.Context(), projectID, epicID, runID)
+	if err != nil {
+		writeErrorResponse(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, toAPIRun(run))
+}
+
 // toAPIRun converts a domain Run to the API Run type.
 func toAPIRun(r *model.Run) Run {
 	run := Run{

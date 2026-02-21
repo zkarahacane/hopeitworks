@@ -207,7 +207,7 @@ type mockRunRepo struct {
 	getActiveRunByStoryFn func(ctx context.Context, storyID uuid.UUID) (*model.Run, error)
 	listRunsByProjectFn   func(ctx context.Context, projectID uuid.UUID, limit, offset int32) ([]*model.Run, error)
 	listRunsByStoryFn     func(ctx context.Context, storyID uuid.UUID, limit, offset int32) ([]*model.Run, error)
-	updateRunStatusFn     func(ctx context.Context, id uuid.UUID, status model.RunStatus, startedAt, completedAt *time.Time, errorMsg *string) (*model.Run, error)
+	updateRunStatusFn     func(ctx context.Context, id uuid.UUID, status model.RunStatus, startedAt, completedAt, pausedAt *time.Time, errorMsg *string) (*model.Run, error)
 	countRunsByProjectFn  func(ctx context.Context, projectID uuid.UUID) (int64, error)
 	countRunsByStoryFn    func(ctx context.Context, storyID uuid.UUID) (int64, error)
 	createRunStepFn       func(ctx context.Context, step *model.RunStep) (*model.RunStep, error)
@@ -262,9 +262,9 @@ func (m *mockRunRepo) ListRunsByStory(ctx context.Context, storyID uuid.UUID, li
 	}
 	return nil, nil
 }
-func (m *mockRunRepo) UpdateRunStatus(ctx context.Context, id uuid.UUID, status model.RunStatus, startedAt, completedAt *time.Time, errorMsg *string) (*model.Run, error) {
+func (m *mockRunRepo) UpdateRunStatus(ctx context.Context, id uuid.UUID, status model.RunStatus, startedAt, completedAt, pausedAt *time.Time, errorMsg *string) (*model.Run, error) {
 	if m.updateRunStatusFn != nil {
-		return m.updateRunStatusFn(ctx, id, status, startedAt, completedAt, errorMsg)
+		return m.updateRunStatusFn(ctx, id, status, startedAt, completedAt, pausedAt, errorMsg)
 	}
 	return &model.Run{ID: id, Status: status}, nil
 }
