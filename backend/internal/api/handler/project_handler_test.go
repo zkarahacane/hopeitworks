@@ -167,6 +167,10 @@ func (m *mockUserRepoForHandler) Update(_ context.Context, user *model.User) (*m
 	return user, nil
 }
 
+func (m *mockUserRepoForHandler) UpdatePasswordHash(_ context.Context, _ uuid.UUID, _ string) error {
+	return nil
+}
+
 func (m *mockUserRepoForHandler) Delete(_ context.Context, _ uuid.UUID) error { return nil }
 
 func setupHandler() (*ProjectHandler, *mockProjectRepo) {

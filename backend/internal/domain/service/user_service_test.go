@@ -6,16 +6,19 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
+
 	"github.com/zakari/hopeitworks/backend/internal/domain/model"
 	"github.com/zakari/hopeitworks/backend/pkg/errors"
 )
 
 // mockUserRepo is a mock implementation of port.UserRepository for testing.
 type mockUserRepo struct {
-	users    map[uuid.UUID]*model.User
-	createFn func(ctx context.Context, u *model.User) (*model.User, error)
-	updateFn func(ctx context.Context, u *model.User) (*model.User, error)
-	deleteFn func(ctx context.Context, id uuid.UUID) error
+	users            map[uuid.UUID]*model.User
+	createFn         func(ctx context.Context, u *model.User) (*model.User, error)
+	updateFn         func(ctx context.Context, u *model.User) (*model.User, error)
+	deleteFn         func(ctx context.Context, id uuid.UUID) error
+	updatePasswordFn func(ctx context.Context, id uuid.UUID, hash string) error
 }
 
 func newMockUserRepo() *mockUserRepo {
@@ -75,6 +78,19 @@ func (m *mockUserRepo) Update(ctx context.Context, user *model.User) (*model.Use
 	user.UpdatedAt = time.Now()
 	m.users[user.ID] = user
 	return user, nil
+}
+
+func (m *mockUserRepo) UpdatePasswordHash(ctx context.Context, id uuid.UUID, hash string) error {
+	if m.updatePasswordFn != nil {
+		return m.updatePasswordFn(ctx, id, hash)
+	}
+	u, ok := m.users[id]
+	if !ok {
+		return errors.NewNotFound("user", id)
+	}
+	u.PasswordHash = hash
+	u.UpdatedAt = time.Now()
+	return nil
 }
 
 func (m *mockUserRepo) Delete(ctx context.Context, id uuid.UUID) error {
@@ -299,5 +315,195 @@ func TestUserService_Delete(t *testing.T) {
 	}
 	if domainErr.Code != "USER_NOT_FOUND" {
 		t.Errorf("expected USER_NOT_FOUND, got %q", domainErr.Code)
+	}
+}
+
+func TestUserService_UpdateProfile(t *testing.T) {
+	repo := newMockUserRepo()
+	svc := NewUserService(repo)
+
+	user := seedUser(repo, "Alice", "alice@example.com", model.RoleUser)
+
+	newName := "Alice Updated"
+	newEmail := "alice-new@example.com"
+	emptyName := ""
+	longName := string(make([]byte, 256))
+
+	tests := []struct {
+		name    string
+		params  UpdateProfileParams
+		wantErr bool
+		errCode string
+	}{
+		{
+			name:    "update name only",
+			params:  UpdateProfileParams{ID: user.ID, Name: &newName},
+			wantErr: false,
+		},
+		{
+			name:    "update email only",
+			params:  UpdateProfileParams{ID: user.ID, Email: &newEmail},
+			wantErr: false,
+		},
+		{
+			name:    "update both name and email",
+			params:  UpdateProfileParams{ID: user.ID, Name: &newName, Email: &newEmail},
+			wantErr: false,
+		},
+		{
+			name:    "empty name",
+			params:  UpdateProfileParams{ID: user.ID, Name: &emptyName},
+			wantErr: true,
+			errCode: "VALIDATION_ERROR",
+		},
+		{
+			name:    "name too long",
+			params:  UpdateProfileParams{ID: user.ID, Name: &longName},
+			wantErr: true,
+			errCode: "VALIDATION_ERROR",
+		},
+		{
+			name:    "user not found",
+			params:  UpdateProfileParams{ID: uuid.New(), Name: &newName},
+			wantErr: true,
+			errCode: "UNAUTHORIZED",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := svc.UpdateProfile(context.Background(), tt.params)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				domainErr, ok := err.(*errors.DomainError)
+				if !ok {
+					t.Fatalf("expected DomainError, got %T", err)
+				}
+				if domainErr.Code != tt.errCode {
+					t.Errorf("expected error code %q, got %q", tt.errCode, domainErr.Code)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if result == nil {
+				t.Fatal("expected non-nil result")
+			}
+		})
+	}
+}
+
+func TestUserService_UpdateProfile_DuplicateEmail(t *testing.T) {
+	repo := newMockUserRepo()
+	// Override update to simulate duplicate key error
+	repo.updateFn = func(_ context.Context, _ *model.User) (*model.User, error) {
+		return nil, &pgDuplicateKeyError{}
+	}
+	svc := NewUserService(repo)
+
+	user := seedUser(repo, "Alice", "alice@example.com", model.RoleUser)
+	email := "taken@example.com"
+
+	_, err := svc.UpdateProfile(context.Background(), UpdateProfileParams{
+		ID:    user.ID,
+		Email: &email,
+	})
+	if err == nil {
+		t.Fatal("expected error for duplicate email")
+	}
+	domainErr, ok := err.(*errors.DomainError)
+	if !ok {
+		t.Fatalf("expected DomainError, got %T", err)
+	}
+	if domainErr.Code != "EMAIL_ALREADY_EXISTS" {
+		t.Errorf("expected EMAIL_ALREADY_EXISTS, got %q", domainErr.Code)
+	}
+}
+
+func TestUserService_ChangePassword(t *testing.T) {
+	repo := newMockUserRepo()
+	svc := NewUserService(repo)
+
+	// Seed user with a known bcrypt hash for "oldpassword"
+	hash, _ := bcrypt.GenerateFromPassword([]byte("oldpassword"), bcrypt.DefaultCost)
+	user := seedUser(repo, "Alice", "alice@example.com", model.RoleUser)
+	user.PasswordHash = string(hash)
+
+	tests := []struct {
+		name            string
+		userID          uuid.UUID
+		currentPassword string
+		newPassword     string
+		wantErr         bool
+		errCode         string
+	}{
+		{
+			name:            "successful password change",
+			userID:          user.ID,
+			currentPassword: "oldpassword",
+			newPassword:     "newpassword123",
+			wantErr:         false,
+		},
+		{
+			name:            "wrong current password",
+			userID:          user.ID,
+			currentPassword: "wrongpassword",
+			newPassword:     "newpassword123",
+			wantErr:         true,
+			errCode:         "UNAUTHORIZED",
+		},
+		{
+			name:            "new password too short",
+			userID:          user.ID,
+			currentPassword: "oldpassword",
+			newPassword:     "short",
+			wantErr:         true,
+			errCode:         "VALIDATION_ERROR",
+		},
+		{
+			name:            "user not found",
+			userID:          uuid.New(),
+			currentPassword: "oldpassword",
+			newPassword:     "newpassword123",
+			wantErr:         true,
+			errCode:         "UNAUTHORIZED",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Reset password hash for repeated tests
+			if tt.name == "successful password change" || tt.name == "new password too short" {
+				h, _ := bcrypt.GenerateFromPassword([]byte("oldpassword"), bcrypt.DefaultCost)
+				user.PasswordHash = string(h)
+			}
+
+			err := svc.ChangePassword(context.Background(), tt.userID, tt.currentPassword, tt.newPassword)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				domainErr, ok := err.(*errors.DomainError)
+				if !ok {
+					t.Fatalf("expected DomainError, got %T", err)
+				}
+				if domainErr.Code != tt.errCode {
+					t.Errorf("expected error code %q, got %q", tt.errCode, domainErr.Code)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			// Verify the password hash was updated
+			updatedUser := repo.users[tt.userID]
+			if bcrypt.CompareHashAndPassword([]byte(updatedUser.PasswordHash), []byte(tt.newPassword)) != nil {
+				t.Error("password hash was not updated correctly")
+			}
+		})
 	}
 }

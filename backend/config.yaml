@@ -20,3 +20,11 @@ docker:
 
 logging:
   level: debug
+
+smtp:
+  host: localhost
+  port: 1025
+  from: noreply@hopeitworks.local
+  username: ""
+  password: ""
+  frontend_url: http://localhost:5173

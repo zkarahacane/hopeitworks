@@ -52,6 +52,10 @@ services:
       DB_SSLMODE: disable
       DOCKER_HOST: tcp://socket-proxy:2375
       DOCKER_AGENT_NETWORK: ${DOCKER_AGENT_NETWORK:-deploy_hopeitworks_agent-network}
+      SMTP_HOST: mailhog
+      SMTP_PORT: 1025
+      SMTP_FROM: noreply@hopeitworks.local
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
     ports:
       - "${SERVER_PORT:-8080}:8080"
     depends_on:
@@ -59,9 +63,21 @@ services:
         condition: service_healthy
       socket-proxy:
         condition: service_started
+      mailhog:
+        condition: service_started
     restart: on-failure
     networks:
       - hopeitworks
+
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    container_name: hopeitworks-mailhog
+    ports:
+      - "${MAILHOG_SMTP_PORT:-1025}:1025"
+      - "${MAILHOG_UI_PORT:-8025}:8025"
+    networks:
+      - hopeitworks
+    restart: on-failure
 
 volumes:
   postgres_data:

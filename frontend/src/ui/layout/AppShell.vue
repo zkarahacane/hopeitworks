@@ -11,11 +11,13 @@ import { useLayoutStore } from '@/stores/layout'
 import { useHITLStore } from '@/stores/hitl'
 import { useKeyboard } from '@/composables/useKeyboard'
 import { useBreakpoint } from '@/composables/useBreakpoint'
+import { useAuth } from '@/composables/useAuth'
 
 const layoutStore = useLayoutStore()
 const hitlStore = useHITLStore()
 const toast = useToast()
 const { isMobile } = useBreakpoint()
+const { isAuthenticated } = useAuth()
 const mobileSidebarOpen = ref(false)
 const router = useRouter()
 
@@ -90,70 +92,76 @@ function toggleMobileSidebar() {
 
 <template>
   <div class="flex h-screen flex-col overflow-hidden">
-    <!-- Skip navigation link -->
-    <a
-      href="#main-content"
-      class="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:bg-primary focus:px-4 focus:py-2 focus:text-white"
-    >
-      Skip to main content
-    </a>
-
-    <AppHeader
-      :show-hamburger="isMobile"
-      @toggle-sidebar="toggleMobileSidebar"
-    />
-
-    <div class="flex min-h-0 flex-1">
-      <AppSidebar
-        :collapsed="layoutStore.sidebarCollapsed"
-        :mobile-open="mobileSidebarOpen"
-        @close="mobileSidebarOpen = false"
-      />
-
-      <main
-        id="main-content"
-        class="flex-1 overflow-auto bg-surface-100 p-4"
+    <template v-if="isAuthenticated">
+      <!-- Skip navigation link -->
+      <a
+        href="#main-content"
+        class="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:bg-primary focus:px-4 focus:py-2 focus:text-white"
       >
-        <router-view />
-      </main>
-    </div>
+        Skip to main content
+      </a>
 
-    <!-- Mobile bottom nav -->
-    <nav
-      v-if="isMobile"
-      class="flex h-14 items-center justify-around border-t border-surface-200 bg-surface-0"
-      aria-label="Mobile navigation"
-    >
-      <Button
-        v-for="item in mobileNavItems"
-        :key="item.route"
-        :icon="item.icon"
-        :label="item.label"
-        text
-        class="flex flex-col items-center gap-0.5 text-xs"
-        @click="router.push(item.route)"
+      <AppHeader
+        :show-hamburger="isMobile"
+        @toggle-sidebar="toggleMobileSidebar"
       />
-    </nav>
 
-    <AppStatusBar v-if="!isMobile" />
+      <div class="flex min-h-0 flex-1">
+        <AppSidebar
+          :collapsed="layoutStore.sidebarCollapsed"
+          :mobile-open="mobileSidebarOpen"
+          @close="mobileSidebarOpen = false"
+        />
 
-    <!-- Global toast for SSE notifications (HITL approvals) -->
-    <Toast position="top-right" group="hitl">
-      <template #message="slotProps">
-        <div class="flex flex-col gap-2">
-          <div class="flex items-center gap-2">
-            <i class="pi pi-exclamation-triangle" />
-            <span class="font-semibold">{{ slotProps.message.summary }}</span>
+        <main
+          id="main-content"
+          class="flex-1 overflow-auto bg-surface-100 p-4"
+        >
+          <router-view />
+        </main>
+      </div>
+
+      <!-- Mobile bottom nav -->
+      <nav
+        v-if="isMobile"
+        class="flex h-14 items-center justify-around border-t border-surface-200 bg-surface-0"
+        aria-label="Mobile navigation"
+      >
+        <Button
+          v-for="item in mobileNavItems"
+          :key="item.route"
+          :icon="item.icon"
+          :label="item.label"
+          text
+          class="flex flex-col items-center gap-0.5 text-xs"
+          @click="router.push(item.route)"
+        />
+      </nav>
+
+      <AppStatusBar v-if="!isMobile" />
+
+      <!-- Global toast for SSE notifications (HITL approvals) -->
+      <Toast position="top-right" group="hitl">
+        <template #message="slotProps">
+          <div class="flex flex-col gap-2">
+            <div class="flex items-center gap-2">
+              <i class="pi pi-exclamation-triangle" />
+              <span class="font-semibold">{{ slotProps.message.summary }}</span>
+            </div>
+            <span>{{ slotProps.message.detail }}</span>
+            <Button
+              label="Review Now"
+              size="small"
+              severity="warn"
+              @click="navigateToApproval()"
+            />
           </div>
-          <span>{{ slotProps.message.detail }}</span>
-          <Button
-            label="Review Now"
-            size="small"
-            severity="warn"
-            @click="navigateToApproval()"
-          />
-        </div>
-      </template>
-    </Toast>
+        </template>
+      </Toast>
+    </template>
+
+    <template v-else>
+      <router-view />
+    </template>
   </div>
 </template>

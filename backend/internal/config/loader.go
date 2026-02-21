@@ -65,6 +65,26 @@ func applyEnvOverrides(cfg *pkgconfig.Config) {
 	if v := os.Getenv("DOCKER_AGENT_NETWORK"); v != "" {
 		cfg.Docker.AgentNetwork = v
 	}
+	if v := os.Getenv("SMTP_HOST"); v != "" {
+		cfg.SMTP.Host = v
+	}
+	if v := os.Getenv("SMTP_PORT"); v != "" {
+		if port, err := strconv.Atoi(v); err == nil {
+			cfg.SMTP.Port = port
+		}
+	}
+	if v := os.Getenv("SMTP_FROM"); v != "" {
+		cfg.SMTP.From = v
+	}
+	if v := os.Getenv("SMTP_USERNAME"); v != "" {
+		cfg.SMTP.Username = v
+	}
+	if v := os.Getenv("SMTP_PASSWORD"); v != "" {
+		cfg.SMTP.Password = v
+	}
+	if v := os.Getenv("FRONTEND_URL"); v != "" {
+		cfg.SMTP.FrontendURL = v
+	}
 }
 
 func validate(cfg *pkgconfig.Config) error {

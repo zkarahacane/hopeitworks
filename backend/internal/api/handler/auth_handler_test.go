@@ -11,8 +11,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
 	"github.com/zakari/hopeitworks/backend/internal/api/middleware"
 	"github.com/zakari/hopeitworks/backend/internal/domain/model"
+	"github.com/zakari/hopeitworks/backend/internal/domain/port"
 	"github.com/zakari/hopeitworks/backend/internal/domain/service"
 )
 
@@ -66,9 +68,19 @@ func (m *mockRepo) Count(_ context.Context) (int64, error) {
 	return int64(len(m.users)), nil
 }
 
-func (m *mockRepo) Update(_ context.Context, _ *model.User) (*model.User, error) {
-	return nil, nil
+func (m *mockRepo) Update(_ context.Context, user *model.User) (*model.User, error) {
+	existing, ok := m.users[user.ID.String()]
+	if !ok {
+		return nil, errors.New("no rows")
+	}
+	if user.PasswordHash != "" {
+		existing.PasswordHash = user.PasswordHash
+	}
+	existing.UpdatedAt = time.Now()
+	return existing, nil
 }
+
+func (m *mockRepo) UpdatePasswordHash(_ context.Context, _ uuid.UUID, _ string) error { return nil }
 
 func (m *mockRepo) Delete(_ context.Context, _ uuid.UUID) error { return nil }
 
@@ -77,11 +89,78 @@ type pgDupError struct{}
 func (e *pgDupError) Error() string    { return "duplicate key" }
 func (e *pgDupError) SQLState() string { return "23505" }
 
+// mockTokenRepo is a test double for port.PasswordResetTokenRepository.
+type mockTokenRepo struct {
+	tokens map[string]*model.PasswordResetToken
+}
+
+func newMockTokenRepo() *mockTokenRepo {
+	return &mockTokenRepo{tokens: make(map[string]*model.PasswordResetToken)}
+}
+
+func (m *mockTokenRepo) Create(_ context.Context, userID uuid.UUID, token string, expiresAt time.Time) (*model.PasswordResetToken, error) {
+	prt := &model.PasswordResetToken{
+		ID:        uuid.New(),
+		UserID:    userID,
+		Token:     token,
+		ExpiresAt: expiresAt,
+		CreatedAt: time.Now(),
+	}
+	m.tokens[token] = prt
+	return prt, nil
+}
+
+func (m *mockTokenRepo) GetByToken(_ context.Context, token string) (*model.PasswordResetToken, error) {
+	prt, ok := m.tokens[token]
+	if !ok {
+		return nil, errors.New("not found")
+	}
+	return prt, nil
+}
+
+func (m *mockTokenRepo) MarkUsed(_ context.Context, id uuid.UUID) error {
+	for _, prt := range m.tokens {
+		if prt.ID == id {
+			now := time.Now()
+			prt.UsedAt = &now
+			return nil
+		}
+	}
+	return errors.New("not found")
+}
+
+// mockEmailSender is a test double for port.EmailSender.
+type mockEmailSender struct {
+	sendFn func(ctx context.Context, msg port.EmailMessage) error
+}
+
+func newMockEmailSender() *mockEmailSender {
+	return &mockEmailSender{}
+}
+
+func (m *mockEmailSender) Send(ctx context.Context, msg port.EmailMessage) error {
+	if m.sendFn != nil {
+		return m.sendFn(ctx, msg)
+	}
+	return nil
+}
+
 func newTestHandler() (*AuthHandler, *mockRepo) {
 	repo := newMockRepo()
-	authSvc := service.NewAuthService(repo, nil, "test-secret-key", 24*time.Hour)
-	handler := NewAuthHandler(authSvc, repo, false)
-	return handler, repo
+	tokenRepo := newMockTokenRepo()
+	emailSender := newMockEmailSender()
+	authSvc := service.NewAuthService(repo, tokenRepo, emailSender, "http://localhost:5173", "test-secret-key", 24*time.Hour)
+	h := NewAuthHandler(authSvc, repo, false)
+	return h, repo
+}
+
+func newTestHandlerWithDeps() (*AuthHandler, *mockRepo, *mockTokenRepo, *mockEmailSender) {
+	repo := newMockRepo()
+	tokenRepo := newMockTokenRepo()
+	emailSender := newMockEmailSender()
+	authSvc := service.NewAuthService(repo, tokenRepo, emailSender, "http://localhost:5173", "test-secret-key", 24*time.Hour)
+	h := NewAuthHandler(authSvc, repo, false)
+	return h, repo, tokenRepo, emailSender
 }
 
 const (
@@ -299,5 +378,197 @@ func TestMeHandler_Unauthenticated(t *testing.T) {
 
 	if rec.Code != http.StatusUnauthorized {
 		t.Errorf("expected 401, got %d", rec.Code)
+	}
+}
+
+// ── ForgotPassword handler tests ────────────────────────────────────────
+
+func TestForgotPasswordHandler_ValidEmail(t *testing.T) {
+	h, _, _, _ := newTestHandlerWithDeps()
+
+	// Register a user first
+	regReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewBufferString(testRegisterBody))
+	regReq.Header.Set("Content-Type", "application/json")
+	regRec := httptest.NewRecorder()
+	h.Register(regRec, regReq)
+
+	// Request forgot password
+	body := `{"email":"test@example.com"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/forgot-password", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	h.ForgotPassword(rec, req)
+
+	if rec.Code != http.StatusAccepted {
+		t.Errorf("expected 202, got %d", rec.Code)
+	}
+
+	var resp messageResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if resp.Message != "If this email is registered, a reset link has been sent" {
+		t.Errorf("unexpected message: %s", resp.Message)
+	}
+}
+
+func TestForgotPasswordHandler_UnknownEmail(t *testing.T) {
+	h, _ := newTestHandler()
+
+	body := `{"email":"unknown@example.com"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/forgot-password", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	h.ForgotPassword(rec, req)
+
+	// Must still return 202 (no enumeration)
+	if rec.Code != http.StatusAccepted {
+		t.Errorf("expected 202, got %d", rec.Code)
+	}
+}
+
+func TestForgotPasswordHandler_MissingEmail(t *testing.T) {
+	h, _ := newTestHandler()
+
+	body := `{}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/forgot-password", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	h.ForgotPassword(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", rec.Code)
+	}
+}
+
+// ── ResetPassword handler tests ─────────────────────────────────────────
+
+func TestResetPasswordHandler_ValidToken(t *testing.T) {
+	h, _, tokenRepo, _ := newTestHandlerWithDeps()
+
+	// Register a user
+	regReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewBufferString(testRegisterBody))
+	regReq.Header.Set("Content-Type", "application/json")
+	regRec := httptest.NewRecorder()
+	h.Register(regRec, regReq)
+
+	var regResp userResponse
+	if err := json.NewDecoder(regRec.Body).Decode(&regResp); err != nil {
+		t.Fatalf("failed to decode register response: %v", err)
+	}
+	userID, _ := uuid.Parse(regResp.ID)
+
+	// Create a token directly in the mock
+	prt := &model.PasswordResetToken{
+		ID:        uuid.New(),
+		UserID:    userID,
+		Token:     "valid-reset-token",
+		ExpiresAt: time.Now().Add(1 * time.Hour),
+		CreatedAt: time.Now(),
+	}
+	tokenRepo.tokens["valid-reset-token"] = prt
+
+	// Reset password
+	body := `{"token":"valid-reset-token","password":"newSecureP@ss1"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/reset-password", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	h.ResetPassword(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d, body: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestResetPasswordHandler_ExpiredToken(t *testing.T) {
+	h, _, tokenRepo, _ := newTestHandlerWithDeps()
+
+	prt := &model.PasswordResetToken{
+		ID:        uuid.New(),
+		UserID:    uuid.New(),
+		Token:     "expired-token",
+		ExpiresAt: time.Now().Add(-1 * time.Hour),
+		CreatedAt: time.Now().Add(-2 * time.Hour),
+	}
+	tokenRepo.tokens["expired-token"] = prt
+
+	body := `{"token":"expired-token","password":"newSecureP@ss1"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/reset-password", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	h.ResetPassword(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", rec.Code)
+	}
+
+	var resp errorEnvelope
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode error response: %v", err)
+	}
+	if resp.Error.Code != "RESET_TOKEN_EXPIRED" {
+		t.Errorf("expected error code RESET_TOKEN_EXPIRED, got %s", resp.Error.Code)
+	}
+}
+
+func TestResetPasswordHandler_InvalidToken(t *testing.T) {
+	h, _ := newTestHandler()
+
+	body := `{"token":"nonexistent-token","password":"newSecureP@ss1"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/reset-password", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	h.ResetPassword(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", rec.Code)
+	}
+
+	var resp errorEnvelope
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode error response: %v", err)
+	}
+	if resp.Error.Code != "RESET_TOKEN_INVALID" {
+		t.Errorf("expected error code RESET_TOKEN_INVALID, got %s", resp.Error.Code)
+	}
+}
+
+func TestResetPasswordHandler_WeakPassword(t *testing.T) {
+	h, _ := newTestHandler()
+
+	body := `{"token":"some-token","password":"short"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/reset-password", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	h.ResetPassword(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", rec.Code)
+	}
+}
+
+func TestResetPasswordHandler_MissingFields(t *testing.T) {
+	h, _ := newTestHandler()
+
+	tests := []struct {
+		name string
+		body string
+	}{
+		{"missing token", `{"password":"newSecureP@ss1"}`},
+		{"missing password", `{"token":"some-token"}`},
+		{"empty body", `{}`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/reset-password", bytes.NewBufferString(tt.body))
+			req.Header.Set("Content-Type", "application/json")
+			rec := httptest.NewRecorder()
+			h.ResetPassword(rec, req)
+
+			if rec.Code != http.StatusBadRequest {
+				t.Errorf("expected 400, got %d", rec.Code)
+			}
+		})
 	}
 }

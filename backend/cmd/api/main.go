@@ -19,6 +19,7 @@ import (
 	hbadapter "github.com/zakari/hopeitworks/backend/internal/adapter/handlebars"
 	pgadapter "github.com/zakari/hopeitworks/backend/internal/adapter/postgres"
 	riveradapter "github.com/zakari/hopeitworks/backend/internal/adapter/river"
+	smtpadapter "github.com/zakari/hopeitworks/backend/internal/adapter/smtp"
 	webhookadapter "github.com/zakari/hopeitworks/backend/internal/adapter/webhook"
 	"github.com/zakari/hopeitworks/backend/internal/api/handler"
 	authmw "github.com/zakari/hopeitworks/backend/internal/api/middleware"
@@ -76,9 +77,12 @@ func run() error {
 	// Auth service and middleware
 	userRepo := pgadapter.NewUserRepository(pool)
 	blacklistRepo := pgadapter.NewTokenBlacklistRepo(pool)
+	passwordResetTokenRepo := pgadapter.NewPasswordResetTokenRepository(pool)
+	emailSender := smtpadapter.NewEmailSender(cfg.SMTP)
 	jwtSecret := getEnvOrDefault("JWT_SECRET", "dev-secret-key-change-in-production")
 	jwtExpiration := 24 * time.Hour
-	authService := service.NewAuthService(userRepo, blacklistRepo, jwtSecret, jwtExpiration)
+	authService := service.NewAuthService(userRepo, passwordResetTokenRepo, emailSender, cfg.SMTP.FrontendURL, jwtSecret, jwtExpiration)
+	authService.SetBlacklistRepo(blacklistRepo)
 
 	// Project repository (shared)
 	projectRepo := pgadapter.NewProjectRepo(queries)
@@ -132,6 +136,7 @@ func run() error {
 	// User service
 	userService := service.NewUserService(userRepo)
 	userHandler := handler.NewUserHandler(userService)
+	profileHandler := handler.NewProfileHandler(userService)
 
 	// Application-wide context for background services
 	appCtx, appCancel := context.WithCancel(ctx)
@@ -262,7 +267,7 @@ func run() error {
 	epicRunService := service.NewEpicRunService(epicRunRepo, storyRepo, epicRepo, schedulerService, parallelGroupExecutor, eventRepo, logger)
 	epicRunHandler := handler.NewEpicRunHandler(epicRunService)
 
-	server := handler.NewServer(authHandler, projectHandler, userHandler, epicHandler, storyHandler, promptTemplateHandler, runHandler, pipelineConfigHandler, hitlHandler, costHandler, notificationHandler, epicRunHandler)
+	server := handler.NewServer(authHandler, projectHandler, userHandler, profileHandler, epicHandler, storyHandler, promptTemplateHandler, runHandler, pipelineConfigHandler, hitlHandler, costHandler, notificationHandler, epicRunHandler)
 
 	// Project user handler
 	projectUserHandler := handler.NewProjectUserHandler(projectUserService)
