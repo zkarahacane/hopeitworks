@@ -152,14 +152,14 @@ development_status:
   epic-10-retrospective: optional
 
   # Post-MVP: Bug Fixes from E2E Testing
-  post-mvp-fixes: in-progress
+  post-mvp-fixes: done
   fix-1-migrations-numbering-conflict: done
-  fix-2-password-input-accessibility: ready-for-dev
-  fix-3-catch-all-404-route: ready-for-dev
-  fix-4-e2e-test-helpers: ready-for-dev
-  fix-5-e2e-stack-docker-reset: ready-for-dev
+  fix-2-password-input-accessibility: done
+  fix-3-catch-all-404-route: done
+  fix-4-e2e-test-helpers: done
+  fix-5-e2e-stack-docker-reset: done
   fix-6-e2e-selector-refinements: done
-  fix-7-pipeline-config-seed-data: ready-for-dev
+  fix-7-pipeline-config-seed-data: done
 
 # PARALLEL EXECUTION WAVES
 # ========================
@@ -633,10 +633,10 @@ parallel_waves:
     stories:
       - key: fix-2-password-input-accessibility
         domain: front
-        status: ready-for-dev
+        status: done
       - key: fix-3-catch-all-404-route
         domain: front
-        status: ready-for-dev
+        status: done
     container_count: 2
     depends_on: [wave-16]
     notes: "P1 frontend fixes: password a11y + 404 route — parallel, independent"
@@ -646,10 +646,10 @@ parallel_waves:
     stories:
       - key: fix-4-e2e-test-helpers
         domain: front
-        status: ready-for-dev
+        status: done
       - key: fix-5-e2e-stack-docker-reset
         domain: shared
-        status: ready-for-dev
+        status: done
     container_count: 2
     depends_on: [wave-17]
     notes: "P2 test infra fixes: test selectors + stack script — parallel, independent"
@@ -662,7 +662,7 @@ parallel_waves:
         status: done
       - key: fix-7-pipeline-config-seed-data
         domain: shared
-        status: ready-for-dev
+        status: done
     container_count: 2
     depends_on: [wave-18]
     notes: "Final test fixes: selector refinements + pipeline config 404 — parallel"
