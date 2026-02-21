@@ -151,6 +151,14 @@ development_status:
   10-3-pipeline-validation-stories-integration-test: done
   epic-10-retrospective: optional
 
+  # Post-MVP: Bug Fixes from E2E Testing
+  post-mvp-fixes: in-progress
+  fix-1-migrations-numbering-conflict: ready-for-dev
+  fix-2-password-input-accessibility: ready-for-dev
+  fix-3-catch-all-404-route: ready-for-dev
+  fix-4-e2e-test-helpers: ready-for-dev
+  fix-5-e2e-stack-docker-reset: ready-for-dev
+
 # PARALLEL EXECUTION WAVES
 # ========================
 # Stories in the same wave can run simultaneously in separate containers.
@@ -603,3 +611,43 @@ parallel_waves:
     container_count: 1
     depends_on: [wave-14]
     notes: "Full pipeline validation - Epic 10 COMPLETE, PROJECT MVP DONE"
+
+  # ============================================================
+  # PHASE 5: POST-MVP BUG FIXES (from E2E smoke testing)
+  # ============================================================
+
+  wave-16:
+    phase: 5-bugfixes
+    stories:
+      - key: fix-1-migrations-numbering-conflict
+        domain: back
+        status: ready-for-dev
+    container_count: 1
+    depends_on: [wave-15]
+    notes: "P0 blocker: fix migration numbering conflict — all project routes return 500"
+
+  wave-17:
+    phase: 5-bugfixes
+    stories:
+      - key: fix-2-password-input-accessibility
+        domain: front
+        status: ready-for-dev
+      - key: fix-3-catch-all-404-route
+        domain: front
+        status: ready-for-dev
+    container_count: 2
+    depends_on: [wave-16]
+    notes: "P1 frontend fixes: password a11y + 404 route — parallel, independent"
+
+  wave-18:
+    phase: 5-bugfixes
+    stories:
+      - key: fix-4-e2e-test-helpers
+        domain: front
+        status: ready-for-dev
+      - key: fix-5-e2e-stack-docker-reset
+        domain: shared
+        status: ready-for-dev
+    container_count: 2
+    depends_on: [wave-17]
+    notes: "P2 test infra fixes: test selectors + stack script — parallel, independent"
