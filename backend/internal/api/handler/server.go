@@ -15,11 +15,12 @@ type Server struct {
 	runs            *RunHandler
 	pipelineConfig  *PipelineConfigHandler
 	notifications   *NotificationHandler
+	epicRuns        *EpicRunHandler
 }
 
 // NewServer creates a new Server with the given handlers.
-func NewServer(auth *AuthHandler, projects *ProjectHandler, users *UserHandler, epics *EpicHandler, stories *StoryHandler, promptTemplates *PromptTemplateHandler, runs *RunHandler, pipelineConfig *PipelineConfigHandler, notifications *NotificationHandler) *Server {
-	return &Server{auth: auth, projects: projects, users: users, epics: epics, stories: stories, promptTemplates: promptTemplates, runs: runs, pipelineConfig: pipelineConfig, notifications: notifications}
+func NewServer(auth *AuthHandler, projects *ProjectHandler, users *UserHandler, epics *EpicHandler, stories *StoryHandler, promptTemplates *PromptTemplateHandler, runs *RunHandler, pipelineConfig *PipelineConfigHandler, notifications *NotificationHandler, epicRuns *EpicRunHandler) *Server {
+	return &Server{auth: auth, projects: projects, users: users, epics: epics, stories: stories, promptTemplates: promptTemplates, runs: runs, pipelineConfig: pipelineConfig, notifications: notifications, epicRuns: epicRuns}
 }
 
 // RegisterUser delegates to AuthHandler.
@@ -117,9 +118,14 @@ func (s *Server) GetEpicDAG(w http.ResponseWriter, r *http.Request, projectID Pr
 	s.epics.GetEpicDAG(w, r, projectID, epicID)
 }
 
-// LaunchEpicRun delegates to EpicHandler (stub — not yet implemented).
-func (s *Server) LaunchEpicRun(w http.ResponseWriter, _ *http.Request, _ ProjectIdPath, _ EpicIdPath) {
-	w.WriteHeader(http.StatusNotImplemented)
+// LaunchEpicRun delegates to EpicRunHandler.
+func (s *Server) LaunchEpicRun(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, epicID EpicIdPath) {
+	s.epicRuns.LaunchEpicRun(w, r, projectID, epicID)
+}
+
+// GetEpicRun delegates to EpicRunHandler.
+func (s *Server) GetEpicRun(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, epicRunID EpicRunIdPath) {
+	s.epicRuns.GetEpicRun(w, r, projectID, epicRunID)
 }
 
 // ListStories delegates to StoryHandler.

@@ -494,6 +494,32 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
+        "422":
+          description: Cycle detected in story dependencies
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /projects/{projectId}/epic-runs/{epicRunId}:
+    get:
+      operationId: getEpicRun
+      summary: Get an epic run by ID with per-story status
+      tags: [epics]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/EpicRunIdPath"
+      responses:
+        "200":
+          description: Epic run details with per-story status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EpicRunDetail"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
   # ── Stories ──────────────────────────────────────────────────────────
   /projects/{projectId}/stories:
@@ -1311,6 +1337,15 @@ components:
         format: uuid
       description: Notification config UUID
 
+    EpicRunIdPath:
+      name: epicRunId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Epic run UUID
+
     PageParam:
       name: page
       in: query
@@ -1695,6 +1730,52 @@ components:
         stories_count:
           type: integer
           example: 5
+
+    EpicRunStory:
+      type: object
+      required: [story_id, group_index, status]
+      properties:
+        story_id:
+          type: string
+          format: uuid
+        run_id:
+          type: string
+          format: uuid
+          nullable: true
+        group_index:
+          type: integer
+        status:
+          type: string
+          example: pending
+
+    EpicRunDetail:
+      type: object
+      required: [id, project_id, epic_id, status, created_at, stories]
+      properties:
+        id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        epic_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, running, completed, failed, paused]
+          example: pending
+        created_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        stories:
+          type: array
+          items:
+            $ref: "#/components/schemas/EpicRunStory"
 
     # ── Story ───────────────────────────────────────────────────────────
     Story:

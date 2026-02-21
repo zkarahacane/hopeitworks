@@ -256,7 +256,13 @@ func run() error {
 	// SSE handler for real-time event streaming
 	sseHandler := handler.NewSSEHandler(eventBus, eventRepo, projectUserRepo, logger)
 
-	server := handler.NewServer(authHandler, projectHandler, userHandler, epicHandler, storyHandler, promptTemplateHandler, runHandler, pipelineConfigHandler, notificationHandler)
+	// Epic run orchestration
+	epicRunRepo := pgadapter.NewEpicRunRepo(queries)
+	parallelGroupExecutor := service.NewParallelGroupExecutor(epicRunRepo, runService, pipelineExecutor, eventRepo, logger)
+	epicRunService := service.NewEpicRunService(epicRunRepo, storyRepo, epicRepo, schedulerService, parallelGroupExecutor, eventRepo, logger)
+	epicRunHandler := handler.NewEpicRunHandler(epicRunService)
+
+	server := handler.NewServer(authHandler, projectHandler, userHandler, epicHandler, storyHandler, promptTemplateHandler, runHandler, pipelineConfigHandler, notificationHandler, epicRunHandler)
 
 	// Project user handler
 	projectUserHandler := handler.NewProjectUserHandler(projectUserService)
