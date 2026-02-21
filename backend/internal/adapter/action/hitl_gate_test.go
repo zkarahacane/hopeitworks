@@ -36,6 +36,10 @@ func (m *hitlMockHITLRepo) GetByRunStepID(_ context.Context, _ uuid.UUID) (*mode
 	return nil, apperrors.NewNotFound("hitl_request", uuid.Nil)
 }
 
+func (m *hitlMockHITLRepo) GetPendingByRunID(_ context.Context, _ uuid.UUID) (*model.HITLRequest, error) {
+	return nil, apperrors.NewNotFound("hitl_request", uuid.Nil)
+}
+
 func (m *hitlMockHITLRepo) UpdateStatus(_ context.Context, _ uuid.UUID, _ model.HITLStatus, _ *uuid.UUID, _ *string, _ time.Time) (*model.HITLRequest, error) {
 	return nil, nil
 }

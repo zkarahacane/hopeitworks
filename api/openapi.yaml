@@ -1074,24 +1074,55 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
-  /hitl-requests/{hitlRequestId}/approve:
+  /projects/{projectId}/runs/{runId}/hitl/approve:
     post:
-      operationId: approveHITLRequest
-      summary: Approve a HITL request
+      operationId: approveHITLGate
+      summary: Approve a pending HITL gate, resuming pipeline execution
       tags: [hitl]
       parameters:
-        - $ref: "#/components/parameters/HITLRequestIdPath"
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/RunIdPath"
       responses:
-        "200":
-          description: HITL request approved
+        "202":
+          description: HITL gate approved, pipeline resuming
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/HITLRequest"
-        "400":
-          $ref: "#/components/responses/BadRequest"
+                $ref: "#/components/schemas/HITLActionResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /projects/{projectId}/runs/{runId}/hitl/reject:
+    post:
+      operationId: rejectHITLGate
+      summary: Reject a pending HITL gate, failing the pipeline run
+      tags: [hitl]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/RunIdPath"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RejectHITLRequest"
+      responses:
+        "202":
+          description: HITL gate rejected, run marked as failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HITLActionResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
@@ -1190,35 +1221,6 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
-
-  /hitl-requests/{hitlRequestId}/reject:
-    post:
-      operationId: rejectHITLRequest
-      summary: Reject a HITL request
-      tags: [hitl]
-      parameters:
-        - $ref: "#/components/parameters/HITLRequestIdPath"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/RejectHITLRequest"
-      responses:
-        "200":
-          description: HITL request rejected
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/HITLRequest"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "409":
-          $ref: "#/components/responses/Conflict"
 
 # ── Components ──────────────────────────────────────────────────────────
 components:
@@ -2362,14 +2364,27 @@ components:
 
     RejectHITLRequest:
       type: object
-      required:
-        - reason
       properties:
         reason:
           type: string
-          minLength: 10
-          description: Reason for rejecting the HITL request
+          description: Optional reason for rejecting the HITL request
 
+    HITLActionResponse:
+      type: object
+      required: [run_id, hitl_request_id, status]
+      properties:
+        run_id:
+          type: string
+          format: uuid
+          description: ID of the pipeline run
+        hitl_request_id:
+          type: string
+          format: uuid
+          description: ID of the resolved HITL request
+        status:
+          type: string
+          description: Current run status after the action
+          example: running
 
     # ── Costs ──────────────────────────────────────────────────────────
     CostSummary:

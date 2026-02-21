@@ -180,6 +180,10 @@ func (m *runHandlerJobQueue) EnqueueExecuteRun(ctx context.Context, runID uuid.U
 	return nil
 }
 
+func (m *runHandlerJobQueue) EnqueueResumeRun(_ context.Context, _, _ uuid.UUID) error {
+	return nil
+}
+
 // handlerTestPipelineYAML is a minimal valid pipeline config for handler tests.
 const handlerTestPipelineYAML = `steps:
   - id: "step-1"

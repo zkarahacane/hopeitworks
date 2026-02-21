@@ -46,7 +46,13 @@ const { approveAction, rejectAction } = useApprovalActions()
 
 async function handleApprove() {
   if (!fetchAction.data.value) return
-  await approveAction.execute(fetchAction.data.value.id)
+  const projectId = fetchAction.data.value.project_id
+  const runIdValue = fetchAction.data.value.run_id
+  if (!projectId || !runIdValue) {
+    toast.add({ severity: 'error', summary: 'Missing project or run ID', life: 3000 })
+    return
+  }
+  await approveAction.execute(projectId, runIdValue)
   if (!approveAction.error.value) {
     toast.add({ severity: 'success', summary: 'Approval submitted', life: 3000 })
     router.push({ name: 'run-detail', params: { id: runId.value } })
@@ -68,7 +74,13 @@ async function handleReject() {
   rejectValidationError.value = null
 
   if (!fetchAction.data.value) return
-  await rejectAction.execute(fetchAction.data.value.id, rejectReason.value)
+  const projectId = fetchAction.data.value.project_id
+  const runIdValue = fetchAction.data.value.run_id
+  if (!projectId || !runIdValue) {
+    toast.add({ severity: 'error', summary: 'Missing project or run ID', life: 3000 })
+    return
+  }
+  await rejectAction.execute(projectId, runIdValue, rejectReason.value)
   if (!rejectAction.error.value) {
     showRejectDialog.value = false
     toast.add({ severity: 'success', summary: 'Rejection submitted', life: 3000 })
