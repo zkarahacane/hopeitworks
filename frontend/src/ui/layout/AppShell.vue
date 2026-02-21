@@ -8,42 +8,49 @@ import AppHeader from './AppHeader.vue'
 import AppSidebar from './AppSidebar.vue'
 import AppStatusBar from './AppStatusBar.vue'
 import { useLayoutStore } from '@/stores/layout'
-import { useApprovalsStore, type PendingApproval } from '@/stores/approvals'
+import { useHITLStore } from '@/stores/hitl'
 import { useKeyboard } from '@/composables/useKeyboard'
 import { useBreakpoint } from '@/composables/useBreakpoint'
 
 const layoutStore = useLayoutStore()
-const approvalsStore = useApprovalsStore()
+const hitlStore = useHITLStore()
 const toast = useToast()
 const { isMobile } = useBreakpoint()
 const mobileSidebarOpen = ref(false)
 const router = useRouter()
 
+/**
+ * NOTE: Global SSE subscription for HITL events is NOT implemented in MVP.
+ * The backend SSE endpoint requires a valid project_id UUID and does not support
+ * global/wildcard subscriptions. For MVP, the HITL badge count is populated by:
+ * 1. ApprovalsView calls fetchPending() when mounted
+ * 2. Project-specific SSE connections in RunDetailView dispatch to useHITLStore
+ * TODO: Phase 2 - implement global SSE endpoint or multi-project SSE aggregation
+ */
+
 /** Watch for new pending approvals and show toast notifications */
 watch(
-  () => approvalsStore.pendingApprovals.length,
-  (newLen, oldLen) => {
-    if (newLen > oldLen) {
-      const latest = approvalsStore.pendingApprovals[newLen - 1]
-      if (latest) showApprovalToast(latest)
+  () => hitlStore.pendingCount,
+  (newCount, oldCount) => {
+    if (newCount > oldCount) {
+      const latest = hitlStore.pendingItems[hitlStore.pendingItems.length - 1]
+      if (latest) {
+        toast.add({
+          severity: 'warn',
+          summary: 'Review Required',
+          detail: `Review required for ${latest.storyKey}`,
+          life: 0,
+          group: 'hitl',
+        })
+      }
     }
   },
 )
 
-function showApprovalToast(approval: PendingApproval) {
-  toast.add({
-    severity: 'warn',
-    summary: 'Review Required',
-    detail: `Review required for ${approval.storyKey}`,
-    life: 0,
-    group: 'hitl',
-  })
-}
-
 function navigateToApproval() {
-  const latest = approvalsStore.pendingApprovals[approvalsStore.pendingApprovals.length - 1]
+  const latest = hitlStore.pendingItems[hitlStore.pendingItems.length - 1]
   if (!latest) return
-  approvalsStore.removePendingApproval(latest.hitlRequestId)
+  hitlStore.handleResolvedEvent(latest.hitlRequestId)
   router.push({
     name: 'hitl-approve',
     params: {

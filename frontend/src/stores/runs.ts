@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
-import { useApprovalsStore } from './approvals'
+import { useHITLStore } from './hitl'
 
 export const useRunsStore = defineStore('runs', () => {
   const items = ref<Array<{ id: string; status: string }>>([])
@@ -16,14 +16,14 @@ export const useRunsStore = defineStore('runs', () => {
   /** Handle SSE events dispatched from the useSSE composable */
   function handleSSEEvent(event: { type: string; payload: Record<string, unknown> }) {
     if (event.type === 'hitl_gate.pending') {
-      const approvalsStore = useApprovalsStore()
-      approvalsStore.handleHITLPendingEvent(
+      const hitlStore = useHITLStore()
+      hitlStore.handlePendingEvent(
         event.payload as {
+          hitl_request_id: string
           run_id: string
           step_id: string
-          story_key: string
-          hitl_request_id: string
           project_id: string
+          story_key: string
         },
       )
     }

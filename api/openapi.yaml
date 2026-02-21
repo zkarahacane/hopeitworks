@@ -1075,6 +1075,31 @@ paths:
           $ref: "#/components/responses/NotFound"
 
   # ── HITL Requests ───────────────────────────────────────────────────
+  /hitl-requests:
+    get:
+      operationId: listHITLRequests
+      summary: List HITL requests filtered by status
+      tags: [hitl]
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [pending, approved, rejected]
+          description: Filter by HITL request status
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/PerPageParam"
+      responses:
+        "200":
+          description: Paginated list of HITL requests
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HITLRequestList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
   /hitl-requests/by-step/{stepId}:
     get:
       operationId: getHITLRequestByStep
@@ -2429,6 +2454,110 @@ components:
           type: number
           format: double
           example: 5.25
+
+    HITLRequestList:
+      type: object
+      required:
+        - data
+        - pagination
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/HITLRequest"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+
+    RejectHITLRequest:
+      type: object
+      required:
+        - reason
+      properties:
+        reason:
+          type: string
+          minLength: 10
+          description: Reason for rejecting the HITL request
+
+
+    # ── Costs ──────────────────────────────────────────────────────────
+    CostSummary:
+      type: object
+      required:
+        - total_cost_usd
+        - period_start
+        - period_end
+        - avg_cost_per_story_usd
+      properties:
+        total_cost_usd:
+          type: number
+          format: double
+          example: 1.2345
+        total_cost_week_usd:
+          type: number
+          format: double
+          example: 0.5678
+        total_cost_month_usd:
+          type: number
+          format: double
+          example: 3.4567
+        avg_cost_per_story_usd:
+          type: number
+          format: double
+          example: 0.1234
+        budget_limit_usd:
+          type: number
+          format: double
+          example: 10.0
+        period_start:
+          type: string
+          format: date-time
+          example: "2026-02-10T00:00:00Z"
+        period_end:
+          type: string
+          format: date-time
+          example: "2026-02-17T00:00:00Z"
+
+    CostDataPoint:
+      type: object
+      required:
+        - date
+        - total_cost_usd
+      properties:
+        date:
+          type: string
+          format: date
+          example: "2026-02-10"
+        total_cost_usd:
+          type: number
+          format: double
+          example: 0.1234
+
+    RunCostRow:
+      type: object
+      required:
+        - run_id
+        - story_key
+        - status
+        - started_at
+        - total_cost_usd
+      properties:
+        run_id:
+          type: string
+          format: uuid
+        story_key:
+          type: string
+          example: S-01
+        status:
+          type: string
+          example: completed
+        started_at:
+          type: string
+          format: date-time
+          example: "2026-02-10T10:30:00Z"
+        total_cost_usd:
+          type: number
+          format: double
+          example: 0.01234
 
     RunCostBreakdown:
       type: object
