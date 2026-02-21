@@ -41,6 +41,24 @@ func (s *HITLService) GetByID(ctx context.Context, id uuid.UUID) (*model.HITLReq
 	return s.hitlRepo.GetByID(ctx, id)
 }
 
+// GetProjectIDForHITLRequest returns the project ID associated with a HITL request.
+// This is used for RBAC checks to ensure users have access to the project.
+func (s *HITLService) GetProjectIDForHITLRequest(ctx context.Context, hitlRequestID uuid.UUID) (uuid.UUID, error) {
+	req, err := s.hitlRepo.GetByID(ctx, hitlRequestID)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	step, err := s.runRepo.GetRunStep(ctx, req.RunStepID)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("failed to get run step: %w", err)
+	}
+	run, err := s.runRepo.GetRun(ctx, step.RunID)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("failed to get run: %w", err)
+	}
+	return run.ProjectID, nil
+}
+
 // ListPendingByProject returns all pending HITL requests for a project.
 func (s *HITLService) ListPendingByProject(ctx context.Context, projectID uuid.UUID) ([]*model.PendingHITLRequest, int64, error) {
 	pending, err := s.hitlRepo.ListPendingByProject(ctx, projectID)

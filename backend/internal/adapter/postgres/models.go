@@ -41,6 +41,7 @@ type HitlRequest struct {
 	ResolvedBy      pgtype.UUID        `json:"resolved_by"`
 	RejectionReason pgtype.Text        `json:"rejection_reason"`
 	CreatedAt       time.Time          `json:"created_at"`
+	DiffUrl         pgtype.Text        `json:"diff_url"`
 }
 
 type PipelineConfig struct {

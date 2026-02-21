@@ -21,6 +21,7 @@ SELECT
     rs.run_id,
     rs.id AS step_id,
     s.key AS story_key,
+    hr.diff_url,
     hr.created_at
 FROM hitl_requests hr
 JOIN run_steps rs ON rs.id = hr.run_step_id

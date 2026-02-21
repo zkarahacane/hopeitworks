@@ -108,6 +108,9 @@ func (r *HITLRepo) ListPendingByProject(ctx context.Context, projectID uuid.UUID
 			StoryKey:  row.StoryKey,
 			CreatedAt: row.CreatedAt,
 		}
+		if row.DiffUrl.Valid {
+			result[i].DiffURL = &row.DiffUrl.String
+		}
 	}
 	return result, nil
 }
