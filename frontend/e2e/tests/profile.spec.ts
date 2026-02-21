@@ -4,7 +4,7 @@ const userFixture = {
   id: '1',
   email: 'test@example.com',
   name: 'Test User',
-  role: 'user',
+  role: 'member',
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
 }
