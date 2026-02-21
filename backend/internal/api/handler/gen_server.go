@@ -33,6 +33,12 @@ const (
 	CreateEpicRequestStatusInProgress CreateEpicRequestStatus = "in_progress"
 )
 
+// Defines values for CreateNotificationConfigRequestChannelType.
+const (
+	CreateNotificationConfigRequestChannelTypeDiscord CreateNotificationConfigRequestChannelType = "discord"
+	CreateNotificationConfigRequestChannelTypeWebhook CreateNotificationConfigRequestChannelType = "webhook"
+)
+
 // Defines values for CreatePromptTemplateRequestType.
 const (
 	CreatePromptTemplateRequestTypeCustom    CreatePromptTemplateRequestType = "custom"
@@ -54,6 +60,33 @@ const (
 	EpicStatusBacklog    EpicStatus = "backlog"
 	EpicStatusDone       EpicStatus = "done"
 	EpicStatusInProgress EpicStatus = "in_progress"
+)
+
+// Defines values for EpicRunAcceptedStatus.
+const (
+	Scheduling EpicRunAcceptedStatus = "scheduling"
+)
+
+// Defines values for EpicRunDetailStatus.
+const (
+	EpicRunDetailStatusCompleted EpicRunDetailStatus = "completed"
+	EpicRunDetailStatusFailed    EpicRunDetailStatus = "failed"
+	EpicRunDetailStatusPaused    EpicRunDetailStatus = "paused"
+	EpicRunDetailStatusPending   EpicRunDetailStatus = "pending"
+	EpicRunDetailStatusRunning   EpicRunDetailStatus = "running"
+)
+
+// Defines values for HITLRequestStatus.
+const (
+	HITLRequestStatusApproved HITLRequestStatus = "approved"
+	HITLRequestStatusPending  HITLRequestStatus = "pending"
+	HITLRequestStatusRejected HITLRequestStatus = "rejected"
+)
+
+// Defines values for NotificationConfigChannelType.
+const (
+	NotificationConfigChannelTypeDiscord NotificationConfigChannelType = "discord"
+	NotificationConfigChannelTypeWebhook NotificationConfigChannelType = "webhook"
 )
 
 // Defines values for PipelineStepActionType.
@@ -98,13 +131,20 @@ const (
 	RunStatusRunning   RunStatus = "running"
 )
 
+// Defines values for RunStepRetryType.
+const (
+	Full        RunStepRetryType = "full"
+	Incremental RunStepRetryType = "incremental"
+)
+
 // Defines values for RunStepStatus.
 const (
-	RunStepStatusCancelled RunStepStatus = "cancelled"
-	RunStepStatusCompleted RunStepStatus = "completed"
-	RunStepStatusFailed    RunStepStatus = "failed"
-	RunStepStatusPending   RunStepStatus = "pending"
-	RunStepStatusRunning   RunStepStatus = "running"
+	RunStepStatusCancelled       RunStepStatus = "cancelled"
+	RunStepStatusCompleted       RunStepStatus = "completed"
+	RunStepStatusFailed          RunStepStatus = "failed"
+	RunStepStatusPending         RunStepStatus = "pending"
+	RunStepStatusRunning         RunStepStatus = "running"
+	RunStepStatusWaitingApproval RunStepStatus = "waiting_approval"
 )
 
 // Defines values for RunWithStepsStatus.
@@ -139,6 +179,12 @@ const (
 	InProgress UpdateEpicRequestStatus = "in_progress"
 )
 
+// Defines values for UpdateNotificationConfigRequestChannelType.
+const (
+	Discord UpdateNotificationConfigRequestChannelType = "discord"
+	Webhook UpdateNotificationConfigRequestChannelType = "webhook"
+)
+
 // Defines values for UpdatePromptTemplateRequestType.
 const (
 	UpdatePromptTemplateRequestTypeCustom    UpdatePromptTemplateRequestType = "custom"
@@ -167,6 +213,56 @@ const (
 	UserRoleUser  UserRole = "user"
 )
 
+// Defines values for ListHITLRequestsParamsStatus.
+const (
+	Approved ListHITLRequestsParamsStatus = "approved"
+	Pending  ListHITLRequestsParamsStatus = "pending"
+	Rejected ListHITLRequestsParamsStatus = "rejected"
+)
+
+// Defines values for GetProjectCostsParamsPeriod.
+const (
+	GetProjectCostsParamsPeriodN30d GetProjectCostsParamsPeriod = "30d"
+	GetProjectCostsParamsPeriodN7d  GetProjectCostsParamsPeriod = "7d"
+	GetProjectCostsParamsPeriodN90d GetProjectCostsParamsPeriod = "90d"
+)
+
+// Defines values for GetProjectCostChartParamsPeriod.
+const (
+	GetProjectCostChartParamsPeriodN30d GetProjectCostChartParamsPeriod = "30d"
+	GetProjectCostChartParamsPeriodN7d  GetProjectCostChartParamsPeriod = "7d"
+)
+
+// Defines values for GetProjectCostRunsParamsPeriod.
+const (
+	GetProjectCostRunsParamsPeriodN30d GetProjectCostRunsParamsPeriod = "30d"
+	GetProjectCostRunsParamsPeriodN7d  GetProjectCostRunsParamsPeriod = "7d"
+)
+
+// Defines values for GetProjectCostSummaryParamsPeriod.
+const (
+	GetProjectCostSummaryParamsPeriodN30d GetProjectCostSummaryParamsPeriod = "30d"
+	GetProjectCostSummaryParamsPeriodN7d  GetProjectCostSummaryParamsPeriod = "7d"
+	GetProjectCostSummaryParamsPeriodN90d GetProjectCostSummaryParamsPeriod = "90d"
+)
+
+// CostDataPoint defines model for CostDataPoint.
+type CostDataPoint struct {
+	Date         openapi_types.Date `json:"date"`
+	TotalCostUsd float64            `json:"total_cost_usd"`
+}
+
+// CostSummary defines model for CostSummary.
+type CostSummary struct {
+	AvgCostPerStoryUsd float64   `json:"avg_cost_per_story_usd"`
+	BudgetLimitUsd     *float64  `json:"budget_limit_usd,omitempty"`
+	PeriodEnd          time.Time `json:"period_end"`
+	PeriodStart        time.Time `json:"period_start"`
+	TotalCostMonthUsd  *float64  `json:"total_cost_month_usd,omitempty"`
+	TotalCostUsd       float64   `json:"total_cost_usd"`
+	TotalCostWeekUsd   *float64  `json:"total_cost_week_usd,omitempty"`
+}
+
 // CreateEpicRequest defines model for CreateEpicRequest.
 type CreateEpicRequest struct {
 	Description *string                  `json:"description,omitempty"`
@@ -176,6 +272,17 @@ type CreateEpicRequest struct {
 
 // CreateEpicRequestStatus defines model for CreateEpicRequest.Status.
 type CreateEpicRequestStatus string
+
+// CreateNotificationConfigRequest defines model for CreateNotificationConfigRequest.
+type CreateNotificationConfigRequest struct {
+	ChannelType  CreateNotificationConfigRequestChannelType `json:"channel_type"`
+	Config       map[string]string                          `json:"config"`
+	Enabled      *bool                                      `json:"enabled,omitempty"`
+	EventsFilter []string                                   `json:"events_filter"`
+}
+
+// CreateNotificationConfigRequestChannelType defines model for CreateNotificationConfigRequest.ChannelType.
+type CreateNotificationConfigRequestChannelType string
 
 // CreateProjectRequest defines model for CreateProjectRequest.
 type CreateProjectRequest struct {
@@ -235,10 +342,72 @@ type Epic struct {
 // EpicStatus defines model for Epic.Status.
 type EpicStatus string
 
+// EpicDAGEdge defines model for EpicDAGEdge.
+type EpicDAGEdge struct {
+	// Source Source story key (dependency)
+	Source string `json:"source"`
+
+	// Target Target story key (dependent)
+	Target string `json:"target"`
+}
+
+// EpicDAGNode defines model for EpicDAGNode.
+type EpicDAGNode struct {
+	Id  openapi_types.UUID `json:"id"`
+	Key string             `json:"key"`
+
+	// Layer Zero-based execution layer index
+	Layer  int    `json:"layer"`
+	Status string `json:"status"`
+	Title  string `json:"title"`
+}
+
+// EpicDAGResponse defines model for EpicDAGResponse.
+type EpicDAGResponse struct {
+	Edges []EpicDAGEdge `json:"edges"`
+	Nodes []EpicDAGNode `json:"nodes"`
+}
+
 // EpicList defines model for EpicList.
 type EpicList struct {
 	Data       []Epic     `json:"data"`
 	Pagination Pagination `json:"pagination"`
+}
+
+// EpicRunAccepted defines model for EpicRunAccepted.
+type EpicRunAccepted struct {
+	EpicRunId    openapi_types.UUID    `json:"epic_run_id"`
+	Status       EpicRunAcceptedStatus `json:"status"`
+	StoriesCount int                   `json:"stories_count"`
+}
+
+// EpicRunAcceptedStatus defines model for EpicRunAccepted.Status.
+type EpicRunAcceptedStatus string
+
+// EpicRunDetail defines model for EpicRunDetail.
+type EpicRunDetail struct {
+	CompletedAt *time.Time          `json:"completed_at"`
+	CreatedAt   time.Time           `json:"created_at"`
+	EpicId      openapi_types.UUID  `json:"epic_id"`
+	Id          openapi_types.UUID  `json:"id"`
+	ProjectId   openapi_types.UUID  `json:"project_id"`
+	Status      EpicRunDetailStatus `json:"status"`
+	Stories     []EpicRunStory      `json:"stories"`
+}
+
+// EpicRunDetailStatus defines model for EpicRunDetail.Status.
+type EpicRunDetailStatus string
+
+// EpicRunStory defines model for EpicRunStory.
+type EpicRunStory struct {
+	// GroupIndex Zero-based execution layer index
+	GroupIndex int                 `json:"group_index"`
+	RunId      *openapi_types.UUID `json:"run_id"`
+	Status     string              `json:"status"`
+	StoryId    openapi_types.UUID  `json:"story_id"`
+
+	// StoryKey Unique story identifier within project (e.g., S-01)
+	StoryKey *string `json:"story_key,omitempty"`
 }
 
 // Error defines model for Error.
@@ -248,6 +417,37 @@ type Error struct {
 		Details *map[string]interface{} `json:"details,omitempty"`
 		Message string                  `json:"message"`
 	} `json:"error"`
+}
+
+// HITLRequest defines model for HITLRequest.
+type HITLRequest struct {
+	CreatedAt time.Time `json:"created_at"`
+
+	// DiffContent Unified diff content from the agent run
+	DiffContent     *string             `json:"diff_content"`
+	GateType        string              `json:"gate_type"`
+	Id              openapi_types.UUID  `json:"id"`
+	ProjectId       *openapi_types.UUID `json:"project_id,omitempty"`
+	RejectionReason *string             `json:"rejection_reason"`
+	ResolvedAt      *time.Time          `json:"resolved_at"`
+	ReviewedAt      *time.Time          `json:"reviewed_at"`
+	ReviewerId      *openapi_types.UUID `json:"reviewer_id"`
+	RunId           *openapi_types.UUID `json:"run_id,omitempty"`
+	RunStepId       openapi_types.UUID  `json:"run_step_id"`
+	Status          HITLRequestStatus   `json:"status"`
+	StepId          openapi_types.UUID  `json:"step_id"`
+	StoryKey        string              `json:"story_key"`
+	StoryObjective  *string             `json:"story_objective,omitempty"`
+	StoryTitle      string              `json:"story_title"`
+}
+
+// HITLRequestStatus defines model for HITLRequest.Status.
+type HITLRequestStatus string
+
+// HITLRequestList defines model for HITLRequestList.
+type HITLRequestList struct {
+	Data       []HITLRequest `json:"data"`
+	Pagination Pagination    `json:"pagination"`
 }
 
 // ImportStoriesRequest defines model for ImportStoriesRequest.
@@ -288,6 +488,34 @@ type LoginRequest struct {
 	Password string              `json:"password"`
 }
 
+// ModelCostBreakdown defines model for ModelCostBreakdown.
+type ModelCostBreakdown struct {
+	Model        string  `json:"model"`
+	TokensInput  int64   `json:"tokens_input"`
+	TokensOutput int64   `json:"tokens_output"`
+	TotalCost    float64 `json:"total_cost"`
+}
+
+// NotificationConfig defines model for NotificationConfig.
+type NotificationConfig struct {
+	ChannelType  NotificationConfigChannelType `json:"channel_type"`
+	Config       map[string]string             `json:"config"`
+	CreatedAt    time.Time                     `json:"created_at"`
+	Enabled      bool                          `json:"enabled"`
+	EventsFilter []string                      `json:"events_filter"`
+	Id           openapi_types.UUID            `json:"id"`
+	ProjectId    openapi_types.UUID            `json:"project_id"`
+	UpdatedAt    time.Time                     `json:"updated_at"`
+}
+
+// NotificationConfigChannelType defines model for NotificationConfig.ChannelType.
+type NotificationConfigChannelType string
+
+// NotificationConfigList defines model for NotificationConfigList.
+type NotificationConfigList struct {
+	Data []NotificationConfig `json:"data"`
+}
+
 // Pagination defines model for Pagination.
 type Pagination struct {
 	Page    int `json:"page"`
@@ -320,12 +548,42 @@ type PipelineStepModel string
 
 // Project defines model for Project.
 type Project struct {
-	CreatedAt   time.Time          `json:"created_at"`
-	Description *string            `json:"description,omitempty"`
-	Id          openapi_types.UUID `json:"id"`
-	Name        string             `json:"name"`
-	OwnerId     openapi_types.UUID `json:"owner_id"`
-	UpdatedAt   time.Time          `json:"updated_at"`
+	// CircuitBreakerActive Whether the circuit breaker is currently tripped
+	CircuitBreakerActive bool `json:"circuit_breaker_active"`
+
+	// CircuitBreakerCount Number of consecutive pipeline failures
+	CircuitBreakerCount int `json:"circuit_breaker_count"`
+
+	// CircuitBreakerMax Threshold for consecutive failures before tripping
+	CircuitBreakerMax int                `json:"circuit_breaker_max"`
+	CreatedAt         time.Time          `json:"created_at"`
+	Description       *string            `json:"description,omitempty"`
+	Id                openapi_types.UUID `json:"id"`
+
+	// MaxBudget Maximum budget for the project in USD (informational only)
+	MaxBudget *float64           `json:"max_budget"`
+	Name      string             `json:"name"`
+	OwnerId   openapi_types.UUID `json:"owner_id"`
+	UpdatedAt time.Time          `json:"updated_at"`
+}
+
+// ProjectCostSummary defines model for ProjectCostSummary.
+type ProjectCostSummary struct {
+	ByModel []ModelCostBreakdown `json:"by_model"`
+	ByRun   []RunCostBreakdown   `json:"by_run"`
+	ByStory []StoryCostBreakdown `json:"by_story"`
+
+	// MaxBudget Project budget limit in USD (informational only)
+	MaxBudget *float64 `json:"max_budget"`
+
+	// TotalCost Total cost in USD for the period
+	TotalCost float64 `json:"total_cost"`
+
+	// TotalInput Total input tokens for the period
+	TotalInput int64 `json:"total_input"`
+
+	// TotalOutput Total output tokens for the period
+	TotalOutput int64 `json:"total_output"`
 }
 
 // ProjectList defines model for ProjectList.
@@ -361,6 +619,12 @@ type RegisterRequest struct {
 	Password string              `json:"password"`
 }
 
+// RejectHITLRequest defines model for RejectHITLRequest.
+type RejectHITLRequest struct {
+	// Reason Reason for rejecting the HITL request
+	Reason string `json:"reason"`
+}
+
 // RetryPolicy defines model for RetryPolicy.
 type RetryPolicy struct {
 	MaxRetries int                  `json:"max_retries"`
@@ -377,15 +641,43 @@ type Run struct {
 	ErrorMessage           *string                 `json:"error_message,omitempty"`
 	Id                     openapi_types.UUID      `json:"id"`
 	PipelineConfigSnapshot *map[string]interface{} `json:"pipeline_config_snapshot,omitempty"`
-	ProjectId              openapi_types.UUID      `json:"project_id"`
-	StartedAt              *time.Time              `json:"started_at,omitempty"`
-	Status                 RunStatus               `json:"status"`
-	StoryId                openapi_types.UUID      `json:"story_id"`
-	UpdatedAt              time.Time               `json:"updated_at"`
+
+	// Progress Percentage of completed steps (0–100), computed at query time.
+	Progress  int                `json:"progress"`
+	ProjectId openapi_types.UUID `json:"project_id"`
+	StartedAt *time.Time         `json:"started_at,omitempty"`
+	Status    RunStatus          `json:"status"`
+	StoryId   openapi_types.UUID `json:"story_id"`
+	UpdatedAt time.Time          `json:"updated_at"`
 }
 
 // RunStatus defines model for Run.Status.
 type RunStatus string
+
+// RunCostBreakdown defines model for RunCostBreakdown.
+type RunCostBreakdown struct {
+	CreatedAt time.Time          `json:"created_at"`
+	RunId     openapi_types.UUID `json:"run_id"`
+	Status    string             `json:"status"`
+	StoryKey  string             `json:"story_key"`
+	TotalCost float64            `json:"total_cost"`
+}
+
+// RunCostDetail defines model for RunCostDetail.
+type RunCostDetail struct {
+	RunId     openapi_types.UUID  `json:"run_id"`
+	Steps     []StepCostBreakdown `json:"steps"`
+	TotalCost float64             `json:"total_cost"`
+}
+
+// RunCostRow defines model for RunCostRow.
+type RunCostRow struct {
+	RunId        openapi_types.UUID `json:"run_id"`
+	StartedAt    time.Time          `json:"started_at"`
+	Status       string             `json:"status"`
+	StoryKey     string             `json:"story_key"`
+	TotalCostUsd float64            `json:"total_cost_usd"`
+}
 
 // RunList defines model for RunList.
 type RunList struct {
@@ -402,12 +694,24 @@ type RunStep struct {
 	ErrorMessage *string            `json:"error_message,omitempty"`
 	Id           openapi_types.UUID `json:"id"`
 	LogTail      *string            `json:"log_tail,omitempty"`
-	RunId        openapi_types.UUID `json:"run_id"`
-	StartedAt    *time.Time         `json:"started_at,omitempty"`
-	Status       RunStepStatus      `json:"status"`
-	StepName     string             `json:"step_name"`
-	StepOrder    int                `json:"step_order"`
+
+	// ParentStepId ID of the original step this is a retry of; null for root steps
+	ParentStepId *openapi_types.UUID `json:"parent_step_id"`
+
+	// RetryCount Which retry attempt this is (1-based); null for root steps
+	RetryCount *int `json:"retry_count"`
+
+	// RetryType Retry strategy used for this attempt; null for root steps
+	RetryType *RunStepRetryType  `json:"retry_type"`
+	RunId     openapi_types.UUID `json:"run_id"`
+	StartedAt *time.Time         `json:"started_at,omitempty"`
+	Status    RunStepStatus      `json:"status"`
+	StepName  string             `json:"step_name"`
+	StepOrder int                `json:"step_order"`
 }
+
+// RunStepRetryType Retry strategy used for this attempt; null for root steps
+type RunStepRetryType string
 
 // RunStepStatus defines model for RunStep.Status.
 type RunStepStatus string
@@ -419,16 +723,31 @@ type RunWithSteps struct {
 	ErrorMessage           *string                 `json:"error_message,omitempty"`
 	Id                     openapi_types.UUID      `json:"id"`
 	PipelineConfigSnapshot *map[string]interface{} `json:"pipeline_config_snapshot,omitempty"`
-	ProjectId              openapi_types.UUID      `json:"project_id"`
-	StartedAt              *time.Time              `json:"started_at,omitempty"`
-	Status                 RunWithStepsStatus      `json:"status"`
-	Steps                  []RunStep               `json:"steps"`
-	StoryId                openapi_types.UUID      `json:"story_id"`
-	UpdatedAt              time.Time               `json:"updated_at"`
+
+	// Progress Percentage of completed steps (0–100), computed at query time.
+	Progress  int                `json:"progress"`
+	ProjectId openapi_types.UUID `json:"project_id"`
+	StartedAt *time.Time         `json:"started_at,omitempty"`
+	Status    RunWithStepsStatus `json:"status"`
+	Steps     []RunStep          `json:"steps"`
+	StoryId   openapi_types.UUID `json:"story_id"`
+	UpdatedAt time.Time          `json:"updated_at"`
 }
 
 // RunWithStepsStatus defines model for RunWithSteps.Status.
 type RunWithStepsStatus string
+
+// StepCostBreakdown defines model for StepCostBreakdown.
+type StepCostBreakdown struct {
+	CostUsd      float64            `json:"cost_usd"`
+	Model        string             `json:"model"`
+	StartedAt    *time.Time         `json:"started_at,omitempty"`
+	StepId       openapi_types.UUID `json:"step_id"`
+	StepName     string             `json:"step_name"`
+	TokensInput  int64              `json:"tokens_input"`
+	TokensOutput int64              `json:"tokens_output"`
+	TotalCostUsd *float64           `json:"total_cost_usd,omitempty"`
+}
 
 // Story defines model for Story.
 type Story struct {
@@ -451,6 +770,23 @@ type Story struct {
 
 // StoryScope defines model for Story.Scope.
 type StoryScope string
+
+// StoryCostBreakdown defines model for StoryCostBreakdown.
+type StoryCostBreakdown struct {
+	StoryId   openapi_types.UUID `json:"story_id"`
+	StoryKey  string             `json:"story_key"`
+	TotalCost float64            `json:"total_cost"`
+}
+
+// StoryCostSummary defines model for StoryCostSummary.
+type StoryCostSummary struct {
+	// RunCount Number of distinct runs that incurred costs
+	RunCount    int                `json:"run_count"`
+	StoryId     openapi_types.UUID `json:"story_id"`
+	TotalCost   float64            `json:"total_cost"`
+	TotalInput  int64              `json:"total_input"`
+	TotalOutput int64              `json:"total_output"`
+}
 
 // StoryCounts defines model for StoryCounts.
 type StoryCounts struct {
@@ -484,6 +820,17 @@ type UpdateEpicRequest struct {
 // UpdateEpicRequestStatus defines model for UpdateEpicRequest.Status.
 type UpdateEpicRequestStatus string
 
+// UpdateNotificationConfigRequest defines model for UpdateNotificationConfigRequest.
+type UpdateNotificationConfigRequest struct {
+	ChannelType  UpdateNotificationConfigRequestChannelType `json:"channel_type"`
+	Config       map[string]string                          `json:"config"`
+	Enabled      bool                                       `json:"enabled"`
+	EventsFilter []string                                   `json:"events_filter"`
+}
+
+// UpdateNotificationConfigRequestChannelType defines model for UpdateNotificationConfigRequest.ChannelType.
+type UpdateNotificationConfigRequestChannelType string
+
 // UpdatePipelineConfigRequest defines model for UpdatePipelineConfigRequest.
 type UpdatePipelineConfigRequest struct {
 	Steps []PipelineStep `json:"steps"`
@@ -492,7 +839,10 @@ type UpdatePipelineConfigRequest struct {
 // UpdateProjectRequest defines model for UpdateProjectRequest.
 type UpdateProjectRequest struct {
 	Description *string `json:"description,omitempty"`
-	Name        *string `json:"name,omitempty"`
+
+	// MaxBudget Maximum budget for the project in USD (informational only)
+	MaxBudget *float64 `json:"max_budget"`
+	Name      *string  `json:"name,omitempty"`
 }
 
 // UpdatePromptTemplateRequest defines model for UpdatePromptTemplateRequest.
@@ -552,8 +902,17 @@ type UserList struct {
 // EpicIdPath defines model for EpicIdPath.
 type EpicIdPath = openapi_types.UUID
 
+// EpicRunIdPath defines model for EpicRunIdPath.
+type EpicRunIdPath = openapi_types.UUID
+
+// HITLRequestIdPath defines model for HITLRequestIdPath.
+type HITLRequestIdPath = openapi_types.UUID
+
 // IdPath defines model for IdPath.
 type IdPath = openapi_types.UUID
+
+// NotificationIdPath defines model for NotificationIdPath.
+type NotificationIdPath = openapi_types.UUID
 
 // PageParam defines model for PageParam.
 type PageParam = int
@@ -569,6 +928,9 @@ type RunIdPath = openapi_types.UUID
 
 // SortByParam defines model for SortByParam.
 type SortByParam = string
+
+// StepIdPath defines model for StepIdPath.
+type StepIdPath = openapi_types.UUID
 
 // StoryIdPath defines model for StoryIdPath.
 type StoryIdPath = openapi_types.UUID
@@ -591,6 +953,21 @@ type NotFound = Error
 // Unauthorized defines model for Unauthorized.
 type Unauthorized = Error
 
+// ListHITLRequestsParams defines parameters for ListHITLRequests.
+type ListHITLRequestsParams struct {
+	// Status Filter by HITL request status
+	Status *ListHITLRequestsParamsStatus `form:"status,omitempty" json:"status,omitempty"`
+
+	// Page Page number
+	Page *PageParam `form:"page,omitempty" json:"page,omitempty"`
+
+	// PerPage Items per page
+	PerPage *PerPageParam `form:"per_page,omitempty" json:"per_page,omitempty"`
+}
+
+// ListHITLRequestsParamsStatus defines parameters for ListHITLRequests.
+type ListHITLRequestsParamsStatus string
+
 // ListProjectsParams defines parameters for ListProjects.
 type ListProjectsParams struct {
 	// Page Page number
@@ -602,6 +979,48 @@ type ListProjectsParams struct {
 	// SortBy Field to sort by
 	SortBy *SortByParam `form:"sort_by,omitempty" json:"sort_by,omitempty"`
 }
+
+// GetProjectCostsParams defines parameters for GetProjectCosts.
+type GetProjectCostsParams struct {
+	// Period Time period for aggregation
+	Period *GetProjectCostsParamsPeriod `form:"period,omitempty" json:"period,omitempty"`
+}
+
+// GetProjectCostsParamsPeriod defines parameters for GetProjectCosts.
+type GetProjectCostsParamsPeriod string
+
+// GetProjectCostChartParams defines parameters for GetProjectCostChart.
+type GetProjectCostChartParams struct {
+	// Period Time period for cost chart data
+	Period *GetProjectCostChartParamsPeriod `form:"period,omitempty" json:"period,omitempty"`
+}
+
+// GetProjectCostChartParamsPeriod defines parameters for GetProjectCostChart.
+type GetProjectCostChartParamsPeriod string
+
+// GetProjectCostRunsParams defines parameters for GetProjectCostRuns.
+type GetProjectCostRunsParams struct {
+	// Period Time period for run cost data
+	Period *GetProjectCostRunsParamsPeriod `form:"period,omitempty" json:"period,omitempty"`
+
+	// Page Page number
+	Page *PageParam `form:"page,omitempty" json:"page,omitempty"`
+
+	// PerPage Items per page
+	PerPage *PerPageParam `form:"per_page,omitempty" json:"per_page,omitempty"`
+}
+
+// GetProjectCostRunsParamsPeriod defines parameters for GetProjectCostRuns.
+type GetProjectCostRunsParamsPeriod string
+
+// GetProjectCostSummaryParams defines parameters for GetProjectCostSummary.
+type GetProjectCostSummaryParams struct {
+	// Period Time period for aggregation
+	Period *GetProjectCostSummaryParamsPeriod `form:"period,omitempty" json:"period,omitempty"`
+}
+
+// GetProjectCostSummaryParamsPeriod defines parameters for GetProjectCostSummary.
+type GetProjectCostSummaryParamsPeriod string
 
 // ListEpicsParams defines parameters for ListEpics.
 type ListEpicsParams struct {
@@ -675,6 +1094,9 @@ type LoginUserJSONRequestBody = LoginRequest
 // RegisterUserJSONRequestBody defines body for RegisterUser for application/json ContentType.
 type RegisterUserJSONRequestBody = RegisterRequest
 
+// RejectHITLRequestJSONRequestBody defines body for RejectHITLRequest for application/json ContentType.
+type RejectHITLRequestJSONRequestBody = RejectHITLRequest
+
 // CreateProjectJSONRequestBody defines body for CreateProject for application/json ContentType.
 type CreateProjectJSONRequestBody = CreateProjectRequest
 
@@ -686,6 +1108,12 @@ type CreateEpicJSONRequestBody = CreateEpicRequest
 
 // UpdateEpicJSONRequestBody defines body for UpdateEpic for application/json ContentType.
 type UpdateEpicJSONRequestBody = UpdateEpicRequest
+
+// CreateNotificationConfigJSONRequestBody defines body for CreateNotificationConfig for application/json ContentType.
+type CreateNotificationConfigJSONRequestBody = CreateNotificationConfigRequest
+
+// UpdateNotificationConfigJSONRequestBody defines body for UpdateNotificationConfig for application/json ContentType.
+type UpdateNotificationConfigJSONRequestBody = UpdateNotificationConfigRequest
 
 // UpdatePipelineConfigJSONRequestBody defines body for UpdatePipelineConfig for application/json ContentType.
 type UpdatePipelineConfigJSONRequestBody = UpdatePipelineConfigRequest
@@ -787,6 +1215,21 @@ type ServerInterface interface {
 	// Register a new user
 	// (POST /auth/register)
 	RegisterUser(w http.ResponseWriter, r *http.Request)
+	// List HITL requests filtered by status
+	// (GET /hitl-requests)
+	ListHITLRequests(w http.ResponseWriter, r *http.Request, params ListHITLRequestsParams)
+	// Get the HITL request for a run step
+	// (GET /hitl-requests/by-step/{stepId})
+	GetHITLRequestByStep(w http.ResponseWriter, r *http.Request, stepId StepIdPath)
+	// Get a HITL request by ID
+	// (GET /hitl-requests/{hitlRequestId})
+	GetHITLRequest(w http.ResponseWriter, r *http.Request, hitlRequestId HITLRequestIdPath)
+	// Approve a HITL request
+	// (POST /hitl-requests/{hitlRequestId}/approve)
+	ApproveHITLRequest(w http.ResponseWriter, r *http.Request, hitlRequestId HITLRequestIdPath)
+	// Reject a HITL request
+	// (POST /hitl-requests/{hitlRequestId}/reject)
+	RejectHITLRequest(w http.ResponseWriter, r *http.Request, hitlRequestId HITLRequestIdPath)
 	// List all projects
 	// (GET /projects)
 	ListProjects(w http.ResponseWriter, r *http.Request, params ListProjectsParams)
@@ -802,6 +1245,24 @@ type ServerInterface interface {
 	// Update a project
 	// (PUT /projects/{id})
 	UpdateProject(w http.ResponseWriter, r *http.Request, id IdPath)
+	// Reset the circuit breaker for a project
+	// (POST /projects/{id}/circuit-breaker/reset)
+	ResetCircuitBreaker(w http.ResponseWriter, r *http.Request, id IdPath)
+	// Get aggregated cost data for a project
+	// (GET /projects/{projectId}/costs)
+	GetProjectCosts(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, params GetProjectCostsParams)
+	// Get daily cost data points for chart rendering
+	// (GET /projects/{projectId}/costs/chart)
+	GetProjectCostChart(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, params GetProjectCostChartParams)
+	// Get run-level cost breakdown for a project
+	// (GET /projects/{projectId}/costs/runs)
+	GetProjectCostRuns(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, params GetProjectCostRunsParams)
+	// Get cost summary for a project
+	// (GET /projects/{projectId}/costs/summary)
+	GetProjectCostSummary(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, params GetProjectCostSummaryParams)
+	// Get an epic run by ID with per-story status
+	// (GET /projects/{projectId}/epic-runs/{epicRunId})
+	GetEpicRun(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, epicRunId EpicRunIdPath)
 	// List epics for a project with story counts
 	// (GET /projects/{projectId}/epics)
 	ListEpics(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, params ListEpicsParams)
@@ -817,12 +1278,33 @@ type ServerInterface interface {
 	// Update an epic
 	// (PUT /projects/{projectId}/epics/{epicId})
 	UpdateEpic(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, epicId EpicIdPath)
+	// Get the dependency graph (DAG) for an epic
+	// (GET /projects/{projectId}/epics/{epicId}/dag)
+	GetEpicDAG(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, epicId EpicIdPath)
+	// Launch a batch run for all stories in an epic (async)
+	// (POST /projects/{projectId}/epics/{epicId}/runs)
+	LaunchEpicRun(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, epicId EpicIdPath)
 	// Pause an in-progress epic run
 	// (POST /projects/{projectId}/epics/{epicId}/runs/{runId}/pause)
 	PauseEpicRun(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, epicId EpicIdPath, runId RunIdPath)
 	// Resume a paused epic run
 	// (POST /projects/{projectId}/epics/{epicId}/runs/{runId}/resume)
 	ResumeEpicRun(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, epicId EpicIdPath, runId RunIdPath)
+	// List notification configs for a project
+	// (GET /projects/{projectId}/notifications)
+	ListNotificationConfigs(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath)
+	// Create a notification config for a project
+	// (POST /projects/{projectId}/notifications)
+	CreateNotificationConfig(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath)
+	// Delete a notification config
+	// (DELETE /projects/{projectId}/notifications/{notificationId})
+	DeleteNotificationConfig(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, notificationId NotificationIdPath)
+	// Update a notification config
+	// (PUT /projects/{projectId}/notifications/{notificationId})
+	UpdateNotificationConfig(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, notificationId NotificationIdPath)
+	// Send a test notification
+	// (POST /projects/{projectId}/notifications/{notificationId}/test)
+	TestNotificationConfig(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, notificationId NotificationIdPath)
 	// Get the pipeline configuration for a project
 	// (GET /projects/{projectId}/pipeline)
 	GetPipelineConfig(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath)
@@ -835,6 +1317,9 @@ type ServerInterface interface {
 	// Create a new pipeline run for a project
 	// (POST /projects/{projectId}/runs)
 	CreateRun(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath)
+	// Get total costs for a run with per-step breakdown
+	// (GET /projects/{projectId}/runs/{runId}/costs)
+	GetRunCosts(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, runId RunIdPath)
 	// Pause a running story run
 	// (POST /projects/{projectId}/runs/{runId}/pause)
 	PauseRun(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, runId RunIdPath)
@@ -859,6 +1344,9 @@ type ServerInterface interface {
 	// Update a story
 	// (PUT /projects/{projectId}/stories/{storyId})
 	UpdateStory(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, storyId StoryIdPath)
+	// Get total costs for a story across all runs
+	// (GET /projects/{projectId}/stories/{storyId}/costs)
+	GetStoryCosts(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, storyId StoryIdPath)
 	// Launch a pipeline run for a single story
 	// (POST /projects/{projectId}/stories/{storyId}/runs)
 	LaunchRun(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, storyId StoryIdPath)
@@ -925,6 +1413,36 @@ func (_ Unimplemented) RegisterUser(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// List HITL requests filtered by status
+// (GET /hitl-requests)
+func (_ Unimplemented) ListHITLRequests(w http.ResponseWriter, r *http.Request, params ListHITLRequestsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Get the HITL request for a run step
+// (GET /hitl-requests/by-step/{stepId})
+func (_ Unimplemented) GetHITLRequestByStep(w http.ResponseWriter, r *http.Request, stepId StepIdPath) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Get a HITL request by ID
+// (GET /hitl-requests/{hitlRequestId})
+func (_ Unimplemented) GetHITLRequest(w http.ResponseWriter, r *http.Request, hitlRequestId HITLRequestIdPath) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Approve a HITL request
+// (POST /hitl-requests/{hitlRequestId}/approve)
+func (_ Unimplemented) ApproveHITLRequest(w http.ResponseWriter, r *http.Request, hitlRequestId HITLRequestIdPath) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Reject a HITL request
+// (POST /hitl-requests/{hitlRequestId}/reject)
+func (_ Unimplemented) RejectHITLRequest(w http.ResponseWriter, r *http.Request, hitlRequestId HITLRequestIdPath) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // List all projects
 // (GET /projects)
 func (_ Unimplemented) ListProjects(w http.ResponseWriter, r *http.Request, params ListProjectsParams) {
@@ -952,6 +1470,42 @@ func (_ Unimplemented) GetProject(w http.ResponseWriter, r *http.Request, id IdP
 // Update a project
 // (PUT /projects/{id})
 func (_ Unimplemented) UpdateProject(w http.ResponseWriter, r *http.Request, id IdPath) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Reset the circuit breaker for a project
+// (POST /projects/{id}/circuit-breaker/reset)
+func (_ Unimplemented) ResetCircuitBreaker(w http.ResponseWriter, r *http.Request, id IdPath) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Get aggregated cost data for a project
+// (GET /projects/{projectId}/costs)
+func (_ Unimplemented) GetProjectCosts(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, params GetProjectCostsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Get daily cost data points for chart rendering
+// (GET /projects/{projectId}/costs/chart)
+func (_ Unimplemented) GetProjectCostChart(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, params GetProjectCostChartParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Get run-level cost breakdown for a project
+// (GET /projects/{projectId}/costs/runs)
+func (_ Unimplemented) GetProjectCostRuns(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, params GetProjectCostRunsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Get cost summary for a project
+// (GET /projects/{projectId}/costs/summary)
+func (_ Unimplemented) GetProjectCostSummary(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, params GetProjectCostSummaryParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Get an epic run by ID with per-story status
+// (GET /projects/{projectId}/epic-runs/{epicRunId})
+func (_ Unimplemented) GetEpicRun(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, epicRunId EpicRunIdPath) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -985,6 +1539,18 @@ func (_ Unimplemented) UpdateEpic(w http.ResponseWriter, r *http.Request, projec
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Get the dependency graph (DAG) for an epic
+// (GET /projects/{projectId}/epics/{epicId}/dag)
+func (_ Unimplemented) GetEpicDAG(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, epicId EpicIdPath) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Launch a batch run for all stories in an epic (async)
+// (POST /projects/{projectId}/epics/{epicId}/runs)
+func (_ Unimplemented) LaunchEpicRun(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, epicId EpicIdPath) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Pause an in-progress epic run
 // (POST /projects/{projectId}/epics/{epicId}/runs/{runId}/pause)
 func (_ Unimplemented) PauseEpicRun(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, epicId EpicIdPath, runId RunIdPath) {
@@ -994,6 +1560,36 @@ func (_ Unimplemented) PauseEpicRun(w http.ResponseWriter, r *http.Request, proj
 // Resume a paused epic run
 // (POST /projects/{projectId}/epics/{epicId}/runs/{runId}/resume)
 func (_ Unimplemented) ResumeEpicRun(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, epicId EpicIdPath, runId RunIdPath) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// List notification configs for a project
+// (GET /projects/{projectId}/notifications)
+func (_ Unimplemented) ListNotificationConfigs(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Create a notification config for a project
+// (POST /projects/{projectId}/notifications)
+func (_ Unimplemented) CreateNotificationConfig(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Delete a notification config
+// (DELETE /projects/{projectId}/notifications/{notificationId})
+func (_ Unimplemented) DeleteNotificationConfig(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, notificationId NotificationIdPath) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Update a notification config
+// (PUT /projects/{projectId}/notifications/{notificationId})
+func (_ Unimplemented) UpdateNotificationConfig(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, notificationId NotificationIdPath) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Send a test notification
+// (POST /projects/{projectId}/notifications/{notificationId}/test)
+func (_ Unimplemented) TestNotificationConfig(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, notificationId NotificationIdPath) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1018,6 +1614,12 @@ func (_ Unimplemented) ListRunsByProject(w http.ResponseWriter, r *http.Request,
 // Create a new pipeline run for a project
 // (POST /projects/{projectId}/runs)
 func (_ Unimplemented) CreateRun(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Get total costs for a run with per-step breakdown
+// (GET /projects/{projectId}/runs/{runId}/costs)
+func (_ Unimplemented) GetRunCosts(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, runId RunIdPath) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1066,6 +1668,12 @@ func (_ Unimplemented) GetStory(w http.ResponseWriter, r *http.Request, projectI
 // Update a story
 // (PUT /projects/{projectId}/stories/{storyId})
 func (_ Unimplemented) UpdateStory(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, storyId StoryIdPath) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Get total costs for a story across all runs
+// (GET /projects/{projectId}/stories/{storyId}/costs)
+func (_ Unimplemented) GetStoryCosts(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath, storyId StoryIdPath) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1209,6 +1817,179 @@ func (siw *ServerInterfaceWrapper) RegisterUser(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RegisterUser(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListHITLRequests operation middleware
+func (siw *ServerInterfaceWrapper) ListHITLRequests(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListHITLRequestsParams
+
+	// ------------- Optional query parameter "status" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "status", r.URL.Query(), &params.Status)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "status", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "page" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "page", r.URL.Query(), &params.Page)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "page", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "per_page" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "per_page", r.URL.Query(), &params.PerPage)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "per_page", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListHITLRequests(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetHITLRequestByStep operation middleware
+func (siw *ServerInterfaceWrapper) GetHITLRequestByStep(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "stepId" -------------
+	var stepId StepIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "stepId", chi.URLParam(r, "stepId"), &stepId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "stepId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetHITLRequestByStep(w, r, stepId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetHITLRequest operation middleware
+func (siw *ServerInterfaceWrapper) GetHITLRequest(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "hitlRequestId" -------------
+	var hitlRequestId HITLRequestIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "hitlRequestId", chi.URLParam(r, "hitlRequestId"), &hitlRequestId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "hitlRequestId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetHITLRequest(w, r, hitlRequestId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ApproveHITLRequest operation middleware
+func (siw *ServerInterfaceWrapper) ApproveHITLRequest(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "hitlRequestId" -------------
+	var hitlRequestId HITLRequestIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "hitlRequestId", chi.URLParam(r, "hitlRequestId"), &hitlRequestId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "hitlRequestId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ApproveHITLRequest(w, r, hitlRequestId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RejectHITLRequest operation middleware
+func (siw *ServerInterfaceWrapper) RejectHITLRequest(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "hitlRequestId" -------------
+	var hitlRequestId HITLRequestIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "hitlRequestId", chi.URLParam(r, "hitlRequestId"), &hitlRequestId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "hitlRequestId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RejectHITLRequest(w, r, hitlRequestId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1371,6 +2152,261 @@ func (siw *ServerInterfaceWrapper) UpdateProject(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateProject(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ResetCircuitBreaker operation middleware
+func (siw *ServerInterfaceWrapper) ResetCircuitBreaker(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id IdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ResetCircuitBreaker(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetProjectCosts operation middleware
+func (siw *ServerInterfaceWrapper) GetProjectCosts(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "projectId" -------------
+	var projectId ProjectIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectId", chi.URLParam(r, "projectId"), &projectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetProjectCostsParams
+
+	// ------------- Optional query parameter "period" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "period", r.URL.Query(), &params.Period)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "period", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetProjectCosts(w, r, projectId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetProjectCostChart operation middleware
+func (siw *ServerInterfaceWrapper) GetProjectCostChart(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "projectId" -------------
+	var projectId ProjectIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectId", chi.URLParam(r, "projectId"), &projectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetProjectCostChartParams
+
+	// ------------- Optional query parameter "period" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "period", r.URL.Query(), &params.Period)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "period", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetProjectCostChart(w, r, projectId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetProjectCostRuns operation middleware
+func (siw *ServerInterfaceWrapper) GetProjectCostRuns(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "projectId" -------------
+	var projectId ProjectIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectId", chi.URLParam(r, "projectId"), &projectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetProjectCostRunsParams
+
+	// ------------- Optional query parameter "period" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "period", r.URL.Query(), &params.Period)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "period", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "page" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "page", r.URL.Query(), &params.Page)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "page", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "per_page" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "per_page", r.URL.Query(), &params.PerPage)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "per_page", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetProjectCostRuns(w, r, projectId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetProjectCostSummary operation middleware
+func (siw *ServerInterfaceWrapper) GetProjectCostSummary(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "projectId" -------------
+	var projectId ProjectIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectId", chi.URLParam(r, "projectId"), &projectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetProjectCostSummaryParams
+
+	// ------------- Optional query parameter "period" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "period", r.URL.Query(), &params.Period)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "period", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetProjectCostSummary(w, r, projectId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetEpicRun operation middleware
+func (siw *ServerInterfaceWrapper) GetEpicRun(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "projectId" -------------
+	var projectId ProjectIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectId", chi.URLParam(r, "projectId"), &projectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "epicRunId" -------------
+	var epicRunId EpicRunIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "epicRunId", chi.URLParam(r, "epicRunId"), &epicRunId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "epicRunId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetEpicRun(w, r, projectId, epicRunId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1589,6 +2625,86 @@ func (siw *ServerInterfaceWrapper) UpdateEpic(w http.ResponseWriter, r *http.Req
 	handler.ServeHTTP(w, r)
 }
 
+// GetEpicDAG operation middleware
+func (siw *ServerInterfaceWrapper) GetEpicDAG(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "projectId" -------------
+	var projectId ProjectIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectId", chi.URLParam(r, "projectId"), &projectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "epicId" -------------
+	var epicId EpicIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "epicId", chi.URLParam(r, "epicId"), &epicId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "epicId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetEpicDAG(w, r, projectId, epicId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// LaunchEpicRun operation middleware
+func (siw *ServerInterfaceWrapper) LaunchEpicRun(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "projectId" -------------
+	var projectId ProjectIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectId", chi.URLParam(r, "projectId"), &projectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "epicId" -------------
+	var epicId EpicIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "epicId", chi.URLParam(r, "epicId"), &epicId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "epicId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.LaunchEpicRun(w, r, projectId, epicId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // PauseEpicRun operation middleware
 func (siw *ServerInterfaceWrapper) PauseEpicRun(w http.ResponseWriter, r *http.Request) {
 
@@ -1678,6 +2794,188 @@ func (siw *ServerInterfaceWrapper) ResumeEpicRun(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ResumeEpicRun(w, r, projectId, epicId, runId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListNotificationConfigs operation middleware
+func (siw *ServerInterfaceWrapper) ListNotificationConfigs(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "projectId" -------------
+	var projectId ProjectIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectId", chi.URLParam(r, "projectId"), &projectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListNotificationConfigs(w, r, projectId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateNotificationConfig operation middleware
+func (siw *ServerInterfaceWrapper) CreateNotificationConfig(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "projectId" -------------
+	var projectId ProjectIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectId", chi.URLParam(r, "projectId"), &projectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateNotificationConfig(w, r, projectId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteNotificationConfig operation middleware
+func (siw *ServerInterfaceWrapper) DeleteNotificationConfig(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "projectId" -------------
+	var projectId ProjectIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectId", chi.URLParam(r, "projectId"), &projectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "notificationId" -------------
+	var notificationId NotificationIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "notificationId", chi.URLParam(r, "notificationId"), &notificationId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "notificationId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteNotificationConfig(w, r, projectId, notificationId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateNotificationConfig operation middleware
+func (siw *ServerInterfaceWrapper) UpdateNotificationConfig(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "projectId" -------------
+	var projectId ProjectIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectId", chi.URLParam(r, "projectId"), &projectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "notificationId" -------------
+	var notificationId NotificationIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "notificationId", chi.URLParam(r, "notificationId"), &notificationId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "notificationId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateNotificationConfig(w, r, projectId, notificationId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// TestNotificationConfig operation middleware
+func (siw *ServerInterfaceWrapper) TestNotificationConfig(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "projectId" -------------
+	var projectId ProjectIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectId", chi.URLParam(r, "projectId"), &projectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "notificationId" -------------
+	var notificationId NotificationIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "notificationId", chi.URLParam(r, "notificationId"), &notificationId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "notificationId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TestNotificationConfig(w, r, projectId, notificationId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1821,6 +3119,46 @@ func (siw *ServerInterfaceWrapper) CreateRun(w http.ResponseWriter, r *http.Requ
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateRun(w, r, projectId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetRunCosts operation middleware
+func (siw *ServerInterfaceWrapper) GetRunCosts(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "projectId" -------------
+	var projectId ProjectIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectId", chi.URLParam(r, "projectId"), &projectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "runId" -------------
+	var runId RunIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "runId", chi.URLParam(r, "runId"), &runId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "runId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetRunCosts(w, r, projectId, runId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2149,6 +3487,46 @@ func (siw *ServerInterfaceWrapper) UpdateStory(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateStory(w, r, projectId, storyId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetStoryCosts operation middleware
+func (siw *ServerInterfaceWrapper) GetStoryCosts(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "projectId" -------------
+	var projectId ProjectIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectId", chi.URLParam(r, "projectId"), &projectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "storyId" -------------
+	var storyId StoryIdPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "storyId", chi.URLParam(r, "storyId"), &storyId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "storyId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetStoryCosts(w, r, projectId, storyId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2748,6 +4126,21 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/auth/register", wrapper.RegisterUser)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/hitl-requests", wrapper.ListHITLRequests)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/hitl-requests/by-step/{stepId}", wrapper.GetHITLRequestByStep)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/hitl-requests/{hitlRequestId}", wrapper.GetHITLRequest)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/hitl-requests/{hitlRequestId}/approve", wrapper.ApproveHITLRequest)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/hitl-requests/{hitlRequestId}/reject", wrapper.RejectHITLRequest)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/projects", wrapper.ListProjects)
 	})
 	r.Group(func(r chi.Router) {
@@ -2761,6 +4154,24 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Put(options.BaseURL+"/projects/{id}", wrapper.UpdateProject)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/projects/{id}/circuit-breaker/reset", wrapper.ResetCircuitBreaker)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/projects/{projectId}/costs", wrapper.GetProjectCosts)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/projects/{projectId}/costs/chart", wrapper.GetProjectCostChart)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/projects/{projectId}/costs/runs", wrapper.GetProjectCostRuns)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/projects/{projectId}/costs/summary", wrapper.GetProjectCostSummary)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/projects/{projectId}/epic-runs/{epicRunId}", wrapper.GetEpicRun)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/projects/{projectId}/epics", wrapper.ListEpics)
@@ -2778,10 +4189,31 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Put(options.BaseURL+"/projects/{projectId}/epics/{epicId}", wrapper.UpdateEpic)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/projects/{projectId}/epics/{epicId}/dag", wrapper.GetEpicDAG)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/projects/{projectId}/epics/{epicId}/runs", wrapper.LaunchEpicRun)
+	})
+	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/projects/{projectId}/epics/{epicId}/runs/{runId}/pause", wrapper.PauseEpicRun)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/projects/{projectId}/epics/{epicId}/runs/{runId}/resume", wrapper.ResumeEpicRun)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/projects/{projectId}/notifications", wrapper.ListNotificationConfigs)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/projects/{projectId}/notifications", wrapper.CreateNotificationConfig)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/projects/{projectId}/notifications/{notificationId}", wrapper.DeleteNotificationConfig)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/projects/{projectId}/notifications/{notificationId}", wrapper.UpdateNotificationConfig)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/projects/{projectId}/notifications/{notificationId}/test", wrapper.TestNotificationConfig)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/projects/{projectId}/pipeline", wrapper.GetPipelineConfig)
@@ -2794,6 +4226,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/projects/{projectId}/runs", wrapper.CreateRun)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/projects/{projectId}/runs/{runId}/costs", wrapper.GetRunCosts)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/projects/{projectId}/runs/{runId}/pause", wrapper.PauseRun)
@@ -2818,6 +4253,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Put(options.BaseURL+"/projects/{projectId}/stories/{storyId}", wrapper.UpdateStory)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/projects/{projectId}/stories/{storyId}/costs", wrapper.GetStoryCosts)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/projects/{projectId}/stories/{storyId}/runs", wrapper.LaunchRun)
@@ -2862,88 +4300,137 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
+	"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",
+	"9L8BAAD//z1qXh8V9gAA",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

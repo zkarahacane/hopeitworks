@@ -63,6 +63,96 @@ func TestValidateRunTransition(t *testing.T) {
 	}
 }
 
+func TestComputeProgress(t *testing.T) {
+	tests := []struct {
+		name     string
+		steps    []RunStep
+		expected int
+	}{
+		{
+			name:     "zero steps returns 0",
+			steps:    []RunStep{},
+			expected: 0,
+		},
+		{
+			name:     "nil steps returns 0",
+			steps:    nil,
+			expected: 0,
+		},
+		{
+			name: "no completed steps returns 0",
+			steps: []RunStep{
+				{Status: StepStatusPending},
+				{Status: StepStatusRunning},
+				{Status: StepStatusPending},
+			},
+			expected: 0,
+		},
+		{
+			name: "2 of 3 completed returns 66",
+			steps: []RunStep{
+				{Status: StepStatusCompleted},
+				{Status: StepStatusCompleted},
+				{Status: StepStatusRunning},
+			},
+			expected: 66,
+		},
+		{
+			name: "all 3 completed returns 100",
+			steps: []RunStep{
+				{Status: StepStatusCompleted},
+				{Status: StepStatusCompleted},
+				{Status: StepStatusCompleted},
+			},
+			expected: 100,
+		},
+		{
+			name: "1 of 1 completed returns 100",
+			steps: []RunStep{
+				{Status: StepStatusCompleted},
+			},
+			expected: 100,
+		},
+		{
+			name: "1 of 2 completed returns 50",
+			steps: []RunStep{
+				{Status: StepStatusCompleted},
+				{Status: StepStatusPending},
+			},
+			expected: 50,
+		},
+		{
+			name: "1 of 3 completed returns 33",
+			steps: []RunStep{
+				{Status: StepStatusCompleted},
+				{Status: StepStatusFailed},
+				{Status: StepStatusPending},
+			},
+			expected: 33,
+		},
+		{
+			name: "mixed statuses with cancelled",
+			steps: []RunStep{
+				{Status: StepStatusCompleted},
+				{Status: StepStatusCancelled},
+				{Status: StepStatusPending},
+				{Status: StepStatusPending},
+			},
+			expected: 25,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := &Run{}
+			result := r.ComputeProgress(tt.steps)
+			if result != tt.expected {
+				t.Errorf("ComputeProgress() = %d, want %d", result, tt.expected)
+			}
+		})
+	}
+}
+
 func TestValidateStepTransition(t *testing.T) {
 	tests := []struct {
 		name    string

@@ -13,3 +13,12 @@ LIMIT $2 OFFSET $3;
 SELECT * FROM events
 WHERE entity_type = $1 AND entity_id = $2
 ORDER BY created_at ASC;
+
+-- name: GetEventsSince :many
+SELECT e.*
+FROM events e
+WHERE e.project_id = $1
+  AND e.created_at > (
+      SELECT anchor.created_at FROM events anchor WHERE anchor.id = $2
+  )
+ORDER BY e.created_at ASC;

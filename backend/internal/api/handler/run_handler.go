@@ -185,6 +185,7 @@ func toAPIRun(r *model.Run) Run {
 		ProjectId: r.ProjectID,
 		StoryId:   r.StoryID,
 		Status:    RunStatus(r.Status),
+		Progress:  r.Progress,
 		CreatedAt: r.CreatedAt,
 		UpdatedAt: r.UpdatedAt,
 	}
@@ -237,6 +238,7 @@ func toAPIRunWithSteps(r *model.Run) RunWithSteps {
 		ProjectId: r.ProjectID,
 		StoryId:   r.StoryID,
 		Status:    RunWithStepsStatus(r.Status),
+		Progress:  r.Progress,
 		CreatedAt: r.CreatedAt,
 		UpdatedAt: r.UpdatedAt,
 		Steps:     make([]RunStep, len(r.Steps)),

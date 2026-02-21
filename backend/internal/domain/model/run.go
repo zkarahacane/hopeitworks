@@ -25,11 +25,12 @@ const (
 type StepStatus string
 
 const (
-	StepStatusPending   StepStatus = "pending"
-	StepStatusRunning   StepStatus = "running"
-	StepStatusCompleted StepStatus = "completed"
-	StepStatusFailed    StepStatus = "failed"
-	StepStatusCancelled StepStatus = "cancelled"
+	StepStatusPending         StepStatus = "pending"
+	StepStatusRunning         StepStatus = "running"
+	StepStatusCompleted       StepStatus = "completed"
+	StepStatusFailed          StepStatus = "failed"
+	StepStatusCancelled       StepStatus = "cancelled"
+	StepStatusWaitingApproval StepStatus = "waiting_approval"
 )
 
 // Run represents a pipeline execution run.
@@ -46,6 +47,22 @@ type Run struct {
 	CreatedAt              time.Time
 	UpdatedAt              time.Time
 	Steps                  []RunStep
+	Progress               int // computed, not persisted
+}
+
+// ComputeProgress computes the run progress as a percentage (0–100)
+// based on the number of completed steps. Returns 0 if there are no steps.
+func (r *Run) ComputeProgress(steps []RunStep) int {
+	if len(steps) == 0 {
+		return 0
+	}
+	completed := 0
+	for _, s := range steps {
+		if s.Status == StepStatusCompleted {
+			completed++
+		}
+	}
+	return int(float64(completed) / float64(len(steps)) * 100)
 }
 
 // RunStep represents an individual step within a pipeline run.
@@ -61,6 +78,12 @@ type RunStep struct {
 	ErrorMessage *string
 	ContainerID  *string
 	LogTail      *string
+	// RetryCount is the number of retries attempted from this step.
+	RetryCount int
+	// RetryType is "incremental" or "full"; nil for original (non-retry) steps.
+	RetryType *string
+	// ParentStepID is the ID of the step this was retried from; nil for original steps.
+	ParentStepID *uuid.UUID
 	CreatedAt    time.Time
 }
 
@@ -71,8 +94,9 @@ var validRunTransitions = map[RunStatus][]RunStatus{
 }
 
 var validStepTransitions = map[StepStatus][]StepStatus{
-	StepStatusPending: {StepStatusRunning, StepStatusCancelled},
-	StepStatusRunning: {StepStatusCompleted, StepStatusFailed, StepStatusCancelled},
+	StepStatusPending:         {StepStatusRunning, StepStatusCancelled},
+	StepStatusRunning:         {StepStatusCompleted, StepStatusFailed, StepStatusCancelled, StepStatusWaitingApproval},
+	StepStatusWaitingApproval: {StepStatusRunning, StepStatusCompleted, StepStatusFailed, StepStatusCancelled},
 }
 
 // ValidateRunTransition checks if a run status transition is valid.

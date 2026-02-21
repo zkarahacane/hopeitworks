@@ -82,11 +82,31 @@ func (m *mockEpicRepo) Delete(_ context.Context, id uuid.UUID) error {
 	return nil
 }
 
+// errorStoryRepo is a mock that always returns an error on ListByEpic.
+type errorStoryRepo struct {
+	mockStoryRepo
+	listByEpicErr error
+}
+
+func (m *errorStoryRepo) ListByEpic(_ context.Context, _ uuid.UUID, _, _ int32) ([]*model.Story, error) {
+	return nil, m.listByEpicErr
+}
+
 func setupEpicHandler() (*EpicHandler, *mockEpicRepo) {
 	repo := newMockEpicRepo()
+	storyRepo := newMockStoryRepo()
 	svc := service.NewEpicService(repo)
-	handler := NewEpicHandler(svc)
-	return handler, repo
+	scheduler := service.NewSchedulerService()
+	h := NewEpicHandler(svc, scheduler, storyRepo)
+	return h, repo
+}
+
+func setupEpicHandlerWithStoryRepo(storyRepo port.StoryRepository) (*EpicHandler, *mockEpicRepo) {
+	epicRepo := newMockEpicRepo()
+	svc := service.NewEpicService(epicRepo)
+	scheduler := service.NewSchedulerService()
+	h := NewEpicHandler(svc, scheduler, storyRepo)
+	return h, epicRepo
 }
 
 func TestCreateEpic_AdminOnly(t *testing.T) {
@@ -449,5 +469,149 @@ func TestDeleteEpic_NotFound(t *testing.T) {
 
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("expected 404, got %d", rec.Code)
+	}
+}
+
+func TestGetEpicDAG_NoDeps(t *testing.T) {
+	projectID := uuid.New()
+	epicID := uuid.New()
+
+	storyRepo := newMockStoryRepo()
+	storyRepo.stories[uuid.New()] = &model.Story{ID: uuid.New(), ProjectID: projectID, EpicID: &epicID, Key: "S-01", Title: "Story 1", Status: "backlog"}
+	storyRepo.stories[uuid.New()] = &model.Story{ID: uuid.New(), ProjectID: projectID, EpicID: &epicID, Key: "S-02", Title: "Story 2", Status: "backlog"}
+	storyRepo.stories[uuid.New()] = &model.Story{ID: uuid.New(), ProjectID: projectID, EpicID: &epicID, Key: "S-03", Title: "Story 3", Status: "backlog"}
+
+	h, _ := setupEpicHandlerWithStoryRepo(storyRepo)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects/"+projectID.String()+"/epics/"+epicID.String()+"/dag", nil)
+	ctx := middleware.SetUserContext(req.Context(), uuid.New(), model.RoleUser)
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.GetEpicDAG(rec, req, projectID, epicID)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp EpicDAGResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if len(resp.Nodes) != 3 {
+		t.Errorf("expected 3 nodes, got %d", len(resp.Nodes))
+	}
+	for _, node := range resp.Nodes {
+		if node.Layer != 0 {
+			t.Errorf("expected all nodes in layer 0, got node %s in layer %d", node.Key, node.Layer)
+		}
+	}
+	if len(resp.Edges) != 0 {
+		t.Errorf("expected 0 edges, got %d", len(resp.Edges))
+	}
+}
+
+func TestGetEpicDAG_WithDeps(t *testing.T) {
+	projectID := uuid.New()
+	epicID := uuid.New()
+
+	storyRepo := newMockStoryRepo()
+	storyRepo.stories[uuid.New()] = &model.Story{ID: uuid.New(), ProjectID: projectID, EpicID: &epicID, Key: "S-01", Title: "Story 1", Status: "backlog"}
+	storyRepo.stories[uuid.New()] = &model.Story{ID: uuid.New(), ProjectID: projectID, EpicID: &epicID, Key: "S-02", Title: "Story 2", Status: "backlog", DependsOn: []string{"S-01"}}
+	storyRepo.stories[uuid.New()] = &model.Story{ID: uuid.New(), ProjectID: projectID, EpicID: &epicID, Key: "S-03", Title: "Story 3", Status: "backlog", DependsOn: []string{"S-01"}}
+
+	h, _ := setupEpicHandlerWithStoryRepo(storyRepo)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects/"+projectID.String()+"/epics/"+epicID.String()+"/dag", nil)
+	ctx := middleware.SetUserContext(req.Context(), uuid.New(), model.RoleUser)
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.GetEpicDAG(rec, req, projectID, epicID)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp EpicDAGResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if len(resp.Nodes) != 3 {
+		t.Errorf("expected 3 nodes, got %d", len(resp.Nodes))
+	}
+
+	// S-01 should be layer 0, S-02 and S-03 should be layer 1
+	layerMap := make(map[string]int)
+	for _, node := range resp.Nodes {
+		layerMap[node.Key] = node.Layer
+	}
+	if layerMap["S-01"] != 0 {
+		t.Errorf("expected S-01 in layer 0, got %d", layerMap["S-01"])
+	}
+	if layerMap["S-02"] != 1 {
+		t.Errorf("expected S-02 in layer 1, got %d", layerMap["S-02"])
+	}
+	if layerMap["S-03"] != 1 {
+		t.Errorf("expected S-03 in layer 1, got %d", layerMap["S-03"])
+	}
+
+	if len(resp.Edges) != 2 {
+		t.Errorf("expected 2 edges, got %d", len(resp.Edges))
+	}
+}
+
+func TestGetEpicDAG_CycleReturns422(t *testing.T) {
+	projectID := uuid.New()
+	epicID := uuid.New()
+
+	storyRepo := newMockStoryRepo()
+	storyRepo.stories[uuid.New()] = &model.Story{ID: uuid.New(), ProjectID: projectID, EpicID: &epicID, Key: "S-01", Title: "Story 1", Status: "backlog", DependsOn: []string{"S-02"}}
+	storyRepo.stories[uuid.New()] = &model.Story{ID: uuid.New(), ProjectID: projectID, EpicID: &epicID, Key: "S-02", Title: "Story 2", Status: "backlog", DependsOn: []string{"S-01"}}
+
+	h, _ := setupEpicHandlerWithStoryRepo(storyRepo)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects/"+projectID.String()+"/epics/"+epicID.String()+"/dag", nil)
+	ctx := middleware.SetUserContext(req.Context(), uuid.New(), model.RoleUser)
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.GetEpicDAG(rec, req, projectID, epicID)
+
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp Error
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode error response: %v", err)
+	}
+
+	if resp.Error.Code != "DAG_CYCLE_DETECTED" {
+		t.Errorf("expected error code DAG_CYCLE_DETECTED, got %s", resp.Error.Code)
+	}
+}
+
+func TestGetEpicDAG_StoryRepoError(t *testing.T) {
+	projectID := uuid.New()
+	epicID := uuid.New()
+
+	errRepo := &errorStoryRepo{
+		mockStoryRepo: *newMockStoryRepo(),
+		listByEpicErr: errors.NewNotFound("epic", epicID),
+	}
+	h, _ := setupEpicHandlerWithStoryRepo(errRepo)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects/"+projectID.String()+"/epics/"+epicID.String()+"/dag", nil)
+	ctx := middleware.SetUserContext(req.Context(), uuid.New(), model.RoleUser)
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.GetEpicDAG(rec, req, projectID, epicID)
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("expected 404, got %d. Body: %s", rec.Code, rec.Body.String())
 	}
 }

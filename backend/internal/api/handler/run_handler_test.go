@@ -87,6 +87,12 @@ func (m *runHandlerRunRepo) UpdateRunStepStatus(_ context.Context, _ uuid.UUID, 
 func (m *runHandlerRunRepo) UpdateRunStepContainerInfo(_ context.Context, _ uuid.UUID, _ *string, _ *string) (*model.RunStep, error) {
 	return nil, nil
 }
+func (m *runHandlerRunRepo) CreateRetryRunStep(_ context.Context, step *model.RunStep) (*model.RunStep, error) {
+	return step, nil
+}
+func (m *runHandlerRunRepo) ListRetryStepsByParent(_ context.Context, _ uuid.UUID) ([]*model.RunStep, error) {
+	return nil, nil
+}
 
 // runHandlerStoryRepo is a minimal mock of port.StoryRepository for handler tests.
 type runHandlerStoryRepo struct {
@@ -165,6 +171,12 @@ func (m *runHandlerProjectRepo) Update(_ context.Context, p *model.Project) (*mo
 	return p, nil
 }
 func (m *runHandlerProjectRepo) Delete(_ context.Context, _ uuid.UUID) error { return nil }
+func (m *runHandlerProjectRepo) IncrementCircuitBreakerCount(_ context.Context, _ uuid.UUID) (*model.Project, error) {
+	return &model.Project{}, nil
+}
+func (m *runHandlerProjectRepo) ResetCircuitBreaker(_ context.Context, _ uuid.UUID) (*model.Project, error) {
+	return &model.Project{}, nil
+}
 
 // runHandlerJobQueue is a minimal mock of port.JobQueue.
 type runHandlerJobQueue struct {
@@ -425,8 +437,8 @@ func TestPauseRunHandler_InvalidState(t *testing.T) {
 
 	h.PauseRun(rec, req, projectID, runID)
 
-	if rec.Code != http.StatusConflict {
-		t.Errorf("expected status 409, got %d. Body: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Errorf("expected status 422, got %d. Body: %s", rec.Code, rec.Body.String())
 	}
 }
 
@@ -545,8 +557,8 @@ func TestResumeRunHandler_InvalidState(t *testing.T) {
 
 	h.ResumeRun(rec, req, projectID, runID)
 
-	if rec.Code != http.StatusConflict {
-		t.Errorf("expected status 409, got %d. Body: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Errorf("expected status 422, got %d. Body: %s", rec.Code, rec.Body.String())
 	}
 }
 

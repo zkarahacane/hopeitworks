@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"slices"
@@ -18,12 +19,18 @@ import (
 // ErrRunPaused is returned when a run is paused mid-execution.
 var ErrRunPaused = fmt.Errorf("run paused")
 
+// errStepSuspended is returned by executeStep when the step transitions
+// to waiting_approval. It is NOT a failure — it signals the executor to
+// stop processing further steps without marking the run as failed.
+var errStepSuspended = errors.New("step suspended for approval")
+
 // PipelineExecutor orchestrates sequential execution of pipeline steps.
 type PipelineExecutor struct {
-	runRepo   port.RunRepository
-	actionReg port.ActionRegistry
-	eventPub  port.EventPublisher
-	logger    *slog.Logger
+	runRepo        port.RunRepository
+	actionReg      port.ActionRegistry
+	eventPub       port.EventPublisher
+	circuitBreaker *CircuitBreakerService
+	logger         *slog.Logger
 }
 
 // NewPipelineExecutor creates a new pipeline executor.
@@ -41,12 +48,35 @@ func NewPipelineExecutor(
 	}
 }
 
+// SetCircuitBreaker configures the circuit breaker service for the executor.
+func (e *PipelineExecutor) SetCircuitBreaker(cb *CircuitBreakerService) {
+	e.circuitBreaker = cb
+}
+
 // ExecuteRun executes all steps of a run sequentially.
 // Steps execute in step_order sequence. Execution stops on first failure, cancellation, or pause.
+// The circuit breaker is checked before execution and updated after completion/failure.
 func (e *PipelineExecutor) ExecuteRun(ctx context.Context, runID uuid.UUID) error {
 	// 1. Verify run exists
-	if _, err := e.runRepo.GetRun(ctx, runID); err != nil {
+	run, err := e.runRepo.GetRun(ctx, runID)
+	if err != nil {
 		return err
+	}
+
+	// 2. Check circuit breaker before starting
+	if e.circuitBreaker != nil {
+		if err := e.circuitBreaker.CheckCircuitBreaker(ctx, run.ProjectID); err != nil {
+			e.logger.Warn("circuit breaker open, aborting run",
+				"run_id", runID,
+				"project_id", run.ProjectID,
+			)
+			errMsg := err.Error()
+			failedAt := time.Now()
+			if _, updateErr := e.runRepo.UpdateRunStatus(ctx, runID, model.RunStatusFailed, nil, &failedAt, nil, &errMsg); updateErr != nil {
+				e.logger.Error("failed to update run status after circuit breaker check", "error", updateErr)
+			}
+			return err
+		}
 	}
 
 	steps, err := e.runRepo.ListRunStepsByRun(ctx, runID)
@@ -59,9 +89,9 @@ func (e *PipelineExecutor) ExecuteRun(ctx context.Context, runID uuid.UUID) erro
 		return cmp.Compare(a.StepOrder, b.StepOrder)
 	})
 
-	// 2. Transition run to "running", publish run.started
+	// 3. Transition run to "running", publish run.started
 	now := time.Now()
-	run, err := e.runRepo.UpdateRunStatus(ctx, runID, model.RunStatusRunning, &now, nil, nil, nil)
+	run, err = e.runRepo.UpdateRunStatus(ctx, runID, model.RunStatusRunning, &now, nil, nil, nil)
 	if err != nil {
 		return err
 	}
@@ -72,7 +102,7 @@ func (e *PipelineExecutor) ExecuteRun(ctx context.Context, runID uuid.UUID) erro
 		"started_at": now.Format(time.RFC3339),
 	})
 
-	// 3. Execute each step in order
+	// 4. Execute each step in order
 	metadata := make(map[string]any)
 	for i := range steps {
 		step := steps[i]
@@ -100,12 +130,23 @@ func (e *PipelineExecutor) ExecuteRun(ctx context.Context, runID uuid.UUID) erro
 		}
 
 		if err := e.executeStep(ctx, run, step, metadata); err != nil {
+			if errors.Is(err, errStepSuspended) {
+				e.logger.Info("pipeline step suspended for approval",
+					"run_id", run.ID, "step_id", step.ID)
+				return nil
+			}
 			e.handleStepFailure(ctx, run, step, err)
+			// Record failure in circuit breaker
+			if e.circuitBreaker != nil {
+				if cbErr := e.circuitBreaker.RecordFailure(ctx, run.ProjectID); cbErr != nil {
+					e.logger.Error("failed to record circuit breaker failure", "error", cbErr)
+				}
+			}
 			return err
 		}
 	}
 
-	// 4. All steps completed — mark run as completed
+	// 5. All steps completed — mark run as completed
 	completedAt := time.Now()
 	if _, err := e.runRepo.UpdateRunStatus(ctx, runID, model.RunStatusCompleted, nil, &completedAt, nil, nil); err != nil {
 		return err
@@ -116,6 +157,13 @@ func (e *PipelineExecutor) ExecuteRun(ctx context.Context, runID uuid.UUID) erro
 		"status":       string(model.RunStatusCompleted),
 		"completed_at": completedAt.Format(time.RFC3339),
 	})
+
+	// Reset circuit breaker count on success
+	if e.circuitBreaker != nil {
+		if cbErr := e.circuitBreaker.RecordSuccess(ctx, run.ProjectID); cbErr != nil {
+			e.logger.Error("failed to record circuit breaker success", "error", cbErr)
+		}
+	}
 
 	return nil
 }
@@ -157,6 +205,14 @@ func (e *PipelineExecutor) executeStep(ctx context.Context, run *model.Run, step
 	// Execute action
 	if err := action.Execute(ctx, runCtx); err != nil {
 		return err
+	}
+
+	// Re-fetch step to detect suspension (e.g., hitl_gate sets waiting_approval)
+	refetchedStep, fetchErr := e.runRepo.GetRunStep(ctx, step.ID)
+	if fetchErr != nil {
+		e.logger.Warn("failed to re-fetch step after execute", "step_id", step.ID, "error", fetchErr)
+	} else if refetchedStep.Status == model.StepStatusWaitingApproval {
+		return errStepSuspended
 	}
 
 	// Transition step to "completed"

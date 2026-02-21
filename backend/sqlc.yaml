@@ -17,3 +17,5 @@ sql:
             go_type: time.Time
           - db_type: timestamp
             go_type: time.Time
+          - db_type: "numeric"
+            go_type: float64

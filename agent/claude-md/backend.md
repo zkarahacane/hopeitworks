@@ -381,6 +381,17 @@ go test ./... -v
 golangci-lint run ./...
 ```
 
+### Integration Tests (Docker Available)
+
+The Docker socket is mounted in this container. Testcontainers work.
+Run the full test suite including integration tests before creating the PR:
+
+```bash
+cd backend && go test ./... -race -count=1
+```
+
+This catches type mismatches between sqlc-generated code and actual Postgres behavior (e.g., COALESCE return types, NULL handling).
+
 ## go-wire Dependency Injection
 
 ### Provider Sets

@@ -242,7 +242,15 @@ Stories are implemented via Docker containers running Claude Code agents. **Neve
 | Script | Purpose |
 |--------|---------|
 | `scripts/bmad-dev.sh` | Launch dev agent containers (clone mode or interactive) |
-| `scripts/pipeline.sh` | Runs inside container: dev-story (Opus) → code-review (Sonnet) → merge-story (Sonnet) |
+| `scripts/pipeline.sh` | Runs inside container: dev-story → code-review → merge-story |
+
+### Default models per phase
+
+| Phase | Default model | Override flag |
+|-------|--------------|---------------|
+| `dev-story` | `opus` | `--dev=MODEL` |
+| `code-review` | `sonnet` | `--review=MODEL` |
+| `merge-story` | `opus` | `--merge=MODEL` |
 
 ### Usage
 
@@ -260,6 +268,10 @@ Stories are implemented via Docker containers running Claude Code agents. **Neve
 ./scripts/bmad-dev.sh --story <story-key> --phase dev-story
 ./scripts/bmad-dev.sh --story <story-key> --phase code-review
 ./scripts/bmad-dev.sh --story <story-key> --phase merge-story
+
+# Override models per phase (reduce cost or test with lighter models)
+./scripts/bmad-dev.sh --story <story-key> --pipeline --dev=sonnet
+./scripts/bmad-dev.sh --wave <N> --pipeline --dev=sonnet --review=haiku --merge=sonnet
 
 # Monitor running containers
 ./scripts/bmad-dev.sh --status
