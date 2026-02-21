@@ -33,12 +33,24 @@ export type SeedUserKey = keyof typeof SEED_USERS
 /**
  * Login via the UI form. Fills email/password and submits.
  * Waits for navigation away from /login.
+ *
+ * The password field uses PrimeVue Password which wraps the native input,
+ * so getByLabel may not resolve correctly. We fall back to a CSS selector.
  */
 export async function loginViaUI(page: Page, userKey: SeedUserKey): Promise<void> {
   const user = SEED_USERS[userKey]
   await page.goto('/login')
   await page.getByLabel(/email/i).fill(user.email)
-  await page.getByLabel(/password/i).fill(user.password)
+
+  // PrimeVue Password component wraps the <input> — getByLabel may not find it.
+  // Try label association first, fall back to the raw input[type="password"] selector.
+  const passwordByLabel = page.getByLabel(/password/i)
+  const passwordBySelector = page.locator('input[type="password"]')
+  const passwordField = (await passwordByLabel.isVisible().catch(() => false))
+    ? passwordByLabel
+    : passwordBySelector
+  await passwordField.fill(user.password)
+
   await page.getByRole('button', { name: /sign in|log in|login/i }).click()
   await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 10000 })
 }
