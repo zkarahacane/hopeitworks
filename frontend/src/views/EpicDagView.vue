@@ -28,12 +28,10 @@ function handleLaunchClick() {
     rejectLabel: 'Cancel',
     accept: async () => {
       await launch()
-      if (result.value) {
-        toast.add({
-          severity: 'success',
-          summary: 'Epic run scheduled',
-          detail: `Run ID: ${result.value.epic_run_id}`,
-          life: 5000,
+      if (result.value?.epic_run_id) {
+        router.push({
+          name: 'epic-run-monitor',
+          params: { id: projectId, epicRunId: result.value.epic_run_id },
         })
       } else {
         toast.add({

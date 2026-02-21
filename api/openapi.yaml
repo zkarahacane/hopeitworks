@@ -1332,15 +1332,6 @@ components:
         format: uuid
       description: HITL request UUID
 
-    NotificationIdPath:
-      name: notificationId
-      in: path
-      required: true
-      schema:
-        type: string
-        format: uuid
-      description: Notification config UUID
-
     EpicRunIdPath:
       name: epicRunId
       in: path
@@ -1349,6 +1340,15 @@ components:
         type: string
         format: uuid
       description: Epic run UUID
+
+    NotificationIdPath:
+      name: notificationId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Notification config UUID
 
     PageParam:
       name: page
@@ -1755,12 +1755,18 @@ components:
         story_id:
           type: string
           format: uuid
+        story_key:
+          type: string
+          example: S-01
+          description: Unique story identifier within project (e.g., S-01)
         run_id:
           type: string
           format: uuid
           nullable: true
         group_index:
           type: integer
+          description: Zero-based execution layer index
+          example: 0
         status:
           type: string
           example: pending

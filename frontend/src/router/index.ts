@@ -59,6 +59,11 @@ const router = createRouter({
           component: () => import('@/views/EpicDagView.vue'),
         },
         {
+          path: 'epic-runs/:epicRunId',
+          name: 'epic-run-monitor',
+          component: () => import('@/views/EpicRunView.vue'),
+        },
+        {
           path: 'pipeline',
           name: 'project-pipeline',
           component: PipelineConfigView,
