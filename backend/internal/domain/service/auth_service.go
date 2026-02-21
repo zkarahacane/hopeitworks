@@ -20,6 +20,7 @@ var (
 	ErrInvalidCredentials = errors.New("invalid credentials")
 	ErrEmailAlreadyExists = errors.New("email already exists")
 	ErrValidation         = errors.New("validation error")
+	ErrTokenRevoked       = errors.New("token has been revoked")
 	ErrResetTokenExpired  = errors.New("reset token expired")
 	ErrResetTokenInvalid  = errors.New("reset token invalid or already used")
 )
@@ -34,6 +35,7 @@ type Claims struct {
 // AuthService handles user authentication logic.
 type AuthService struct {
 	repo          port.UserRepository
+	blacklistRepo port.TokenBlacklistRepository
 	tokenRepo     port.PasswordResetTokenRepository
 	emailSender   port.EmailSender
 	frontendURL   string
@@ -42,6 +44,7 @@ type AuthService struct {
 }
 
 // NewAuthService creates a new AuthService with all dependencies.
+// blacklistRepo may be nil for backwards compatibility (environments without token revocation).
 func NewAuthService(
 	repo port.UserRepository,
 	tokenRepo port.PasswordResetTokenRepository,
@@ -58,6 +61,11 @@ func NewAuthService(
 		jwtSecret:     []byte(jwtSecret),
 		jwtExpiration: jwtExpiration,
 	}
+}
+
+// SetBlacklistRepo injects the token blacklist repository (optional).
+func (s *AuthService) SetBlacklistRepo(repo port.TokenBlacklistRepository) {
+	s.blacklistRepo = repo
 }
 
 // Register creates a new user and returns the user with a JWT token.
@@ -144,6 +152,31 @@ func (s *AuthService) JWTExpiration() time.Duration {
 	return s.jwtExpiration
 }
 
+// Logout invalidates the given JWT token string by adding its JTI to the blacklist.
+func (s *AuthService) Logout(ctx context.Context, tokenString string) error {
+	if s.blacklistRepo == nil {
+		return nil // blacklist not configured, skip revocation
+	}
+	claims, err := s.ValidateToken(tokenString)
+	if err != nil {
+		return nil //nolint:nilerr // intentional: expired/invalid tokens don't need revocation
+	}
+	jti := claims.ID
+	if jti == "" {
+		return nil // legacy token without JTI — skip
+	}
+	expiresAt := claims.ExpiresAt.Time
+	return s.blacklistRepo.Revoke(ctx, jti, expiresAt)
+}
+
+// PurgeExpiredTokens removes expired entries from the token blacklist.
+func (s *AuthService) PurgeExpiredTokens(ctx context.Context) error {
+	if s.blacklistRepo == nil {
+		return nil
+	}
+	return s.blacklistRepo.DeleteExpired(ctx)
+}
+
 // ForgotPassword generates a reset token and sends an email if the address is registered.
 // Always returns nil to prevent email enumeration.
 func (s *AuthService) ForgotPassword(ctx context.Context, email string) error {
@@ -217,6 +250,7 @@ func (s *AuthService) generateToken(userID uuid.UUID, role model.Role) (string, 
 		UserID: userID,
 		Role:   role,
 		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        uuid.New().String(),
 			ExpiresAt: jwt.NewNumericDate(now.Add(s.jwtExpiration)),
 			IssuedAt:  jwt.NewNumericDate(now),
 		},

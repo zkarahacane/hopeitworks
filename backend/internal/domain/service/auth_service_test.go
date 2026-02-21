@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 
@@ -185,6 +186,36 @@ func (m *mockEmailSender) Send(ctx context.Context, msg port.EmailMessage) error
 	if m.sendFn != nil {
 		return m.sendFn(ctx, msg)
 	}
+	return nil
+}
+
+// mockBlacklistRepo is a test double for port.TokenBlacklistRepository.
+type mockBlacklistRepo struct {
+	revoked   map[string]bool
+	revokeFn  func(ctx context.Context, jti string, expiresAt time.Time) error
+	revokedFn func(ctx context.Context, jti string) (bool, error)
+}
+
+func newMockBlacklistRepo() *mockBlacklistRepo {
+	return &mockBlacklistRepo{revoked: make(map[string]bool)}
+}
+
+func (m *mockBlacklistRepo) Revoke(ctx context.Context, jti string, expiresAt time.Time) error {
+	if m.revokeFn != nil {
+		return m.revokeFn(ctx, jti, expiresAt)
+	}
+	m.revoked[jti] = true
+	return nil
+}
+
+func (m *mockBlacklistRepo) IsRevoked(ctx context.Context, jti string) (bool, error) {
+	if m.revokedFn != nil {
+		return m.revokedFn(ctx, jti)
+	}
+	return m.revoked[jti], nil
+}
+
+func (m *mockBlacklistRepo) DeleteExpired(_ context.Context) error {
 	return nil
 }
 
@@ -374,6 +405,102 @@ func TestValidateToken_ExpiredToken(t *testing.T) {
 	_, err = svc.ValidateToken(token)
 	if err == nil {
 		t.Error("expected error for expired token")
+	}
+}
+
+// ── Blacklist / Logout tests ─────────────────────────────────────────────
+
+func TestGenerateToken_HasJTI(t *testing.T) {
+	repo := newMockRepo()
+	svc := newTestAuthService(repo, newMockTokenRepo(), newMockEmailSender())
+
+	_, token, err := svc.Register(context.Background(), "test@example.com", "secureP@ss1", "Test User")
+	if err != nil {
+		t.Fatalf("register failed: %v", err)
+	}
+
+	claims, err := svc.ValidateToken(token)
+	if err != nil {
+		t.Fatalf("validate failed: %v", err)
+	}
+
+	if claims.ID == "" {
+		t.Error("expected non-empty JTI (claims.ID)")
+	}
+}
+
+func TestAuthService_Logout_RevokesToken(t *testing.T) {
+	repo := newMockRepo()
+	blacklist := newMockBlacklistRepo()
+	svc := newTestAuthService(repo, newMockTokenRepo(), newMockEmailSender())
+	svc.SetBlacklistRepo(blacklist)
+
+	_, token, err := svc.Register(context.Background(), "test@example.com", "secureP@ss1", "Test User")
+	if err != nil {
+		t.Fatalf("register failed: %v", err)
+	}
+
+	// Parse claims to get the JTI
+	claims, err := svc.ValidateToken(token)
+	if err != nil {
+		t.Fatalf("validate failed: %v", err)
+	}
+
+	err = svc.Logout(context.Background(), token)
+	if err != nil {
+		t.Fatalf("logout failed: %v", err)
+	}
+
+	if !blacklist.revoked[claims.ID] {
+		t.Error("expected token JTI to be revoked in blacklist")
+	}
+}
+
+func TestAuthService_Logout_InvalidToken_Noop(t *testing.T) {
+	repo := newMockRepo()
+	blacklist := newMockBlacklistRepo()
+	svc := newTestAuthService(repo, newMockTokenRepo(), newMockEmailSender())
+	svc.SetBlacklistRepo(blacklist)
+
+	// Logout with invalid token should not error and should not call Revoke
+	err := svc.Logout(context.Background(), "invalid-token")
+	if err != nil {
+		t.Fatalf("expected no error for invalid token, got %v", err)
+	}
+
+	if len(blacklist.revoked) != 0 {
+		t.Error("expected no revocations for invalid token")
+	}
+}
+
+func TestAuthService_Logout_EmptyJTI_Noop(t *testing.T) {
+	repo := newMockRepo()
+	blacklist := newMockBlacklistRepo()
+	svc := newTestAuthService(repo, newMockTokenRepo(), newMockEmailSender())
+	svc.SetBlacklistRepo(blacklist)
+
+	// Generate a token without JTI manually
+	legacyClaims := &Claims{
+		UserID: uuid.New(),
+		Role:   "user",
+	}
+	legacyClaims.ExpiresAt = jwt.NewNumericDate(time.Now().Add(24 * time.Hour))
+	legacyClaims.IssuedAt = jwt.NewNumericDate(time.Now())
+	// ID intentionally left empty
+
+	legacyToken := jwt.NewWithClaims(jwt.SigningMethodHS256, legacyClaims)
+	tokenStr, err := legacyToken.SignedString([]byte("test-secret"))
+	if err != nil {
+		t.Fatalf("sign failed: %v", err)
+	}
+
+	err = svc.Logout(context.Background(), tokenStr)
+	if err != nil {
+		t.Fatalf("expected no error for empty JTI, got %v", err)
+	}
+
+	if len(blacklist.revoked) != 0 {
+		t.Error("expected no revocations for token without JTI")
 	}
 }
 

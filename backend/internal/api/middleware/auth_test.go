@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -68,7 +69,7 @@ func TestAuthMiddleware_ValidToken(t *testing.T) {
 	var capturedRole model.Role
 	var userIDFound, roleFound bool
 
-	handler := Auth(authSvc)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := Auth(authSvc, nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		capturedUserID, userIDFound = UserIDFromContext(r.Context())
 		capturedRole, roleFound = RoleFromContext(r.Context())
 		w.WriteHeader(http.StatusOK)
@@ -100,7 +101,7 @@ func TestAuthMiddleware_ValidToken(t *testing.T) {
 func TestAuthMiddleware_NoCookie(t *testing.T) {
 	authSvc := newTestAuthService()
 
-	handler := Auth(authSvc)(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+	handler := Auth(authSvc, nil)(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 		t.Error("handler should not be called when no cookie is present")
 	}))
 
@@ -117,7 +118,7 @@ func TestAuthMiddleware_NoCookie(t *testing.T) {
 func TestAuthMiddleware_InvalidToken(t *testing.T) {
 	authSvc := newTestAuthService()
 
-	handler := Auth(authSvc)(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+	handler := Auth(authSvc, nil)(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 		t.Error("handler should not be called with invalid token")
 	}))
 
@@ -144,7 +145,7 @@ func TestAuthMiddleware_ExpiredToken(t *testing.T) {
 	// Use the same secret for validation
 	authSvc := newTestAuthService()
 
-	handler := Auth(authSvc)(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+	handler := Auth(authSvc, nil)(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 		t.Error("handler should not be called with expired token")
 	}))
 
@@ -156,6 +157,99 @@ func TestAuthMiddleware_ExpiredToken(t *testing.T) {
 
 	if rec.Code != http.StatusUnauthorized {
 		t.Errorf("expected 401, got %d", rec.Code)
+	}
+}
+
+// mockBlacklistRepo implements port.TokenBlacklistRepository for testing.
+type mockBlacklistRepo struct {
+	revokedJTIs map[string]bool
+}
+
+func newMockBlacklist() *mockBlacklistRepo {
+	return &mockBlacklistRepo{revokedJTIs: make(map[string]bool)}
+}
+
+func (m *mockBlacklistRepo) Revoke(_ context.Context, jti string, _ time.Time) error {
+	m.revokedJTIs[jti] = true
+	return nil
+}
+
+func (m *mockBlacklistRepo) IsRevoked(_ context.Context, jti string) (bool, error) {
+	return m.revokedJTIs[jti], nil
+}
+
+func (m *mockBlacklistRepo) DeleteExpired(_ context.Context) error {
+	return nil
+}
+
+func TestAuthMiddleware_RevokedToken_Returns401(t *testing.T) {
+	authSvc := newTestAuthService()
+	blacklist := newMockBlacklist()
+
+	_, token, err := authSvc.Register(context.Background(), "test@example.com", "secureP@ss1", "Test User")
+	if err != nil {
+		t.Fatalf("register failed: %v", err)
+	}
+
+	// Parse the token to get the JTI, then mark it as revoked
+	claims, err := authSvc.ValidateToken(token)
+	if err != nil {
+		t.Fatalf("validate failed: %v", err)
+	}
+	blacklist.revokedJTIs[claims.ID] = true
+
+	handler := Auth(authSvc, blacklist)(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		t.Error("handler should not be called with revoked token")
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
+	req.AddCookie(&http.Cookie{Name: "token", Value: token})
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401, got %d", rec.Code)
+	}
+
+	// Verify the response body contains TOKEN_REVOKED
+	body := rec.Body.String()
+	if !strings.Contains(body, "TOKEN_REVOKED") {
+		t.Errorf("expected TOKEN_REVOKED error code in body, got %s", body)
+	}
+}
+
+func TestAuthMiddleware_ValidToken_NotRevoked_Passes(t *testing.T) {
+	authSvc := newTestAuthService()
+	blacklist := newMockBlacklist()
+
+	user, token, err := authSvc.Register(context.Background(), "test@example.com", "secureP@ss1", "Test User")
+	if err != nil {
+		t.Fatalf("register failed: %v", err)
+	}
+
+	var capturedUserID uuid.UUID
+	var userIDFound bool
+
+	handler := Auth(authSvc, blacklist)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedUserID, userIDFound = UserIDFromContext(r.Context())
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
+	req.AddCookie(&http.Cookie{Name: "token", Value: token})
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+	if !userIDFound {
+		t.Error("user ID not found in context")
+	}
+	if capturedUserID != user.ID {
+		t.Errorf("expected user ID %s, got %s", user.ID, capturedUserID)
 	}
 }
 

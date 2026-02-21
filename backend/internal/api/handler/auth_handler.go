@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -121,7 +122,16 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 }
 
 // Logout handles POST /auth/logout.
-func (h *AuthHandler) Logout(w http.ResponseWriter, _ *http.Request) {
+func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
+	cookie, err := r.Cookie("token")
+	if err == nil && cookie.Value != "" {
+		// Best-effort blacklist — always clear cookie regardless of outcome
+		if logoutErr := h.authService.Logout(r.Context(), cookie.Value); logoutErr != nil {
+			slog.WarnContext(r.Context(), "failed to blacklist token on logout",
+				"error", logoutErr,
+			)
+		}
+	}
 	http.SetCookie(w, &http.Cookie{
 		Name:     "token",
 		Value:    "",
