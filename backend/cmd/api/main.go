@@ -13,13 +13,17 @@ import (
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/riverqueue/river"
 	actionadapter "github.com/zakari/hopeitworks/backend/internal/adapter/action"
+	discordadapter "github.com/zakari/hopeitworks/backend/internal/adapter/discord"
 	dockeradapter "github.com/zakari/hopeitworks/backend/internal/adapter/docker"
 	hbadapter "github.com/zakari/hopeitworks/backend/internal/adapter/handlebars"
 	pgadapter "github.com/zakari/hopeitworks/backend/internal/adapter/postgres"
 	riveradapter "github.com/zakari/hopeitworks/backend/internal/adapter/river"
+	webhookadapter "github.com/zakari/hopeitworks/backend/internal/adapter/webhook"
 	"github.com/zakari/hopeitworks/backend/internal/api/handler"
 	authmw "github.com/zakari/hopeitworks/backend/internal/api/middleware"
 	internalconfig "github.com/zakari/hopeitworks/backend/internal/config"
+	"github.com/zakari/hopeitworks/backend/internal/domain/model"
+	"github.com/zakari/hopeitworks/backend/internal/domain/port"
 	"github.com/zakari/hopeitworks/backend/internal/domain/service"
 	pkglog "github.com/zakari/hopeitworks/backend/pkg/log"
 )
@@ -127,11 +131,6 @@ func run() error {
 	userService := service.NewUserService(userRepo)
 	userHandler := handler.NewUserHandler(userService)
 
-	// Notification configs
-	notificationConfigRepo := pgadapter.NewNotificationConfigRepository(queries)
-	notificationConfigService := service.NewNotificationConfigService(notificationConfigRepo)
-	notificationHandler := handler.NewNotificationHandler(notificationConfigService)
-
 	// Application-wide context for background services
 	appCtx, appCancel := context.WithCancel(ctx)
 	defer appCancel()
@@ -226,7 +225,30 @@ func run() error {
 		}()
 	}
 
-	server := handler.NewServer(authHandler, projectHandler, userHandler, epicHandler, storyHandler, promptTemplateHandler, runHandler, pipelineConfigHandler, notificationHandler)
+	// Notification configs
+	notificationConfigRepo := pgadapter.NewNotificationConfigRepository(queries)
+	notificationConfigService := service.NewNotificationConfigService(notificationConfigRepo)
+	notificationHandler := handler.NewNotificationHandler(notificationConfigService)
+
+	// Notification dispatcher (background goroutine)
+	notifiers := map[string]port.Notifier{
+		model.ChannelTypeDiscord: discordadapter.NewNotifier(),
+		model.ChannelTypeWebhook: webhookadapter.NewNotifier(),
+	}
+	notificationDispatcher := service.NewNotificationDispatcher(eventBus, notificationConfigRepo, projectRepo, notifiers)
+	notificationDispatcher.Start(appCtx)
+	logger.Info("notification dispatcher started")
+
+	// SSE handler for real-time event streaming
+	sseHandler := handler.NewSSEHandler(eventBus, eventRepo, projectUserRepo, logger)
+
+	// Epic run orchestration
+	epicRunRepo := pgadapter.NewEpicRunRepo(queries)
+	parallelGroupExecutor := service.NewParallelGroupExecutor(epicRunRepo, runService, pipelineExecutor, eventRepo, logger)
+	epicRunService := service.NewEpicRunService(epicRunRepo, storyRepo, epicRepo, schedulerService, parallelGroupExecutor, eventRepo, logger)
+	epicRunHandler := handler.NewEpicRunHandler(epicRunService)
+
+	server := handler.NewServer(authHandler, projectHandler, userHandler, epicHandler, storyHandler, promptTemplateHandler, runHandler, pipelineConfigHandler, notificationHandler, epicRunHandler)
 
 	// Project user handler
 	projectUserHandler := handler.NewProjectUserHandler(projectUserService)
@@ -247,6 +269,9 @@ func run() error {
 	})
 
 	handler.HandlerFromMuxWithBaseURL(server, r, "/api/v1")
+
+	// SSE endpoint for real-time event streaming
+	r.Get("/api/v1/events/stream", sseHandler.ServeHTTP)
 
 	// Mount project_users routes (manually registered, not in OpenAPI spec yet)
 	r.Route("/api/v1/projects/{id}/users", func(r chi.Router) {
