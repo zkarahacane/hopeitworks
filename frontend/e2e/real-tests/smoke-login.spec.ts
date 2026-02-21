@@ -67,7 +67,13 @@ test.describe('Auth smoke tests (real backend)', () => {
     await page.goto('/login')
 
     await page.getByLabel(/email/i).fill(SEED_USERS.admin.email)
-    await page.getByLabel(/password/i).fill('this-is-the-wrong-password')
+
+    // PrimeVue Password wraps the input — fall back to CSS selector if getByLabel fails
+    const pwByLabel = page.getByLabel(/password/i)
+    const pwBySelector = page.locator('input[type="password"]')
+    const pwField = (await pwByLabel.count()) > 0 ? pwByLabel : pwBySelector
+    await pwField.fill('this-is-the-wrong-password')
+
     await page.getByRole('button', { name: /sign in|log in|login/i }).click()
 
     // The form should remain on /login and show an error
@@ -132,7 +138,6 @@ test.describe('Auth smoke tests (real backend)', () => {
    */
   test('AUDIT: /auth/me does not return role field (known bug)', async ({
     context,
-    request,
   }) => {
     test.info().annotations.push({
       type: 'known-bug',
@@ -146,8 +151,9 @@ test.describe('Auth smoke tests (real backend)', () => {
     // Login via API to get the session cookie set on the browser context
     await loginViaAPI(context, 'admin')
 
-    // Call /auth/me with the authenticated session
-    const response = await request.get('/api/v1/auth/me')
+    // Use context.request so the session cookie set by loginViaAPI is applied.
+    // The standalone `request` fixture has a separate cookie jar and won't be authenticated.
+    const response = await context.request.get('/api/v1/auth/me')
     expect(response.status(), '/auth/me should return 200 for authenticated user').toBe(200)
 
     const body = await response.json()

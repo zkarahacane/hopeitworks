@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { loginViaAPI, loginViaUI, SEED_USERS } from './helpers/auth'
+import { loginViaAPI } from './helpers/auth'
 import { LogCollector } from './helpers/log-collector'
 
 const TODO_APP_ID = '00000000-0000-0000-0000-000000000101'
@@ -24,8 +24,8 @@ test.describe('smoke: navigation', () => {
     await loginViaAPI(context, 'admin')
     await page.goto('/')
 
-    // Click the sidebar link to projects
-    await page.getByRole('link', { name: /projects/i }).first().click()
+    // Sidebar uses PrimeVue Button components, not <a> links
+    await page.getByRole('button', { name: /projects/i }).first().click()
 
     await expect(page).toHaveURL(/\/projects/)
   })
@@ -34,7 +34,8 @@ test.describe('smoke: navigation', () => {
     await loginViaAPI(context, 'admin')
     await page.goto('/')
 
-    await page.getByRole('link', { name: /approvals/i }).first().click()
+    // Sidebar uses PrimeVue Button components, not <a> links
+    await page.getByRole('button', { name: /approvals/i }).first().click()
 
     await expect(page).toHaveURL(/\/approvals/)
   })
@@ -46,18 +47,19 @@ test.describe('smoke: navigation', () => {
     // Verify we land on the project detail page
     await expect(page).toHaveURL(new RegExp(TODO_APP_ID))
 
+    // PrimeVue TabMenu renders items as <a> with role="tab", not role="link"
     // Navigate to board tab
-    const boardTab = page.getByRole('link', { name: /board/i })
+    const boardTab = page.getByRole('tab', { name: /board/i })
     await boardTab.first().click()
     await expect(page).toHaveURL(new RegExp(`${TODO_APP_ID}/board`))
 
     // Navigate to pipeline tab
-    const pipelineTab = page.getByRole('link', { name: /pipeline/i })
+    const pipelineTab = page.getByRole('tab', { name: /pipeline/i })
     await pipelineTab.first().click()
     await expect(page).toHaveURL(new RegExp(`${TODO_APP_ID}/pipeline`))
 
     // Navigate to templates tab
-    const templatesTab = page.getByRole('link', { name: /templates/i })
+    const templatesTab = page.getByRole('tab', { name: /templates/i })
     await templatesTab.first().click()
     await expect(page).toHaveURL(new RegExp(`${TODO_APP_ID}/templates`))
   })
