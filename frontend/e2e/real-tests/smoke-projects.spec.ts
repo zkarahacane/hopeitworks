@@ -34,9 +34,9 @@ test.describe('Projects smoke tests (real backend)', () => {
     await loginViaUI(page, 'admin')
     await page.goto('/projects')
 
-    // Wait for the project list to render
-    await expect(page.getByText('Todo App')).toBeVisible({ timeout: 10000 })
-    await expect(page.getByText('E-commerce API')).toBeVisible({ timeout: 5000 })
+    // Wait for the project list to render — use row-scoped selectors to avoid strict mode violations
+    await expect(page.getByRole('row', { name: /Todo App/i }).first()).toBeVisible({ timeout: 10000 })
+    await expect(page.getByRole('row', { name: /E-commerce API/i }).first()).toBeVisible({ timeout: 5000 })
   })
 
   test('click project navigates to project detail', async ({ page }) => {
@@ -54,8 +54,9 @@ test.describe('Projects smoke tests (real backend)', () => {
     await loginViaUI(page, 'admin')
     await page.goto(`/projects/${TODO_APP_ID}`)
 
-    // The project name must be visible
-    await expect(page.getByText('Todo App')).toBeVisible({ timeout: 10000 })
+    // The project name appears in h1[data-testid="project-name"] — use testid to avoid strict mode
+    await expect(page.getByTestId('project-name')).toBeVisible({ timeout: 10000 })
+    await expect(page.getByTestId('project-name')).toHaveText('Todo App')
 
     // Some description text should also be present (could be a subheading or paragraph)
     // We look for a non-empty block of text beneath the title rather than a fixed string,

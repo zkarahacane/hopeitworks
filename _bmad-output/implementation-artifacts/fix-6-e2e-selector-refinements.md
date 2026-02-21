@@ -1,6 +1,6 @@
 # Story fix-6: E2E test selector refinements for real backend tests
 
-Status: ready-for-dev
+Status: in-progress
 
 ## Story
 
@@ -51,10 +51,10 @@ After fixing 5 bugs (waves 16-18), the smoke suite went from 19/28 failures to 7
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Read actual component DOM structure (ProjectDetailView tabs, AppShell logout, project overview)
-- [ ] Task 2: Fix smoke-login.spec.ts — ensure `login with dev credentials` uses the same password fallback
-- [ ] Task 3: Fix smoke-login.spec.ts — update logout test to match actual UI (find the logout trigger)
-- [ ] Task 4: Fix smoke-navigation.spec.ts — update tab selectors based on actual ProjectDetailView DOM
-- [ ] Task 5: Fix smoke-navigation.spec.ts — fix back/forward URL assertion (`/` not `/dashboard`)
-- [ ] Task 6: Fix smoke-projects.spec.ts — use `getByTestId('project-name')` or scoped selectors
-- [ ] Task 7: Run `npm run test:e2e:real` and verify all 6 previously failing tests now pass
+- [x] Task 1: Read actual component DOM structure (ProjectDetailView tabs, AppShell logout, project overview)
+- [x] Task 2: Fix smoke-login.spec.ts — ensure `login with dev credentials` uses the same password fallback (verified: already correct in helper and inline code)
+- [x] Task 3: Fix smoke-login.spec.ts — update logout test to match actual UI (added PrimeVue popup Menu to AppHeader with logout item, updated test to click user-menu-button then menuitem)
+- [x] Task 4: Fix smoke-navigation.spec.ts — update tab selectors based on actual ProjectDetailView DOM (verified: `getByRole('tab')` already correct for PrimeVue TabMenu)
+- [x] Task 5: Fix smoke-navigation.spec.ts — fix back/forward URL assertion (verified: regex `/^\/?$|\/dashboard/` already handles both `/` and `/dashboard`)
+- [x] Task 6: Fix smoke-projects.spec.ts — use `getByTestId('project-name')` and row-scoped selectors to avoid strict mode violations
+- [ ] Task 7: Run `npm run test:e2e:real` and verify all 6 previously failing tests now pass (requires running test stack)
