@@ -69,6 +69,32 @@ func (h *CostHandler) GetProjectCosts(w http.ResponseWriter, r *http.Request, pr
 	writeJSON(w, http.StatusOK, resp)
 }
 
+// GetProjectCostSummary handles GET /projects/{projectId}/costs/summary.
+func (h *CostHandler) GetProjectCostSummary(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, params GetProjectCostSummaryParams) {
+	period := "7d"
+	if params.Period != nil {
+		period = string(*params.Period)
+	}
+
+	summary, err := h.service.GetProjectCostSummary(r.Context(), projectID, period)
+	if err != nil {
+		writeErrorResponse(w, err)
+		return
+	}
+
+	resp := CostSummary{
+		TotalCostUsd:       summary.TotalCostUSD,
+		TotalCostWeekUsd:   &summary.TotalCostWeekUSD,
+		TotalCostMonthUsd:  &summary.TotalCostMonthUSD,
+		AvgCostPerStoryUsd: summary.AvgCostPerStory,
+		BudgetLimitUsd:     summary.BudgetLimitUSD,
+		PeriodStart:        summary.PeriodStart.UTC(),
+		PeriodEnd:          summary.PeriodEnd.UTC(),
+	}
+
+	writeJSON(w, http.StatusOK, resp)
+}
+
 // GetStoryCosts handles GET /projects/{projectId}/stories/{storyId}/costs.
 func (h *CostHandler) GetStoryCosts(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, storyID StoryIdPath) {
 	summary, err := h.service.GetStoryCosts(r.Context(), projectID, storyID)

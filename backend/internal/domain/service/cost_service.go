@@ -143,6 +143,71 @@ func (s *CostService) GetProjectCosts(ctx context.Context, projectID uuid.UUID, 
 	}, nil
 }
 
+// GetProjectCostSummary returns a simplified cost summary for a project.
+// It populates total_cost_usd for the selected period, plus week and month totals
+// and average cost per story, matching the CostSummary API schema.
+func (s *CostService) GetProjectCostSummary(ctx context.Context, projectID uuid.UUID, period string) (*model.CostSummary, error) {
+	// Verify project exists
+	project, err := s.projectRepo.GetByID(ctx, projectID)
+	if err != nil {
+		return nil, err
+	}
+
+	if period == "" {
+		period = "7d"
+	}
+
+	since, err := parsePeriod(period)
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now().UTC()
+
+	// Fetch cost for the requested period
+	totalCost, _, _, err := s.costRepo.SumCostByProject(ctx, projectID, since)
+	if err != nil {
+		return nil, err
+	}
+
+	// Fetch week cost
+	weekCost, _, _, err := s.costRepo.SumCostByProject(ctx, projectID, now.AddDate(0, 0, -7))
+	if err != nil {
+		return nil, err
+	}
+
+	// Fetch month cost
+	monthCost, _, _, err := s.costRepo.SumCostByProject(ctx, projectID, now.AddDate(0, 0, -30))
+	if err != nil {
+		return nil, err
+	}
+
+	// Compute average cost per story from the requested period
+	byStory, err := s.costRepo.ListCostsByProjectByStory(ctx, projectID, since)
+	if err != nil {
+		return nil, err
+	}
+
+	var avgCostPerStory float64
+	if len(byStory) > 0 {
+		var total float64
+		for _, s := range byStory {
+			total += s.TotalCost
+		}
+		avgCostPerStory = total / float64(len(byStory))
+	}
+
+	return &model.CostSummary{
+		TotalCostUSD:      totalCost,
+		TotalCostWeekUSD:  weekCost,
+		TotalCostMonthUSD: monthCost,
+		AvgCostPerStory:   avgCostPerStory,
+		BudgetLimitUSD:    project.MaxBudget,
+		PeriodStart:       since,
+		PeriodEnd:         now,
+	}, nil
+}
+
 // GetStoryCosts returns aggregated cost data for a story across all runs.
 func (s *CostService) GetStoryCosts(ctx context.Context, projectID, storyID uuid.UUID) (*model.StoryCostSummary, error) {
 	// Verify story exists and belongs to project

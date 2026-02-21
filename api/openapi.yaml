@@ -1206,7 +1206,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ProjectCostSummary"
+                $ref: "#/components/schemas/CostSummary"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "404":

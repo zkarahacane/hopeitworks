@@ -224,6 +224,11 @@ func (s *Server) GetProjectCosts(w http.ResponseWriter, r *http.Request, project
 	s.costs.GetProjectCosts(w, r, projectID, params)
 }
 
+// GetProjectCostSummary delegates to CostHandler.
+func (s *Server) GetProjectCostSummary(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, params GetProjectCostSummaryParams) {
+	s.costs.GetProjectCostSummary(w, r, projectID, params)
+}
+
 // GetStoryCosts delegates to CostHandler.
 func (s *Server) GetStoryCosts(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, storyID StoryIdPath) {
 	s.costs.GetStoryCosts(w, r, projectID, storyID)

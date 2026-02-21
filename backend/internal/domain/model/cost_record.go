@@ -51,6 +51,17 @@ func ComputeCostUSD(model string, inputTokens, outputTokens int64) (float64, boo
 	return cost, true
 }
 
+// CostSummary holds the simplified cost summary returned by the /costs/summary endpoint.
+type CostSummary struct {
+	TotalCostUSD      float64
+	TotalCostWeekUSD  float64
+	TotalCostMonthUSD float64
+	AvgCostPerStory   float64
+	BudgetLimitUSD    *float64
+	PeriodStart       time.Time
+	PeriodEnd         time.Time
+}
+
 // ProjectCostSummary holds aggregated cost data for a project over a time period.
 type ProjectCostSummary struct {
 	TotalCost   float64
