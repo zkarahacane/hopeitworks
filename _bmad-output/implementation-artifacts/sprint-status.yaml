@@ -147,7 +147,7 @@ development_status:
   # Epic 10: Reference Test Project & Validation
   epic-10: in-progress
   10-1-todo-app-reference-project-structure: backlog
-  10-2-todo-app-ci-pipeline-seed-data: backlog
+  10-2-todo-app-ci-pipeline-seed-data: review
   10-3-pipeline-validation-stories-integration-test: backlog
   epic-10-retrospective: optional
 

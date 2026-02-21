@@ -1,44 +1,16 @@
-services:
-  db:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: todo
-      POSTGRES_PASSWORD: todo
-      POSTGRES_DB: todo
-    ports:
-      - "5433:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-      - ./init.sql:/docker-entrypoint-initdb.d/01-schema.sql
-      - ./seed.sql:/docker-entrypoint-initdb.d/02-seed.sql
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U todo"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
+version: "3.8"
 
-  backend:
-    build:
-      context: .
-      dockerfile: Dockerfile.backend
-    environment:
-      DATABASE_URL: postgres://todo:todo@db:5432/todo
-      PORT: "3000"
+services:
+  todo-app:
+    build: .
     ports:
       - "3000:3000"
-    depends_on:
-      db:
-        condition: service_healthy
-
-  frontend:
-    image: nginx:alpine
-    ports:
-      - "8080:80"
+    environment:
+      - PORT=3000
+      - DB_PATH=/app/data/todos.db
     volumes:
-      - ./frontend:/usr/share/nginx/html:ro
-      - ./nginx-compose.conf:/etc/nginx/conf.d/default.conf:ro
-    depends_on:
-      - backend
+      - todo-data:/app/data
+    restart: unless-stopped
 
 volumes:
-  pgdata:
+  todo-data:

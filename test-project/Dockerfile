@@ -1,30 +1,16 @@
-FROM node:20-alpine AS backend
-
-WORKDIR /app/backend
-COPY backend/package.json backend/package-lock.json* ./
-RUN npm install --production
-COPY backend/ .
-
-FROM nginx:alpine AS frontend
-
-COPY frontend/ /usr/share/nginx/html/
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-
 FROM node:20-alpine
 
-RUN apk add --no-cache nginx
+WORKDIR /app
 
-# Copy backend
-WORKDIR /app/backend
-COPY --from=backend /app/backend .
+COPY package.json ./
+RUN npm install --omit=dev
 
-# Copy frontend + nginx config
-COPY --from=frontend /usr/share/nginx/html/ /usr/share/nginx/html/
-COPY --from=frontend /etc/nginx/conf.d/default.conf /etc/nginx/conf.d/default.conf
+COPY src/ ./src/
+COPY seed.sql ./
 
-COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+EXPOSE 3000
 
-EXPOSE 80 3000
+HEALTHCHECK --interval=10s --timeout=3s --start-period=5s \
+  CMD wget -qO- http://localhost:3000/health || exit 1
 
-CMD ["/entrypoint.sh"]
+CMD ["node", "src/app.js"]

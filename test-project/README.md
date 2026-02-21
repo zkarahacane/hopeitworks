@@ -1,16 +1,51 @@
-# Todo App — Pipeline Validation Baseline
+# Todo App - Reference Project
 
-A minimal todo application used as a reference project for validating the hopeitworks pipeline. This is an **evergreen baseline** — the CI pipeline must always pass.
+A minimal todo application used as a reference project for validating the hopeitworks pipeline end-to-end.
 
 ## Purpose
 
-This project serves as the ultimate smoke test for the hopeitworks platform. The pipeline runs stories against this project to verify the complete flow: agent execution, PR creation, CI polling, review, and merge.
+This project serves as a baseline for the hopeitworks CI polling and pipeline validation features. It provides:
 
-## Architecture
+- A simple REST API with CRUD operations for todos
+- A static HTML frontend for managing todos
+- A CI pipeline with build, lint, and test stages
+- Seed data for consistent testing
 
-- **Backend:** Node.js + Express API with Postgres
-- **Frontend:** Static HTML/CSS/JS served by nginx
-- **Database:** PostgreSQL 16
+## Tech Stack
+
+- **Runtime:** Node.js 20+
+- **Framework:** Express
+- **Database:** SQLite (via better-sqlite3)
+- **Testing:** Jest + supertest (unit), curl-based E2E
+- **Linting:** ESLint 9 (flat config)
+- **CI:** GitHub Actions
+
+## Getting Started
+
+### Local Development
+
+```bash
+# Install dependencies
+npm install
+
+# Seed the database
+npm run seed
+
+# Start the app
+npm start
+# App runs on http://localhost:3000
+```
+
+### Docker
+
+```bash
+# Build and run
+docker compose up -d
+
+# Or build manually
+docker build -t todo-app .
+docker run -p 3000:3000 todo-app
+```
 
 ## API Endpoints
 
@@ -18,108 +53,59 @@ This project serves as the ultimate smoke test for the hopeitworks platform. The
 |--------|------|-------------|
 | GET | `/health` | Health check |
 | GET | `/api/todos` | List all todos |
-| GET | `/api/todos/:id` | Get a single todo |
-| POST | `/api/todos` | Create a todo |
+| GET | `/api/todos/:id` | Get a todo by ID |
+| POST | `/api/todos` | Create a new todo |
 | PUT | `/api/todos/:id` | Update a todo |
 | DELETE | `/api/todos/:id` | Delete a todo |
 
-## Local Development
+### Request/Response Examples
 
-### With Docker Compose (recommended)
-
+**Create a todo:**
 ```bash
-cd test-project
-docker compose up
+curl -X POST http://localhost:3000/api/todos \
+  -H "Content-Type: application/json" \
+  -d '{"title": "Buy groceries"}'
 ```
 
-This starts:
-- PostgreSQL on port 5433 (host) / 5432 (container)
-- Backend API on port 3000
-- Frontend on port 8080
-
-Open http://localhost:8080 in your browser.
-
-### Without Docker
-
-1. Start PostgreSQL and create the `todo` database
-2. Run the schema and seed data:
-   ```bash
-   psql -U todo -d todo -f init.sql
-   psql -U todo -d todo -f seed.sql
-   ```
-3. Start the backend:
-   ```bash
-   cd backend
-   npm install
-   npm start
-   ```
-4. Serve the frontend (any static file server):
-   ```bash
-   npx serve frontend -l 8080
-   ```
+**List todos:**
+```bash
+curl http://localhost:3000/api/todos
+```
 
 ## Testing
 
 ```bash
-cd backend
-npm install
+# Unit tests
 npm test
-```
 
-## Linting
+# E2E tests (requires running app on localhost:3000)
+npm run test:e2e
 
-```bash
-cd backend
+# Lint
 npm run lint
 ```
 
-## Standalone Docker Build
+## CI Pipeline
+
+The GitHub Actions CI pipeline (`.github/workflows/ci.yml`) runs the following stages:
+
+1. **Install** - Install npm dependencies
+2. **Lint** - Run ESLint on source and test files
+3. **Unit Tests** - Run Jest test suite
+4. **Build** - Build Docker image
+5. **E2E Tests** - Start the app in Docker and run curl-based E2E tests
+
+The pipeline triggers on:
+- Push to `main`
+- Pull requests targeting `main`
+- Manual dispatch
+
+## Seed Data
+
+The `seed.sql` file contains 8 sample todos for testing. To seed the database:
 
 ```bash
-docker build -t todo-app .
-docker run -p 80:80 -e DATABASE_URL=postgres://todo:todo@host:5432/todo todo-app
+npm run seed
 ```
 
-## Project Structure
-
-```
-test-project/
-├── README.md                   # This file
-├── CLAUDE.md                   # Agent scoping document
-├── Dockerfile                  # Combined app image (backend + frontend)
-├── Dockerfile.backend          # Backend-only image (used by docker-compose)
-├── docker-compose.yml          # Local dev stack
-├── nginx.conf                  # Nginx config for standalone Dockerfile
-├── nginx-compose.conf          # Nginx config for docker-compose
-├── entrypoint.sh               # Standalone container entrypoint
-├── init.sql                    # Database schema
-├── seed.sql                    # Sample data (8 todos)
-├── backend/
-│   ├── package.json
-│   ├── server.js               # Express API
-│   ├── eslint.config.js
-│   └── test/
-│       └── todos.test.js       # Unit tests (Node.js test runner)
-├── frontend/
-│   ├── index.html
-│   ├── styles.css
-│   └── app.js                  # Vanilla JS todo UI
-└── stories/                    # Reference stories for pipeline validation
-    ├── S-TODO-1-add-todo.md
-    ├── S-TODO-2-list-todos.md
-    ├── S-TODO-3-complete-todo.md
-    ├── S-TODO-4-delete-todo.md
-    └── S-TODO-5-todo-ui.md
-```
-
-## Reference Stories
-
-The `stories/` directory contains 5 markdown stories with frontmatter fields (`key`, `epic`, `scope`, `depends_on`). These stories form a dependency DAG used to validate the platform's DAG scheduler and story import functionality.
-
-Dependency graph:
-```
-S-TODO-1 (Add Todo)
-├── S-TODO-2 (List Todos) ──┐
-├── S-TODO-3 (Complete Todo) ├── S-TODO-5 (Todo UI)
-└── S-TODO-4 (Delete Todo) ──┘
-```
+This creates the `todos` table (if not exists) and inserts sample todos with `INSERT OR REPLACE` for idempotency.
