@@ -75,18 +75,21 @@ type PipelineConfig struct {
 }
 
 type Project struct {
-	ID           uuid.UUID      `json:"id"`
-	Name         string         `json:"name"`
-	Description  pgtype.Text    `json:"description"`
-	OwnerID      pgtype.UUID    `json:"owner_id"`
-	RepoUrl      pgtype.Text    `json:"repo_url"`
-	GitProvider  string         `json:"git_provider"`
-	GitTokenEnv  pgtype.Text    `json:"git_token_env"`
-	AgentRuntime string         `json:"agent_runtime"`
-	DefaultModel pgtype.Text    `json:"default_model"`
-	MaxBudget    pgtype.Numeric `json:"max_budget"`
-	CreatedAt    time.Time      `json:"created_at"`
-	UpdatedAt    time.Time      `json:"updated_at"`
+	ID                   uuid.UUID      `json:"id"`
+	Name                 string         `json:"name"`
+	Description          pgtype.Text    `json:"description"`
+	OwnerID              pgtype.UUID    `json:"owner_id"`
+	RepoUrl              pgtype.Text    `json:"repo_url"`
+	GitProvider          string         `json:"git_provider"`
+	GitTokenEnv          pgtype.Text    `json:"git_token_env"`
+	AgentRuntime         string         `json:"agent_runtime"`
+	DefaultModel         pgtype.Text    `json:"default_model"`
+	MaxBudget            pgtype.Numeric `json:"max_budget"`
+	CreatedAt            time.Time      `json:"created_at"`
+	UpdatedAt            time.Time      `json:"updated_at"`
+	CircuitBreakerCount  int32          `json:"circuit_breaker_count"`
+	CircuitBreakerActive bool           `json:"circuit_breaker_active"`
+	CircuitBreakerMax    int32          `json:"circuit_breaker_max"`
 }
 
 type ProjectUser struct {

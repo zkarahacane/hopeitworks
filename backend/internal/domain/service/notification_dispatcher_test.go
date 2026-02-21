@@ -76,6 +76,14 @@ func (m *mockProjectRepo) Update(_ context.Context, p *model.Project) (*model.Pr
 
 func (m *mockProjectRepo) Delete(_ context.Context, _ uuid.UUID) error { return nil }
 
+func (m *mockProjectRepo) IncrementCircuitBreakerCount(_ context.Context, id uuid.UUID) (*model.Project, error) {
+	return &model.Project{ID: id}, nil
+}
+
+func (m *mockProjectRepo) ResetCircuitBreaker(_ context.Context, id uuid.UUID) (*model.Project, error) {
+	return &model.Project{ID: id}, nil
+}
+
 type mockNotifier struct {
 	mu    sync.Mutex
 	calls int
