@@ -8,6 +8,17 @@ type Config struct {
 	Database DatabaseConfig `yaml:"database"`
 	Docker   DockerConfig   `yaml:"docker"`
 	Log      LogConfig      `yaml:"logging"`
+	SMTP     SMTPConfig     `yaml:"smtp"`
+}
+
+// SMTPConfig holds outbound email relay settings.
+type SMTPConfig struct {
+	Host        string `yaml:"host"`
+	Port        int    `yaml:"port"`
+	From        string `yaml:"from"`
+	Username    string `yaml:"username"`
+	Password    string `yaml:"password"`
+	FrontendURL string `yaml:"frontend_url"`
 }
 
 // ServerConfig holds HTTP server settings.

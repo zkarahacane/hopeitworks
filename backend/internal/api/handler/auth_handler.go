@@ -163,6 +163,68 @@ func (h *AuthHandler) setTokenCookie(w http.ResponseWriter, token string) {
 	})
 }
 
+type forgotPasswordRequest struct {
+	Email string `json:"email"`
+}
+
+type resetPasswordRequest struct {
+	Token    string `json:"token"`
+	Password string `json:"password"`
+}
+
+type messageResponse struct {
+	Message string `json:"message"`
+}
+
+// ForgotPassword handles POST /auth/forgot-password.
+func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
+	var req forgotPasswordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "Invalid request body")
+		return
+	}
+	if req.Email == "" {
+		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "email is required")
+		return
+	}
+
+	// Ignore error — always return 202 to prevent enumeration.
+	_ = h.authService.ForgotPassword(r.Context(), req.Email)
+
+	writeJSON(w, http.StatusAccepted, messageResponse{
+		Message: "If this email is registered, a reset link has been sent",
+	})
+}
+
+// ResetPassword handles POST /auth/reset-password.
+func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
+	var req resetPasswordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "Invalid request body")
+		return
+	}
+	if req.Token == "" || req.Password == "" {
+		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "token and password are required")
+		return
+	}
+
+	if err := h.authService.ResetPassword(r.Context(), req.Token, req.Password); err != nil {
+		switch {
+		case errors.Is(err, service.ErrResetTokenExpired):
+			writeError(w, http.StatusBadRequest, "RESET_TOKEN_EXPIRED", "The reset link has expired. Please request a new one.")
+		case errors.Is(err, service.ErrResetTokenInvalid):
+			writeError(w, http.StatusBadRequest, "RESET_TOKEN_INVALID", "The reset token is invalid or has already been used.")
+		case errors.Is(err, service.ErrValidation):
+			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "Password must be at least 8 characters.")
+		default:
+			writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "An unexpected error occurred.")
+		}
+		return
+	}
+
+	writeJSON(w, http.StatusOK, messageResponse{Message: "Password updated successfully"})
+}
+
 func toUserResponse(u *model.User) userResponse {
 	return userResponse{
 		ID:        u.ID.String(),

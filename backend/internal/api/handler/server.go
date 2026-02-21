@@ -45,6 +45,16 @@ func (s *Server) GetCurrentUser(w http.ResponseWriter, r *http.Request) {
 	s.auth.Me(w, r)
 }
 
+// ForgotPassword delegates to AuthHandler.
+func (s *Server) ForgotPassword(w http.ResponseWriter, r *http.Request) {
+	s.auth.ForgotPassword(w, r)
+}
+
+// ResetPassword delegates to AuthHandler.
+func (s *Server) ResetPassword(w http.ResponseWriter, r *http.Request) {
+	s.auth.ResetPassword(w, r)
+}
+
 // ListProjects delegates to ProjectHandler.
 func (s *Server) ListProjects(w http.ResponseWriter, r *http.Request, params ListProjectsParams) {
 	s.projects.ListProjects(w, r, params)

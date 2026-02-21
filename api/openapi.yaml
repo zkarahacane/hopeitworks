@@ -126,6 +126,50 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
+  /auth/forgot-password:
+    post:
+      operationId: forgotPassword
+      summary: Request a password reset link via email
+      tags: [auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ForgotPasswordRequest"
+      responses:
+        "202":
+          description: Reset email dispatched (always returned — prevents email enumeration)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /auth/reset-password:
+    post:
+      operationId: resetPassword
+      summary: Set a new password using a reset token
+      tags: [auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetPasswordRequest"
+      responses:
+        "200":
+          description: Password updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
   # ── Users ───────────────────────────────────────────────────────────────
   /users:
     get:
@@ -1645,6 +1689,37 @@ components:
           type: string
           format: password
           example: secureP@ss1
+
+    ForgotPasswordRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+          example: user@example.com
+
+    ResetPasswordRequest:
+      type: object
+      required: [token, password]
+      properties:
+        token:
+          type: string
+          description: The reset token received by email
+          example: "dGVzdC10b2tlbi1mb3ItcmVzZXQ="
+        password:
+          type: string
+          minLength: 8
+          description: The new password (minimum 8 characters)
+          example: "newSecurePass123"
+
+    MessageResponse:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+          example: "If this email is registered, a reset link has been sent"
 
     # ── User ───────────────────────────────────────────────────────────
     User:

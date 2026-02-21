@@ -2,7 +2,10 @@ package service
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -17,6 +20,8 @@ var (
 	ErrInvalidCredentials = errors.New("invalid credentials")
 	ErrEmailAlreadyExists = errors.New("email already exists")
 	ErrValidation         = errors.New("validation error")
+	ErrResetTokenExpired  = errors.New("reset token expired")
+	ErrResetTokenInvalid  = errors.New("reset token invalid or already used")
 )
 
 // Claims represents the JWT claims payload.
@@ -29,13 +34,27 @@ type Claims struct {
 // AuthService handles user authentication logic.
 type AuthService struct {
 	repo          port.UserRepository
+	tokenRepo     port.PasswordResetTokenRepository
+	emailSender   port.EmailSender
+	frontendURL   string
 	jwtSecret     []byte
 	jwtExpiration time.Duration
 }
 
-func NewAuthService(repo port.UserRepository, jwtSecret string, jwtExpiration time.Duration) *AuthService {
+// NewAuthService creates a new AuthService with all dependencies.
+func NewAuthService(
+	repo port.UserRepository,
+	tokenRepo port.PasswordResetTokenRepository,
+	emailSender port.EmailSender,
+	frontendURL string,
+	jwtSecret string,
+	jwtExpiration time.Duration,
+) *AuthService {
 	return &AuthService{
 		repo:          repo,
+		tokenRepo:     tokenRepo,
+		emailSender:   emailSender,
+		frontendURL:   frontendURL,
 		jwtSecret:     []byte(jwtSecret),
 		jwtExpiration: jwtExpiration,
 	}
@@ -125,6 +144,73 @@ func (s *AuthService) JWTExpiration() time.Duration {
 	return s.jwtExpiration
 }
 
+// ForgotPassword generates a reset token and sends an email if the address is registered.
+// Always returns nil to prevent email enumeration.
+func (s *AuthService) ForgotPassword(ctx context.Context, email string) error {
+	if email == "" {
+		return ErrValidation
+	}
+
+	user, err := s.repo.GetByEmail(ctx, email)
+	if err != nil {
+		return nil //nolint:nilerr // intentional: return nil to prevent email enumeration
+	}
+
+	rawToken, err := generateSecureToken()
+	if err != nil {
+		return err
+	}
+
+	expiresAt := time.Now().Add(1 * time.Hour)
+	if _, err := s.tokenRepo.Create(ctx, user.ID, rawToken, expiresAt); err != nil {
+		return err
+	}
+
+	resetLink := fmt.Sprintf("%s/reset-password?token=%s", s.frontendURL, rawToken)
+	return s.emailSender.Send(ctx, port.EmailMessage{
+		To:       user.Email,
+		Subject:  "Reset your HopeItWorks password",
+		HTMLBody: buildResetEmailHTML(user.Name, resetLink),
+	})
+}
+
+// ResetPassword validates the token and updates the user's password.
+func (s *AuthService) ResetPassword(ctx context.Context, rawToken, newPassword string) error {
+	if rawToken == "" || newPassword == "" {
+		return ErrValidation
+	}
+	if len(newPassword) < 8 {
+		return ErrValidation
+	}
+
+	prt, err := s.tokenRepo.GetByToken(ctx, rawToken)
+	if err != nil {
+		return ErrResetTokenInvalid
+	}
+	if prt.IsUsed() {
+		return ErrResetTokenInvalid
+	}
+	if prt.IsExpired() {
+		return ErrResetTokenExpired
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+
+	user, err := s.repo.GetByID(ctx, prt.UserID)
+	if err != nil {
+		return err
+	}
+	user.PasswordHash = string(hash)
+	if _, err := s.repo.Update(ctx, user); err != nil {
+		return err
+	}
+
+	return s.tokenRepo.MarkUsed(ctx, prt.ID)
+}
+
 func (s *AuthService) generateToken(userID uuid.UUID, role model.Role) (string, error) {
 	now := time.Now()
 	claims := &Claims{
@@ -137,6 +223,32 @@ func (s *AuthService) generateToken(userID uuid.UUID, role model.Role) (string, 
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString(s.jwtSecret)
+}
+
+// generateSecureToken returns a 32-byte URL-safe base64-encoded random token.
+func generateSecureToken() (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return base64.URLEncoding.EncodeToString(b), nil
+}
+
+// buildResetEmailHTML returns a minimal HTML email body with the reset link.
+func buildResetEmailHTML(name, resetLink string) string {
+	return fmt.Sprintf(`<!DOCTYPE html>
+<html>
+<body style="font-family: sans-serif; padding: 24px;">
+  <h2>Password Reset Request</h2>
+  <p>Hi %s,</p>
+  <p>We received a request to reset your HopeItWorks password.
+     Click the button below to set a new password. This link expires in <strong>1 hour</strong>.</p>
+  <p><a href="%s" style="background:#4F46E5;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;">
+    Reset my password
+  </a></p>
+  <p>If you did not request a password reset, you can ignore this email.</p>
+</body>
+</html>`, name, resetLink)
 }
 
 // sqlStateError is an interface for errors that expose a SQL state code.

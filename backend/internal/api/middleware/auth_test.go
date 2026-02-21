@@ -9,11 +9,12 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/zakari/hopeitworks/backend/internal/domain/model"
+	"github.com/zakari/hopeitworks/backend/internal/domain/port"
 	"github.com/zakari/hopeitworks/backend/internal/domain/service"
 )
 
 func newTestAuthService() *service.AuthService {
-	return service.NewAuthService(&noopRepo{}, "test-secret-key", 24*time.Hour)
+	return service.NewAuthService(&noopRepo{}, &noopTokenRepo{}, &noopEmailSender{}, "http://localhost:5173", "test-secret-key", 24*time.Hour)
 }
 
 // noopRepo is a minimal mock repo just for token generation.
@@ -39,6 +40,20 @@ func (r *noopRepo) Update(_ context.Context, _ *model.User) (*model.User, error)
 	return nil, nil
 }
 func (r *noopRepo) Delete(_ context.Context, _ uuid.UUID) error { return nil }
+
+type noopTokenRepo struct{}
+
+func (r *noopTokenRepo) Create(_ context.Context, _ uuid.UUID, _ string, _ time.Time) (*model.PasswordResetToken, error) {
+	return nil, nil
+}
+func (r *noopTokenRepo) GetByToken(_ context.Context, _ string) (*model.PasswordResetToken, error) {
+	return nil, nil
+}
+func (r *noopTokenRepo) MarkUsed(_ context.Context, _ uuid.UUID) error { return nil }
+
+type noopEmailSender struct{}
+
+func (s *noopEmailSender) Send(_ context.Context, _ port.EmailMessage) error { return nil }
 
 func TestAuthMiddleware_ValidToken(t *testing.T) {
 	authSvc := newTestAuthService()
@@ -118,7 +133,7 @@ func TestAuthMiddleware_InvalidToken(t *testing.T) {
 
 func TestAuthMiddleware_ExpiredToken(t *testing.T) {
 	// Create a service with negative expiration for immediately expired tokens
-	expiredSvc := service.NewAuthService(&noopRepo{}, "test-secret-key", -1*time.Hour)
+	expiredSvc := service.NewAuthService(&noopRepo{}, &noopTokenRepo{}, &noopEmailSender{}, "http://localhost:5173", "test-secret-key", -1*time.Hour)
 
 	_, token, err := expiredSvc.Register(context.Background(), "test@example.com", "secureP@ss1", "Test")
 	if err != nil {
