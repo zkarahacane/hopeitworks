@@ -115,6 +115,8 @@ type UpdateProjectParams struct {
 	ID          uuid.UUID
 	Name        *string
 	Description *string
+	MaxBudget   *float64
+	SetBudget   bool // true when max_budget field is explicitly set (allows setting to nil)
 }
 
 // Update validates inputs and updates an existing project.
@@ -138,6 +140,9 @@ func (s *ProjectService) Update(ctx context.Context, params UpdateProjectParams)
 			return nil, errors.NewValidation("description", "must be 1000 characters or less")
 		}
 		existing.Description = params.Description
+	}
+	if params.SetBudget {
+		existing.MaxBudget = params.MaxBudget
 	}
 
 	return s.repo.Update(ctx, existing)

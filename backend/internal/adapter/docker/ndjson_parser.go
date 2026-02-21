@@ -51,5 +51,21 @@ func parseNDJSONLine(line string, runID string, stepID string) *model.LogEvent {
 		}
 	}
 
+	if eventType, ok := data["type"].(string); ok {
+		event.Type = eventType
+	}
+
+	if event.Type == "cost" {
+		if v, ok := data["input_tokens"].(float64); ok {
+			event.InputTokens = int64(v)
+		}
+		if v, ok := data["output_tokens"].(float64); ok {
+			event.OutputTokens = int64(v)
+		}
+		if v, ok := data["model"].(string); ok {
+			event.Model = v
+		}
+	}
+
 	return event
 }

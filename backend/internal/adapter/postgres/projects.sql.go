@@ -26,7 +26,7 @@ func (q *Queries) CountProjects(ctx context.Context) (int64, error) {
 const createProject = `-- name: CreateProject :one
 INSERT INTO projects (name, description, owner_id, repo_url, git_provider, git_token_env, agent_runtime, default_model, max_budget)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-RETURNING id, name, description, owner_id, repo_url, git_provider, git_token_env, agent_runtime, default_model, max_budget, created_at, updated_at
+RETURNING id, name, description, owner_id, repo_url, git_provider, git_token_env, agent_runtime, default_model, max_budget, created_at, updated_at, circuit_breaker_count, circuit_breaker_active, circuit_breaker_max
 `
 
 type CreateProjectParams struct {
@@ -67,6 +67,9 @@ func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) (P
 		&i.MaxBudget,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CircuitBreakerCount,
+		&i.CircuitBreakerActive,
+		&i.CircuitBreakerMax,
 	)
 	return i, err
 }
@@ -80,8 +83,33 @@ func (q *Queries) DeleteProject(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
+const getCircuitBreakerState = `-- name: GetCircuitBreakerState :one
+SELECT id, circuit_breaker_count, circuit_breaker_active, circuit_breaker_max
+FROM projects
+WHERE id = $1
+`
+
+type GetCircuitBreakerStateRow struct {
+	ID                   uuid.UUID `json:"id"`
+	CircuitBreakerCount  int32     `json:"circuit_breaker_count"`
+	CircuitBreakerActive bool      `json:"circuit_breaker_active"`
+	CircuitBreakerMax    int32     `json:"circuit_breaker_max"`
+}
+
+func (q *Queries) GetCircuitBreakerState(ctx context.Context, id uuid.UUID) (GetCircuitBreakerStateRow, error) {
+	row := q.db.QueryRow(ctx, getCircuitBreakerState, id)
+	var i GetCircuitBreakerStateRow
+	err := row.Scan(
+		&i.ID,
+		&i.CircuitBreakerCount,
+		&i.CircuitBreakerActive,
+		&i.CircuitBreakerMax,
+	)
+	return i, err
+}
+
 const getProject = `-- name: GetProject :one
-SELECT id, name, description, owner_id, repo_url, git_provider, git_token_env, agent_runtime, default_model, max_budget, created_at, updated_at FROM projects WHERE id = $1
+SELECT id, name, description, owner_id, repo_url, git_provider, git_token_env, agent_runtime, default_model, max_budget, created_at, updated_at, circuit_breaker_count, circuit_breaker_active, circuit_breaker_max FROM projects WHERE id = $1
 `
 
 func (q *Queries) GetProject(ctx context.Context, id uuid.UUID) (Project, error) {
@@ -100,12 +128,50 @@ func (q *Queries) GetProject(ctx context.Context, id uuid.UUID) (Project, error)
 		&i.MaxBudget,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CircuitBreakerCount,
+		&i.CircuitBreakerActive,
+		&i.CircuitBreakerMax,
+	)
+	return i, err
+}
+
+const incrementCircuitBreakerCount = `-- name: IncrementCircuitBreakerCount :one
+UPDATE projects
+SET circuit_breaker_count = circuit_breaker_count + 1,
+    circuit_breaker_active = CASE
+        WHEN circuit_breaker_count + 1 >= circuit_breaker_max THEN true
+        ELSE circuit_breaker_active
+    END,
+    updated_at = now()
+WHERE id = $1
+RETURNING id, name, description, owner_id, repo_url, git_provider, git_token_env, agent_runtime, default_model, max_budget, created_at, updated_at, circuit_breaker_count, circuit_breaker_active, circuit_breaker_max
+`
+
+func (q *Queries) IncrementCircuitBreakerCount(ctx context.Context, id uuid.UUID) (Project, error) {
+	row := q.db.QueryRow(ctx, incrementCircuitBreakerCount, id)
+	var i Project
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Description,
+		&i.OwnerID,
+		&i.RepoUrl,
+		&i.GitProvider,
+		&i.GitTokenEnv,
+		&i.AgentRuntime,
+		&i.DefaultModel,
+		&i.MaxBudget,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.CircuitBreakerCount,
+		&i.CircuitBreakerActive,
+		&i.CircuitBreakerMax,
 	)
 	return i, err
 }
 
 const listProjects = `-- name: ListProjects :many
-SELECT id, name, description, owner_id, repo_url, git_provider, git_token_env, agent_runtime, default_model, max_budget, created_at, updated_at FROM projects ORDER BY created_at DESC LIMIT $1 OFFSET $2
+SELECT id, name, description, owner_id, repo_url, git_provider, git_token_env, agent_runtime, default_model, max_budget, created_at, updated_at, circuit_breaker_count, circuit_breaker_active, circuit_breaker_max FROM projects ORDER BY created_at DESC LIMIT $1 OFFSET $2
 `
 
 type ListProjectsParams struct {
@@ -135,6 +201,9 @@ func (q *Queries) ListProjects(ctx context.Context, arg ListProjectsParams) ([]P
 			&i.MaxBudget,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.CircuitBreakerCount,
+			&i.CircuitBreakerActive,
+			&i.CircuitBreakerMax,
 		); err != nil {
 			return nil, err
 		}
@@ -144,6 +213,38 @@ func (q *Queries) ListProjects(ctx context.Context, arg ListProjectsParams) ([]P
 		return nil, err
 	}
 	return items, nil
+}
+
+const resetCircuitBreaker = `-- name: ResetCircuitBreaker :one
+UPDATE projects
+SET circuit_breaker_count = 0,
+    circuit_breaker_active = false,
+    updated_at = now()
+WHERE id = $1
+RETURNING id, name, description, owner_id, repo_url, git_provider, git_token_env, agent_runtime, default_model, max_budget, created_at, updated_at, circuit_breaker_count, circuit_breaker_active, circuit_breaker_max
+`
+
+func (q *Queries) ResetCircuitBreaker(ctx context.Context, id uuid.UUID) (Project, error) {
+	row := q.db.QueryRow(ctx, resetCircuitBreaker, id)
+	var i Project
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Description,
+		&i.OwnerID,
+		&i.RepoUrl,
+		&i.GitProvider,
+		&i.GitTokenEnv,
+		&i.AgentRuntime,
+		&i.DefaultModel,
+		&i.MaxBudget,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.CircuitBreakerCount,
+		&i.CircuitBreakerActive,
+		&i.CircuitBreakerMax,
+	)
+	return i, err
 }
 
 const updateProject = `-- name: UpdateProject :one
@@ -159,7 +260,7 @@ SET name = COALESCE($1, name),
     max_budget = COALESCE($9, max_budget),
     updated_at = now()
 WHERE id = $10
-RETURNING id, name, description, owner_id, repo_url, git_provider, git_token_env, agent_runtime, default_model, max_budget, created_at, updated_at
+RETURNING id, name, description, owner_id, repo_url, git_provider, git_token_env, agent_runtime, default_model, max_budget, created_at, updated_at, circuit_breaker_count, circuit_breaker_active, circuit_breaker_max
 `
 
 type UpdateProjectParams struct {
@@ -202,6 +303,9 @@ func (q *Queries) UpdateProject(ctx context.Context, arg UpdateProjectParams) (P
 		&i.MaxBudget,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CircuitBreakerCount,
+		&i.CircuitBreakerActive,
+		&i.CircuitBreakerMax,
 	)
 	return i, err
 }

@@ -4,6 +4,7 @@ set -euo pipefail
 # BMAD Dev Agent Launcher
 #
 # Story lifecycle: dev-story (Opus) → code-review (Sonnet) → merge-story (Opus)
+# Model overrides: --dev=MODEL --review=MODEL --merge=MODEL (default: opus/sonnet/opus)
 # Branching: develop (clone) → feat/story-key (PR targets wave-X)
 #
 # Usage:
@@ -29,12 +30,22 @@ set -euo pipefail
 #   # Monitoring
 #   ./scripts/bmad-dev.sh --status
 #
+#   # Use personal or professional subscription
+#   ./scripts/bmad-dev.sh --story 1-1 --pipeline --perso
+#   ./scripts/bmad-dev.sh --wave 1 --pipeline --pro
+#
+#   # Override models per phase
+#   ./scripts/bmad-dev.sh --story 1-1 --pipeline --dev=sonnet
+#   ./scripts/bmad-dev.sh --wave 1 --pipeline --dev=sonnet --review=haiku --merge=sonnet
+#
 #   # Force rebuild
 #   ./scripts/bmad-dev.sh --build
 #
 # Required env vars:
-#   CLAUDE_CODE_OAUTH_TOKEN - OAuth token for Claude Code
-#   GITHUB_TOKEN            - GitHub token for gh CLI
+#   CLAUDE_CODE_OAUTH_TOKEN      - Default OAuth token for Claude Code
+#   CLAUDE_CODE_OAUTH_TOKEN_PERSO - Personal subscription token (used with --perso)
+#   CLAUDE_CODE_OAUTH_TOKEN_PRO   - Professional subscription token (used with --pro)
+#   GITHUB_TOKEN                  - GitHub token for gh CLI
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
@@ -56,7 +67,11 @@ PHASE=""
 PIPELINE=false
 SETUP=false
 STATUS=false
+SUB_MODE=""
 CLAUDE_ARGS=()
+MODEL_DEV="opus"
+MODEL_REVIEW="sonnet"
+MODEL_MERGE="opus"
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -68,6 +83,11 @@ while [[ $# -gt 0 ]]; do
         --no-merge)  SKIP_MERGE=true; shift ;;
         --setup)     SETUP=true; shift ;;
         --status)    STATUS=true; shift ;;
+        --perso)     SUB_MODE="perso"; shift ;;
+        --pro)       SUB_MODE="pro"; shift ;;
+        --dev=*)     MODEL_DEV="${1#--dev=}"; shift ;;
+        --review=*)  MODEL_REVIEW="${1#--review=}"; shift ;;
+        --merge=*)   MODEL_MERGE="${1#--merge=}"; shift ;;
         -p|--prompt) CLAUDE_ARGS+=("-p" "$2"); shift 2 ;;
         --model)     CLAUDE_ARGS+=("--model" "$2"); shift 2 ;;
         *)           CLAUDE_ARGS+=("$1"); shift ;;
@@ -85,10 +105,10 @@ get_workflow() {
 }
 get_model() {
     case "$1" in
-        dev-story)    echo "opus" ;;
-        code-review)  echo "sonnet" ;;
-        merge-story)  echo "opus" ;;
-        *)            echo "opus" ;;
+        dev-story)    echo "$MODEL_DEV" ;;
+        code-review)  echo "$MODEL_REVIEW" ;;
+        merge-story)  echo "$MODEL_MERGE" ;;
+        *)            echo "$MODEL_DEV" ;;
     esac
 }
 
@@ -96,11 +116,36 @@ get_model() {
 # HELPERS
 # ============================================================
 
+resolve_token() {
+    case "$SUB_MODE" in
+        perso)
+            if [[ -z "${CLAUDE_CODE_OAUTH_TOKEN_PERSO:-}" ]]; then
+                echo -e "${RED}Error: CLAUDE_CODE_OAUTH_TOKEN_PERSO is not set${NC}"
+                exit 1
+            fi
+            CLAUDE_CODE_OAUTH_TOKEN="$CLAUDE_CODE_OAUTH_TOKEN_PERSO"
+            export CLAUDE_CODE_OAUTH_TOKEN
+            ;;
+        pro)
+            if [[ -z "${CLAUDE_CODE_OAUTH_TOKEN_PRO:-}" ]]; then
+                echo -e "${RED}Error: CLAUDE_CODE_OAUTH_TOKEN_PRO is not set${NC}"
+                exit 1
+            fi
+            CLAUDE_CODE_OAUTH_TOKEN="$CLAUDE_CODE_OAUTH_TOKEN_PRO"
+            export CLAUDE_CODE_OAUTH_TOKEN
+            ;;
+    esac
+}
+
 check_token() {
+    resolve_token
     if [[ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]]; then
-        echo -e "${RED}Error: CLAUDE_CODE_OAUTH_TOKEN is not set${NC}"
+        echo -e "${RED}Error: CLAUDE_CODE_OAUTH_TOKEN is not set (use --perso or --pro, or set CLAUDE_CODE_OAUTH_TOKEN)${NC}"
         exit 1
     fi
+    local label="default"
+    [[ -n "$SUB_MODE" ]] && label="$SUB_MODE"
+    echo -e "${CYAN}Subscription: ${label}${NC}"
 }
 
 get_repo_url() {
@@ -145,33 +190,15 @@ stop_container() {
 
 get_wave_stories() {
     local wave="$1"
-    local in_wave=false
-    local in_stories=false
-    while IFS= read -r line; do
-        # Detect wave start: "  wave-N:"
-        if echo "$line" | grep -qE "^  wave-${wave}:"; then
-            in_wave=true
-            in_stories=false
-            continue
-        fi
-        # Detect next wave or end of parallel_waves
-        if $in_wave && echo "$line" | grep -qE "^  wave-[0-9]+:"; then
-            break
-        fi
-        # Detect stories section
-        if $in_wave && echo "$line" | grep -q "stories:"; then
-            in_stories=true
-            continue
-        fi
-        # Extract key values
-        if $in_wave && $in_stories && echo "$line" | grep -qE "^\s+- key:"; then
-            echo "$line" | sed 's/.*key: *//'
-        fi
-        # Stop stories section on non-indented or different section
-        if $in_wave && $in_stories && echo "$line" | grep -qE "^    [a-z]" && ! echo "$line" | grep -qE "^\s+-"; then
-            in_stories=false
-        fi
-    done < "$SPRINT_STATUS"
+    awk -v wave="wave-${wave}" '
+        # Match target wave header (2-space indent)
+        $0 ~ "^  " wave ":" { in_wave=1; next }
+        # Stop at next wave header or any line at wave indent level that is not a child
+        in_wave && /^  wave-[0-9]+:/ { exit }
+        in_wave && /^  [a-z#]/ { exit }
+        # Extract key values (6+ space indent, "- key:")
+        in_wave && /- key:/ { sub(/.*key: */, ""); print }
+    ' "$SPRINT_STATUS"
 }
 
 # Run container in CLONE mode (detached)
@@ -214,6 +241,9 @@ run_clone() {
         -e "CLONE_BRANCH=develop" \
         -e "BASE_BRANCH=${merge_target}" \
         -e "STORY_BRANCH=${story_key}" \
+        -e "MODEL_DEV=${MODEL_DEV}" \
+        -e "MODEL_REVIEW=${MODEL_REVIEW}" \
+        -e "MODEL_MERGE=${MODEL_MERGE}" \
         "${extra_env[@]+"${extra_env[@]}"}" \
         "$IMAGE_NAME" \
         --dangerously-skip-permissions \

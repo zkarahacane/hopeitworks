@@ -40,6 +40,9 @@ func (r *HITLRepo) Create(ctx context.Context, req *model.HITLRequest) (*model.H
 
 	row, err := r.queries.CreateHITLRequest(ctx, params)
 	if err != nil {
+		if isForeignKeyViolation(err) {
+			return nil, apperrors.NewNotFound("run_step", req.RunStepID)
+		}
 		return nil, apperrors.NewInternal("failed to create HITL request", err)
 	}
 	return toDomainHITLRequest(row), nil

@@ -91,7 +91,7 @@ func (h *HITLHandler) RejectHITLRequest(w http.ResponseWriter, r *http.Request, 
 		}
 	}
 
-	req, err := h.service.Reject(r.Context(), hitlRequestID, userID, body.Reason)
+	req, err := h.service.Reject(r.Context(), hitlRequestID, userID, &body.Reason)
 	if err != nil {
 		writeErrorResponse(w, err)
 		return
@@ -102,11 +102,14 @@ func (h *HITLHandler) RejectHITLRequest(w http.ResponseWriter, r *http.Request, 
 // toAPIHITLRequest converts a domain HITLRequest to the API HITLRequest type.
 func toAPIHITLRequest(req *model.HITLRequest) HITLRequest {
 	r := HITLRequest{
-		Id:        req.ID,
-		RunStepId: req.RunStepID,
-		GateType:  req.GateType,
-		Status:    HITLRequestStatus(req.Status),
-		CreatedAt: req.CreatedAt,
+		Id:         req.ID,
+		RunStepId:  req.RunStepID,
+		StepId:     req.RunStepID, // StepId maps to run_step_id in the domain model
+		GateType:   req.GateType,
+		Status:     HITLRequestStatus(req.Status),
+		CreatedAt:  req.CreatedAt,
+		StoryKey:   "",
+		StoryTitle: "",
 	}
 	if req.DiffContent != nil {
 		r.DiffContent = req.DiffContent
@@ -115,7 +118,7 @@ func toAPIHITLRequest(req *model.HITLRequest) HITLRequest {
 		r.ResolvedAt = req.ResolvedAt
 	}
 	if req.ResolvedBy != nil {
-		r.ResolvedBy = req.ResolvedBy
+		r.ReviewerId = req.ResolvedBy
 	}
 	if req.RejectionReason != nil {
 		r.RejectionReason = req.RejectionReason

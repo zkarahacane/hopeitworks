@@ -139,6 +139,14 @@ func (m *mockRunRepoForHITLHandler) UpdateRunStepContainerInfo(_ context.Context
 	return nil, nil
 }
 
+func (m *mockRunRepoForHITLHandler) CreateRetryRunStep(_ context.Context, step *model.RunStep) (*model.RunStep, error) {
+	return step, nil
+}
+
+func (m *mockRunRepoForHITLHandler) ListRetryStepsByParent(_ context.Context, _ uuid.UUID) ([]*model.RunStep, error) {
+	return nil, nil
+}
+
 type mockEventPubForHITLHandler struct{}
 
 func (m *mockEventPubForHITLHandler) Publish(_ context.Context, _ model.Event) error { return nil }

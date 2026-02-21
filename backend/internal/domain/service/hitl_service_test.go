@@ -149,6 +149,14 @@ func (m *mockRunRepoForHITL) UpdateRunStepContainerInfo(_ context.Context, _ uui
 	return nil, nil
 }
 
+func (m *mockRunRepoForHITL) CreateRetryRunStep(_ context.Context, step *model.RunStep) (*model.RunStep, error) {
+	return step, nil
+}
+
+func (m *mockRunRepoForHITL) ListRetryStepsByParent(_ context.Context, _ uuid.UUID) ([]*model.RunStep, error) {
+	return nil, nil
+}
+
 // mockEventPubForHITL implements port.EventPublisher for HITL tests.
 type mockEventPubForHITL struct {
 	events []model.Event
