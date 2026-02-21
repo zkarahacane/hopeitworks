@@ -26,7 +26,7 @@ test.describe('Login Page', () => {
 
     // Check password field
     await expect(page.locator('label[for="password"]')).toHaveText('Password')
-    const passwordInput = page.locator('#password input')
+    const passwordInput = page.locator('#password')
     await expect(passwordInput).toBeVisible()
 
     // Check submit button
@@ -51,7 +51,7 @@ test.describe('Login Page', () => {
 
     // Fill invalid email
     await page.locator('#email').fill('not-an-email')
-    await page.locator('#password input').fill('password123')
+    await page.locator('#password').fill('password123')
 
     // Submit
     await page.getByRole('button', { name: 'Sign In' }).click()
@@ -66,7 +66,7 @@ test.describe('Login Page', () => {
 
     // Fill valid email but short password
     await page.locator('#email').fill('test@example.com')
-    await page.locator('#password input').fill('short')
+    await page.locator('#password').fill('short')
 
     // Submit
     await page.getByRole('button', { name: 'Sign In' }).click()
@@ -94,7 +94,7 @@ test.describe('Login Page', () => {
 
     // Fill valid credentials
     await page.locator('#email').fill('test@test.com')
-    await page.locator('#password input').fill('password123')
+    await page.locator('#password').fill('password123')
 
     // Submit
     await page.getByRole('button', { name: 'Sign In' }).click()
@@ -117,7 +117,7 @@ test.describe('Login Page', () => {
 
     // Fill credentials
     await page.locator('#email').fill('wrong@test.com')
-    await page.locator('#password input').fill('wrongpassword123')
+    await page.locator('#password').fill('wrongpassword123')
 
     // Submit
     await page.getByRole('button', { name: 'Sign In' }).click()
@@ -148,7 +148,7 @@ test.describe('Login Page', () => {
 
     // Fill valid credentials
     await page.locator('#email').fill('test@test.com')
-    await page.locator('#password input').fill('password123')
+    await page.locator('#password').fill('password123')
 
     // Submit
     await page.getByRole('button', { name: 'Sign In' }).click()
