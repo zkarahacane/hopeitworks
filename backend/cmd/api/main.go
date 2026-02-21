@@ -133,6 +133,7 @@ func run() error {
 	// User service
 	userService := service.NewUserService(userRepo)
 	userHandler := handler.NewUserHandler(userService)
+	profileHandler := handler.NewProfileHandler(userService)
 
 	// Application-wide context for background services
 	appCtx, appCancel := context.WithCancel(ctx)
@@ -260,7 +261,7 @@ func run() error {
 	epicRunService := service.NewEpicRunService(epicRunRepo, storyRepo, epicRepo, schedulerService, parallelGroupExecutor, eventRepo, logger)
 	epicRunHandler := handler.NewEpicRunHandler(epicRunService)
 
-	server := handler.NewServer(authHandler, projectHandler, userHandler, epicHandler, storyHandler, promptTemplateHandler, runHandler, pipelineConfigHandler, hitlHandler, costHandler, notificationHandler, epicRunHandler)
+	server := handler.NewServer(authHandler, projectHandler, userHandler, profileHandler, epicHandler, storyHandler, promptTemplateHandler, runHandler, pipelineConfigHandler, hitlHandler, costHandler, notificationHandler, epicRunHandler)
 
 	// Project user handler
 	projectUserHandler := handler.NewProjectUserHandler(projectUserService)

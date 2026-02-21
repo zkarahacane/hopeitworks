@@ -108,6 +108,9 @@ func (m *mockProjectUserServiceUserRepo) Count(_ context.Context) (int64, error)
 func (m *mockProjectUserServiceUserRepo) Update(_ context.Context, user *model.User) (*model.User, error) {
 	return user, nil
 }
+func (m *mockProjectUserServiceUserRepo) UpdatePasswordHash(_ context.Context, _ uuid.UUID, _ string) error {
+	return nil
+}
 func (m *mockProjectUserServiceUserRepo) Delete(_ context.Context, _ uuid.UUID) error { return nil }
 
 func setupProjectUserService() (*ProjectUserService, *mockProjectUserRepo, *mockProjectRepo, *mockProjectUserServiceUserRepo) {

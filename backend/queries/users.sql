@@ -24,5 +24,11 @@ SET name = COALESCE(sqlc.narg('name'), name),
 WHERE id = $1 AND deleted_at IS NULL
 RETURNING *;
 
+-- name: UpdateUserPasswordHash :exec
+UPDATE users
+SET password_hash = $2,
+    updated_at    = now()
+WHERE id = $1 AND deleted_at IS NULL;
+
 -- name: DeleteUser :exec
 UPDATE users SET deleted_at = now() WHERE id = $1 AND deleted_at IS NULL;

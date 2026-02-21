@@ -9,6 +9,7 @@ type Server struct {
 	auth            *AuthHandler
 	projects        *ProjectHandler
 	users           *UserHandler
+	profile         *ProfileHandler
 	epics           *EpicHandler
 	stories         *StoryHandler
 	promptTemplates *PromptTemplateHandler
@@ -21,8 +22,8 @@ type Server struct {
 }
 
 // NewServer creates a new Server with the given handlers.
-func NewServer(auth *AuthHandler, projects *ProjectHandler, users *UserHandler, epics *EpicHandler, stories *StoryHandler, promptTemplates *PromptTemplateHandler, runs *RunHandler, pipelineConfig *PipelineConfigHandler, hitl *HITLHandler, costs *CostHandler, notifications *NotificationHandler, epicRuns *EpicRunHandler) *Server {
-	return &Server{auth: auth, projects: projects, users: users, epics: epics, stories: stories, promptTemplates: promptTemplates, runs: runs, pipelineConfig: pipelineConfig, hitl: hitl, costs: costs, notifications: notifications, epicRuns: epicRuns}
+func NewServer(auth *AuthHandler, projects *ProjectHandler, users *UserHandler, profile *ProfileHandler, epics *EpicHandler, stories *StoryHandler, promptTemplates *PromptTemplateHandler, runs *RunHandler, pipelineConfig *PipelineConfigHandler, hitl *HITLHandler, costs *CostHandler, notifications *NotificationHandler, epicRuns *EpicRunHandler) *Server {
+	return &Server{auth: auth, projects: projects, users: users, profile: profile, epics: epics, stories: stories, promptTemplates: promptTemplates, runs: runs, pipelineConfig: pipelineConfig, hitl: hitl, costs: costs, notifications: notifications, epicRuns: epicRuns}
 }
 
 // RegisterUser delegates to AuthHandler.
@@ -98,6 +99,21 @@ func (s *Server) UpdateUser(w http.ResponseWriter, r *http.Request, id IdPath) {
 // DeleteUser delegates to UserHandler.
 func (s *Server) DeleteUser(w http.ResponseWriter, r *http.Request, id IdPath) {
 	s.users.DeleteUser(w, r, id)
+}
+
+// GetMyProfile delegates to ProfileHandler.
+func (s *Server) GetMyProfile(w http.ResponseWriter, r *http.Request) {
+	s.profile.GetMyProfile(w, r)
+}
+
+// UpdateMyProfile delegates to ProfileHandler.
+func (s *Server) UpdateMyProfile(w http.ResponseWriter, r *http.Request) {
+	s.profile.UpdateMyProfile(w, r)
+}
+
+// ChangeMyPassword delegates to ProfileHandler.
+func (s *Server) ChangeMyPassword(w http.ResponseWriter, r *http.Request) {
+	s.profile.ChangeMyPassword(w, r)
 }
 
 // ListEpics delegates to EpicHandler.
