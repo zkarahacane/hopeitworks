@@ -1769,7 +1769,6 @@ components:
           example: 0
         status:
           type: string
-          enum: [pending, running, completed, failed]
           example: pending
 
     EpicRunDetail:
