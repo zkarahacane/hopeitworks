@@ -969,6 +969,29 @@ paths:
         Returns aggregated cost data for the specified project over a time period,
         with breakdowns by story, run, and model. Budget limits are included for
         informational display alongside usage.
+      tags: [costs]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - name: period
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [7d, 30d, 90d]
+            default: 7d
+          description: Time period for aggregation
+      responses:
+        "200":
+          description: Aggregated project cost data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectCostSummary"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   # ── Notification Configs ─────────────────────────────────────────────
   /projects/{projectId}/notifications:
     get:
@@ -1184,16 +1207,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ProjectCostSummary"
-            enum: [7d, 30d]
-            default: 7d
-          description: Time period for cost aggregation
-      responses:
-        "200":
-          description: Cost summary
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CostSummary"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "404":
@@ -1214,6 +1227,11 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/StoryCostSummary"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /projects/{projectId}/costs/chart:
     get:
       operationId: getProjectCostChart
@@ -1258,6 +1276,11 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/RunCostDetail"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /projects/{projectId}/costs/runs:
     get:
       operationId: getProjectCostRuns
@@ -2392,6 +2415,99 @@ components:
           $ref: "#/components/schemas/Pagination"
 
 
+    # ── Notification Config ────────────────────────────────────────────
+    NotificationConfig:
+      type: object
+      required: [id, project_id, channel_type, config, events_filter, enabled, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 770e8400-e29b-41d4-a716-446655440000
+        project_id:
+          type: string
+          format: uuid
+          example: 660e8400-e29b-41d4-a716-446655440000
+        channel_type:
+          type: string
+          enum: [discord, webhook]
+          example: discord
+        config:
+          type: object
+          additionalProperties:
+            type: string
+          example: {"url": "https://discord.com/api/webhooks/..."}
+        events_filter:
+          type: array
+          items:
+            type: string
+          example: ["run.completed", "run.failed"]
+        enabled:
+          type: boolean
+          example: true
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-01-15T10:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2026-01-15T10:30:00Z"
+
+    CreateNotificationConfigRequest:
+      type: object
+      required: [channel_type, config, events_filter]
+      properties:
+        channel_type:
+          type: string
+          enum: [discord, webhook]
+          example: discord
+        config:
+          type: object
+          additionalProperties:
+            type: string
+          example: {"url": "https://discord.com/api/webhooks/..."}
+        events_filter:
+          type: array
+          items:
+            type: string
+          example: ["run.completed", "run.failed"]
+        enabled:
+          type: boolean
+          default: true
+          example: true
+
+    UpdateNotificationConfigRequest:
+      type: object
+      required: [channel_type, config, events_filter, enabled]
+      properties:
+        channel_type:
+          type: string
+          enum: [discord, webhook]
+          example: discord
+        config:
+          type: object
+          additionalProperties:
+            type: string
+          example: {"url": "https://discord.com/api/webhooks/..."}
+        events_filter:
+          type: array
+          items:
+            type: string
+          example: ["run.completed", "run.failed"]
+        enabled:
+          type: boolean
+          example: true
+
+    NotificationConfigList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/NotificationConfig"
+
     # ── Cost ──────────────────────────────────────────────────────────
     ProjectCostSummary:
       type: object
@@ -2454,6 +2570,71 @@ components:
           type: number
           format: double
           example: 5.25
+
+    HITLRequest:
+      type: object
+      required:
+        - id
+        - run_step_id
+        - step_id
+        - story_key
+        - story_title
+        - gate_type
+        - status
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        run_step_id:
+          type: string
+          format: uuid
+        step_id:
+          type: string
+          format: uuid
+        run_id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        gate_type:
+          type: string
+          example: approval
+        status:
+          type: string
+          enum: [pending, approved, rejected]
+          example: pending
+        story_key:
+          type: string
+          example: S-01
+        story_title:
+          type: string
+          example: Implement login page
+        story_objective:
+          type: string
+        diff_content:
+          type: string
+          description: Unified diff content from the agent run
+          nullable: true
+        reviewer_id:
+          type: string
+          format: uuid
+          nullable: true
+        rejection_reason:
+          type: string
+          nullable: true
+        resolved_at:
+          type: string
+          format: date-time
+          nullable: true
+        reviewed_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
 
     HITLRequestList:
       type: object
