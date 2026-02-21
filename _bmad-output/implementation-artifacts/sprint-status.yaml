@@ -158,6 +158,8 @@ development_status:
   fix-3-catch-all-404-route: ready-for-dev
   fix-4-e2e-test-helpers: ready-for-dev
   fix-5-e2e-stack-docker-reset: ready-for-dev
+  fix-6-e2e-selector-refinements: ready-for-dev
+  fix-7-pipeline-config-seed-data: ready-for-dev
 
 # PARALLEL EXECUTION WAVES
 # ========================
@@ -651,3 +653,16 @@ parallel_waves:
     container_count: 2
     depends_on: [wave-17]
     notes: "P2 test infra fixes: test selectors + stack script — parallel, independent"
+
+  wave-19:
+    phase: 5-bugfixes
+    stories:
+      - key: fix-6-e2e-selector-refinements
+        domain: front
+        status: ready-for-dev
+      - key: fix-7-pipeline-config-seed-data
+        domain: shared
+        status: ready-for-dev
+    container_count: 2
+    depends_on: [wave-18]
+    notes: "Final test fixes: selector refinements + pipeline config 404 — parallel"
