@@ -60,10 +60,15 @@ func mapCategoryToStatus(cat errors.ErrorCategory) int {
 
 // toAPIProject converts a domain Project to the API Project type.
 func toAPIProject(p *model.Project) Project {
+	gitProvider := ProjectGitProvider(p.GitProvider)
+	agentRuntime := ProjectAgentRuntime(p.AgentRuntime)
+
 	proj := Project{
 		Id:                   p.ID,
 		Name:                 p.Name,
 		OwnerId:              uuid.Nil,
+		GitProvider:          &gitProvider,
+		AgentRuntime:         &agentRuntime,
 		MaxBudget:            p.MaxBudget,
 		CircuitBreakerCount:  p.CircuitBreakerCount,
 		CircuitBreakerActive: p.CircuitBreakerActive,
@@ -76,6 +81,15 @@ func toAPIProject(p *model.Project) Project {
 	}
 	if p.OwnerID != nil {
 		proj.OwnerId = *p.OwnerID
+	}
+	if p.RepoURL != nil {
+		proj.RepoUrl = p.RepoURL
+	}
+	if p.GitTokenEnv != nil {
+		proj.GitTokenEnv = p.GitTokenEnv
+	}
+	if p.DefaultModel != nil {
+		proj.DefaultModel = p.DefaultModel
 	}
 	return proj
 }
