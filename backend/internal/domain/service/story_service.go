@@ -228,4 +228,3 @@ func isValidStoryScope(scope string) bool {
 		return false
 	}
 }
-
