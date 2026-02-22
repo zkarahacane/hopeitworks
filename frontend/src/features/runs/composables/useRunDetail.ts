@@ -71,12 +71,14 @@ export function useRunDetail(runId: string, projectId: string) {
 
   // Subscribe to SSE events if a projectId is available so run/step status
   // changes are reflected immediately without polling.
+  //
+  // The SSE data field contains the full backend Event object. The actual
+  // payload (with run_id etc.) is nested inside the `payload` field.
   if (projectId) {
     useSSE(projectId, (eventName, data) => {
       if (!RUN_REFRESH_EVENTS.has(eventName)) return
-      const payload = data as { run_id?: string; step?: { run_id?: string } }
-      // Events carry run_id at the top level or nested inside a step object.
-      const eventRunId = payload.run_id ?? payload.step?.run_id
+      const event = data as { payload?: { run_id?: string } }
+      const eventRunId = event.payload?.run_id
       if (eventRunId && eventRunId !== runId) return
       fetchRun()
     })

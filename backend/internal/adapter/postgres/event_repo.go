@@ -62,6 +62,23 @@ func (r *EventRepo) Publish(ctx context.Context, event model.Event) error {
 	return nil
 }
 
+// GetEventByID returns a single event by its ID.
+func (r *EventRepo) GetEventByID(ctx context.Context, id uuid.UUID) (*model.Event, error) {
+	row, err := r.queries.GetEventByID(ctx, id)
+	if err != nil {
+		return nil, apperrors.NewInternal("failed to get event by ID", err)
+	}
+	return &model.Event{
+		ID:         row.ID,
+		ProjectID:  row.ProjectID,
+		EntityType: row.EntityType,
+		EntityID:   row.EntityID,
+		Action:     row.Action,
+		Payload:    json.RawMessage(row.Payload),
+		CreatedAt:  row.CreatedAt,
+	}, nil
+}
+
 // GetEventsSince returns all events for the project created after the event
 // identified by afterEventID. Returns empty slice if afterEventID is unknown
 // (the subquery returns no rows, so the WHERE clause matches nothing).

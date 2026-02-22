@@ -1699,3 +1699,229 @@ func TestListRunsByStory_ProgressPopulated(t *testing.T) {
 		t.Errorf("expected progress 66, got %d", result.Runs[0].Progress)
 	}
 }
+
+func TestCancelRun_RunningRun(t *testing.T) {
+	projectID := uuid.New()
+	runID := uuid.New()
+
+	containerID := "container-123"
+	runRepo := &mockRunRepo{
+		getRunFn: func(_ context.Context, id uuid.UUID) (*model.Run, error) {
+			return &model.Run{
+				ID:        id,
+				ProjectID: projectID,
+				Status:    model.RunStatusRunning,
+			}, nil
+		},
+		listRunStepsByRunFn: func(_ context.Context, _ uuid.UUID) ([]*model.RunStep, error) {
+			return []*model.RunStep{
+				{ID: uuid.New(), Status: model.StepStatusCompleted},
+				{ID: uuid.New(), Status: model.StepStatusRunning, ContainerID: &containerID},
+				{ID: uuid.New(), Status: model.StepStatusPending},
+			}, nil
+		},
+		updateRunStepStatusFn: func(_ context.Context, id uuid.UUID, status model.StepStatus, _, _ *time.Time, _ *string) (*model.RunStep, error) {
+			return &model.RunStep{ID: id, Status: status}, nil
+		},
+		updateRunStatusFn: func(_ context.Context, id uuid.UUID, status model.RunStatus, _, _, _ *time.Time, _ *string) (*model.Run, error) {
+			return &model.Run{ID: id, ProjectID: projectID, Status: status}, nil
+		},
+	}
+
+	var stoppedContainerID string
+	containerMgr := &mockContainerManager{
+		stopFn: func(_ context.Context, cid string) error {
+			stoppedContainerID = cid
+			return nil
+		},
+	}
+
+	svc := newRunServiceForTest(runRepo, newMockProjectRepoForService())
+	svc.SetContainerManager(containerMgr)
+
+	result, err := svc.CancelRun(context.Background(), projectID, runID)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if result.Status != model.RunStatusCancelled {
+		t.Errorf("expected status cancelled, got %s", result.Status)
+	}
+	if stoppedContainerID != containerID {
+		t.Errorf("expected container %s to be stopped, got %s", containerID, stoppedContainerID)
+	}
+}
+
+func TestCancelRun_PendingRun(t *testing.T) {
+	projectID := uuid.New()
+	runID := uuid.New()
+
+	stepsCancelled := 0
+	runRepo := &mockRunRepo{
+		getRunFn: func(_ context.Context, id uuid.UUID) (*model.Run, error) {
+			return &model.Run{
+				ID:        id,
+				ProjectID: projectID,
+				Status:    model.RunStatusPending,
+			}, nil
+		},
+		listRunStepsByRunFn: func(_ context.Context, _ uuid.UUID) ([]*model.RunStep, error) {
+			return []*model.RunStep{
+				{ID: uuid.New(), Status: model.StepStatusPending},
+				{ID: uuid.New(), Status: model.StepStatusPending},
+			}, nil
+		},
+		updateRunStepStatusFn: func(_ context.Context, id uuid.UUID, status model.StepStatus, _, _ *time.Time, _ *string) (*model.RunStep, error) {
+			stepsCancelled++
+			return &model.RunStep{ID: id, Status: status}, nil
+		},
+		updateRunStatusFn: func(_ context.Context, id uuid.UUID, status model.RunStatus, _, _, _ *time.Time, _ *string) (*model.Run, error) {
+			return &model.Run{ID: id, ProjectID: projectID, Status: status}, nil
+		},
+	}
+
+	svc := newRunServiceForTest(runRepo, newMockProjectRepoForService())
+
+	result, err := svc.CancelRun(context.Background(), projectID, runID)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if result.Status != model.RunStatusCancelled {
+		t.Errorf("expected status cancelled, got %s", result.Status)
+	}
+	if stepsCancelled != 2 {
+		t.Errorf("expected 2 steps cancelled, got %d", stepsCancelled)
+	}
+}
+
+func TestCancelRun_AlreadyCompleted(t *testing.T) {
+	projectID := uuid.New()
+	runID := uuid.New()
+
+	runRepo := &mockRunRepo{
+		getRunFn: func(_ context.Context, id uuid.UUID) (*model.Run, error) {
+			return &model.Run{
+				ID:        id,
+				ProjectID: projectID,
+				Status:    model.RunStatusCompleted,
+			}, nil
+		},
+	}
+
+	svc := newRunServiceForTest(runRepo, newMockProjectRepoForService())
+
+	_, err := svc.CancelRun(context.Background(), projectID, runID)
+	if err == nil {
+		t.Fatal("expected error for completed run, got nil")
+	}
+	domErr, ok := err.(*errors.DomainError)
+	if !ok {
+		t.Fatalf("expected DomainError, got %T", err)
+	}
+	if domErr.Code != errors.ErrCodeInvalidStateTransition {
+		t.Errorf("expected error code %s, got %s", errors.ErrCodeInvalidStateTransition, domErr.Code)
+	}
+}
+
+func TestCancelRun_WrongProject(t *testing.T) {
+	projectID := uuid.New()
+	otherProjectID := uuid.New()
+	runID := uuid.New()
+
+	runRepo := &mockRunRepo{
+		getRunFn: func(_ context.Context, id uuid.UUID) (*model.Run, error) {
+			return &model.Run{
+				ID:        id,
+				ProjectID: otherProjectID,
+				Status:    model.RunStatusRunning,
+			}, nil
+		},
+	}
+
+	svc := newRunServiceForTest(runRepo, newMockProjectRepoForService())
+
+	_, err := svc.CancelRun(context.Background(), projectID, runID)
+	if err == nil {
+		t.Fatal("expected error for wrong project, got nil")
+	}
+	domErr, ok := err.(*errors.DomainError)
+	if !ok {
+		t.Fatalf("expected DomainError, got %T", err)
+	}
+	if domErr.Category != errors.CategoryNotFound {
+		t.Errorf("expected category not_found, got %s", domErr.Category)
+	}
+}
+
+func TestCancelRun_PausedRun(t *testing.T) {
+	projectID := uuid.New()
+	runID := uuid.New()
+
+	runRepo := &mockRunRepo{
+		getRunFn: func(_ context.Context, id uuid.UUID) (*model.Run, error) {
+			return &model.Run{
+				ID:        id,
+				ProjectID: projectID,
+				Status:    model.RunStatusPaused,
+			}, nil
+		},
+		listRunStepsByRunFn: func(_ context.Context, _ uuid.UUID) ([]*model.RunStep, error) {
+			return []*model.RunStep{
+				{ID: uuid.New(), Status: model.StepStatusCompleted},
+				{ID: uuid.New(), Status: model.StepStatusPending},
+			}, nil
+		},
+		updateRunStepStatusFn: func(_ context.Context, id uuid.UUID, status model.StepStatus, _, _ *time.Time, _ *string) (*model.RunStep, error) {
+			return &model.RunStep{ID: id, Status: status}, nil
+		},
+		updateRunStatusFn: func(_ context.Context, id uuid.UUID, status model.RunStatus, _, _, _ *time.Time, _ *string) (*model.Run, error) {
+			return &model.Run{ID: id, ProjectID: projectID, Status: status}, nil
+		},
+	}
+
+	svc := newRunServiceForTest(runRepo, newMockProjectRepoForService())
+
+	result, err := svc.CancelRun(context.Background(), projectID, runID)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if result.Status != model.RunStatusCancelled {
+		t.Errorf("expected status cancelled, got %s", result.Status)
+	}
+}
+
+func TestCancelRun_PublishesEvent(t *testing.T) {
+	projectID := uuid.New()
+	runID := uuid.New()
+
+	runRepo := &mockRunRepo{
+		getRunFn: func(_ context.Context, id uuid.UUID) (*model.Run, error) {
+			return &model.Run{
+				ID:        id,
+				ProjectID: projectID,
+				Status:    model.RunStatusRunning,
+			}, nil
+		},
+		listRunStepsByRunFn: func(_ context.Context, _ uuid.UUID) ([]*model.RunStep, error) {
+			return nil, nil
+		},
+		updateRunStatusFn: func(_ context.Context, id uuid.UUID, status model.RunStatus, _, _, _ *time.Time, _ *string) (*model.Run, error) {
+			return &model.Run{ID: id, ProjectID: projectID, Status: status}, nil
+		},
+	}
+
+	eventPub := newMockEventPublisher()
+	svc := NewRunService(runRepo, newMockProjectRepoForService(), nil, nil, nil, eventPub)
+
+	_, err := svc.CancelRun(context.Background(), projectID, runID)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	events := eventPub.getEvents()
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(events))
+	}
+	if events[0].Event.Action != "cancelled" {
+		t.Errorf("expected event action 'cancelled', got %s", events[0].Event.Action)
+	}
+}

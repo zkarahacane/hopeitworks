@@ -955,6 +955,33 @@ paths:
         "409":
           $ref: "#/components/responses/Conflict"
 
+  /projects/{projectId}/runs/{runId}/cancel:
+    post:
+      operationId: cancelRun
+      summary: Cancel a pending, running, or paused story run
+      description: >
+        Transitions the run to cancelled status. If the run has a step currently
+        executing in a container, the container is stopped. Pending steps are
+        marked as cancelled. Returns 409 if the run is already in a terminal
+        state (completed, failed, or cancelled).
+      tags: [runs]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/RunIdPath"
+      responses:
+        "200":
+          description: Run cancelled successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Run"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
   /projects/{projectId}/epics/{epicId}/runs/{runId}/pause:
     post:
       operationId: pauseEpicRun
@@ -998,6 +1025,33 @@ paths:
       responses:
         "200":
           description: Epic run resumed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Run"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /projects/{projectId}/epics/{epicId}/runs/{runId}/cancel:
+    post:
+      operationId: cancelEpicRun
+      summary: Cancel a pending, running, or paused epic run
+      description: >
+        Cancels the epic run and all active child runs. Containers for
+        running steps are stopped. Returns 409 if the run is already in a
+        terminal state.
+      tags: [runs]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/EpicIdPath"
+        - $ref: "#/components/parameters/RunIdPath"
+      responses:
+        "200":
+          description: Epic run cancelled successfully
           content:
             application/json:
               schema:

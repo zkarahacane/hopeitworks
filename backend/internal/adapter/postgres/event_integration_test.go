@@ -224,7 +224,7 @@ func TestIntegration_EventBus_SubscribeAndPublish(t *testing.T) {
 	queries := postgres.New(db.pool)
 	publisher := postgres.NewEventRepo(queries)
 
-	bus, err := postgres.NewEventBus(ctx, db.connString, logger)
+	bus, err := postgres.NewEventBus(ctx, db.connString, publisher, logger)
 	if err != nil {
 		t.Fatalf("failed to create event bus: %v", err)
 	}
@@ -278,7 +278,7 @@ func TestIntegration_EventBus_SubscribeAndPublish(t *testing.T) {
 	t.Run("project filtering: only receives events for subscribed project", func(t *testing.T) {
 		otherProjectID := createTestProject(t, db.pool)
 
-		bus2, err := postgres.NewEventBus(ctx, db.connString, logger)
+		bus2, err := postgres.NewEventBus(ctx, db.connString, publisher, logger)
 		if err != nil {
 			t.Fatalf("failed to create second event bus: %v", err)
 		}
@@ -332,7 +332,7 @@ func TestIntegration_EventBus_SubscribeAndPublish(t *testing.T) {
 	})
 
 	t.Run("cleanup function stops event delivery", func(t *testing.T) {
-		bus3, err := postgres.NewEventBus(ctx, db.connString, logger)
+		bus3, err := postgres.NewEventBus(ctx, db.connString, publisher, logger)
 		if err != nil {
 			t.Fatalf("failed to create event bus: %v", err)
 		}
@@ -367,7 +367,9 @@ func TestIntegration_EventBus_Close(t *testing.T) {
 	ctx := context.Background()
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
 
-	bus, err := postgres.NewEventBus(ctx, db.connString, logger)
+	queries := postgres.New(db.pool)
+	closePublisher := postgres.NewEventRepo(queries)
+	bus, err := postgres.NewEventBus(ctx, db.connString, closePublisher, logger)
 	if err != nil {
 		t.Fatalf("failed to create event bus: %v", err)
 	}

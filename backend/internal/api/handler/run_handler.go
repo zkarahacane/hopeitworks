@@ -163,6 +163,28 @@ func (h *RunHandler) ResumeEpicRun(w http.ResponseWriter, r *http.Request, proje
 	writeJSON(w, http.StatusOK, toAPIRun(run))
 }
 
+// CancelRun handles POST /projects/{projectId}/runs/{runId}/cancel.
+func (h *RunHandler) CancelRun(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, runID RunIdPath) {
+	run, err := h.service.CancelRun(r.Context(), projectID, runID)
+	if err != nil {
+		writeErrorResponse(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, toAPIRun(run))
+}
+
+// CancelEpicRun handles POST /projects/{projectId}/epics/{epicId}/runs/{runId}/cancel.
+func (h *RunHandler) CancelEpicRun(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, epicID EpicIdPath, runID RunIdPath) {
+	run, err := h.service.CancelEpicRun(r.Context(), projectID, epicID, runID)
+	if err != nil {
+		writeErrorResponse(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, toAPIRun(run))
+}
+
 // toAPIRun converts a domain Run to the API Run type.
 func toAPIRun(r *model.Run) Run {
 	run := Run{

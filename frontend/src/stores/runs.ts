@@ -10,6 +10,7 @@ export const useRunsStore = defineStore('runs', () => {
   const isPausing = ref(false)
   const isResuming = ref(false)
   const isRetrying = ref(false)
+  const isCancelling = ref(false)
 
   /**
    * Whether the circuit breaker is currently active for the viewed project.
@@ -71,6 +72,24 @@ export const useRunsStore = defineStore('runs', () => {
     }
   }
 
+  /** Cancel a pending, running, or paused run. */
+  async function cancelRun(projectId: string, runId: string) {
+    isCancelling.value = true
+    try {
+      const { data, error } = await apiClient.POST(
+        '/projects/{projectId}/runs/{runId}/cancel',
+        { params: { path: { projectId, runId } } },
+      )
+      if (error) throw error
+      if (data) {
+        updateRunStatus(runId, data.status)
+      }
+      return data
+    } finally {
+      isCancelling.value = false
+    }
+  }
+
   /** Update run status in local state. */
   function updateRunStatus(runId: string, status: string) {
     const item = items.value.find((r) => r.id === runId)
@@ -113,10 +132,12 @@ export const useRunsStore = defineStore('runs', () => {
     isPausing,
     isResuming,
     isRetrying,
+    isCancelling,
     circuitBreakerActive,
     pauseRun,
     resumeRun,
     retryStep,
+    cancelRun,
     updateRunStatus,
     handleSSEEvent,
   }

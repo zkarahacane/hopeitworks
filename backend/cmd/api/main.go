@@ -78,16 +78,23 @@ func run() error {
 		logger.Info("auto-migration disabled, skipping")
 	}
 
-	// Build event bus (dedicated connection for LISTEN/NOTIFY)
-	eventBus, err := pgadapter.NewEventBus(ctx, dsn, logger)
+	// Build dependency graph
+	queries := pgadapter.New(pool)
+
+	// Event publisher (for persisting events to DB) — created early because
+	// EventBus needs it for enriching NOTIFY payloads with full event data.
+	eventRepo := pgadapter.NewEventRepo(queries)
+
+	// Build event bus (dedicated connection for LISTEN/NOTIFY).
+	// The eventRepo is passed so the bus can enrich NOTIFY payloads with
+	// full event data (including payload) from the database, since pg_notify
+	// has an 8KB limit and the trigger only sends metadata.
+	eventBus, err := pgadapter.NewEventBus(ctx, dsn, eventRepo, logger)
 	if err != nil {
 		return fmt.Errorf("creating event bus: %w", err)
 	}
 	defer func() { _ = eventBus.Close() }()
 	logger.Info("event bus connected")
-
-	// Build dependency graph
-	queries := pgadapter.New(pool)
 
 	// Auth service and middleware
 	userRepo := pgadapter.NewUserRepository(pool)
@@ -114,9 +121,6 @@ func run() error {
 	// Project service (with pipeline config seeding on creation)
 	projectService := service.NewProjectService(projectRepo)
 	projectService.SetPipelineConfigService(pipelineConfigService)
-
-	// Event publisher (for persisting events to DB) — needed by circuit breaker
-	eventRepo := pgadapter.NewEventRepo(queries)
 
 	// Circuit breaker service
 	circuitBreakerService := service.NewCircuitBreakerService(projectRepo, eventRepo, logger)
@@ -260,6 +264,9 @@ func run() error {
 	}
 
 	runService := service.NewRunService(runRepo, projectRepo, storyRepo, pipelineConfigRepo, jobQueue, eventRepo)
+	if containerMgr != nil {
+		runService.SetContainerManager(containerMgr)
+	}
 	runHandler := handler.NewRunHandler(runService)
 
 	// Orphan cleanup and timeout enforcement (requires Docker)
