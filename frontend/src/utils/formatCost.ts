@@ -10,3 +10,8 @@ export function formatCostUSD(value: number): string {
     maximumFractionDigits: 5,
   }).format(value)
 }
+
+/** Formats a token count with thousands separators (e.g., 100,000). */
+export function formatTokenCount(count: number): string {
+  return new Intl.NumberFormat('en-US').format(count)
+}
