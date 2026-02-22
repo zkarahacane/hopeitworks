@@ -113,28 +113,9 @@ test.describe('Auth smoke tests (real backend)', () => {
     await expect(page).toHaveURL(/\/login/, { timeout: 8000 })
   })
 
-  /**
-   * KNOWN BUG AUDIT: /api/v1/auth/me does NOT return a `role` field.
-   *
-   * Root cause: `userResponse` struct in `auth_handler.go` is missing the `Role` field.
-   * As a result the frontend falls back to `json.role ?? 'member'`, meaning ALL users —
-   * including admin — are displayed/treated as "member" in the UI.
-   *
-   * This test DOCUMENTS the bug by asserting that `role` is absent from the response.
-   * It should be updated to assert `role` IS present once the bug is fixed.
-   */
-  test('AUDIT: /auth/me does not return role field (known bug)', async ({
+  test('/auth/me returns role field correctly for admin', async ({
     context,
   }) => {
-    test.info().annotations.push({
-      type: 'known-bug',
-      description:
-        'auth_handler.go userResponse struct is missing the Role field. ' +
-        'All users appear as "member" in the frontend because it falls back to ' +
-        '`json.role ?? "member"`. Fix: add Role to userResponse and populate it ' +
-        'from the user entity.',
-    })
-
     // Login via API to get the session cookie set on the browser context
     await loginViaAPI(context, 'admin')
 
@@ -145,13 +126,8 @@ test.describe('Auth smoke tests (real backend)', () => {
 
     const body = await response.json()
 
-    // BUG ASSERTION: role field should be absent from the response.
-    // When this bug is fixed, remove the `toBeUndefined()` assertion and replace with:
-    //   expect(body.role).toBe('admin')
-    expect(
-      body.role,
-      'BUG: /auth/me is missing the `role` field — all users fall back to "member" in the UI',
-    ).toBeUndefined()
+    // The API now correctly returns a `role` field populated from the user entity
+    expect(body.role, '/auth/me should return role: "admin" for the admin user').toBe('admin')
 
     // Verify other expected fields ARE present so we know the response is otherwise valid
     expect(body.id, 'Response should include id').toBeDefined()
