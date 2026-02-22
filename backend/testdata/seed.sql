@@ -65,7 +65,7 @@ VALUES (
     'Todo App',
     'Reference todo application for pipeline validation and baseline testing',
     '00000000-0000-0000-0000-000000000001',
-    'https://github.com/hopeitworks/todo-app',
+    'https://github.com/zkarahacane/todo-app',
     'claude-sonnet-4-20250514'
 ) ON CONFLICT (name) DO UPDATE SET
     description = EXCLUDED.description,
