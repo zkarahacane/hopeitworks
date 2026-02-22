@@ -50,10 +50,13 @@ export const useEpicRunStore = defineStore('epicRun', () => {
     }
   }
 
-  /** Handle incoming SSE events to update epic run state reactively */
+  /** Handle incoming SSE events to update epic run state reactively.
+   *  The SSE data field contains the full backend Event object with the
+   *  actual event data nested in the `payload` field. */
   function handleSSEEvent(eventName: string, data: unknown) {
     if (!epicRun.value) return
-    const payload = data as { story_id?: string; status?: string }
+    const event = data as { payload?: { story_id?: string; status?: string } }
+    const payload = event.payload ?? (data as { story_id?: string; status?: string })
     if (eventName === 'epic_run.story.completed' && payload.story_id) {
       const story = epicRun.value.stories.find((s) => s.story_id === payload.story_id)
       if (story) story.status = 'completed'

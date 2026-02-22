@@ -14,6 +14,9 @@ SELECT * FROM events
 WHERE entity_type = $1 AND entity_id = $2
 ORDER BY created_at ASC;
 
+-- name: GetEventByID :one
+SELECT * FROM events WHERE id = $1;
+
 -- name: GetEventsSince :many
 SELECT e.*
 FROM events e

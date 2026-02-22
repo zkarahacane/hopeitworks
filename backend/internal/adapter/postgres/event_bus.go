@@ -28,14 +28,18 @@ const (
 
 // EventBus implements port.EventSubscriber using pgx LISTEN/NOTIFY.
 // It maintains a dedicated Postgres connection (separate from the pool)
-// for receiving notifications.
+// for receiving notifications. An optional EventRepository is used to
+// enrich notification payloads with the full event data from the database,
+// since Postgres NOTIFY has an 8KB payload limit and only sends metadata.
 type EventBus struct {
 	connString string
 	conn       *pgx.Conn
 	logger     *slog.Logger
+	eventRepo  port.EventRepository
 
 	mu          sync.Mutex
 	subscribers map[uuid.UUID][]chan<- model.Event
+	closedChans map[chan<- model.Event]struct{} // tracks already-closed channels
 	listening   bool
 	stopCh      chan struct{}
 	doneCh      chan struct{} // Closed when listenLoop exits
@@ -43,7 +47,9 @@ type EventBus struct {
 }
 
 // NewEventBus creates a new EventBus with a dedicated pgx connection for LISTEN.
-func NewEventBus(ctx context.Context, connString string, logger *slog.Logger) (*EventBus, error) {
+// The eventRepo parameter is used to enrich NOTIFY payloads with full event data
+// from the database (including the payload field which is too large for pg_notify).
+func NewEventBus(ctx context.Context, connString string, eventRepo port.EventRepository, logger *slog.Logger) (*EventBus, error) {
 	conn, err := pgx.Connect(ctx, connString)
 	if err != nil {
 		return nil, fmt.Errorf("creating event bus connection: %w", err)
@@ -53,7 +59,9 @@ func NewEventBus(ctx context.Context, connString string, logger *slog.Logger) (*
 		connString:  connString,
 		conn:        conn,
 		logger:      logger,
+		eventRepo:   eventRepo,
 		subscribers: make(map[uuid.UUID][]chan<- model.Event),
+		closedChans: make(map[chan<- model.Event]struct{}),
 		stopCh:      make(chan struct{}),
 		doneCh:      make(chan struct{}),
 	}
@@ -85,7 +93,10 @@ func (b *EventBus) Subscribe(ctx context.Context, projectID uuid.UUID) (<-chan m
 		b.mu.Lock()
 		defer b.mu.Unlock()
 		b.removeSubscriber(projectID, eventChan)
-		close(eventChan)
+		if _, alreadyClosed := b.closedChans[eventChan]; !alreadyClosed {
+			close(eventChan)
+			b.closedChans[eventChan] = struct{}{}
+		}
 	}
 
 	return eventChan, cleanup, nil
@@ -118,11 +129,14 @@ func (b *EventBus) Close() error {
 	conn := b.conn
 	b.mu.Unlock()
 
-	// Close all subscriber channels
+	// Close all subscriber channels (skip any already closed by cleanup)
 	b.mu.Lock()
 	for projectID, chans := range b.subscribers {
 		for _, ch := range chans {
-			close(ch)
+			if _, alreadyClosed := b.closedChans[ch]; !alreadyClosed {
+				close(ch)
+				b.closedChans[ch] = struct{}{}
+			}
 		}
 		delete(b.subscribers, projectID)
 	}
@@ -199,7 +213,8 @@ func (b *EventBus) listenLoop() {
 	}
 }
 
-// handleNotification parses a notification payload and dispatches to matching subscribers.
+// handleNotification parses a notification payload, enriches the event from
+// the database (to include the full payload), and dispatches to matching subscribers.
 func (b *EventBus) handleNotification(notification *pgconn.Notification) {
 	var notif notificationPayload
 	if err := json.Unmarshal([]byte(notification.Payload), &notif); err != nil {
@@ -207,12 +222,36 @@ func (b *EventBus) handleNotification(notification *pgconn.Notification) {
 		return
 	}
 
-	event := model.Event{
-		ID:         notif.ID,
-		ProjectID:  notif.ProjectID,
-		EntityType: notif.EntityType,
-		EntityID:   notif.EntityID,
-		Action:     notif.Action,
+	// Enrich the event by fetching the full row from the database.
+	// The pg_notify trigger only sends metadata (IDs, type, action) to stay
+	// within Postgres's 8KB NOTIFY limit. The full payload is fetched here.
+	var event model.Event
+	if b.eventRepo != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		fullEvent, err := b.eventRepo.GetEventByID(ctx, notif.ID)
+		if err != nil {
+			b.logger.Error("failed to enrich event from database, dispatching without payload",
+				"error", err, "event_id", notif.ID)
+			// Fall back to the minimal event from the notification
+			event = model.Event{
+				ID:         notif.ID,
+				ProjectID:  notif.ProjectID,
+				EntityType: notif.EntityType,
+				EntityID:   notif.EntityID,
+				Action:     notif.Action,
+			}
+		} else {
+			event = *fullEvent
+		}
+	} else {
+		event = model.Event{
+			ID:         notif.ID,
+			ProjectID:  notif.ProjectID,
+			EntityType: notif.EntityType,
+			EntityID:   notif.EntityID,
+			Action:     notif.Action,
+		}
 	}
 
 	b.mu.Lock()
