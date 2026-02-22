@@ -15,6 +15,7 @@ const (
 	TemplateNameImplement      = "implement"
 	TemplateNameImplementRetry = "implement-retry"
 	TemplateNameReview         = "review"
+	TemplateNameMerge          = "merge"
 	TemplateNameMergeConflict  = "merge-conflict"
 )
 
@@ -126,6 +127,16 @@ Fix the issues described above while preserving the existing changes.`,
 - Verify all acceptance criteria are met
 - Check code quality and adherence to project conventions
 - Flag any issues or suggest improvements`,
+
+		TemplateNameMerge: `Merge changes for {{story_key}}: {{story_title}}
+
+## Story Context
+**Objective:** {{story_objective}}
+
+## Merge Instructions
+- Create a pull request for the feature branch
+- Ensure CI checks pass before merging
+- Use squash merge to maintain clean commit history`,
 
 		TemplateNameMergeConflict: `Resolve merge conflict for {{story_key}}: {{story_title}}
 

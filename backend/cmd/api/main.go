@@ -16,6 +16,7 @@ import (
 	actionadapter "github.com/zakari/hopeitworks/backend/internal/adapter/action"
 	discordadapter "github.com/zakari/hopeitworks/backend/internal/adapter/discord"
 	dockeradapter "github.com/zakari/hopeitworks/backend/internal/adapter/docker"
+	gitadapter "github.com/zakari/hopeitworks/backend/internal/adapter/git"
 	hbadapter "github.com/zakari/hopeitworks/backend/internal/adapter/handlebars"
 	pgadapter "github.com/zakari/hopeitworks/backend/internal/adapter/postgres"
 	riveradapter "github.com/zakari/hopeitworks/backend/internal/adapter/river"
@@ -28,6 +29,7 @@ import (
 	"github.com/zakari/hopeitworks/backend/internal/domain/port"
 	"github.com/zakari/hopeitworks/backend/internal/domain/service"
 	"github.com/zakari/hopeitworks/backend/migrations"
+	pkgexec "github.com/zakari/hopeitworks/backend/pkg/exec"
 	pkglog "github.com/zakari/hopeitworks/backend/pkg/log"
 )
 
@@ -172,8 +174,29 @@ func run() error {
 		logger.Warn("docker container manager unavailable, timeout enforcer and orphan cleaner disabled", "error", err)
 	}
 
+	// HITL repository (created early because hitl_gate action needs it)
+	hitlRepo := pgadapter.NewHITLRepo(queries)
+
 	// Action registry
 	actionReg := service.NewActionRegistry()
+
+	// Git provider (needed by ci_poll and hitl_gate actions)
+	cmdRunner := pkgexec.NewRealCommandRunner()
+	gitProvider := gitadapter.NewGhCliAdapter(cmdRunner, logger)
+
+	// CI Poll action (no Docker required)
+	ciPollCfg := actionadapter.CIPollConfig{
+		DefaultPollInterval: 30 * time.Second,
+		DefaultTimeout:      15 * time.Minute,
+	}
+	ciPollAction := actionadapter.NewCIPollAction(gitProvider, eventRepo, ciPollCfg, logger)
+	actionReg.Register(ciPollAction)
+	logger.Info("ci_poll action registered")
+
+	// HITL Gate action (no Docker required)
+	hitlGateAction := actionadapter.NewHITLGateAction(hitlRepo, runRepo, gitProvider, eventRepo, storyRepo, logger)
+	actionReg.Register(hitlGateAction)
+	logger.Info("hitl_gate action registered")
 
 	// Cost tracking (for agent_run action)
 	costSvc := costService
@@ -199,6 +222,13 @@ func run() error {
 			)
 			actionReg.Register(agentRunAction)
 			logger.Info("agent_run action registered")
+
+			// Register action_type aliases so pipeline configs using
+			// implement/review/merge resolve to AgentRunAction
+			for _, alias := range []string{"implement", "review", "merge"} {
+				actionReg.RegisterAlias(alias, agentRunAction)
+			}
+			logger.Info("action aliases registered", "aliases", []string{"implement", "review", "merge"})
 
 			// Incremental retry action (delegates to agent_run)
 			incrementalRetryAction := actionadapter.NewIncrementalRetryAction(
@@ -252,7 +282,6 @@ func run() error {
 	}
 
 	// HITL service and handler
-	hitlRepo := pgadapter.NewHITLRepo(queries)
 	hitlService := service.NewHITLService(hitlRepo, runRepo, eventRepo, logger)
 	hitlHandler := handler.NewHITLHandler(hitlService)
 

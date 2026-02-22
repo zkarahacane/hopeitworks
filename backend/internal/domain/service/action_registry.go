@@ -32,6 +32,14 @@ func (r *InMemoryActionRegistry) Register(action model.Action) {
 	r.actions[action.Name()] = action
 }
 
+// RegisterAlias registers an existing action under an alias name.
+// The action is stored under the alias key; its own Name() is not affected.
+func (r *InMemoryActionRegistry) RegisterAlias(alias string, action model.Action) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.actions[alias] = action
+}
+
 // Get retrieves an action by name.
 // Returns ACTION_NOT_FOUND error if action is not registered.
 func (r *InMemoryActionRegistry) Get(name string) (model.Action, error) {
