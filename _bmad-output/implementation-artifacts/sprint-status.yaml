@@ -196,11 +196,11 @@ development_status:
   runtime-6-default-pipeline-steps-and-templates: done
 
   # Post-MVP: Pipeline UX Improvements
-  post-mvp-pipeline-ux: backlog
-  3-15-fix-live-log-streaming-sse: ready-for-dev
-  3-16-cancel-run-endpoint-and-ui: ready-for-dev
-  3-17-display-step-costs-in-run-detail: ready-for-dev
-  3-18-retry-failed-step-endpoint-and-ui: ready-for-dev
+  post-mvp-pipeline-ux: done
+  3-15-fix-live-log-streaming-sse: done
+  3-16-cancel-run-endpoint-and-ui: done
+  3-17-display-step-costs-in-run-detail: done
+  3-18-retry-failed-step-endpoint-and-ui: done
 
   # Post-MVP: E2E Usability Fixes
   post-mvp-e2e-usability: done
@@ -899,20 +899,20 @@ parallel_waves:
     stories:
       - key: 3-15-fix-live-log-streaming-sse
         domain: back
-        status: ready-for-dev
+        status: done
         cross_epic_deps: [4-1-sse-streaming-endpoint, 3-5-ndjson-log-streaming-from-container]
       - key: 3-16-cancel-run-endpoint-and-ui
         domain: shared
-        status: ready-for-dev
+        status: done
         cross_epic_deps: [3-7-pipeline-executor-sequential-step-runner]
       - key: 3-17-display-step-costs-in-run-detail
         domain: front
-        status: ready-for-dev
+        status: done
         cross_epic_deps: [9-2-cost-aggregation-api, 4-4-run-progress-timeline-display]
       - key: 3-18-retry-failed-step-endpoint-and-ui
         domain: shared
-        status: ready-for-dev
+        status: done
         cross_epic_deps: [8-2-incremental-retry-action, 4-4-run-progress-timeline-display]
     container_count: 4
     depends_on: [wave-29]
-    notes: "Pipeline UX: live logs fix, cancel run, cost display per step, retry failed step — all parallel"
+    notes: "Pipeline UX: live logs fix, cancel run, cost display per step, retry failed step — Phase 10 COMPLETE"
