@@ -7,6 +7,10 @@ export interface Project {
   id: string
   name: string
   description?: string
+  repo_url?: string
+  git_provider?: string
+  agent_runtime?: string
+  default_model?: string
   owner_id: string
   circuit_breaker_active?: boolean
   created_at: string
@@ -24,6 +28,20 @@ export interface Pagination {
 export interface CreateProjectPayload {
   name: string
   description?: string
+  repo_url?: string
+  git_provider?: string
+  agent_runtime?: string
+  default_model?: string
+}
+
+/** Payload for updating an existing project */
+export interface UpdateProjectPayload {
+  name?: string
+  description?: string
+  repo_url?: string
+  git_provider?: string
+  agent_runtime?: string
+  default_model?: string
 }
 
 /** Parameters for fetching paginated project lists */
@@ -84,6 +102,21 @@ export const useProjectsStore = defineStore('projects', () => {
     return data as Project
   }
 
+  /** Update an existing project via the API */
+  async function updateProject(id: string, payload: UpdateProjectPayload): Promise<Project> {
+    const { data, error: apiError } = await apiClient.PUT('/projects/{id}', {
+      params: { path: { id } },
+      body: payload,
+    })
+    if (apiError) {
+      const message =
+        (apiError as { error?: { message?: string } })?.error?.message ??
+        'Failed to update project'
+      throw new Error(message)
+    }
+    return data as Project
+  }
+
   /** Reset store state to initial values */
   function reset() {
     items.value = []
@@ -91,5 +124,5 @@ export const useProjectsStore = defineStore('projects', () => {
     error.value = null
   }
 
-  return { items, pagination, isLoading, error, fetchProjects, createProject, reset }
+  return { items, pagination, isLoading, error, fetchProjects, createProject, updateProject, reset }
 })

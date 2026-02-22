@@ -16,6 +16,11 @@ vi.mock('@/composables/useProjects', () => ({
       isLoading: mockIsLoading,
       error: mockError,
     },
+    updateProject: {
+      execute: vi.fn(),
+      isLoading: ref(false),
+      error: ref(null),
+    },
     projects: ref([]),
     pagination: ref(null),
     isLoading: ref(false),
@@ -42,6 +47,23 @@ const DialogStub = defineComponent({
   },
 })
 
+/** Stub Select to avoid matchMedia error in jsdom */
+const SelectStub = defineComponent({
+  name: 'SelectStub',
+  props: ['modelValue', 'options', 'invalid'],
+  emits: ['update:modelValue'],
+  setup(props, { attrs }) {
+    return () =>
+      h('select', {
+        id: attrs.id,
+        value: props.modelValue,
+        onChange: (e: Event) => {
+          // noop for tests
+        },
+      })
+  },
+})
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let wrapper: VueWrapper<any>
 
@@ -54,6 +76,7 @@ function mountComponent(visible = true) {
       plugins: [PrimeVue, createPinia()],
       stubs: {
         Dialog: DialogStub,
+        Select: SelectStub,
       },
     },
   })
@@ -77,6 +100,15 @@ describe('CreateProjectDialog', () => {
     expect(wrapper.text()).toContain('Create Project')
     expect(wrapper.find('#project-name').exists()).toBe(true)
     expect(wrapper.find('#project-description').exists()).toBe(true)
+  })
+
+  it('renders pipeline configuration fields when visible', () => {
+    mountComponent()
+    expect(wrapper.text()).toContain('Pipeline Configuration')
+    expect(wrapper.find('#project-repo-url').exists()).toBe(true)
+    expect(wrapper.find('#project-git-provider').exists()).toBe(true)
+    expect(wrapper.find('#project-agent-runtime').exists()).toBe(true)
+    expect(wrapper.find('#project-default-model').exists()).toBe(true)
   })
 
   it('does not render content when not visible', () => {
@@ -127,10 +159,56 @@ describe('CreateProjectDialog', () => {
     expect(mockExecute).not.toHaveBeenCalled()
   })
 
-  it('calls execute and emits created on valid submission', async () => {
+  it('does not call execute when form is submitted without repo_url', async () => {
+    mountComponent()
+
+    await wrapper.find('#project-name').setValue('My Project')
+    await flushPromises()
+
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect(mockExecute).not.toHaveBeenCalled()
+  })
+
+  it('shows validation error when repo_url is empty on submit', async () => {
+    mountComponent()
+
+    await wrapper.find('#project-name').setValue('My Project')
+    // Touch the repo_url field and set it to empty to trigger the custom Zod message
+    await wrapper.find('#project-repo-url').setValue('')
+    await flushPromises()
+
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    await vi.waitFor(() => {
+      expect(wrapper.text()).toContain('Repository URL is required')
+    })
+  })
+
+  it('shows validation error for invalid URL format', async () => {
+    mountComponent()
+
+    await wrapper.find('#project-name').setValue('My Project')
+    await wrapper.find('#project-repo-url').setValue('not-a-url')
+    await flushPromises()
+
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    await vi.waitFor(() => {
+      expect(wrapper.text()).toContain('Must be a valid URL')
+    })
+  })
+
+  it('calls execute and emits created on valid submission with all fields', async () => {
     const createdProject = {
       id: 'p1',
       name: 'My Project',
+      repo_url: 'https://github.com/org/repo',
+      git_provider: 'github',
+      agent_runtime: 'docker',
       owner_id: 'u1',
       created_at: '2026-02-16T10:00:00Z',
       updated_at: '2026-02-16T10:00:00Z',
@@ -139,14 +217,12 @@ describe('CreateProjectDialog', () => {
 
     mountComponent()
 
-    // Set value via setValue which properly handles v-model
     await wrapper.find('#project-name').setValue('My Project')
+    await wrapper.find('#project-repo-url').setValue('https://github.com/org/repo')
     await flushPromises()
 
-    // Submit form
     await wrapper.find('form').trigger('submit')
 
-    // vee-validate handleSubmit uses deep async chains; poll until execute is called
     await vi.waitFor(() => {
       expect(mockExecute).toHaveBeenCalled()
     })
@@ -154,9 +230,12 @@ describe('CreateProjectDialog', () => {
     expect(mockExecute).toHaveBeenCalledWith({
       name: 'My Project',
       description: undefined,
+      repo_url: 'https://github.com/org/repo',
+      git_provider: 'github',
+      agent_runtime: 'docker',
+      default_model: undefined,
     })
 
-    // Wait for emit to propagate after execute resolves
     await flushPromises()
 
     const createdEmits = wrapper.emitted('created')
@@ -170,6 +249,7 @@ describe('CreateProjectDialog', () => {
     mountComponent()
 
     await wrapper.find('#project-name').setValue('Test Project')
+    await wrapper.find('#project-repo-url').setValue('https://github.com/org/repo')
     await flushPromises()
 
     await wrapper.find('form').trigger('submit')

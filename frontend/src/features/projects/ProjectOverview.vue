@@ -27,6 +27,29 @@ const project = inject<Ref<Project | null>>('project')
             <dt class="text-sm font-medium text-surface-500">Description</dt>
             <dd class="mt-1">{{ project.description }}</dd>
           </div>
+          <div v-if="project.repo_url" class="sm:col-span-2">
+            <dt class="text-sm font-medium text-surface-500">Repository URL</dt>
+            <dd class="mt-1">
+              <a
+                :href="project.repo_url"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="underline"
+              >{{ project.repo_url }}</a>
+            </dd>
+          </div>
+          <div>
+            <dt class="text-sm font-medium text-surface-500">Git Provider</dt>
+            <dd class="mt-1">{{ project.git_provider || '-' }}</dd>
+          </div>
+          <div>
+            <dt class="text-sm font-medium text-surface-500">Agent Runtime</dt>
+            <dd class="mt-1">{{ project.agent_runtime || '-' }}</dd>
+          </div>
+          <div>
+            <dt class="text-sm font-medium text-surface-500">Default Model</dt>
+            <dd class="mt-1">{{ project.default_model || '-' }}</dd>
+          </div>
         </dl>
       </template>
     </Card>
