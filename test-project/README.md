@@ -9,42 +9,48 @@ This project serves as a baseline for the hopeitworks CI polling and pipeline va
 - A simple REST API with CRUD operations for todos
 - A static HTML frontend for managing todos
 - A CI pipeline with build, lint, and test stages
-- Seed data for consistent testing
+- PostgreSQL as the database backend
 
 ## Tech Stack
 
 - **Runtime:** Node.js 20+
 - **Framework:** Express
-- **Database:** SQLite (via better-sqlite3)
-- **Testing:** Jest + supertest (unit), curl-based E2E
+- **Database:** PostgreSQL 16
+- **Testing:** Node.js built-in test runner (`node --test`)
 - **Linting:** ESLint 9 (flat config)
 - **CI:** GitHub Actions
 
+## Prerequisites
+
+- Docker and Docker Compose v2
+- Node.js 20+ (for local development without Docker)
+
 ## Getting Started
+
+### Docker (Recommended)
+
+```bash
+# Start the full stack (Postgres + app)
+docker compose up -d
+
+# Verify it's running
+curl http://localhost:3000/health
+
+# Stop and clean up
+docker compose down -v
+```
 
 ### Local Development
 
+Requires a running PostgreSQL instance.
+
 ```bash
-# Install dependencies
-npm install
+# Install backend dependencies
+cd backend && npm install
 
-# Seed the database
-npm run seed
-
-# Start the app
-npm start
+# Start the app (connects to Postgres via DATABASE_URL)
+DATABASE_URL=postgres://todo:todo@localhost:5432/todo npm start
 # App runs on http://localhost:3000
-```
-
-### Docker
-
-```bash
-# Build and run
-docker compose up -d
-
-# Or build manually
-docker build -t todo-app .
-docker run -p 3000:3000 todo-app
 ```
 
 ## API Endpoints
@@ -75,14 +81,15 @@ curl http://localhost:3000/api/todos
 ## Testing
 
 ```bash
-# Unit tests
-npm test
+# Unit tests (uses mock pool, no Postgres required)
+cd backend && npm test
 
-# E2E tests (requires running app on localhost:3000)
-npm run test:e2e
+# Integration tests against running stack
+docker compose up -d
+DATABASE_URL=postgres://todo:todo@localhost:5432/todo cd backend && npm test
 
 # Lint
-npm run lint
+cd backend && npm run lint
 ```
 
 ## CI Pipeline
@@ -91,7 +98,7 @@ The GitHub Actions CI pipeline (`.github/workflows/ci.yml`) runs the following s
 
 1. **Install** - Install npm dependencies
 2. **Lint** - Run ESLint on source and test files
-3. **Unit Tests** - Run Jest test suite
+3. **Unit Tests** - Run test suite via `node --test`
 4. **Build** - Build Docker image
 5. **E2E Tests** - Start the app in Docker and run curl-based E2E tests
 
@@ -100,15 +107,9 @@ The pipeline triggers on:
 - Pull requests targeting `main`
 - Manual dispatch
 
-## Seed Data
+## Database Schema
 
-The `seed.sql` file contains 8 sample todos for testing. To seed the database:
-
-```bash
-npm run seed
-```
-
-This creates the `todos` table (if not exists) and inserts sample todos with `INSERT OR REPLACE` for idempotency.
+The `init.sql` file contains the PostgreSQL schema for the `todos` table. It is automatically applied when the Postgres container starts for the first time via Docker's `/docker-entrypoint-initdb.d/` mechanism.
 
 ---
 
@@ -121,6 +122,13 @@ This directory also contains sample stories used to validate the hopeitworks pip
 ```
 test-project/
 ├── README.md             # This file
+├── backend/              # Node.js + Express + pg (PostgreSQL)
+│   ├── app.js            # Express routes
+│   ├── server.js         # Entry point
+│   └── test/             # Unit tests
+├── init.sql              # PostgreSQL schema
+├── docker-compose.yml    # Full stack: Postgres + app
+├── Dockerfile            # Builds the backend app
 └── stories/
     └── todo-stories.md   # 5 sample stories in frontmatter markdown format
 ```
@@ -141,6 +149,18 @@ These stories exercise:
 - Multiple scopes (backend, frontend)
 - Dependency chains (linear and diamond)
 - Standard YAML frontmatter parsing
+
+### End-to-End with hopeitworks
+
+To run a real pipeline on the todo app:
+
+1. Ensure `hopeitworks/agent:latest` is built (runtime-1)
+2. Ensure actions are wired in the action registry (runtime-2)
+3. Start the hopeitworks dev stack: `cd deploy && docker compose up -d`
+4. Register `test-project/` as a project in hopeitworks (via UI or API) using the GitHub URL of the hopeitworks repo
+5. Import a story from `test-project/stories/todo-stories.md` (e.g., `TODO-1`)
+6. Launch a run via UI or `POST /api/v1/projects/{id}/stories/{story_id}/runs`
+7. Observe the pipeline: implement step -> container spawns -> agent clones repo -> runs claude -> pushes branch -> CI polls -> HITL gate -> merge
 
 ### Pipeline Validation Flow
 
