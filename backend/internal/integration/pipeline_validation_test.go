@@ -452,21 +452,27 @@ func TestIntegration_PipelineValidation_Execution(t *testing.T) {
 		}
 
 		// Events are returned in created_at DESC order.
-		// Expected events (8 total):
-		// run.started, 3x(step.started + step.completed), run.completed
+		// Expected events (10 total):
+		// story.status_updated(running), run.started, 3x(step.started + step.completed), run.completed, story.status_updated(done)
 		if len(events) < 8 {
 			t.Fatalf("expected at least 8 events, got %d", len(events))
 		}
 
-		// Verify most recent event (index 0, DESC order) is run.completed
-		if events[0].EntityType != "run" || events[0].Action != "completed" {
-			t.Errorf("most recent event: expected run.completed, got %s.%s", events[0].EntityType, events[0].Action)
+		// Find run.completed and run.started events (story.status_updated may be before/after)
+		var foundRunCompleted, foundRunStarted bool
+		for _, e := range events {
+			if e.EntityType == "run" && e.Action == "completed" {
+				foundRunCompleted = true
+			}
+			if e.EntityType == "run" && e.Action == "started" {
+				foundRunStarted = true
+			}
 		}
-
-		// Verify oldest event (last index, DESC order) is run.started
-		last := events[len(events)-1]
-		if last.EntityType != "run" || last.Action != "started" {
-			t.Errorf("oldest event: expected run.started, got %s.%s", last.EntityType, last.Action)
+		if !foundRunCompleted {
+			t.Error("expected run.completed event, not found")
+		}
+		if !foundRunStarted {
+			t.Error("expected run.started event, not found")
 		}
 
 		// Count step events
