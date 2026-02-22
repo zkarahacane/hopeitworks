@@ -8,6 +8,9 @@ SELECT p.id, 'implement', 'Implement story {{story_key}}: {{story_title}}
 ## Objective
 {{story_objective}}
 
+## Instructions
+Implement the story according to the acceptance criteria below. Work on branch {{branch_name}} and modify only the target files listed.
+
 ## Target Files
 {{#each target_files}}
 - {{this}}
@@ -30,6 +33,9 @@ SELECT p.id, 'implement-retry', 'Retry implementation for {{story_key}}: {{story
 
 ## Previous Error
 {{error_context}}
+
+## Log Tail
+{{log_tail}}
 
 ## Existing Changes
 {{diff_content}}
@@ -57,10 +63,17 @@ SELECT p.id, 'review', 'Review changes for {{story_key}}: {{story_title}}
 ## Changes to Review
 {{diff_content}}
 
+## Review Checklist
+- [ ] All acceptance criteria are met
+- [ ] Code passes golangci-lint (backend) or ESLint (frontend)
+- [ ] Tests are added or updated for new behavior
+- [ ] No secrets, tokens, or credentials are committed
+- [ ] No console.log or fmt.Println in production code
+- [ ] Code quality and adherence to project conventions
+- [ ] Error messages are actionable with sufficient context
+
 ## Review Instructions
-- Verify all acceptance criteria are met
-- Check code quality and adherence to project conventions
-- Flag any issues or suggest improvements', 'review'
+Report findings as a list of issues with severity (blocker, warning, suggestion). If no issues are found, approve the changes.', 'review'
 FROM projects p
 WHERE NOT EXISTS (
     SELECT 1 FROM prompt_templates pt

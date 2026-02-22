@@ -10,8 +10,8 @@ import type { PipelineStep } from '@/stores/pipelineConfig'
 
 const modelOptions = [
   { label: 'Claude Opus 4.6', value: 'claude-opus-4-6' },
-  { label: 'Claude Sonnet 4.5', value: 'claude-sonnet-4-5' },
-  { label: 'Claude Haiku 4.3', value: 'claude-haiku-4-3' },
+  { label: 'Claude Sonnet 4.6', value: 'claude-sonnet-4-6' },
+  { label: 'Claude Haiku 4.5', value: 'claude-haiku-4-5' },
 ]
 
 const retryTypeOptions = [

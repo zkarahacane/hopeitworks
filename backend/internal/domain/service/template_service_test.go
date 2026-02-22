@@ -222,6 +222,7 @@ func TestTemplateService_RenderForStory_AllDefaultTemplates(t *testing.T) {
 		{TemplateNameImplement, "Implement story"},
 		{TemplateNameImplementRetry, "Retry implementation"},
 		{TemplateNameReview, "Review changes"},
+		{TemplateNameMerge, "Merge changes"},
 		{TemplateNameMergeConflict, "Resolve merge conflict"},
 	}
 

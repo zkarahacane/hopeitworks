@@ -76,7 +76,7 @@ func TestParallelGroupExecutor_Execute_HappyPath(t *testing.T) {
 		getByProjectIDFn: func(_ context.Context, _ uuid.UUID) (*model.PipelineConfig, error) {
 			return &model.PipelineConfig{
 				ProjectID:  projectID,
-				ConfigYAML: `steps: [{name: "implement", action_type: "implement", model: "claude-sonnet-4-5", auto_approve: false}]`,
+				ConfigYAML: `steps: [{name: "implement", action_type: "implement", model: "claude-sonnet-4-6", auto_approve: false}]`,
 			}, nil
 		},
 	}
@@ -171,7 +171,7 @@ func TestParallelGroupExecutor_Execute_FailFast(t *testing.T) {
 		getByProjectIDFn: func(_ context.Context, _ uuid.UUID) (*model.PipelineConfig, error) {
 			return &model.PipelineConfig{
 				ProjectID:  projectID,
-				ConfigYAML: `steps: [{name: "implement", action_type: "implement", model: "claude-sonnet-4-5", auto_approve: false}]`,
+				ConfigYAML: `steps: [{name: "implement", action_type: "implement", model: "claude-sonnet-4-6", auto_approve: false}]`,
 			}, nil
 		},
 	}

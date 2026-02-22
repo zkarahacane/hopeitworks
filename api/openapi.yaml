@@ -2563,7 +2563,7 @@ components:
           example: implement
         model:
           type: string
-          enum: [claude-opus-4-6, claude-sonnet-4-5, claude-haiku-4-3]
+          enum: [claude-opus-4-6, claude-sonnet-4-6, claude-haiku-4-5]
           example: claude-opus-4-6
         auto_approve:
           type: boolean

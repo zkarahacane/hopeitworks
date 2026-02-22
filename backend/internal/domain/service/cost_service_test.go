@@ -281,14 +281,14 @@ func TestRecordStepCost_KnownModel_CorrectCost(t *testing.T) {
 		},
 		{
 			name:         "sonnet pricing",
-			model:        "claude-sonnet-4-5",
+			model:        "claude-sonnet-4-6",
 			inputTokens:  2_000_000,
 			outputTokens: 500_000,
 			expectedCost: 6.0 + 7.5, // 3*2 + 15*0.5
 		},
 		{
 			name:         "haiku pricing",
-			model:        "claude-haiku-4-3",
+			model:        "claude-haiku-4-5",
 			inputTokens:  10_000_000,
 			outputTokens: 1_000_000,
 			expectedCost: 2.5 + 1.25, // 0.25*10 + 1.25*1
@@ -525,8 +525,8 @@ func TestComputeCostUSD(t *testing.T) {
 		expectedKnown bool
 	}{
 		{"opus", "claude-opus-4-6", 1_000_000, 1_000_000, 15.0 + 75.0, true},
-		{"sonnet", "claude-sonnet-4-5", 1_000_000, 1_000_000, 3.0 + 15.0, true},
-		{"haiku", "claude-haiku-4-3", 1_000_000, 1_000_000, 0.25 + 1.25, true},
+		{"sonnet", "claude-sonnet-4-6", 1_000_000, 1_000_000, 3.0 + 15.0, true},
+		{"haiku", "claude-haiku-4-5", 1_000_000, 1_000_000, 0.25 + 1.25, true},
 		{"unknown", "gpt-4", 1_000_000, 1_000_000, 0, false},
 		{"zero tokens", "claude-opus-4-6", 0, 0, 0, true},
 	}

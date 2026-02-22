@@ -26,7 +26,7 @@ const DefaultPipelineConfigYAML = `steps:
   - id: 880e8400-e29b-41d4-a716-446655440002
     name: review
     action_type: review
-    model: claude-sonnet-4-5
+    model: claude-sonnet-4-6
     auto_approve: false
     retry_policy:
       max_retries: 2
@@ -34,7 +34,7 @@ const DefaultPipelineConfigYAML = `steps:
   - id: 880e8400-e29b-41d4-a716-446655440003
     name: merge
     action_type: merge
-    model: claude-sonnet-4-5
+    model: claude-sonnet-4-6
     auto_approve: true
     retry_policy:
       max_retries: 1
