@@ -455,4 +455,3 @@ func TestHITLHandler_RejectHITLRequest(t *testing.T) {
 		})
 	}
 }
-
