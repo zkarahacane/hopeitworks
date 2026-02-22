@@ -1,6 +1,6 @@
 # Story fix-11: Missing service methods for 501 endpoints
 
-Status: dev-complete
+Status: done
 
 ## Story
 

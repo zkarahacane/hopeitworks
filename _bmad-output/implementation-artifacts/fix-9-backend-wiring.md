@@ -1,6 +1,6 @@
 # Story fix-9: [BACK] Fix backend wiring — missing server.go delegations, nil pipeline executor dependencies, and missing role in auth response
 
-Status: review
+Status: done
 
 ## Story
 

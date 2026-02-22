@@ -1,6 +1,6 @@
 # Story fix-10: [SHARED] Expose project infrastructure fields in OpenAPI spec
 
-Status: review
+Status: done
 
 ## Story
 

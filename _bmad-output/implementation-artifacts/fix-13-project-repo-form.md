@@ -1,6 +1,6 @@
 # Story fix-13: [FRONT] Expose repo URL and pipeline config fields in project forms
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
