@@ -17,7 +17,8 @@
     "lint:oxlint": "oxlint . --fix",
     "lint:eslint": "eslint . --fix --cache",
     "format": "prettier --write --experimental-cli src/",
-    "generate:api": "openapi-typescript ../api/openapi.yaml -o src/api/schema.d.ts"
+    "generate:api": "openapi-typescript ../api/openapi.yaml -o src/api/schema.d.ts",
+    "generate-api": "openapi-typescript ../api/openapi.yaml -o src/api/schema.d.ts"
   },
   "dependencies": {
     "@guolao/vue-monaco-editor": "^1.6.0",

@@ -154,8 +154,8 @@ type RunListResult struct {
 	Total int64
 }
 
-// ListRunsByProject retrieves a paginated list of runs for a project.
-func (s *RunService) ListRunsByProject(ctx context.Context, projectID uuid.UUID, page, perPage int) (*RunListResult, error) {
+// normalizePagination clamps page and perPage to valid defaults.
+func normalizePagination(page, perPage int) (int32, int32) {
 	if page < 1 {
 		page = 1
 	}
@@ -165,26 +165,37 @@ func (s *RunService) ListRunsByProject(ctx context.Context, projectID uuid.UUID,
 	if perPage > 100 {
 		perPage = 100
 	}
+	return int32(perPage), int32((page - 1) * perPage)
+}
 
-	offset := int32((page - 1) * perPage)
-	limit := int32(perPage)
-
-	runs, err := s.runRepo.ListRunsByProject(ctx, projectID, limit, offset)
-	if err != nil {
-		return nil, err
-	}
-
-	// TODO(perf): batch fetch steps in single query for large lists (S-4-2)
+// enrichRunsWithSteps fetches and attaches steps (with progress) to each run.
+// TODO(perf): batch fetch steps in single query for large lists (S-4-2)
+func (s *RunService) enrichRunsWithSteps(ctx context.Context, runs []*model.Run) error {
 	for _, r := range runs {
 		steps, err := s.runRepo.ListRunStepsByRun(ctx, r.ID)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		r.Steps = make([]model.RunStep, len(steps))
 		for i, step := range steps {
 			r.Steps[i] = *step
 		}
 		r.Progress = r.ComputeProgress(r.Steps)
+	}
+	return nil
+}
+
+// ListRunsByProject retrieves a paginated list of runs for a project.
+func (s *RunService) ListRunsByProject(ctx context.Context, projectID uuid.UUID, page, perPage int) (*RunListResult, error) {
+	limit, offset := normalizePagination(page, perPage)
+
+	runs, err := s.runRepo.ListRunsByProject(ctx, projectID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.enrichRunsWithSteps(ctx, runs); err != nil {
+		return nil, err
 	}
 
 	total, err := s.runRepo.CountRunsByProject(ctx, projectID)
@@ -200,35 +211,15 @@ func (s *RunService) ListRunsByProject(ctx context.Context, projectID uuid.UUID,
 
 // ListRunsByStory retrieves a paginated list of runs for a story.
 func (s *RunService) ListRunsByStory(ctx context.Context, storyID uuid.UUID, page, perPage int) (*RunListResult, error) {
-	if page < 1 {
-		page = 1
-	}
-	if perPage < 1 {
-		perPage = 20
-	}
-	if perPage > 100 {
-		perPage = 100
-	}
-
-	offset := int32((page - 1) * perPage)
-	limit := int32(perPage)
+	limit, offset := normalizePagination(page, perPage)
 
 	runs, err := s.runRepo.ListRunsByStory(ctx, storyID, limit, offset)
 	if err != nil {
 		return nil, err
 	}
 
-	// TODO(perf): batch fetch steps in single query for large lists (S-4-2)
-	for _, r := range runs {
-		steps, err := s.runRepo.ListRunStepsByRun(ctx, r.ID)
-		if err != nil {
-			return nil, err
-		}
-		r.Steps = make([]model.RunStep, len(steps))
-		for i, step := range steps {
-			r.Steps[i] = *step
-		}
-		r.Progress = r.ComputeProgress(r.Steps)
+	if err := s.enrichRunsWithSteps(ctx, runs); err != nil {
+		return nil, err
 	}
 
 	total, err := s.runRepo.CountRunsByStory(ctx, storyID)
