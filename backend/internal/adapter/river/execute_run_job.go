@@ -2,6 +2,7 @@ package river
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/riverqueue/river"
@@ -26,6 +27,12 @@ type ExecuteRunWorker struct {
 // NewExecuteRunWorker creates a new ExecuteRunWorker.
 func NewExecuteRunWorker(executor *service.PipelineExecutor) *ExecuteRunWorker {
 	return &ExecuteRunWorker{executor: executor}
+}
+
+// Timeout returns the maximum duration for a pipeline run job.
+// Agent containers can take 30+ minutes for complex stories.
+func (w *ExecuteRunWorker) Timeout(_ *river.Job[ExecuteRunArgs]) time.Duration {
+	return 45 * time.Minute
 }
 
 // Work executes the pipeline run identified by the job payload.
