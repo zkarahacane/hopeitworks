@@ -28,7 +28,7 @@ function formatDate(iso?: string | null): string {
 
 /** Returns the last step in a group (latest retry or root) to check if retry is possible. */
 function lastStep(group: { root: RunStep; retries: RunStep[] }): RunStep {
-  return group.retries.length > 0 ? group.retries[group.retries.length - 1] : group.root
+  return group.retries.length > 0 ? group.retries[group.retries.length - 1]! : group.root
 }
 
 function canRetry(group: { root: RunStep; retries: RunStep[] }): boolean {
