@@ -12,6 +12,7 @@ test.describe('Application Routing', () => {
             id: '1',
             email: 'test@test.com',
             name: 'Test User',
+            role: 'user',
           }),
         })
       })
@@ -85,6 +86,7 @@ test.describe('Application Routing', () => {
             id: '1',
             email: 'test@test.com',
             name: 'Test User',
+            role: 'user',
           }),
         })
       })

@@ -11,6 +11,7 @@ test.describe('Project Creation', () => {
           id: '1',
           email: 'test@test.com',
           name: 'Test User',
+          role: 'user',
         }),
       })
     })
