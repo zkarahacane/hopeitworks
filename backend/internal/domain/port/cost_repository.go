@@ -36,4 +36,13 @@ type CostRepository interface {
 
 	// ListStepCostsByRun returns per-step cost breakdown for a run.
 	ListStepCostsByRun(ctx context.Context, runID uuid.UUID) ([]model.StepCostBreakdown, error)
+
+	// ListDailyCostsByProject returns daily cost data points for chart rendering.
+	ListDailyCostsByProject(ctx context.Context, projectID uuid.UUID, since time.Time) ([]model.CostDataPoint, error)
+
+	// ListCostsByProjectByRunPaginated returns paginated run-level cost breakdown.
+	ListCostsByProjectByRunPaginated(ctx context.Context, projectID uuid.UUID, since time.Time, limit, offset int32) ([]model.RunCostRow, error)
+
+	// CountCostsByProjectByRun returns the count of distinct runs with costs.
+	CountCostsByProjectByRun(ctx context.Context, projectID uuid.UUID, since time.Time) (int64, error)
 }

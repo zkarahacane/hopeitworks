@@ -382,6 +382,15 @@ func (m *mockCostRepo) ListCostsByProjectByModel(_ context.Context, _ uuid.UUID,
 func (m *mockCostRepo) ListStepCostsByRun(_ context.Context, _ uuid.UUID) ([]model.StepCostBreakdown, error) {
 	return nil, nil
 }
+func (m *mockCostRepo) ListDailyCostsByProject(_ context.Context, _ uuid.UUID, _ time.Time) ([]model.CostDataPoint, error) {
+	return nil, nil
+}
+func (m *mockCostRepo) ListCostsByProjectByRunPaginated(_ context.Context, _ uuid.UUID, _ time.Time, _, _ int32) ([]model.RunCostRow, error) {
+	return nil, nil
+}
+func (m *mockCostRepo) CountCostsByProjectByRun(_ context.Context, _ uuid.UUID, _ time.Time) (int64, error) {
+	return 0, nil
+}
 
 type agentRunFixture struct {
 	projectID uuid.UUID

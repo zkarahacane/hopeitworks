@@ -127,6 +127,40 @@ func (r *HITLRepo) CountPendingByProject(ctx context.Context, projectID uuid.UUI
 	return count, nil
 }
 
+// ListFiltered returns HITL requests optionally filtered by status with pagination.
+func (r *HITLRepo) ListFiltered(ctx context.Context, status *string, limit, offset int32) ([]*model.HITLRequest, error) {
+	statusStr := ""
+	if status != nil {
+		statusStr = *status
+	}
+	rows, err := r.queries.ListHITLRequestsFiltered(ctx, ListHITLRequestsFilteredParams{
+		Column1: statusStr,
+		Limit:   limit,
+		Offset:  offset,
+	})
+	if err != nil {
+		return nil, apperrors.NewInternal("failed to list filtered HITL requests", err)
+	}
+	result := make([]*model.HITLRequest, len(rows))
+	for i, row := range rows {
+		result[i] = toDomainHITLRequest(row)
+	}
+	return result, nil
+}
+
+// CountFiltered returns the count of HITL requests optionally filtered by status.
+func (r *HITLRepo) CountFiltered(ctx context.Context, status *string) (int64, error) {
+	statusStr := ""
+	if status != nil {
+		statusStr = *status
+	}
+	count, err := r.queries.CountHITLRequestsFiltered(ctx, statusStr)
+	if err != nil {
+		return 0, apperrors.NewInternal("failed to count filtered HITL requests", err)
+	}
+	return count, nil
+}
+
 // toDomainHITLRequest maps a sqlc-generated HitlRequest to a domain HITLRequest.
 func toDomainHITLRequest(row HitlRequest) *model.HITLRequest {
 	req := &model.HITLRequest{

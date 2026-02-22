@@ -188,6 +188,63 @@ func (r *CostRepo) ListStepCostsByRun(ctx context.Context, runID uuid.UUID) ([]m
 	return results, nil
 }
 
+// ListDailyCostsByProject returns daily cost data points for chart rendering.
+func (r *CostRepo) ListDailyCostsByProject(ctx context.Context, projectID uuid.UUID, since time.Time) ([]model.CostDataPoint, error) {
+	rows, err := r.queries.ListDailyCostsByProject(ctx, ListDailyCostsByProjectParams{
+		ProjectID: projectID,
+		CreatedAt: since,
+	})
+	if err != nil {
+		return nil, apperrors.NewInternal("failed to list daily costs by project", err)
+	}
+
+	results := make([]model.CostDataPoint, len(rows))
+	for i, row := range rows {
+		results[i] = model.CostDataPoint{
+			Date:         row.Date,
+			TotalCostUSD: numericToFloat64(row.TotalCostUsd),
+		}
+	}
+	return results, nil
+}
+
+// ListCostsByProjectByRunPaginated returns paginated run-level cost breakdown.
+func (r *CostRepo) ListCostsByProjectByRunPaginated(ctx context.Context, projectID uuid.UUID, since time.Time, limit, offset int32) ([]model.RunCostRow, error) {
+	rows, err := r.queries.ListCostsByProjectByRunPaginated(ctx, ListCostsByProjectByRunPaginatedParams{
+		ProjectID: projectID,
+		CreatedAt: since,
+		Limit:     limit,
+		Offset:    offset,
+	})
+	if err != nil {
+		return nil, apperrors.NewInternal("failed to list costs by project by run paginated", err)
+	}
+
+	results := make([]model.RunCostRow, len(rows))
+	for i, row := range rows {
+		results[i] = model.RunCostRow{
+			RunID:        row.RunID,
+			StoryKey:     row.StoryKey,
+			Status:       row.Status,
+			StartedAt:    row.StartedAt,
+			TotalCostUSD: numericToFloat64(row.TotalCostUsd),
+		}
+	}
+	return results, nil
+}
+
+// CountCostsByProjectByRun returns the count of distinct runs with costs.
+func (r *CostRepo) CountCostsByProjectByRun(ctx context.Context, projectID uuid.UUID, since time.Time) (int64, error) {
+	count, err := r.queries.CountCostsByProjectByRun(ctx, CountCostsByProjectByRunParams{
+		ProjectID: projectID,
+		CreatedAt: since,
+	})
+	if err != nil {
+		return 0, apperrors.NewInternal("failed to count costs by project by run", err)
+	}
+	return count, nil
+}
+
 // toDomainCostRecord maps a sqlc-generated CostRecord to a domain CostRecord.
 func toDomainCostRecord(c CostRecord) *model.CostRecord {
 	return &model.CostRecord{

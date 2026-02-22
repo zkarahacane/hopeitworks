@@ -13,6 +13,25 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countCostsByProjectByRun = `-- name: CountCostsByProjectByRun :one
+SELECT COUNT(DISTINCT rs2.run_id)
+FROM cost_records cr
+JOIN run_steps rs2 ON rs2.id = cr.run_step_id
+WHERE cr.project_id = $1 AND cr.created_at >= $2
+`
+
+type CountCostsByProjectByRunParams struct {
+	ProjectID uuid.UUID `json:"project_id"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func (q *Queries) CountCostsByProjectByRun(ctx context.Context, arg CountCostsByProjectByRunParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countCostsByProjectByRun, arg.ProjectID, arg.CreatedAt)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const getCostByRunStep = `-- name: GetCostByRunStep :one
 SELECT id, run_step_id, project_id, tokens_input, tokens_output, cost_usd, model, created_at FROM cost_records WHERE run_step_id = $1 LIMIT 1
 `
@@ -173,6 +192,68 @@ func (q *Queries) ListCostsByProjectByRun(ctx context.Context, arg ListCostsByPr
 	return items, nil
 }
 
+const listCostsByProjectByRunPaginated = `-- name: ListCostsByProjectByRunPaginated :many
+SELECT rs2.run_id,
+       s.key    AS story_key,
+       r.status,
+       r.created_at AS started_at,
+       COALESCE(SUM(cr.cost_usd), 0)::DECIMAL(10,6) AS total_cost_usd
+FROM cost_records cr
+JOIN run_steps rs2 ON rs2.id = cr.run_step_id
+JOIN runs r ON r.id = rs2.run_id
+JOIN stories s ON s.id = r.story_id
+WHERE cr.project_id = $1 AND cr.created_at >= $2
+GROUP BY rs2.run_id, s.key, r.status, r.created_at
+ORDER BY r.created_at DESC
+LIMIT $3 OFFSET $4
+`
+
+type ListCostsByProjectByRunPaginatedParams struct {
+	ProjectID uuid.UUID `json:"project_id"`
+	CreatedAt time.Time `json:"created_at"`
+	Limit     int32     `json:"limit"`
+	Offset    int32     `json:"offset"`
+}
+
+type ListCostsByProjectByRunPaginatedRow struct {
+	RunID        uuid.UUID      `json:"run_id"`
+	StoryKey     string         `json:"story_key"`
+	Status       string         `json:"status"`
+	StartedAt    time.Time      `json:"started_at"`
+	TotalCostUsd pgtype.Numeric `json:"total_cost_usd"`
+}
+
+func (q *Queries) ListCostsByProjectByRunPaginated(ctx context.Context, arg ListCostsByProjectByRunPaginatedParams) ([]ListCostsByProjectByRunPaginatedRow, error) {
+	rows, err := q.db.Query(ctx, listCostsByProjectByRunPaginated,
+		arg.ProjectID,
+		arg.CreatedAt,
+		arg.Limit,
+		arg.Offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCostsByProjectByRunPaginatedRow{}
+	for rows.Next() {
+		var i ListCostsByProjectByRunPaginatedRow
+		if err := rows.Scan(
+			&i.RunID,
+			&i.StoryKey,
+			&i.Status,
+			&i.StartedAt,
+			&i.TotalCostUsd,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCostsByProjectByStory = `-- name: ListCostsByProjectByStory :many
 SELECT r.story_id,
        s.key AS story_key,
@@ -207,6 +288,47 @@ func (q *Queries) ListCostsByProjectByStory(ctx context.Context, arg ListCostsBy
 	for rows.Next() {
 		var i ListCostsByProjectByStoryRow
 		if err := rows.Scan(&i.StoryID, &i.StoryKey, &i.TotalCost); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listDailyCostsByProject = `-- name: ListDailyCostsByProject :many
+SELECT
+    DATE(cr.created_at)::text AS date,
+    COALESCE(SUM(cr.cost_usd), 0)::DECIMAL(10,6) AS total_cost_usd
+FROM cost_records cr
+WHERE cr.project_id = $1
+  AND cr.created_at >= $2
+GROUP BY DATE(cr.created_at)
+ORDER BY date ASC
+`
+
+type ListDailyCostsByProjectParams struct {
+	ProjectID uuid.UUID `json:"project_id"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type ListDailyCostsByProjectRow struct {
+	Date         string         `json:"date"`
+	TotalCostUsd pgtype.Numeric `json:"total_cost_usd"`
+}
+
+func (q *Queries) ListDailyCostsByProject(ctx context.Context, arg ListDailyCostsByProjectParams) ([]ListDailyCostsByProjectRow, error) {
+	rows, err := q.db.Query(ctx, listDailyCostsByProject, arg.ProjectID, arg.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListDailyCostsByProjectRow{}
+	for rows.Next() {
+		var i ListDailyCostsByProjectRow
+		if err := rows.Scan(&i.Date, &i.TotalCostUsd); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

@@ -79,6 +79,34 @@ func (m *mockHITLRepo) CountPendingByProject(_ context.Context, _ uuid.UUID) (in
 	return int64(len(m.pending)), nil
 }
 
+func (m *mockHITLRepo) ListFiltered(_ context.Context, status *string, limit, offset int32) ([]*model.HITLRequest, error) {
+	var result []*model.HITLRequest
+	for _, req := range m.requests {
+		if status == nil || string(req.Status) == *status {
+			result = append(result, req)
+		}
+	}
+	// Apply offset/limit
+	if int(offset) >= len(result) {
+		return []*model.HITLRequest{}, nil
+	}
+	end := int(offset + limit)
+	if end > len(result) {
+		end = len(result)
+	}
+	return result[offset:end], nil
+}
+
+func (m *mockHITLRepo) CountFiltered(_ context.Context, status *string) (int64, error) {
+	var count int64
+	for _, req := range m.requests {
+		if status == nil || string(req.Status) == *status {
+			count++
+		}
+	}
+	return count, nil
+}
+
 // mockRunRepoForHITL implements a minimal port.RunRepository for HITL tests.
 type mockRunRepoForHITL struct {
 	steps  map[uuid.UUID]*model.RunStep
@@ -454,4 +482,123 @@ func TestHITLService_Reject_RepoUpdateFails(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
+}
+
+func TestHITLService_ListAll(t *testing.T) {
+	hitlRepo := newMockHITLRepo()
+
+	// Seed requests with different statuses
+	for i := 0; i < 5; i++ {
+		id := uuid.New()
+		hitlRepo.requests[id] = &model.HITLRequest{
+			ID:        id,
+			RunStepID: uuid.New(),
+			GateType:  "approval",
+			Status:    model.HITLStatusPending,
+			CreatedAt: time.Now(),
+		}
+	}
+	approvedID := uuid.New()
+	hitlRepo.requests[approvedID] = &model.HITLRequest{
+		ID:        approvedID,
+		RunStepID: uuid.New(),
+		GateType:  "approval",
+		Status:    model.HITLStatusApproved,
+		CreatedAt: time.Now(),
+	}
+
+	svc := NewHITLService(hitlRepo, newMockRunRepoForHITL(), nil, hitlTestLogger())
+
+	t.Run("no filter returns all", func(t *testing.T) {
+		items, total, err := svc.ListAll(context.Background(), nil, 1, 20)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if total != 6 {
+			t.Errorf("expected total 6, got %d", total)
+		}
+		if len(items) != 6 {
+			t.Errorf("expected 6 items, got %d", len(items))
+		}
+	})
+
+	t.Run("filter by pending", func(t *testing.T) {
+		status := "pending"
+		items, total, err := svc.ListAll(context.Background(), &status, 1, 20)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if total != 5 {
+			t.Errorf("expected total 5, got %d", total)
+		}
+		if len(items) != 5 {
+			t.Errorf("expected 5 items, got %d", len(items))
+		}
+	})
+
+	t.Run("filter by approved", func(t *testing.T) {
+		status := "approved"
+		items, total, err := svc.ListAll(context.Background(), &status, 1, 20)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if total != 1 {
+			t.Errorf("expected total 1, got %d", total)
+		}
+		if len(items) != 1 {
+			t.Errorf("expected 1 item, got %d", len(items))
+		}
+	})
+
+	t.Run("pagination defaults", func(t *testing.T) {
+		items, total, err := svc.ListAll(context.Background(), nil, 0, 0)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if total != 6 {
+			t.Errorf("expected total 6, got %d", total)
+		}
+		if len(items) > 20 {
+			t.Errorf("expected at most 20 items (default), got %d", len(items))
+		}
+	})
+}
+
+func TestHITLService_GetByStepID(t *testing.T) {
+	hitlRepo := newMockHITLRepo()
+	stepID := uuid.New()
+	hitlID := uuid.New()
+	hitlRepo.requests[hitlID] = &model.HITLRequest{
+		ID:        hitlID,
+		RunStepID: stepID,
+		GateType:  "approval",
+		Status:    model.HITLStatusPending,
+		CreatedAt: time.Now(),
+	}
+
+	svc := NewHITLService(hitlRepo, newMockRunRepoForHITL(), nil, hitlTestLogger())
+
+	t.Run("existing step returns request", func(t *testing.T) {
+		req, err := svc.GetByStepID(context.Background(), stepID)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if req.ID != hitlID {
+			t.Errorf("expected hitl ID %s, got %s", hitlID, req.ID)
+		}
+	})
+
+	t.Run("non-existent step returns not found", func(t *testing.T) {
+		_, err := svc.GetByStepID(context.Background(), uuid.New())
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		domainErr, ok := err.(*apperrors.DomainError)
+		if !ok {
+			t.Fatalf("expected DomainError, got %T", err)
+		}
+		if domainErr.Category != apperrors.CategoryNotFound {
+			t.Errorf("expected not_found category, got %s", domainErr.Category)
+		}
+	})
 }

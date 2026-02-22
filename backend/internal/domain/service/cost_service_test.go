@@ -17,15 +17,18 @@ import (
 // --- Mock implementations ---
 
 type mockCostRepo struct {
-	insertCostRecordFn          func(ctx context.Context, record *model.CostRecord) (*model.CostRecord, error)
-	getCostByRunStepFn          func(ctx context.Context, runStepID uuid.UUID) (*model.CostRecord, error)
-	sumCostByProjectFn          func(ctx context.Context, projectID uuid.UUID, since time.Time) (float64, int64, int64, error)
-	sumCostByRunFn              func(ctx context.Context, runID uuid.UUID) (float64, error)
-	sumCostByStoryFn            func(ctx context.Context, storyID uuid.UUID) (float64, int64, int64, int, error)
-	listCostsByProjectByStoryFn func(ctx context.Context, projectID uuid.UUID, since time.Time) ([]model.StoryCostBreakdown, error)
-	listCostsByProjectByRunFn   func(ctx context.Context, projectID uuid.UUID, since time.Time) ([]model.RunCostBreakdown, error)
-	listCostsByProjectByModelFn func(ctx context.Context, projectID uuid.UUID, since time.Time) ([]model.CostByModel, error)
-	listStepCostsByRunFn        func(ctx context.Context, runID uuid.UUID) ([]model.StepCostBreakdown, error)
+	insertCostRecordFn                 func(ctx context.Context, record *model.CostRecord) (*model.CostRecord, error)
+	getCostByRunStepFn                 func(ctx context.Context, runStepID uuid.UUID) (*model.CostRecord, error)
+	sumCostByProjectFn                 func(ctx context.Context, projectID uuid.UUID, since time.Time) (float64, int64, int64, error)
+	sumCostByRunFn                     func(ctx context.Context, runID uuid.UUID) (float64, error)
+	sumCostByStoryFn                   func(ctx context.Context, storyID uuid.UUID) (float64, int64, int64, int, error)
+	listCostsByProjectByStoryFn        func(ctx context.Context, projectID uuid.UUID, since time.Time) ([]model.StoryCostBreakdown, error)
+	listCostsByProjectByRunFn          func(ctx context.Context, projectID uuid.UUID, since time.Time) ([]model.RunCostBreakdown, error)
+	listCostsByProjectByModelFn        func(ctx context.Context, projectID uuid.UUID, since time.Time) ([]model.CostByModel, error)
+	listStepCostsByRunFn               func(ctx context.Context, runID uuid.UUID) ([]model.StepCostBreakdown, error)
+	listDailyCostsByProjectFn          func(ctx context.Context, projectID uuid.UUID, since time.Time) ([]model.CostDataPoint, error)
+	listCostsByProjectByRunPaginatedFn func(ctx context.Context, projectID uuid.UUID, since time.Time, limit, offset int32) ([]model.RunCostRow, error)
+	countCostsByProjectByRunFn         func(ctx context.Context, projectID uuid.UUID, since time.Time) (int64, error)
 
 	insertCalls []model.CostRecord
 }
@@ -93,6 +96,27 @@ func (m *mockCostRepo) ListStepCostsByRun(ctx context.Context, runID uuid.UUID) 
 		return m.listStepCostsByRunFn(ctx, runID)
 	}
 	return []model.StepCostBreakdown{}, nil
+}
+
+func (m *mockCostRepo) ListDailyCostsByProject(ctx context.Context, projectID uuid.UUID, since time.Time) ([]model.CostDataPoint, error) {
+	if m.listDailyCostsByProjectFn != nil {
+		return m.listDailyCostsByProjectFn(ctx, projectID, since)
+	}
+	return []model.CostDataPoint{}, nil
+}
+
+func (m *mockCostRepo) ListCostsByProjectByRunPaginated(ctx context.Context, projectID uuid.UUID, since time.Time, limit, offset int32) ([]model.RunCostRow, error) {
+	if m.listCostsByProjectByRunPaginatedFn != nil {
+		return m.listCostsByProjectByRunPaginatedFn(ctx, projectID, since, limit, offset)
+	}
+	return []model.RunCostRow{}, nil
+}
+
+func (m *mockCostRepo) CountCostsByProjectByRun(ctx context.Context, projectID uuid.UUID, since time.Time) (int64, error) {
+	if m.countCostsByProjectByRunFn != nil {
+		return m.countCostsByProjectByRunFn(ctx, projectID, since)
+	}
+	return 0, nil
 }
 
 type mockProjectRepoForCost struct {
@@ -514,6 +538,105 @@ func TestComputeCostUSD(t *testing.T) {
 			assert.InDelta(t, tt.expectedCost, cost, 0.001)
 		})
 	}
+}
+
+// --- GetProjectCostChart tests ---
+
+func TestGetProjectCostChart_Success(t *testing.T) {
+	projectID := uuid.New()
+	projectRepo := &mockProjectRepoForCost{
+		project: &model.Project{ID: projectID, Name: "test"},
+	}
+	costRepo := &mockCostRepo{
+		listDailyCostsByProjectFn: func(_ context.Context, _ uuid.UUID, _ time.Time) ([]model.CostDataPoint, error) {
+			return []model.CostDataPoint{
+				{Date: "2026-02-20", TotalCostUSD: 1.50},
+				{Date: "2026-02-21", TotalCostUSD: 3.25},
+			}, nil
+		},
+	}
+	svc := newTestCostService(costRepo, projectRepo, nil, nil)
+
+	points, err := svc.GetProjectCostChart(context.Background(), projectID, "7d")
+	require.NoError(t, err)
+	require.Len(t, points, 2)
+	assert.Equal(t, "2026-02-20", points[0].Date)
+	assert.InDelta(t, 1.50, points[0].TotalCostUSD, 0.001)
+	assert.Equal(t, "2026-02-21", points[1].Date)
+	assert.InDelta(t, 3.25, points[1].TotalCostUSD, 0.001)
+}
+
+func TestGetProjectCostChart_ProjectNotFound(t *testing.T) {
+	projectRepo := &mockProjectRepoForCost{err: errors.NewNotFound("project", uuid.New())}
+	svc := newTestCostService(&mockCostRepo{}, projectRepo, nil, nil)
+
+	_, err := svc.GetProjectCostChart(context.Background(), uuid.New(), "7d")
+	assert.Error(t, err)
+	domErr, ok := err.(*errors.DomainError)
+	assert.True(t, ok)
+	assert.Equal(t, errors.CategoryNotFound, domErr.Category)
+}
+
+func TestGetProjectCostChart_DefaultPeriod(t *testing.T) {
+	projectID := uuid.New()
+	projectRepo := &mockProjectRepoForCost{
+		project: &model.Project{ID: projectID, Name: "test"},
+	}
+	svc := newTestCostService(&mockCostRepo{}, projectRepo, nil, nil)
+
+	points, err := svc.GetProjectCostChart(context.Background(), projectID, "")
+	require.NoError(t, err)
+	assert.Empty(t, points)
+}
+
+// --- GetProjectCostRuns tests ---
+
+func TestGetProjectCostRuns_Success(t *testing.T) {
+	projectID := uuid.New()
+	projectRepo := &mockProjectRepoForCost{
+		project: &model.Project{ID: projectID, Name: "test"},
+	}
+	runID := uuid.New()
+	costRepo := &mockCostRepo{
+		listCostsByProjectByRunPaginatedFn: func(_ context.Context, _ uuid.UUID, _ time.Time, _, _ int32) ([]model.RunCostRow, error) {
+			return []model.RunCostRow{
+				{RunID: runID, StoryKey: "S-01", Status: "completed", StartedAt: time.Now(), TotalCostUSD: 5.0},
+			}, nil
+		},
+		countCostsByProjectByRunFn: func(_ context.Context, _ uuid.UUID, _ time.Time) (int64, error) {
+			return 1, nil
+		},
+	}
+	svc := newTestCostService(costRepo, projectRepo, nil, nil)
+
+	rows, total, err := svc.GetProjectCostRuns(context.Background(), projectID, "7d", 1, 20)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), total)
+	require.Len(t, rows, 1)
+	assert.Equal(t, runID, rows[0].RunID)
+	assert.Equal(t, "S-01", rows[0].StoryKey)
+	assert.InDelta(t, 5.0, rows[0].TotalCostUSD, 0.001)
+}
+
+func TestGetProjectCostRuns_ProjectNotFound(t *testing.T) {
+	projectRepo := &mockProjectRepoForCost{err: errors.NewNotFound("project", uuid.New())}
+	svc := newTestCostService(&mockCostRepo{}, projectRepo, nil, nil)
+
+	_, _, err := svc.GetProjectCostRuns(context.Background(), uuid.New(), "7d", 1, 20)
+	assert.Error(t, err)
+}
+
+func TestGetProjectCostRuns_PaginationDefaults(t *testing.T) {
+	projectID := uuid.New()
+	projectRepo := &mockProjectRepoForCost{
+		project: &model.Project{ID: projectID, Name: "test"},
+	}
+	svc := newTestCostService(&mockCostRepo{}, projectRepo, nil, nil)
+
+	rows, total, err := svc.GetProjectCostRuns(context.Background(), projectID, "", 0, 0)
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), total)
+	assert.Empty(t, rows)
 }
 
 // --- parsePeriod tests ---

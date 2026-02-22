@@ -99,14 +99,53 @@ func (h *HITLHandler) RejectHITLRequest(w http.ResponseWriter, r *http.Request, 
 	writeJSON(w, http.StatusOK, toAPIHITLRequest(req))
 }
 
-// ListHITLRequests handles GET /hitl-requests — implementation deferred to fix-11.
-func (h *HITLHandler) ListHITLRequests(w http.ResponseWriter, _ *http.Request, _ ListHITLRequestsParams) {
-	writeError(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "not implemented")
+// ListHITLRequests handles GET /hitl-requests with optional status filter and pagination.
+func (h *HITLHandler) ListHITLRequests(w http.ResponseWriter, r *http.Request, params ListHITLRequestsParams) {
+	page := 1
+	perPage := 20
+	if params.Page != nil && *params.Page > 0 {
+		page = *params.Page
+	}
+	if params.PerPage != nil && *params.PerPage > 0 {
+		perPage = *params.PerPage
+	}
+
+	var status *string
+	if params.Status != nil {
+		s := string(*params.Status)
+		status = &s
+	}
+
+	items, total, err := h.service.ListAll(r.Context(), status, page, perPage)
+	if err != nil {
+		writeErrorResponse(w, err)
+		return
+	}
+
+	data := make([]HITLRequest, len(items))
+	for i, item := range items {
+		data[i] = toAPIHITLRequest(item)
+	}
+
+	resp := HITLRequestList{
+		Data: data,
+		Pagination: Pagination{
+			Page:    page,
+			PerPage: perPage,
+			Total:   int(total),
+		},
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
-// GetHITLRequestByStep handles GET /run-steps/{stepId}/hitl-request — implementation deferred to fix-11.
-func (h *HITLHandler) GetHITLRequestByStep(w http.ResponseWriter, _ *http.Request, _ StepIdPath) {
-	writeError(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "not implemented")
+// GetHITLRequestByStep handles GET /hitl-requests/by-step/{stepId}.
+func (h *HITLHandler) GetHITLRequestByStep(w http.ResponseWriter, r *http.Request, stepID StepIdPath) {
+	req, err := h.service.GetByStepID(r.Context(), stepID)
+	if err != nil {
+		writeErrorResponse(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toAPIHITLRequest(req))
 }
 
 // toAPIHITLRequest converts a domain HITLRequest to the API HITLRequest type.

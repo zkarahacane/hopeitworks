@@ -13,6 +13,18 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countHITLRequestsFiltered = `-- name: CountHITLRequestsFiltered :one
+SELECT COUNT(*) FROM hitl_requests
+WHERE ($1::text = '' OR status = $1::text)
+`
+
+func (q *Queries) CountHITLRequestsFiltered(ctx context.Context, dollar_1 string) (int64, error) {
+	row := q.db.QueryRow(ctx, countHITLRequestsFiltered, dollar_1)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countPendingHITLRequestsByProject = `-- name: CountPendingHITLRequestsByProject :one
 SELECT COUNT(*)
 FROM hitl_requests hr
@@ -109,6 +121,50 @@ func (q *Queries) GetHITLRequestByRunStepID(ctx context.Context, runStepID uuid.
 		&i.DiffUrl,
 	)
 	return i, err
+}
+
+const listHITLRequestsFiltered = `-- name: ListHITLRequestsFiltered :many
+SELECT id, run_step_id, gate_type, diff_content, status, resolved_at, resolved_by, rejection_reason, created_at, diff_url FROM hitl_requests
+WHERE ($1::text = '' OR status = $1::text)
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3
+`
+
+type ListHITLRequestsFilteredParams struct {
+	Column1 string `json:"column_1"`
+	Limit   int32  `json:"limit"`
+	Offset  int32  `json:"offset"`
+}
+
+func (q *Queries) ListHITLRequestsFiltered(ctx context.Context, arg ListHITLRequestsFilteredParams) ([]HitlRequest, error) {
+	rows, err := q.db.Query(ctx, listHITLRequestsFiltered, arg.Column1, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []HitlRequest{}
+	for rows.Next() {
+		var i HitlRequest
+		if err := rows.Scan(
+			&i.ID,
+			&i.RunStepID,
+			&i.GateType,
+			&i.DiffContent,
+			&i.Status,
+			&i.ResolvedAt,
+			&i.ResolvedBy,
+			&i.RejectionReason,
+			&i.CreatedAt,
+			&i.DiffUrl,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listPendingHITLRequestsByProject = `-- name: ListPendingHITLRequestsByProject :many

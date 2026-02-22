@@ -122,3 +122,18 @@ type StepCostBreakdown struct {
 	TokensOutput int64
 	CostUSD      float64
 }
+
+// CostDataPoint represents a single day's cost total for chart rendering.
+type CostDataPoint struct {
+	Date         string // "YYYY-MM-DD"
+	TotalCostUSD float64
+}
+
+// RunCostRow represents a run-level cost row for the paginated runs tab.
+type RunCostRow struct {
+	RunID        uuid.UUID
+	StoryKey     string
+	Status       string
+	StartedAt    time.Time
+	TotalCostUSD float64
+}
