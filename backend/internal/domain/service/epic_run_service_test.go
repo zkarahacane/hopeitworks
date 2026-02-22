@@ -200,7 +200,7 @@ func TestLaunchEpicRun_HappyPath(t *testing.T) {
 	}
 	runSvc := NewRunService(runRepo, pRepo, sRepo, mockPCR, &mockJobQueue{})
 	actionReg := newMockActionRegistry()
-	pipeExec := NewPipelineExecutor(runRepo, actionReg, eventPub, logger)
+	pipeExec := NewPipelineExecutor(runRepo, sRepo, actionReg, eventPub, logger)
 	stubExecutor := NewParallelGroupExecutor(epicRunRepo, runSvc, pipeExec, eventPub, logger)
 
 	svc := NewEpicRunService(epicRunRepo, storyRepo, epicRepo, scheduler, stubExecutor, eventPub, logger)

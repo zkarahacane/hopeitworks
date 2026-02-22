@@ -240,7 +240,7 @@ func run() error {
 	}
 
 	// Pipeline executor: wired with the real action registry and event publisher
-	pipelineExecutor := service.NewPipelineExecutor(runRepo, actionReg, eventRepo, logger)
+	pipelineExecutor := service.NewPipelineExecutor(runRepo, storyRepo, actionReg, eventRepo, logger)
 	pipelineExecutor.SetCircuitBreaker(circuitBreakerService)
 
 	// River job queue for async pipeline execution
