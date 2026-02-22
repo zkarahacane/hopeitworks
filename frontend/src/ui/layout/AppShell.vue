@@ -27,7 +27,7 @@ const router = useRouter()
  * global/wildcard subscriptions. For MVP, the HITL badge count is populated by:
  * 1. ApprovalsView calls fetchPending() when mounted
  * 2. Project-specific SSE connections in RunDetailView dispatch to useHITLStore
- * TODO: Phase 2 - implement global SSE endpoint or multi-project SSE aggregation
+ * TODO(phase-2): implement global SSE endpoint or multi-project SSE aggregation
  */
 
 /** Watch for new pending approvals and show toast notifications */
