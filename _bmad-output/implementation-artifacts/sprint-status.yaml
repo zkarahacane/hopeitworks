@@ -190,7 +190,7 @@ development_status:
   post-mvp-agent-runtime: backlog
   runtime-1-agent-docker-image: done
   runtime-2-action-wiring-and-action-type-mapping: ready-for-dev
-  runtime-3-test-project-postgres-e2e-validation: ready-for-dev
+  runtime-3-test-project-postgres-e2e-validation: done
 
   # Post-MVP: E2E Usability Fixes
   post-mvp-e2e-usability: done
@@ -852,7 +852,7 @@ parallel_waves:
     stories:
       - key: runtime-3-test-project-postgres-e2e-validation
         domain: shared
-        status: ready-for-dev
+        status: done
         explicit_deps: [runtime-1-agent-docker-image, runtime-2-action-wiring-and-action-type-mapping]
     container_count: 1
     depends_on: [wave-27]
