@@ -72,6 +72,32 @@ func (s *HITLService) ListPendingByProject(ctx context.Context, projectID uuid.U
 	return pending, count, nil
 }
 
+// ListAll returns a paginated list of HITL requests, optionally filtered by status.
+func (s *HITLService) ListAll(ctx context.Context, status *string, page, perPage int) ([]*model.HITLRequest, int64, error) {
+	if page < 1 {
+		page = 1
+	}
+	if perPage < 1 || perPage > 100 {
+		perPage = 20
+	}
+	offset := int32((page - 1) * perPage)
+	limit := int32(perPage)
+	items, err := s.hitlRepo.ListFiltered(ctx, status, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	total, err := s.hitlRepo.CountFiltered(ctx, status)
+	if err != nil {
+		return nil, 0, err
+	}
+	return items, total, nil
+}
+
+// GetByStepID returns the HITL request associated with a run step.
+func (s *HITLService) GetByStepID(ctx context.Context, stepID uuid.UUID) (*model.HITLRequest, error) {
+	return s.hitlRepo.GetByRunStepID(ctx, stepID)
+}
+
 // Approve resolves a HITL request as approved and resumes the pipeline step.
 func (s *HITLService) Approve(ctx context.Context, hitlRequestID uuid.UUID, userID uuid.UUID) (*model.HITLRequest, error) {
 	req, err := s.hitlRepo.GetByID(ctx, hitlRequestID)

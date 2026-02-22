@@ -76,3 +76,34 @@ FROM cost_records cr
 JOIN run_steps rs ON rs.id = cr.run_step_id
 WHERE rs.run_id = $1
 ORDER BY rs.step_order ASC;
+
+-- name: ListDailyCostsByProject :many
+SELECT
+    DATE(cr.created_at)::text AS date,
+    COALESCE(SUM(cr.cost_usd), 0)::DECIMAL(10,6) AS total_cost_usd
+FROM cost_records cr
+WHERE cr.project_id = $1
+  AND cr.created_at >= $2
+GROUP BY DATE(cr.created_at)
+ORDER BY date ASC;
+
+-- name: ListCostsByProjectByRunPaginated :many
+SELECT rs2.run_id,
+       s.key    AS story_key,
+       r.status,
+       r.created_at AS started_at,
+       COALESCE(SUM(cr.cost_usd), 0)::DECIMAL(10,6) AS total_cost_usd
+FROM cost_records cr
+JOIN run_steps rs2 ON rs2.id = cr.run_step_id
+JOIN runs r ON r.id = rs2.run_id
+JOIN stories s ON s.id = r.story_id
+WHERE cr.project_id = $1 AND cr.created_at >= $2
+GROUP BY rs2.run_id, s.key, r.status, r.created_at
+ORDER BY r.created_at DESC
+LIMIT $3 OFFSET $4;
+
+-- name: CountCostsByProjectByRun :one
+SELECT COUNT(DISTINCT rs2.run_id)
+FROM cost_records cr
+JOIN run_steps rs2 ON rs2.id = cr.run_step_id
+WHERE cr.project_id = $1 AND cr.created_at >= $2;

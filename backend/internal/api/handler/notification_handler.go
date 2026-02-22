@@ -20,11 +20,6 @@ func NewNotificationHandler(svc *service.NotificationConfigService) *Notificatio
 	return &NotificationHandler{service: svc}
 }
 
-// TestNotificationConfig handles POST /projects/{projectId}/notifications/{notificationId}/test — implementation deferred to fix-11.
-func (h *NotificationHandler) TestNotificationConfig(w http.ResponseWriter, _ *http.Request, _ ProjectIdPath, _ NotificationIdPath) {
-	writeError(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "not implemented")
-}
-
 // ListNotificationConfigs handles GET /projects/{projectId}/notifications.
 func (h *NotificationHandler) ListNotificationConfigs(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath) {
 	configs, err := h.service.ListByProject(r.Context(), projectID)
@@ -112,6 +107,15 @@ func (h *NotificationHandler) DeleteNotificationConfig(w http.ResponseWriter, r 
 		return
 	}
 
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// TestNotificationConfig handles POST /projects/{projectId}/notifications/{notificationId}/test.
+func (h *NotificationHandler) TestNotificationConfig(w http.ResponseWriter, r *http.Request, _ ProjectIdPath, notificationID NotificationIdPath) {
+	if err := h.service.Test(r.Context(), uuid.UUID(notificationID)); err != nil {
+		writeErrorResponse(w, err)
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 

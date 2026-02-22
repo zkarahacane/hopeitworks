@@ -52,6 +52,14 @@ func (m *hitlMockHITLRepo) CountPendingByProject(_ context.Context, _ uuid.UUID)
 	return 0, nil
 }
 
+func (m *hitlMockHITLRepo) ListFiltered(_ context.Context, _ *string, _, _ int32) ([]*model.HITLRequest, error) {
+	return nil, nil
+}
+
+func (m *hitlMockHITLRepo) CountFiltered(_ context.Context, _ *string) (int64, error) {
+	return 0, nil
+}
+
 func (m *hitlMockHITLRepo) getCreated() []*model.HITLRequest {
 	m.mu.Lock()
 	defer m.mu.Unlock()

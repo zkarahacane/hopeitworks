@@ -22,4 +22,8 @@ type HITLRepository interface {
 	ListPendingByProject(ctx context.Context, projectID uuid.UUID) ([]*model.PendingHITLRequest, error)
 	// CountPendingByProject returns the count of pending HITL requests for a project.
 	CountPendingByProject(ctx context.Context, projectID uuid.UUID) (int64, error)
+	// ListFiltered returns HITL requests optionally filtered by status with pagination.
+	ListFiltered(ctx context.Context, status *string, limit, offset int32) ([]*model.HITLRequest, error)
+	// CountFiltered returns the count of HITL requests optionally filtered by status.
+	CountFiltered(ctx context.Context, status *string) (int64, error)
 }

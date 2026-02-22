@@ -243,16 +243,18 @@ func run() error {
 	hitlService := service.NewHITLService(hitlRepo, runRepo, eventRepo, logger)
 	hitlHandler := handler.NewHITLHandler(hitlService)
 
-	// Notification configs
-	notificationConfigRepo := pgadapter.NewNotificationConfigRepository(queries)
-	notificationConfigService := service.NewNotificationConfigService(notificationConfigRepo)
-	notificationHandler := handler.NewNotificationHandler(notificationConfigService)
-
-	// Notification dispatcher (background goroutine)
+	// Notifier adapters
 	notifiers := map[string]port.Notifier{
 		model.ChannelTypeDiscord: discordadapter.NewNotifier(),
 		model.ChannelTypeWebhook: webhookadapter.NewNotifier(),
 	}
+
+	// Notification configs
+	notificationConfigRepo := pgadapter.NewNotificationConfigRepository(queries)
+	notificationConfigService := service.NewNotificationConfigService(notificationConfigRepo, notifiers)
+	notificationHandler := handler.NewNotificationHandler(notificationConfigService)
+
+	// Notification dispatcher (background goroutine)
 	notificationDispatcher := service.NewNotificationDispatcher(eventBus, notificationConfigRepo, projectRepo, notifiers)
 	notificationDispatcher.Start(appCtx)
 	logger.Info("notification dispatcher started")

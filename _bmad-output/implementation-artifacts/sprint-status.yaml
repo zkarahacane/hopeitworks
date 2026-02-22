@@ -176,8 +176,7 @@ development_status:
 
   fix-9-backend-wiring: review
   fix-10-openapi-project-fields: review
-
-  fix-11-missing-service-methods: backlog
+  fix-11-missing-service-methods: dev-complete
   fix-12-frontend-api-regen: backlog
   fix-13-project-repo-form: backlog
   fix-14-runs-dashboard-routing: backlog

@@ -208,6 +208,52 @@ func (s *CostService) GetProjectCostSummary(ctx context.Context, projectID uuid.
 	}, nil
 }
 
+// GetProjectCostChart returns daily cost data points for chart rendering.
+func (s *CostService) GetProjectCostChart(ctx context.Context, projectID uuid.UUID, period string) ([]model.CostDataPoint, error) {
+	if _, err := s.projectRepo.GetByID(ctx, projectID); err != nil {
+		return nil, err
+	}
+	if period == "" {
+		period = "7d"
+	}
+	since, err := parsePeriod(period)
+	if err != nil {
+		return nil, err
+	}
+	return s.costRepo.ListDailyCostsByProject(ctx, projectID, since)
+}
+
+// GetProjectCostRuns returns a paginated run-level cost breakdown for a project.
+func (s *CostService) GetProjectCostRuns(ctx context.Context, projectID uuid.UUID, period string, page, perPage int) ([]model.RunCostRow, int64, error) {
+	if _, err := s.projectRepo.GetByID(ctx, projectID); err != nil {
+		return nil, 0, err
+	}
+	if period == "" {
+		period = "7d"
+	}
+	since, err := parsePeriod(period)
+	if err != nil {
+		return nil, 0, err
+	}
+	if page < 1 {
+		page = 1
+	}
+	if perPage < 1 || perPage > 100 {
+		perPage = 20
+	}
+	offset := int32((page - 1) * perPage)
+	limit := int32(perPage)
+	rows, err := s.costRepo.ListCostsByProjectByRunPaginated(ctx, projectID, since, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	total, err := s.costRepo.CountCostsByProjectByRun(ctx, projectID, since)
+	if err != nil {
+		return nil, 0, err
+	}
+	return rows, total, nil
+}
+
 // GetStoryCosts returns aggregated cost data for a story across all runs.
 func (s *CostService) GetStoryCosts(ctx context.Context, projectID, storyID uuid.UUID) (*model.StoryCostSummary, error) {
 	// Verify story exists and belongs to project

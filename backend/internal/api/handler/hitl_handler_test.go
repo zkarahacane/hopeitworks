@@ -73,6 +73,14 @@ func (m *mockHITLRepoForHandler) CountPendingByProject(_ context.Context, _ uuid
 	return int64(len(m.pending)), nil
 }
 
+func (m *mockHITLRepoForHandler) ListFiltered(_ context.Context, _ *string, _, _ int32) ([]*model.HITLRequest, error) {
+	return nil, nil
+}
+
+func (m *mockHITLRepoForHandler) CountFiltered(_ context.Context, _ *string) (int64, error) {
+	return 0, nil
+}
+
 // mockRunRepoForHITLHandler implements a minimal port.RunRepository for HITL handler tests.
 type mockRunRepoForHITLHandler struct {
 	steps map[uuid.UUID]*model.RunStep
@@ -448,45 +456,3 @@ func TestHITLHandler_RejectHITLRequest(t *testing.T) {
 	}
 }
 
-// ── Stub method tests (fix-9) ───────────────────────────────────────────
-
-func TestListHITLRequests_ReturnsNotImplemented(t *testing.T) {
-	h, _, _ := setupHITLHandler()
-
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/hitl-requests", nil)
-	rec := httptest.NewRecorder()
-	h.ListHITLRequests(rec, req, ListHITLRequestsParams{})
-
-	if rec.Code != http.StatusNotImplemented {
-		t.Errorf("expected 501, got %d", rec.Code)
-	}
-
-	var resp errorEnvelope
-	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-	if resp.Error.Code != codeNotImplemented {
-		t.Errorf("expected error code NOT_IMPLEMENTED, got %s", resp.Error.Code)
-	}
-}
-
-func TestGetHITLRequestByStep_ReturnsNotImplemented(t *testing.T) {
-	h, _, _ := setupHITLHandler()
-
-	stepID := uuid.New()
-	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/run-steps/%s/hitl-request", stepID), nil)
-	rec := httptest.NewRecorder()
-	h.GetHITLRequestByStep(rec, req, StepIdPath(stepID))
-
-	if rec.Code != http.StatusNotImplemented {
-		t.Errorf("expected 501, got %d", rec.Code)
-	}
-
-	var resp errorEnvelope
-	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-	if resp.Error.Code != codeNotImplemented {
-		t.Errorf("expected error code NOT_IMPLEMENTED, got %s", resp.Error.Code)
-	}
-}

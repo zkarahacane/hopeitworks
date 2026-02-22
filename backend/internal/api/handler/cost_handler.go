@@ -2,7 +2,9 @@ package handler
 
 import (
 	"net/http"
+	"time"
 
+	openapi_types "github.com/oapi-codegen/runtime/types"
 	"github.com/zakari/hopeitworks/backend/internal/domain/service"
 )
 
@@ -14,16 +16,6 @@ type CostHandler struct {
 // NewCostHandler creates a new CostHandler.
 func NewCostHandler(svc *service.CostService) *CostHandler {
 	return &CostHandler{service: svc}
-}
-
-// GetProjectCostChart handles GET /projects/{projectId}/costs/chart — implementation deferred to fix-11.
-func (h *CostHandler) GetProjectCostChart(w http.ResponseWriter, _ *http.Request, _ ProjectIdPath, _ GetProjectCostChartParams) {
-	writeError(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "not implemented")
-}
-
-// GetProjectCostRuns handles GET /projects/{projectId}/costs/runs — implementation deferred to fix-11.
-func (h *CostHandler) GetProjectCostRuns(w http.ResponseWriter, _ *http.Request, _ ProjectIdPath, _ GetProjectCostRunsParams) {
-	writeError(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "not implemented")
 }
 
 // GetProjectCosts handles GET /projects/{projectId}/costs.
@@ -100,6 +92,79 @@ func (h *CostHandler) GetProjectCostSummary(w http.ResponseWriter, r *http.Reque
 		BudgetLimitUsd:     summary.BudgetLimitUSD,
 		PeriodStart:        summary.PeriodStart.UTC(),
 		PeriodEnd:          summary.PeriodEnd.UTC(),
+	}
+
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// GetProjectCostChart handles GET /projects/{projectId}/costs/chart.
+func (h *CostHandler) GetProjectCostChart(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, params GetProjectCostChartParams) {
+	period := "7d"
+	if params.Period != nil {
+		period = string(*params.Period)
+	}
+
+	points, err := h.service.GetProjectCostChart(r.Context(), projectID, period)
+	if err != nil {
+		writeErrorResponse(w, err)
+		return
+	}
+
+	resp := make([]CostDataPoint, len(points))
+	for i, p := range points {
+		t, _ := time.Parse("2006-01-02", p.Date)
+		resp[i] = CostDataPoint{
+			Date:         openapi_types.Date{Time: t},
+			TotalCostUsd: p.TotalCostUSD,
+		}
+	}
+
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// GetProjectCostRuns handles GET /projects/{projectId}/costs/runs.
+func (h *CostHandler) GetProjectCostRuns(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, params GetProjectCostRunsParams) {
+	period := "7d"
+	if params.Period != nil {
+		period = string(*params.Period)
+	}
+
+	page := 1
+	perPage := 20
+	if params.Page != nil && *params.Page > 0 {
+		page = *params.Page
+	}
+	if params.PerPage != nil && *params.PerPage > 0 {
+		perPage = *params.PerPage
+	}
+
+	rows, total, err := h.service.GetProjectCostRuns(r.Context(), projectID, period, page, perPage)
+	if err != nil {
+		writeErrorResponse(w, err)
+		return
+	}
+
+	data := make([]RunCostRow, len(rows))
+	for i, row := range rows {
+		data[i] = RunCostRow{
+			RunId:        row.RunID,
+			StoryKey:     row.StoryKey,
+			Status:       row.Status,
+			StartedAt:    row.StartedAt,
+			TotalCostUsd: row.TotalCostUSD,
+		}
+	}
+
+	resp := struct {
+		Data       []RunCostRow `json:"data"`
+		Pagination Pagination   `json:"pagination"`
+	}{
+		Data: data,
+		Pagination: Pagination{
+			Page:    page,
+			PerPage: perPage,
+			Total:   int(total),
+		},
 	}
 
 	writeJSON(w, http.StatusOK, resp)

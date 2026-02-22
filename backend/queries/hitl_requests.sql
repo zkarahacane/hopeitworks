@@ -38,3 +38,13 @@ JOIN run_steps rs ON rs.id = hr.run_step_id
 JOIN runs r ON r.id = rs.run_id
 WHERE r.project_id = $1
   AND hr.status = 'pending';
+
+-- name: ListHITLRequestsFiltered :many
+SELECT * FROM hitl_requests
+WHERE ($1::text = '' OR status = $1::text)
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3;
+
+-- name: CountHITLRequestsFiltered :one
+SELECT COUNT(*) FROM hitl_requests
+WHERE ($1::text = '' OR status = $1::text);
