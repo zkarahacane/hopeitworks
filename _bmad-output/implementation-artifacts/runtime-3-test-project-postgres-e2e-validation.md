@@ -1,6 +1,6 @@
 # Story runtime-3: Fix test-project and End-to-End Validation
 
-**Status:** ready-for-dev
+**Status:** done
 **Branch:** `feat/runtime-3-test-project-e2e-validation`
 **Commit scope:** `test-project`
 
@@ -293,3 +293,9 @@ For now: the Docker path is authoritative. `src/` is legacy.
 - `test-project/stories/todo-stories.md` — pipeline validation stories
 - `deploy/docker-compose.yml` — reference for postgres service pattern in this project
 - `backend/internal/integration/` — pipeline integration tests that reference test-project stories
+
+---
+
+## Change Log
+
+- Merged to develop via PR #137 (squash merge, 2026-02-22)
