@@ -22,16 +22,7 @@ test.describe('smoke: admin', () => {
     expect(jsErrors).toHaveLength(0)
   })
 
-  test('AUDIT: admin role not enforced due to missing role in API', async ({ request, page, context }) => {
-    test.info().annotations.push({
-      type: 'known-bug',
-      description:
-        'The /api/v1/auth/me response does not include a `role` field. ' +
-        'As a result, the frontend cannot distinguish admin from member users based on the API response alone. ' +
-        'All users default to the "member" role in the frontend auth store. ' +
-        'This means any role-based UI guard relying on the API-provided role is ineffective.',
-    })
-
+  test('admin role is correctly returned by /auth/me', async ({ request, page, context }) => {
     // Login as admin and inspect the /api/v1/auth/me response
     await loginViaAPI(context, 'admin')
     const meResponse = await context.request.get('/api/v1/auth/me')
@@ -39,16 +30,14 @@ test.describe('smoke: admin', () => {
 
     const meBody = await meResponse.json()
 
-    // KNOWN BUG: the `role` field is absent from the auth/me response
     const hasRoleField = 'role' in meBody
     test.info().annotations.push({
       type: 'audit-result',
       description: `auth/me response has 'role' field: ${hasRoleField}. Body keys: ${Object.keys(meBody).join(', ')}`,
     })
 
-    // Document the bug — we expect this assertion to fail once the bug is fixed
-    // For now we assert the current (broken) behavior so CI catches any regression
-    expect(hasRoleField).toBe(false)
+    // The API now correctly returns a `role` field for the admin user
+    expect(meBody.role).toBe('admin')
 
     // Now check what happens when a non-admin (dev user) hits /admin/users
     const devContext = await page.context().browser()!.newContext()

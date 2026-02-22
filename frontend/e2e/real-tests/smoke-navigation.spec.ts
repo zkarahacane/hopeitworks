@@ -47,19 +47,19 @@ test.describe('smoke: navigation', () => {
     // Verify we land on the project detail page
     await expect(page).toHaveURL(new RegExp(TODO_APP_ID))
 
-    // PrimeVue TabMenu renders items as <a> with role="tab", not role="link"
+    // PrimeVue TabMenu renders items as <a> with role="menuitem" inside a role="menubar"
     // Navigate to board tab
-    const boardTab = page.getByRole('tab', { name: /board/i })
+    const boardTab = page.getByRole('menuitem', { name: /board/i })
     await boardTab.first().click()
     await expect(page).toHaveURL(new RegExp(`${TODO_APP_ID}/board`))
 
     // Navigate to pipeline tab
-    const pipelineTab = page.getByRole('tab', { name: /pipeline/i })
+    const pipelineTab = page.getByRole('menuitem', { name: /pipeline/i })
     await pipelineTab.first().click()
     await expect(page).toHaveURL(new RegExp(`${TODO_APP_ID}/pipeline`))
 
     // Navigate to templates tab
-    const templatesTab = page.getByRole('tab', { name: /templates/i })
+    const templatesTab = page.getByRole('menuitem', { name: /templates/i })
     await templatesTab.first().click()
     await expect(page).toHaveURL(new RegExp(`${TODO_APP_ID}/templates`))
   })
@@ -88,7 +88,7 @@ test.describe('smoke: navigation', () => {
 
     // Go back to dashboard
     await page.goBack()
-    await expect(page).toHaveURL(/^\/?$|\/dashboard/)
+    await expect(page).toHaveURL(/localhost:\d+\/?$|\/dashboard/)
 
     // Go forward to /projects
     await page.goForward()
