@@ -7,6 +7,7 @@ package postgres
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -125,6 +126,52 @@ func (q *Queries) GetRun(ctx context.Context, id uuid.UUID) (Run, error) {
 	return i, err
 }
 
+const getRunWithStoryKey = `-- name: GetRunWithStoryKey :one
+SELECT r.id, r.project_id, r.story_id, r.status, r.pipeline_config_snapshot,
+       r.started_at, r.completed_at, r.error_message, r.created_at, r.updated_at,
+       r.paused_at, r.metadata, COALESCE(s.key, '') AS story_key
+FROM runs r
+LEFT JOIN stories s ON s.id = r.story_id
+WHERE r.id = $1
+`
+
+type GetRunWithStoryKeyRow struct {
+	ID                     uuid.UUID          `json:"id"`
+	ProjectID              uuid.UUID          `json:"project_id"`
+	StoryID                uuid.UUID          `json:"story_id"`
+	Status                 string             `json:"status"`
+	PipelineConfigSnapshot []byte             `json:"pipeline_config_snapshot"`
+	StartedAt              pgtype.Timestamptz `json:"started_at"`
+	CompletedAt            pgtype.Timestamptz `json:"completed_at"`
+	ErrorMessage           pgtype.Text        `json:"error_message"`
+	CreatedAt              time.Time          `json:"created_at"`
+	UpdatedAt              time.Time          `json:"updated_at"`
+	PausedAt               pgtype.Timestamptz `json:"paused_at"`
+	Metadata               []byte             `json:"metadata"`
+	StoryKey               string             `json:"story_key"`
+}
+
+func (q *Queries) GetRunWithStoryKey(ctx context.Context, id uuid.UUID) (GetRunWithStoryKeyRow, error) {
+	row := q.db.QueryRow(ctx, getRunWithStoryKey, id)
+	var i GetRunWithStoryKeyRow
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.StoryID,
+		&i.Status,
+		&i.PipelineConfigSnapshot,
+		&i.StartedAt,
+		&i.CompletedAt,
+		&i.ErrorMessage,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.PausedAt,
+		&i.Metadata,
+		&i.StoryKey,
+	)
+	return i, err
+}
+
 const listChildRunsByParent = `-- name: ListChildRunsByParent :many
 SELECT id, project_id, story_id, status, pipeline_config_snapshot, started_at, completed_at, error_message, created_at, updated_at, paused_at, metadata FROM runs
 WHERE project_id = $1 AND pipeline_config_snapshot @> $2::jsonb
@@ -204,6 +251,73 @@ func (q *Queries) ListRunsByProject(ctx context.Context, arg ListRunsByProjectPa
 			&i.UpdatedAt,
 			&i.PausedAt,
 			&i.Metadata,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRunsByProjectWithStoryKey = `-- name: ListRunsByProjectWithStoryKey :many
+SELECT r.id, r.project_id, r.story_id, r.status, r.pipeline_config_snapshot,
+       r.started_at, r.completed_at, r.error_message, r.created_at, r.updated_at,
+       r.paused_at, r.metadata, COALESCE(s.key, '') AS story_key
+FROM runs r
+LEFT JOIN stories s ON s.id = r.story_id
+WHERE r.project_id = $1
+ORDER BY r.created_at DESC
+LIMIT $2 OFFSET $3
+`
+
+type ListRunsByProjectWithStoryKeyParams struct {
+	ProjectID uuid.UUID `json:"project_id"`
+	Limit     int32     `json:"limit"`
+	Offset    int32     `json:"offset"`
+}
+
+type ListRunsByProjectWithStoryKeyRow struct {
+	ID                     uuid.UUID          `json:"id"`
+	ProjectID              uuid.UUID          `json:"project_id"`
+	StoryID                uuid.UUID          `json:"story_id"`
+	Status                 string             `json:"status"`
+	PipelineConfigSnapshot []byte             `json:"pipeline_config_snapshot"`
+	StartedAt              pgtype.Timestamptz `json:"started_at"`
+	CompletedAt            pgtype.Timestamptz `json:"completed_at"`
+	ErrorMessage           pgtype.Text        `json:"error_message"`
+	CreatedAt              time.Time          `json:"created_at"`
+	UpdatedAt              time.Time          `json:"updated_at"`
+	PausedAt               pgtype.Timestamptz `json:"paused_at"`
+	Metadata               []byte             `json:"metadata"`
+	StoryKey               string             `json:"story_key"`
+}
+
+func (q *Queries) ListRunsByProjectWithStoryKey(ctx context.Context, arg ListRunsByProjectWithStoryKeyParams) ([]ListRunsByProjectWithStoryKeyRow, error) {
+	rows, err := q.db.Query(ctx, listRunsByProjectWithStoryKey, arg.ProjectID, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListRunsByProjectWithStoryKeyRow{}
+	for rows.Next() {
+		var i ListRunsByProjectWithStoryKeyRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProjectID,
+			&i.StoryID,
+			&i.Status,
+			&i.PipelineConfigSnapshot,
+			&i.StartedAt,
+			&i.CompletedAt,
+			&i.ErrorMessage,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.PausedAt,
+			&i.Metadata,
+			&i.StoryKey,
 		); err != nil {
 			return nil, err
 		}

@@ -2658,6 +2658,10 @@ components:
           format: date-time
         error_message:
           type: string
+        story_key:
+          type: string
+          description: Key of the associated story (e.g. S-01); optional as some edge cases may have no story.
+          example: "S-01"
         created_at:
           type: string
           format: date-time

@@ -184,6 +184,9 @@ func toAPIRun(r *model.Run) Run {
 	if r.ErrorMessage != nil {
 		run.ErrorMessage = r.ErrorMessage
 	}
+	if r.StoryKey != "" {
+		run.StoryKey = &r.StoryKey
+	}
 	return run
 }
 
@@ -237,6 +240,9 @@ func toAPIRunWithSteps(r *model.Run) RunWithSteps {
 	}
 	if r.ErrorMessage != nil {
 		rws.ErrorMessage = r.ErrorMessage
+	}
+	if r.StoryKey != "" {
+		rws.StoryKey = &r.StoryKey
 	}
 	for i := range r.Steps {
 		rws.Steps[i] = toAPIRunStep(&r.Steps[i])
