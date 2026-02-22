@@ -42,14 +42,7 @@ func (h *ProjectHandler) checkProjectAccess(r *http.Request, projectID uuid.UUID
 // ListProjects handles GET /projects.
 // Admins see all projects; non-admins see only their assigned projects.
 func (h *ProjectHandler) ListProjects(w http.ResponseWriter, r *http.Request, params ListProjectsParams) {
-	page := 1
-	perPage := 20
-	if params.Page != nil && *params.Page > 0 {
-		page = *params.Page
-	}
-	if params.PerPage != nil && *params.PerPage > 0 {
-		perPage = *params.PerPage
-	}
+	page, perPage := paginationDefaults(params.Page, params.PerPage)
 
 	var result *service.ListResult
 	var err error

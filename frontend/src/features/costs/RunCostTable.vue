@@ -5,6 +5,7 @@ import Tag from 'primevue/tag'
 import Skeleton from 'primevue/skeleton'
 import { useRelativeTime } from '@/composables/useRelativeTime'
 import { formatCostUSD } from '@/utils/formatCost'
+import { statusSeverity } from '@/utils/runStatus'
 import type { components } from '@/api/schema'
 
 type RunCostRow = components['schemas']['RunCostRow']
@@ -17,24 +18,6 @@ defineProps<{
 const emit = defineEmits<{
   navigate: [runId: string]
 }>()
-
-/** Maps run status to PrimeVue Tag severity for visual differentiation. */
-function statusSeverity(
-  status: string,
-): 'success' | 'info' | 'warn' | 'danger' | 'secondary' | undefined {
-  switch (status) {
-    case 'completed':
-      return 'success'
-    case 'running':
-      return 'info'
-    case 'failed':
-      return 'danger'
-    case 'cancelled':
-      return 'warn'
-    default:
-      return 'secondary'
-  }
-}
 
 const skeletonRows = [1, 2, 3]
 </script>

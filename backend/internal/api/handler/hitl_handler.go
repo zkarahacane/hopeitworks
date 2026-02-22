@@ -101,14 +101,7 @@ func (h *HITLHandler) RejectHITLRequest(w http.ResponseWriter, r *http.Request, 
 
 // ListHITLRequests handles GET /hitl-requests with optional status filter and pagination.
 func (h *HITLHandler) ListHITLRequests(w http.ResponseWriter, r *http.Request, params ListHITLRequestsParams) {
-	page := 1
-	perPage := 20
-	if params.Page != nil && *params.Page > 0 {
-		page = *params.Page
-	}
-	if params.PerPage != nil && *params.PerPage > 0 {
-		perPage = *params.PerPage
-	}
+	page, perPage := paginationDefaults(params.Page, params.PerPage)
 
 	var status *string
 	if params.Status != nil {
