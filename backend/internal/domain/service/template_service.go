@@ -85,6 +85,9 @@ func getDefaultTemplate(name string) string {
 ## Objective
 {{story_objective}}
 
+## Instructions
+Implement the story according to the acceptance criteria below. Work on branch {{branch_name}} and modify only the target files listed.
+
 ## Target Files
 {{#each target_files}}
 - {{this}}
@@ -123,20 +126,31 @@ Fix the issues described above while preserving the existing changes.`,
 ## Changes to Review
 {{diff_content}}
 
+## Review Checklist
+- [ ] All acceptance criteria are met
+- [ ] Code passes golangci-lint (backend) or ESLint (frontend)
+- [ ] Tests are added or updated for new behavior
+- [ ] No secrets, tokens, or credentials are committed
+- [ ] No console.log or fmt.Println in production code
+- [ ] Code quality and adherence to project conventions
+- [ ] Error messages are actionable with sufficient context
+
 ## Review Instructions
-- Verify all acceptance criteria are met
-- Check code quality and adherence to project conventions
-- Flag any issues or suggest improvements`,
+Report findings as a list of issues with severity (blocker, warning, suggestion). If no issues are found, approve the changes.`,
 
 		TemplateNameMerge: `Merge changes for {{story_key}}: {{story_title}}
 
 ## Story Context
 **Objective:** {{story_objective}}
+**Branch:** {{branch_name}}
 
-## Merge Instructions
-- Create a pull request for the feature branch
-- Ensure CI checks pass before merging
-- Use squash merge to maintain clean commit history`,
+## Merge Steps
+1. Check that CI is green on the feature branch: gh pr checks or gh run list --branch {{branch_name}}
+2. Rebase the feature branch on develop: git fetch origin develop && git rebase origin/develop
+3. Push the rebased branch: git push --force-with-lease
+4. Create a PR following conventional commit format: gh pr create --title "feat(scope): summary" --body "..."
+5. Squash merge after CI passes: gh pr merge --squash --auto
+6. Verify that CI passes on develop after merge`,
 
 		TemplateNameMergeConflict: `Resolve merge conflict for {{story_key}}: {{story_title}}
 
