@@ -12,6 +12,7 @@ import { differenceInSeconds } from 'date-fns'
 import { useRunDetail } from '@/features/runs/composables/useRunDetail'
 import { useRunsStore } from '@/stores/runs'
 import RunLogViewer from '@/features/runs/RunLogViewer.vue'
+import RunCancelConfirmDialog from '@/features/runs/RunCancelConfirmDialog.vue'
 import { runStatusSeverity } from '@/utils/runStatus'
 import type { RunStep } from '@/features/runs/composables/useRunDetail'
 
@@ -35,8 +36,13 @@ const stepSeverity: Record<string, string> = {
 
 const canPause = computed(() => run.value?.status === 'running')
 const canResume = computed(() => run.value?.status === 'paused')
+const canCancel = computed(() => {
+  const status = run.value?.status
+  return status === 'pending' || status === 'running' || status === 'paused'
+})
 
 const pauseError = ref<string | null>(null)
+const cancelDialogVisible = ref(false)
 
 async function handlePause() {
   if (!projectId.value || !runId.value) return
@@ -59,6 +65,18 @@ async function handleResume() {
   } catch (err) {
     pauseError.value = err instanceof Error ? err.message : 'Failed to resume run'
     toast.add({ severity: 'error', summary: 'Failed to resume run', detail: pauseError.value, life: 5000 })
+  }
+}
+
+async function handleCancelConfirm() {
+  if (!projectId.value || !runId.value) return
+  try {
+    await runsStore.cancelRun(projectId.value, runId.value)
+    cancelDialogVisible.value = false
+    toast.add({ severity: 'success', summary: 'Run cancelled', life: 3000 })
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Failed to cancel run'
+    toast.add({ severity: 'error', summary: 'Failed to cancel run', detail: msg, life: 5000 })
   }
 }
 
@@ -116,6 +134,15 @@ function formatDuration(step: RunStep): string | null {
           :loading="runsStore.isResuming"
           data-testid="resume-run-btn"
           @click="handleResume"
+        />
+        <Button
+          v-if="canCancel"
+          label="Cancel"
+          icon="pi pi-times"
+          severity="danger"
+          outlined
+          data-testid="cancel-run-btn"
+          @click="cancelDialogVisible = true"
         />
       </div>
     </div>
@@ -193,5 +220,14 @@ function formatDuration(step: RunStep): string | null {
         <RunLogViewer :project-id="run.project_id" :run-id="run.id" />
       </div>
     </template>
+
+    <!-- Cancel Confirmation Dialog -->
+    <RunCancelConfirmDialog
+      :visible="cancelDialogVisible"
+      :loading="runsStore.isCancelling"
+      @confirm="handleCancelConfirm"
+      @cancel="cancelDialogVisible = false"
+      @update:visible="cancelDialogVisible = $event"
+    />
   </div>
 </template>

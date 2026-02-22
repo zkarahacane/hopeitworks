@@ -22,6 +22,7 @@ type RunService struct {
 	pipelineConfigRepo port.PipelineConfigRepository
 	jobQueue           port.JobQueue
 	eventPub           port.EventPublisher
+	containerMgr       port.ContainerManager
 }
 
 // NewRunService creates a new RunService.
@@ -44,6 +45,11 @@ func NewRunService(
 		svc.eventPub = eventPub[0]
 	}
 	return svc
+}
+
+// SetContainerManager configures the container manager for cancellation support.
+func (s *RunService) SetContainerManager(cm port.ContainerManager) {
+	s.containerMgr = cm
 }
 
 // PipelineStepConfig represents a step in a pipeline configuration.
@@ -459,6 +465,71 @@ func (s *RunService) PauseEpicRun(ctx context.Context, projectID, _ uuid.UUID, r
 // model with parent/child relationships, this method will also resume paused child runs.
 func (s *RunService) ResumeEpicRun(ctx context.Context, projectID, _ uuid.UUID, runID uuid.UUID) (*model.Run, error) {
 	return s.ResumeRun(ctx, projectID, runID)
+}
+
+// CancelRun transitions a run to cancelled status, stops any running containers,
+// and marks pending/running steps as cancelled.
+func (s *RunService) CancelRun(ctx context.Context, projectID, runID uuid.UUID) (*model.Run, error) {
+	run, err := s.runRepo.GetRun(ctx, runID)
+	if err != nil {
+		return nil, err
+	}
+
+	if run.ProjectID != projectID {
+		return nil, errors.NewNotFound("run", runID)
+	}
+
+	if err := model.ValidateRunTransition(run.Status, model.RunStatusCancelled); err != nil {
+		return nil, err
+	}
+
+	// Fetch steps to cancel running/pending ones and stop containers
+	steps, err := s.runRepo.ListRunStepsByRun(ctx, runID)
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now()
+	cancelMsg := "cancelled by user"
+
+	// Stop running containers and cancel active steps
+	for _, step := range steps {
+		switch step.Status {
+		case model.StepStatusRunning, model.StepStatusWaitingApproval:
+			// Stop the container if one is running
+			if s.containerMgr != nil && step.ContainerID != nil && *step.ContainerID != "" {
+				_ = s.containerMgr.Stop(ctx, *step.ContainerID)
+			}
+			if _, err := s.runRepo.UpdateRunStepStatus(ctx, step.ID, model.StepStatusCancelled, nil, &now, &cancelMsg); err != nil {
+				return nil, err
+			}
+		case model.StepStatusPending:
+			if _, err := s.runRepo.UpdateRunStepStatus(ctx, step.ID, model.StepStatusCancelled, nil, &now, &cancelMsg); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	// Transition run to cancelled
+	updated, err := s.runRepo.UpdateRunStatus(ctx, runID, model.RunStatusCancelled, nil, &now, nil, &cancelMsg)
+	if err != nil {
+		return nil, err
+	}
+
+	s.publishRunEvent(ctx, updated.ProjectID, updated.ID, "cancelled", map[string]any{
+		"run_id":       runID.String(),
+		"status":       string(model.RunStatusCancelled),
+		"cancelled_at": now.Format(time.RFC3339),
+	})
+
+	return updated, nil
+}
+
+// CancelEpicRun cancels an epic run. This is a placeholder that operates on the run
+// identified by the epicId/runId combination. When story 7-2 implements the epic run
+// model with parent/child relationships, this method will also cancel active child runs.
+func (s *RunService) CancelEpicRun(ctx context.Context, projectID, _ uuid.UUID, runID uuid.UUID) (*model.Run, error) {
+	return s.CancelRun(ctx, projectID, runID)
 }
 
 // publishRunEvent publishes an event for a run status change.

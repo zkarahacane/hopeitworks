@@ -256,6 +256,16 @@ func (s *Server) ResumeEpicRun(w http.ResponseWriter, r *http.Request, projectID
 	s.runs.ResumeEpicRun(w, r, projectID, epicID, runID)
 }
 
+// CancelRun delegates to RunHandler.
+func (s *Server) CancelRun(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, runID RunIdPath) {
+	s.runs.CancelRun(w, r, projectID, runID)
+}
+
+// CancelEpicRun delegates to RunHandler.
+func (s *Server) CancelEpicRun(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, epicID EpicIdPath, runID RunIdPath) {
+	s.runs.CancelEpicRun(w, r, projectID, epicID, runID)
+}
+
 // GetPipelineConfig delegates to PipelineConfigHandler.
 func (s *Server) GetPipelineConfig(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath) {
 	s.pipelineConfig.GetPipelineConfig(w, r, projectID)
