@@ -12,23 +12,21 @@ export const ALREADY_RUNNING_ERROR = 'ALREADY_RUNNING'
 export function useRunLauncher() {
   const { data, error, isLoading, execute } = useAsyncAction(
     async (projectId: string, storyId: string) => {
-      const response = await apiClient.POST(
-        '/projects/{id}/stories/{story_id}/runs' as never,
+      const { data, error: apiError, response } = await apiClient.POST(
+        '/projects/{projectId}/stories/{storyId}/runs',
         {
-          params: { path: { id: projectId, story_id: storyId } },
-        } as never,
+          params: { path: { projectId, storyId } },
+        },
       )
 
-      const res = response as { error?: { message?: string }; response?: { status: number }; data?: unknown }
-
-      if (res.error) {
-        if (res.response?.status === 409) {
+      if (apiError) {
+        if (response?.status === 409) {
           throw new Error(ALREADY_RUNNING_ERROR)
         }
-        throw new Error(res.error.message ?? 'Failed to launch run')
+        throw new Error((apiError as { error?: { message?: string } })?.error?.message ?? 'Failed to launch run')
       }
 
-      return res.data
+      return data
     },
   )
 

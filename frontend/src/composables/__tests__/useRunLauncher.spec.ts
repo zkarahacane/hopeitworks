@@ -36,8 +36,8 @@ describe('useRunLauncher', () => {
     expect(error.value).toBeNull()
     expect(isLoading.value).toBe(false)
     expect(mockPOST).toHaveBeenCalledWith(
-      '/projects/{id}/stories/{story_id}/runs',
-      { params: { path: { id: 'proj-1', story_id: 'story-1' } } },
+      '/projects/{projectId}/stories/{storyId}/runs',
+      { params: { path: { projectId: 'proj-1', storyId: 'story-1' } } },
     )
   })
 
@@ -57,7 +57,7 @@ describe('useRunLauncher', () => {
 
   it('throws generic error on non-409 error response', async () => {
     mockPOST.mockResolvedValue({
-      error: { message: 'Internal server error' },
+      error: { error: { message: 'Internal server error' } },
       response: { status: 500 },
     })
 
