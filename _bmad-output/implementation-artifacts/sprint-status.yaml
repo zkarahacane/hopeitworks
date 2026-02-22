@@ -187,10 +187,13 @@ development_status:
   1-22-auto-migrate-on-startup: ready-for-dev
 
   # Post-MVP: Agent Runtime & E2E Pipeline
-  post-mvp-agent-runtime: backlog
+  post-mvp-agent-runtime: in-progress
   runtime-1-agent-docker-image: done
-  runtime-2-action-wiring-and-action-type-mapping: ready-for-dev
+  runtime-2-action-wiring-and-action-type-mapping: done
   runtime-3-test-project-postgres-e2e-validation: done
+  runtime-4-run-context-metadata-propagation: ready-for-dev
+  runtime-5-env-vars-dotenv-setup: ready-for-dev
+  runtime-6-default-pipeline-steps-and-templates: ready-for-dev
 
   # Post-MVP: E2E Usability Fixes
   post-mvp-e2e-usability: done
@@ -857,3 +860,22 @@ parallel_waves:
     container_count: 1
     depends_on: [wave-27]
     notes: "Fix test-project + validate real end-to-end pipeline run"
+
+  wave-29:
+    phase: 9-agent-runtime
+    stories:
+      - key: runtime-4-run-context-metadata-propagation
+        domain: back
+        status: ready-for-dev
+        cross_epic_deps: []
+      - key: runtime-5-env-vars-dotenv-setup
+        domain: shared
+        status: ready-for-dev
+        cross_epic_deps: []
+      - key: runtime-6-default-pipeline-steps-and-templates
+        domain: back
+        status: ready-for-dev
+        cross_epic_deps: []
+    container_count: 3
+    depends_on: [wave-28]
+    notes: "RunContext metadata + env vars + default pipeline config/templates"
