@@ -16,6 +16,16 @@ func NewCostHandler(svc *service.CostService) *CostHandler {
 	return &CostHandler{service: svc}
 }
 
+// GetProjectCostChart handles GET /projects/{projectId}/costs/chart — implementation deferred to fix-11.
+func (h *CostHandler) GetProjectCostChart(w http.ResponseWriter, _ *http.Request, _ ProjectIdPath, _ GetProjectCostChartParams) {
+	writeError(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "not implemented")
+}
+
+// GetProjectCostRuns handles GET /projects/{projectId}/costs/runs — implementation deferred to fix-11.
+func (h *CostHandler) GetProjectCostRuns(w http.ResponseWriter, _ *http.Request, _ ProjectIdPath, _ GetProjectCostRunsParams) {
+	writeError(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "not implemented")
+}
+
 // GetProjectCosts handles GET /projects/{projectId}/costs.
 func (h *CostHandler) GetProjectCosts(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, params GetProjectCostsParams) {
 	period := "7d"

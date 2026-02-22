@@ -173,7 +173,7 @@ development_status:
 
   # Post-MVP: E2E Usability Fixes
   post-mvp-e2e-usability: backlog
-  fix-9-backend-wiring: backlog
+  fix-9-backend-wiring: review
   fix-10-openapi-project-fields: backlog
   fix-11-missing-service-methods: backlog
   fix-12-frontend-api-regen: backlog

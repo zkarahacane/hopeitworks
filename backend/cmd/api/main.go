@@ -145,32 +145,8 @@ func run() error {
 	// Background cleanup of expired revoked tokens
 	startTokenCleanup(appCtx, authService, logger)
 
-	// Run service and job queue
+	// Run repository (shared by run service, pipeline executor, and other components)
 	runRepo := pgadapter.NewRunRepo(queries)
-
-	// Pipeline executor (will be used by River workers)
-	// NOTE: event publisher and action registry wiring deferred to later story
-	pipelineExecutor := service.NewPipelineExecutor(runRepo, nil, nil, logger)
-	pipelineExecutor.SetCircuitBreaker(circuitBreakerService)
-
-	// River job queue for async pipeline execution
-	workers := river.NewWorkers()
-	river.AddWorker(workers, riveradapter.NewExecuteRunWorker(pipelineExecutor))
-
-	jobQueue, err := riveradapter.NewJobQueue(pool, workers)
-	if err != nil {
-		logger.Warn("river job queue unavailable, run launching disabled", "error", err)
-	}
-	if jobQueue != nil {
-		go func() {
-			if startErr := jobQueue.Client().Start(appCtx); startErr != nil && startErr != context.Canceled {
-				logger.Error("river client failed", "error", startErr)
-			}
-		}()
-	}
-
-	runService := service.NewRunService(runRepo, projectRepo, storyRepo, pipelineConfigRepo, jobQueue, eventRepo)
-	runHandler := handler.NewRunHandler(runService)
 
 	// Cost service
 	costRepo := pgadapter.NewCostRepo(queries)
@@ -219,6 +195,29 @@ func run() error {
 			logger.Info("incremental_retry action registered")
 		}
 	}
+
+	// Pipeline executor: wired with the real action registry and event publisher
+	pipelineExecutor := service.NewPipelineExecutor(runRepo, actionReg, eventRepo, logger)
+	pipelineExecutor.SetCircuitBreaker(circuitBreakerService)
+
+	// River job queue for async pipeline execution
+	workers := river.NewWorkers()
+	river.AddWorker(workers, riveradapter.NewExecuteRunWorker(pipelineExecutor))
+
+	jobQueue, err := riveradapter.NewJobQueue(pool, workers)
+	if err != nil {
+		logger.Warn("river job queue unavailable, run launching disabled", "error", err)
+	}
+	if jobQueue != nil {
+		go func() {
+			if startErr := jobQueue.Client().Start(appCtx); startErr != nil && startErr != context.Canceled {
+				logger.Error("river client failed", "error", startErr)
+			}
+		}()
+	}
+
+	runService := service.NewRunService(runRepo, projectRepo, storyRepo, pipelineConfigRepo, jobQueue, eventRepo)
+	runHandler := handler.NewRunHandler(runService)
 
 	// Orphan cleanup and timeout enforcement (requires Docker)
 	if containerMgr != nil {

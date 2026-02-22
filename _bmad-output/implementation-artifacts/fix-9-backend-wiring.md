@@ -1,6 +1,6 @@
 # Story fix-9: [BACK] Fix backend wiring — missing server.go delegations, nil pipeline executor dependencies, and missing role in auth response
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -50,30 +50,30 @@ An audit of the backend revealed three independent wiring bugs that collectively
 
 ## Tasks / Subtasks
 
-- [ ] [BACK] Task 1: Add missing delegations in `server.go` (AC: #1, #2)
-  - [ ] Add `ResetCircuitBreaker` delegation pointing to `s.projects.ResetCircuitBreaker` (handler already exists)
-  - [ ] Add `ListHITLRequests` delegation pointing to `s.hitl.ListHITLRequests` (stub to be implemented in fix-11)
-  - [ ] Add `GetHITLRequestByStep` delegation pointing to `s.hitl.GetHITLRequestByStep` (stub to be implemented in fix-11)
-  - [ ] Add `GetProjectCostChart` delegation pointing to `s.costs.GetProjectCostChart` (stub to be implemented in fix-11)
-  - [ ] Add `GetProjectCostRuns` delegation pointing to `s.costs.GetProjectCostRuns` (stub to be implemented in fix-11)
-  - [ ] Add `TestNotificationConfig` delegation pointing to `s.notifications.TestNotificationConfig` (stub to be implemented in fix-11)
-  - [ ] Add stub methods on each respective handler struct so the code compiles (return `501` with a `{"error":{"code":"NOT_IMPLEMENTED","message":"not implemented"}}` body using `writeErrorResponse`)
+- [x] [BACK] Task 1: Add missing delegations in `server.go` (AC: #1, #2)
+  - [x] Add `ResetCircuitBreaker` delegation pointing to `s.projects.ResetCircuitBreaker` (handler already exists)
+  - [x] Add `ListHITLRequests` delegation pointing to `s.hitl.ListHITLRequests` (stub to be implemented in fix-11)
+  - [x] Add `GetHITLRequestByStep` delegation pointing to `s.hitl.GetHITLRequestByStep` (stub to be implemented in fix-11)
+  - [x] Add `GetProjectCostChart` delegation pointing to `s.costs.GetProjectCostChart` (stub to be implemented in fix-11)
+  - [x] Add `GetProjectCostRuns` delegation pointing to `s.costs.GetProjectCostRuns` (stub to be implemented in fix-11)
+  - [x] Add `TestNotificationConfig` delegation pointing to `s.notifications.TestNotificationConfig` (stub to be implemented in fix-11)
+  - [x] Add stub methods on each respective handler struct so the code compiles (return `501` with a `{"error":{"code":"NOT_IMPLEMENTED","message":"not implemented"}}` body using `writeErrorResponse`)
 
-- [ ] [BACK] Task 2: Fix `PipelineExecutor` wiring in `main.go` (AC: #3, #4)
-  - [ ] Remove the early `service.NewPipelineExecutor(runRepo, nil, nil, logger)` call at line 153
-  - [ ] Build `eventPublisher` from `eventRepo` before constructing `pipelineExecutor` (the `pgadapter.EventRepo` already implements `port.EventPublisher` — cast or use it directly)
-  - [ ] Move `pipelineExecutor` construction to after `actionReg` is fully populated (after line 220) so the real `actionReg` and `eventPub` can be passed
-  - [ ] Pass the real `actionReg` and `eventPub` to `service.NewPipelineExecutor(runRepo, actionReg, eventPublisher, logger)`
-  - [ ] Verify that `pipelineExecutor.SetCircuitBreaker(circuitBreakerService)` is still called after the new construction site
-  - [ ] Ensure `river.AddWorker(workers, riveradapter.NewExecuteRunWorker(pipelineExecutor))` still uses the same (now properly wired) instance
+- [x] [BACK] Task 2: Fix `PipelineExecutor` wiring in `main.go` (AC: #3, #4)
+  - [x] Remove the early `service.NewPipelineExecutor(runRepo, nil, nil, logger)` call at line 153
+  - [x] Build `eventPublisher` from `eventRepo` before constructing `pipelineExecutor` (the `pgadapter.EventRepo` already implements `port.EventPublisher` — cast or use it directly)
+  - [x] Move `pipelineExecutor` construction to after `actionReg` is fully populated (after line 220) so the real `actionReg` and `eventPub` can be passed
+  - [x] Pass the real `actionReg` and `eventPub` to `service.NewPipelineExecutor(runRepo, actionReg, eventPublisher, logger)`
+  - [x] Verify that `pipelineExecutor.SetCircuitBreaker(circuitBreakerService)` is still called after the new construction site
+  - [x] Ensure `river.AddWorker(workers, riveradapter.NewExecuteRunWorker(pipelineExecutor))` still uses the same (now properly wired) instance
 
-- [ ] [BACK] Task 3: Add `role` field to `userResponse` in `auth_handler.go` (AC: #5)
-  - [ ] Add `Role string \`json:"role"\`` to the `userResponse` struct (lines 42–48)
-  - [ ] Populate `Role: string(u.Role)` in `toUserResponse()` (line 238–246)
+- [x] [BACK] Task 3: Add `role` field to `userResponse` in `auth_handler.go` (AC: #5)
+  - [x] Add `Role string \`json:"role"\`` to the `userResponse` struct (lines 42–48)
+  - [x] Populate `Role: string(u.Role)` in `toUserResponse()` (line 238–246)
 
-- [ ] [BACK] Task 4: Lint and compile check (AC: #6)
-  - [ ] Run `cd backend && go build ./...` — must succeed with zero errors
-  - [ ] Run `cd backend && golangci-lint run ./...` — must produce zero lint errors
+- [x] [BACK] Task 4: Lint and compile check (AC: #6)
+  - [x] Run `cd backend && go build ./...` — must succeed with zero errors
+  - [x] Run `cd backend && golangci-lint run ./...` — must produce zero lint errors
 
 ## Dev Notes
 
@@ -301,10 +301,44 @@ curl -s -H "Cookie: token=<valid-token>" http://localhost:8080/api/v1/auth/me | 
 
 ## Dev Agent Record
 
-_To be filled by the implementing agent._
+### Implementation Plan
+
+Three independent wiring bugs addressed in order:
+
+1. **server.go delegations**: Added 6 delegation methods (ResetCircuitBreaker, ListHITLRequests, GetHITLRequestByStep, GetProjectCostChart, GetProjectCostRuns, TestNotificationConfig). ResetCircuitBreaker delegates to the existing ProjectHandler implementation. The other 5 delegate to stub methods on their respective handler structs that return 501 Not Implemented.
+
+2. **PipelineExecutor wiring**: Moved the `pipelineExecutor` construction from line 153 (where actionReg and eventPub were nil) to after the action registry is fully populated (after agent_run and incremental_retry registration). The `eventRepo` (pgadapter.EventRepo) already implements `port.EventPublisher`, so it is passed directly. All downstream dependencies (SetCircuitBreaker, River workers, jobQueue, parallelGroupExecutor) remain properly connected.
+
+3. **auth role field**: Added `Role string` to `userResponse` struct and populated it with `string(u.Role)` in `toUserResponse()`.
+
+### Completion Notes
+
+- All 6 delegations added in server.go — follows Go naming conventions (projectID not projectId)
+- 5 stub methods added across hitl_handler.go (2), cost_handler.go (2), notification_handler.go (1) — all return 501 with standard error envelope
+- PipelineExecutor now receives real actionReg and eventRepo — eliminates nil pointer panics on step execution and event publishing
+- auth endpoints (register, login, me) now include `role` field in JSON response
+- 8 new unit tests: 3 for role field presence (register/login/me), 5 for stub 501 responses
+- Full test suite passes (all packages), zero lint errors
+
+## File List
+
+| File | Action |
+|------|--------|
+| `backend/internal/api/handler/server.go` | Modified — added 6 delegation methods |
+| `backend/internal/api/handler/hitl_handler.go` | Modified — added ListHITLRequests and GetHITLRequestByStep stubs |
+| `backend/internal/api/handler/cost_handler.go` | Modified — added GetProjectCostChart and GetProjectCostRuns stubs |
+| `backend/internal/api/handler/notification_handler.go` | Modified — added TestNotificationConfig stub |
+| `backend/cmd/api/main.go` | Modified — restructured PipelineExecutor construction |
+| `backend/internal/api/handler/auth_handler.go` | Modified — added Role to userResponse and toUserResponse |
+| `backend/internal/api/handler/auth_handler_test.go` | Modified — added 3 role field tests |
+| `backend/internal/api/handler/hitl_handler_test.go` | Modified — added 2 stub tests |
+| `backend/internal/api/handler/stub_handlers_test.go` | New — 3 tests for cost and notification stubs |
+| `_bmad-output/implementation-artifacts/fix-9-backend-wiring.md` | Modified — updated status, tasks, dev record |
+| `_bmad-output/implementation-artifacts/sprint-status.yaml` | Modified — fix-9 status: in-progress -> review |
 
 ## Change Log
 
 | Date | Author | Change |
 |------|--------|--------|
 | 2026-02-22 | story-writer | Initial story created |
+| 2026-02-22 | dev-agent | Implemented all 4 tasks: server.go delegations, PipelineExecutor wiring, auth role field, tests |

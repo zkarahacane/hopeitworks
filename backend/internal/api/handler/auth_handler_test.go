@@ -381,6 +381,109 @@ func TestMeHandler_Unauthenticated(t *testing.T) {
 	}
 }
 
+// ── Role field tests ────────────────────────────────────────────────────
+
+func TestRegisterHandler_IncludesRole(t *testing.T) {
+	h, _ := newTestHandler()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewBufferString(testRegisterBody))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	h.Register(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d", rec.Code)
+	}
+
+	var raw map[string]interface{}
+	if err := json.NewDecoder(rec.Body).Decode(&raw); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	role, ok := raw["role"]
+	if !ok {
+		t.Fatal("response missing 'role' field")
+	}
+	roleStr, ok := role.(string)
+	if !ok || roleStr == "" {
+		t.Errorf("expected non-empty role string, got %v", role)
+	}
+}
+
+func TestLoginHandler_IncludesRole(t *testing.T) {
+	h, _ := newTestHandler()
+
+	// Register first
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewBufferString(testRegisterBody))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	h.Register(rec, req)
+
+	// Login
+	loginBody := `{"email":"test@example.com","password":"secureP@ss1"}`
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewBufferString(loginBody))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	h.Login(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+
+	var raw map[string]interface{}
+	if err := json.NewDecoder(rec.Body).Decode(&raw); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	role, ok := raw["role"]
+	if !ok {
+		t.Fatal("login response missing 'role' field")
+	}
+	roleStr, ok := role.(string)
+	if !ok || roleStr == "" {
+		t.Errorf("expected non-empty role string, got %v", role)
+	}
+}
+
+func TestMeHandler_IncludesRole(t *testing.T) {
+	h, _ := newTestHandler()
+
+	// Register to create a user
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewBufferString(testRegisterBody))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	h.Register(rec, req)
+
+	var regResp userResponse
+	if err := json.NewDecoder(rec.Body).Decode(&regResp); err != nil {
+		t.Fatalf("failed to decode register response: %v", err)
+	}
+	userID, _ := uuid.Parse(regResp.ID)
+
+	// Call Me with context set
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
+	ctx := context.WithValue(req.Context(), middleware.ContextKeyUserID, userID)
+	ctx = context.WithValue(ctx, middleware.ContextKeyRole, model.RoleUser)
+	req = req.WithContext(ctx)
+	rec = httptest.NewRecorder()
+	h.Me(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+
+	var raw map[string]interface{}
+	if err := json.NewDecoder(rec.Body).Decode(&raw); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	role, ok := raw["role"]
+	if !ok {
+		t.Fatal("me response missing 'role' field")
+	}
+	roleStr, ok := role.(string)
+	if !ok || roleStr == "" {
+		t.Errorf("expected non-empty role string, got %v", role)
+	}
+}
+
 // ── ForgotPassword handler tests ────────────────────────────────────────
 
 func TestForgotPasswordHandler_ValidEmail(t *testing.T) {
