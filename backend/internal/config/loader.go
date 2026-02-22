@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	pkgconfig "github.com/zakari/hopeitworks/backend/pkg/config"
 	"gopkg.in/yaml.v3"
@@ -21,6 +22,7 @@ func Load(path string) (*pkgconfig.Config, error) {
 		return nil, fmt.Errorf("parsing config file: %w", err)
 	}
 
+	setDefaults(&cfg)
 	applyEnvOverrides(&cfg)
 
 	if err := validate(&cfg); err != nil {
@@ -28,6 +30,13 @@ func Load(path string) (*pkgconfig.Config, error) {
 	}
 
 	return &cfg, nil
+}
+
+func setDefaults(cfg *pkgconfig.Config) {
+	if cfg.Database.AutoMigrate == nil {
+		t := true
+		cfg.Database.AutoMigrate = &t
+	}
 }
 
 func applyEnvOverrides(cfg *pkgconfig.Config) {
@@ -50,6 +59,10 @@ func applyEnvOverrides(cfg *pkgconfig.Config) {
 	}
 	if v := os.Getenv("DB_SSLMODE"); v != "" {
 		cfg.Database.SSLMode = v
+	}
+	if v := os.Getenv("DB_AUTO_MIGRATE"); v != "" {
+		b := strings.EqualFold(v, "true") || v == "1"
+		cfg.Database.AutoMigrate = &b
 	}
 	if v := os.Getenv("SERVER_PORT"); v != "" {
 		if port, err := strconv.Atoi(v); err == nil {

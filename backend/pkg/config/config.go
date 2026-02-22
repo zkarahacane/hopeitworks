@@ -39,6 +39,9 @@ type DatabaseConfig struct {
 	MaxConns        int32  `yaml:"max_conns"`
 	MinConns        int32  `yaml:"min_conns"`
 	MaxConnLifetime string `yaml:"max_conn_lifetime"`
+	// AutoMigrate controls whether pending database migrations are applied
+	// automatically on startup. Defaults to true.
+	AutoMigrate *bool `yaml:"auto_migrate"`
 }
 
 // DockerConfig holds Docker connection settings.
