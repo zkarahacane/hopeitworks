@@ -183,17 +183,24 @@ development_status:
   fix-monaco-native-editor: done
 
   # Post-MVP: DX Improvements
-  post-mvp-dx: backlog
-  1-22-auto-migrate-on-startup: ready-for-dev
+  post-mvp-dx: done
+  1-22-auto-migrate-on-startup: done
 
   # Post-MVP: Agent Runtime & E2E Pipeline
-  post-mvp-agent-runtime: in-progress
+  post-mvp-agent-runtime: done
   runtime-1-agent-docker-image: done
   runtime-2-action-wiring-and-action-type-mapping: done
   runtime-3-test-project-postgres-e2e-validation: done
-  runtime-4-run-context-metadata-propagation: ready-for-dev
-  runtime-5-env-vars-dotenv-setup: ready-for-dev
-  runtime-6-default-pipeline-steps-and-templates: ready-for-dev
+  runtime-4-run-context-metadata-propagation: done
+  runtime-5-env-vars-dotenv-setup: done
+  runtime-6-default-pipeline-steps-and-templates: done
+
+  # Post-MVP: Pipeline UX Improvements
+  post-mvp-pipeline-ux: backlog
+  3-15-fix-live-log-streaming-sse: ready-for-dev
+  3-16-cancel-run-endpoint-and-ui: ready-for-dev
+  3-17-display-step-costs-in-run-detail: ready-for-dev
+  3-18-retry-failed-step-endpoint-and-ui: ready-for-dev
 
   # Post-MVP: E2E Usability Fixes
   post-mvp-e2e-usability: done
@@ -222,6 +229,9 @@ development_status:
 #   Phase 5 (Waves 16-19): Post-MVP Bug Fixes
 #   Phase 6 (Waves 20-21): Auth Enhancements
 #   Phase 7 (Waves 22-23): E2E Usability Fixes
+#   Phase 8 (Waves 24-26): Runner Abstraction Refactoring
+#   Phase 9 (Waves 27-29): Agent Runtime
+#   Phase 10 (Wave 30):    Pipeline UX Improvements
 #
 # Launch a single story in a container:
 #   ./scripts/bmad-dev.sh -p "/bmad-bmm-dev-story"
@@ -845,7 +855,7 @@ parallel_waves:
         status: done
       - key: runtime-2-action-wiring-and-action-type-mapping
         domain: back
-        status: ready-for-dev
+        status: done
     container_count: 2
     depends_on: [wave-26]
     notes: "Agent Docker image + action wiring — parallel, independent"
@@ -866,16 +876,43 @@ parallel_waves:
     stories:
       - key: runtime-4-run-context-metadata-propagation
         domain: back
-        status: ready-for-dev
+        status: done
         cross_epic_deps: []
       - key: runtime-5-env-vars-dotenv-setup
         domain: shared
-        status: ready-for-dev
+        status: done
         cross_epic_deps: []
       - key: runtime-6-default-pipeline-steps-and-templates
         domain: back
-        status: ready-for-dev
+        status: done
         cross_epic_deps: []
     container_count: 3
     depends_on: [wave-28]
-    notes: "RunContext metadata + env vars + default pipeline config/templates"
+    notes: "RunContext metadata + env vars + default pipeline config/templates — Phase 9 COMPLETE"
+
+  # =====================================================
+  # PHASE 10: PIPELINE UX IMPROVEMENTS
+  # =====================================================
+
+  wave-30:
+    phase: 10-pipeline-ux
+    stories:
+      - key: 3-15-fix-live-log-streaming-sse
+        domain: back
+        status: ready-for-dev
+        cross_epic_deps: [4-1-sse-streaming-endpoint, 3-5-ndjson-log-streaming-from-container]
+      - key: 3-16-cancel-run-endpoint-and-ui
+        domain: shared
+        status: ready-for-dev
+        cross_epic_deps: [3-7-pipeline-executor-sequential-step-runner]
+      - key: 3-17-display-step-costs-in-run-detail
+        domain: front
+        status: ready-for-dev
+        cross_epic_deps: [9-2-cost-aggregation-api, 4-4-run-progress-timeline-display]
+      - key: 3-18-retry-failed-step-endpoint-and-ui
+        domain: shared
+        status: ready-for-dev
+        cross_epic_deps: [8-2-incremental-retry-action, 4-4-run-progress-timeline-display]
+    container_count: 4
+    depends_on: [wave-29]
+    notes: "Pipeline UX: live logs fix, cancel run, cost display per step, retry failed step — all parallel"
