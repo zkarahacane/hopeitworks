@@ -106,6 +106,10 @@ func (h *SSEHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 
+	// Flush headers immediately so the browser's EventSource transitions
+	// from CONNECTING to OPEN without waiting for the first keepalive.
+	flusher.Flush()
+
 	// Replay missed events if Last-Event-ID is present
 	lastEventID := r.Header.Get("Last-Event-ID")
 	if lastEventID != "" {
