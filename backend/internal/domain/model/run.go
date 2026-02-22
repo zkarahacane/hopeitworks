@@ -40,6 +40,7 @@ type Run struct {
 	StoryID                uuid.UUID
 	Status                 RunStatus
 	PipelineConfigSnapshot json.RawMessage
+	Metadata               map[string]interface{}
 	StartedAt              *time.Time
 	CompletedAt            *time.Time
 	PausedAt               *time.Time

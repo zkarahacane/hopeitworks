@@ -1062,3 +1062,112 @@ func TestExecuteRun_CircuitBreakerRecordsSuccess(t *testing.T) {
 		t.Errorf("expected circuit breaker count 0, got %d", cbRepo.projects[f.projectID].CircuitBreakerCount)
 	}
 }
+
+func TestExecuteRun_TemplateNameInjectedPerActionType(t *testing.T) {
+	f := newExecutorTestFixture(3)
+
+	// Set step actions to the three known action types
+	f.steps[0].Action = "implement"
+	f.steps[1].Action = "review"
+	f.steps[2].Action = "merge"
+
+	capturedTemplateNames := make([]string, 3)
+	for i, step := range f.steps {
+		idx := i
+		f.actionReg.Register(&mockAction{
+			name: step.Action,
+			executeFn: func(_ context.Context, runCtx *model.RunContext) error {
+				if tmpl, ok := runCtx.Metadata["template_name"].(string); ok {
+					capturedTemplateNames[idx] = tmpl
+				}
+				// Delete template_name to verify it gets re-injected per step
+				delete(runCtx.Metadata, "template_name")
+				return nil
+			},
+		})
+	}
+
+	err := f.executor.ExecuteRun(context.Background(), f.runID)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	expected := []string{TemplateNameImplement, TemplateNameReview, TemplateNameMerge}
+	for i, exp := range expected {
+		if capturedTemplateNames[i] != exp {
+			t.Errorf("step %d: expected template_name %q, got %q", i, exp, capturedTemplateNames[i])
+		}
+	}
+}
+
+func TestExecuteRun_RunMetadataMergedIntoContext(t *testing.T) {
+	f := newExecutorTestFixture(1)
+
+	// Set run metadata with branch_name
+	f.run.Metadata = map[string]interface{}{
+		"branch_name": "feat/runtime-4",
+	}
+
+	var capturedBranchName string
+	f.actionReg.Register(&mockAction{
+		name: f.steps[0].Action,
+		executeFn: func(_ context.Context, runCtx *model.RunContext) error {
+			if bn, ok := runCtx.Metadata["branch_name"].(string); ok {
+				capturedBranchName = bn
+			}
+			return nil
+		},
+	})
+
+	err := f.executor.ExecuteRun(context.Background(), f.runID)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if capturedBranchName != "feat/runtime-4" {
+		t.Errorf("expected branch_name %q, got %q", "feat/runtime-4", capturedBranchName)
+	}
+}
+
+func TestExecuteRun_ModelInjectedPerStep(t *testing.T) {
+	f := newExecutorTestFixture(3)
+
+	// Set run metadata with per-step model keys (as LaunchRun would)
+	f.run.Metadata = map[string]interface{}{
+		"branch_name":  "feat/test",
+		"step_0_model": "claude-opus-4-6",
+		"step_1_model": "claude-sonnet-4-6",
+		// step_2 has no model — should result in no "model" key
+	}
+
+	capturedModels := make([]string, 3)
+	capturedHasModel := make([]bool, 3)
+	for i, step := range f.steps {
+		idx := i
+		f.actionReg.Register(&mockAction{
+			name: step.Action,
+			executeFn: func(_ context.Context, runCtx *model.RunContext) error {
+				if m, ok := runCtx.Metadata["model"].(string); ok {
+					capturedModels[idx] = m
+					capturedHasModel[idx] = true
+				}
+				return nil
+			},
+		})
+	}
+
+	err := f.executor.ExecuteRun(context.Background(), f.runID)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if capturedModels[0] != "claude-opus-4-6" {
+		t.Errorf("step 0: expected model %q, got %q", "claude-opus-4-6", capturedModels[0])
+	}
+	if capturedModels[1] != "claude-sonnet-4-6" {
+		t.Errorf("step 1: expected model %q, got %q", "claude-sonnet-4-6", capturedModels[1])
+	}
+	if capturedHasModel[2] {
+		t.Errorf("step 2: expected no model in metadata, got %q", capturedModels[2])
+	}
+}

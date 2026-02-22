@@ -28,11 +28,21 @@ func NewRunRepo(queries *Queries) *RunRepo {
 }
 
 func (r *RunRepo) CreateRun(ctx context.Context, run *model.Run) (*model.Run, error) {
+	metadataJSON := []byte("{}")
+	if run.Metadata != nil {
+		var err error
+		metadataJSON, err = json.Marshal(run.Metadata)
+		if err != nil {
+			return nil, apperrors.NewInternal("failed to marshal run metadata", err)
+		}
+	}
+
 	params := CreateRunParams{
 		ProjectID:              run.ProjectID,
 		StoryID:                run.StoryID,
 		Status:                 string(run.Status),
 		PipelineConfigSnapshot: []byte(run.PipelineConfigSnapshot),
+		Metadata:               metadataJSON,
 	}
 
 	row, err := r.queries.CreateRun(ctx, params)
@@ -236,6 +246,12 @@ func toDomainRun(r Run) *model.Run {
 		PipelineConfigSnapshot: json.RawMessage(r.PipelineConfigSnapshot),
 		CreatedAt:              r.CreatedAt,
 		UpdatedAt:              r.UpdatedAt,
+	}
+	if len(r.Metadata) > 0 {
+		var meta map[string]interface{}
+		if err := json.Unmarshal(r.Metadata, &meta); err == nil {
+			run.Metadata = meta
+		}
 	}
 	if r.StartedAt.Valid {
 		run.StartedAt = &r.StartedAt.Time

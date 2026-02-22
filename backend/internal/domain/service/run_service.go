@@ -314,19 +314,37 @@ func (s *RunService) LaunchRun(ctx context.Context, projectID, storyID uuid.UUID
 		return nil, errors.NewInternal("marshal pipeline config snapshot", err)
 	}
 
-	// 7. Create Run
+	// 7. Compute run metadata
+	branchName := "feat/" + story.Key
+	runMetadata := map[string]interface{}{
+		"branch_name": branchName,
+	}
+
+	// Build per-step model map from pipeline config (keyed by step order)
+	stepModels := make(map[string]string)
+	for i, stepCfg := range parsed.Steps {
+		if stepCfg.Model != "" {
+			stepModels[fmt.Sprintf("step_%d_model", i)] = stepCfg.Model
+		}
+	}
+	for k, v := range stepModels {
+		runMetadata[k] = v
+	}
+
+	// 8. Create Run
 	run := &model.Run{
 		ProjectID:              projectID,
 		StoryID:                storyID,
 		Status:                 model.RunStatusPending,
 		PipelineConfigSnapshot: snapshotJSON,
+		Metadata:               runMetadata,
 	}
 	createdRun, err := s.runRepo.CreateRun(ctx, run)
 	if err != nil {
 		return nil, err
 	}
 
-	// 8. Create RunSteps
+	// 9. Create RunSteps
 	steps := make([]model.RunStep, 0, len(parsed.Steps))
 	for i, stepCfg := range parsed.Steps {
 		step := &model.RunStep{
@@ -344,7 +362,7 @@ func (s *RunService) LaunchRun(ctx context.Context, projectID, storyID uuid.UUID
 	}
 	createdRun.Steps = steps
 
-	// 9. Enqueue River job (non-transactional for MVP)
+	// 10. Enqueue River job (non-transactional for MVP)
 	if s.jobQueue == nil {
 		return nil, errors.NewInternal("enqueue execute_run job", fmt.Errorf("job queue unavailable"))
 	}

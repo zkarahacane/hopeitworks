@@ -970,3 +970,88 @@ func TestAgentRunAction_CleanupOnAllPaths(t *testing.T) {
 		t.Error("expected container cleanup even when start fails")
 	}
 }
+
+func TestAgentRunAction_BranchNameFromMetadata(t *testing.T) {
+	f := newAgentRunFixture(t)
+	runCtx := f.newRunContext()
+	runCtx.Metadata["branch_name"] = "feat/runtime-4"
+
+	err := f.action.Execute(context.Background(), runCtx)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	f.containerMgr.mu.Lock()
+	createCalls := f.containerMgr.createCalls
+	f.containerMgr.mu.Unlock()
+	if len(createCalls) != 1 {
+		t.Fatalf("expected 1 create call, got %d", len(createCalls))
+	}
+
+	envMap := make(map[string]string)
+	for _, env := range createCalls[0].Env {
+		parts := strings.SplitN(env, "=", 2)
+		if len(parts) == 2 {
+			envMap[parts[0]] = parts[1]
+		}
+	}
+
+	if envMap["BRANCH_NAME"] != "feat/runtime-4" {
+		t.Errorf("expected BRANCH_NAME=feat/runtime-4, got %q", envMap["BRANCH_NAME"])
+	}
+}
+
+func TestAgentRunAction_ModelFromMetadata(t *testing.T) {
+	f := newAgentRunFixture(t)
+	runCtx := f.newRunContext()
+	runCtx.Metadata["model"] = "claude-opus-4-6"
+
+	err := f.action.Execute(context.Background(), runCtx)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	f.containerMgr.mu.Lock()
+	createCalls := f.containerMgr.createCalls
+	f.containerMgr.mu.Unlock()
+	if len(createCalls) != 1 {
+		t.Fatalf("expected 1 create call, got %d", len(createCalls))
+	}
+
+	envMap := make(map[string]string)
+	for _, env := range createCalls[0].Env {
+		parts := strings.SplitN(env, "=", 2)
+		if len(parts) == 2 {
+			envMap[parts[0]] = parts[1]
+		}
+	}
+
+	if envMap["MODEL"] != "claude-opus-4-6" {
+		t.Errorf("expected MODEL=claude-opus-4-6, got %q", envMap["MODEL"])
+	}
+}
+
+func TestAgentRunAction_ModelFallback(t *testing.T) {
+	f := newAgentRunFixture(t)
+	runCtx := f.newRunContext()
+	// Explicitly ensure no "model" in metadata
+	delete(runCtx.Metadata, "model")
+
+	err := f.action.Execute(context.Background(), runCtx)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	f.containerMgr.mu.Lock()
+	createCalls := f.containerMgr.createCalls
+	f.containerMgr.mu.Unlock()
+	if len(createCalls) != 1 {
+		t.Fatalf("expected 1 create call, got %d", len(createCalls))
+	}
+
+	for _, env := range createCalls[0].Env {
+		if strings.HasPrefix(env, "MODEL=") {
+			t.Errorf("expected no MODEL env var when model is not in metadata, got %q", env)
+		}
+	}
+}

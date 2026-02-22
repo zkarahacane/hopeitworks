@@ -616,6 +616,195 @@ func TestLaunchRun_Success(t *testing.T) {
 	}
 }
 
+func TestLaunchRun_BranchNameInMetadata(t *testing.T) {
+	projectID := uuid.New()
+	storyID := uuid.New()
+
+	storyRepo := &mockStoryRepoForRun{
+		getByIDFn: func(_ context.Context, id uuid.UUID) (*model.Story, error) {
+			return &model.Story{
+				ID:        id,
+				ProjectID: projectID,
+				Key:       "runtime-4",
+				Status:    model.StoryStatusBacklog,
+			}, nil
+		},
+	}
+
+	pipelineConfigRepo := &mockPipelineConfigRepoForRun{
+		getByProjectIDFn: func(_ context.Context, _ uuid.UUID) (*model.PipelineConfig, error) {
+			return &model.PipelineConfig{
+				ID:         uuid.New(),
+				ProjectID:  projectID,
+				ConfigYAML: testPipelineYAML,
+				Version:    1,
+			}, nil
+		},
+	}
+
+	var capturedRun *model.Run
+	runRepo := &mockRunRepo{
+		createRunFn: func(_ context.Context, run *model.Run) (*model.Run, error) {
+			run.ID = uuid.New()
+			capturedRun = run
+			return run, nil
+		},
+		createRunStepFn: func(_ context.Context, step *model.RunStep) (*model.RunStep, error) {
+			step.ID = uuid.New()
+			return step, nil
+		},
+	}
+
+	svc := NewRunService(runRepo, newMockProjectRepoForService(), storyRepo, pipelineConfigRepo, &mockJobQueue{})
+	run, err := svc.LaunchRun(context.Background(), projectID, storyID)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	// Verify branch_name in metadata
+	if capturedRun.Metadata == nil {
+		t.Fatal("expected run metadata to be set")
+	}
+	bn, ok := capturedRun.Metadata["branch_name"].(string)
+	if !ok {
+		t.Fatal("expected branch_name in metadata")
+	}
+	if bn != "feat/runtime-4" {
+		t.Errorf("expected branch_name %q, got %q", "feat/runtime-4", bn)
+	}
+
+	// Verify returned run also has metadata
+	if run.Metadata == nil {
+		t.Fatal("expected returned run metadata to be set")
+	}
+}
+
+func TestLaunchRun_ModelInMetadata(t *testing.T) {
+	projectID := uuid.New()
+	storyID := uuid.New()
+
+	storyRepo := &mockStoryRepoForRun{
+		getByIDFn: func(_ context.Context, id uuid.UUID) (*model.Story, error) {
+			return &model.Story{
+				ID:        id,
+				ProjectID: projectID,
+				Key:       "S-01",
+				Status:    model.StoryStatusBacklog,
+			}, nil
+		},
+	}
+
+	pipelineConfigRepo := &mockPipelineConfigRepoForRun{
+		getByProjectIDFn: func(_ context.Context, _ uuid.UUID) (*model.PipelineConfig, error) {
+			return &model.PipelineConfig{
+				ID:         uuid.New(),
+				ProjectID:  projectID,
+				ConfigYAML: testPipelineYAML,
+				Version:    1,
+			}, nil
+		},
+	}
+
+	var capturedRun *model.Run
+	runRepo := &mockRunRepo{
+		createRunFn: func(_ context.Context, run *model.Run) (*model.Run, error) {
+			run.ID = uuid.New()
+			capturedRun = run
+			return run, nil
+		},
+		createRunStepFn: func(_ context.Context, step *model.RunStep) (*model.RunStep, error) {
+			step.ID = uuid.New()
+			return step, nil
+		},
+	}
+
+	svc := NewRunService(runRepo, newMockProjectRepoForService(), storyRepo, pipelineConfigRepo, &mockJobQueue{})
+	_, err := svc.LaunchRun(context.Background(), projectID, storyID)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	// Verify per-step model keys in metadata (testPipelineYAML has models on all 3 steps)
+	if capturedRun.Metadata == nil {
+		t.Fatal("expected run metadata to be set")
+	}
+	step0Model, ok := capturedRun.Metadata["step_0_model"].(string)
+	if !ok {
+		t.Fatal("expected step_0_model in metadata")
+	}
+	if step0Model != "claude-opus-4-6" {
+		t.Errorf("expected step_0_model %q, got %q", "claude-opus-4-6", step0Model)
+	}
+	step1Model, ok := capturedRun.Metadata["step_1_model"].(string)
+	if !ok {
+		t.Fatal("expected step_1_model in metadata")
+	}
+	if step1Model != "claude-sonnet-4-5" {
+		t.Errorf("expected step_1_model %q, got %q", "claude-sonnet-4-5", step1Model)
+	}
+}
+
+func TestLaunchRun_NoModelWhenEmpty(t *testing.T) {
+	projectID := uuid.New()
+	storyID := uuid.New()
+
+	pipelineYAMLNoModel := `steps:
+  - id: "step-1"
+    name: "implement"
+    action_type: "implement"
+    auto_approve: false
+    retry_policy:
+      max_retries: 0
+      retry_type: "none"
+`
+
+	storyRepo := &mockStoryRepoForRun{
+		getByIDFn: func(_ context.Context, id uuid.UUID) (*model.Story, error) {
+			return &model.Story{
+				ID:        id,
+				ProjectID: projectID,
+				Key:       "S-02",
+				Status:    model.StoryStatusBacklog,
+			}, nil
+		},
+	}
+
+	pipelineConfigRepo := &mockPipelineConfigRepoForRun{
+		getByProjectIDFn: func(_ context.Context, _ uuid.UUID) (*model.PipelineConfig, error) {
+			return &model.PipelineConfig{
+				ID:         uuid.New(),
+				ProjectID:  projectID,
+				ConfigYAML: pipelineYAMLNoModel,
+				Version:    1,
+			}, nil
+		},
+	}
+
+	var capturedRun *model.Run
+	runRepo := &mockRunRepo{
+		createRunFn: func(_ context.Context, run *model.Run) (*model.Run, error) {
+			run.ID = uuid.New()
+			capturedRun = run
+			return run, nil
+		},
+		createRunStepFn: func(_ context.Context, step *model.RunStep) (*model.RunStep, error) {
+			step.ID = uuid.New()
+			return step, nil
+		},
+	}
+
+	svc := NewRunService(runRepo, newMockProjectRepoForService(), storyRepo, pipelineConfigRepo, &mockJobQueue{})
+	_, err := svc.LaunchRun(context.Background(), projectID, storyID)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	// Verify no step_0_model key when model is empty
+	if _, exists := capturedRun.Metadata["step_0_model"]; exists {
+		t.Error("expected no step_0_model key when pipeline step has no model")
+	}
+}
+
 func TestLaunchRun_StoryNotFound(t *testing.T) {
 	projectID := uuid.New()
 	storyID := uuid.New()

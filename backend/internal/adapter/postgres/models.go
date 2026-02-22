@@ -200,6 +200,7 @@ type Run struct {
 	CreatedAt              time.Time          `json:"created_at"`
 	UpdatedAt              time.Time          `json:"updated_at"`
 	PausedAt               pgtype.Timestamptz `json:"paused_at"`
+	Metadata               []byte             `json:"metadata"`
 }
 
 type RunStep struct {
