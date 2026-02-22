@@ -144,7 +144,8 @@ test.describe('Application Routing', () => {
       await expect(page.locator('h1')).toHaveText('Dashboard')
 
       // Navigate to Projects using sidebar button
-      await page.getByRole('button', { name: 'Projects' }).click()
+      const sidebar = page.locator('aside')
+      await sidebar.getByRole('button', { name: 'Projects' }).click()
       await expect(page).toHaveURL('/projects')
       await expect(page.locator('h1')).toHaveText('Projects')
     })
