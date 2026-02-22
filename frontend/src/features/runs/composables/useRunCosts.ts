@@ -38,11 +38,15 @@ export function useRunCosts(
 
   // Refetch costs when run status changes (costs finalize on step completion)
   if (runStatus) {
-    watch(runStatus, (newStatus, oldStatus) => {
-      if (newStatus !== oldStatus) {
-        fetchCosts()
-      }
-    })
+    watch(
+      runStatus,
+      (newStatus, oldStatus) => {
+        if (newStatus !== oldStatus && oldStatus !== undefined) {
+          fetchCosts()
+        }
+      },
+      { flush: 'post' },
+    )
   }
 
   onMounted(fetchCosts)

@@ -51,6 +51,11 @@ const totalCostDisplay = computed(() => {
   return formatCostUSD(costDetail.value.total_cost)
 })
 
+/** Helper to get step cost breakdown by step ID. */
+function getStepCost(stepId: string): StepCostBreakdown | undefined {
+  return stepCostMap.value.get(stepId)
+}
+
 const stepSeverity: Record<string, string> = {
   completed: 'success',
   running: 'info',
@@ -211,20 +216,20 @@ function formatDuration(step: RunStep): string | null {
               </div>
               <!-- Per-step cost breakdown -->
               <div
-                v-if="stepCostMap.get((item as RunStep).id)"
+                v-if="getStepCost((item as RunStep).id)"
                 class="flex items-center gap-3 text-xs text-surface-500 mt-1"
                 data-testid="step-cost"
               >
                 <span class="font-mono bg-surface-100 dark:bg-surface-800 px-1.5 py-0.5 rounded">
-                  {{ stepCostMap.get((item as RunStep).id)!.model }}
+                  {{ getStepCost((item as RunStep).id)!.model }}
                 </span>
                 <span>
-                  {{ formatTokenCount(stepCostMap.get((item as RunStep).id)!.tokens_input) }} in
+                  {{ formatTokenCount(getStepCost((item as RunStep).id)!.tokens_input) }} in
                   /
-                  {{ formatTokenCount(stepCostMap.get((item as RunStep).id)!.tokens_output) }} out
+                  {{ formatTokenCount(getStepCost((item as RunStep).id)!.tokens_output) }} out
                 </span>
                 <span class="font-medium text-surface-700 dark:text-surface-300">
-                  {{ formatCostUSD(stepCostMap.get((item as RunStep).id)!.cost_usd) }}
+                  {{ formatCostUSD(getStepCost((item as RunStep).id)!.cost_usd) }}
                 </span>
               </div>
               <div
