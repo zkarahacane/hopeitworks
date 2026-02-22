@@ -1,13 +1,10 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
 
-	"github.com/zakari/hopeitworks/backend/internal/api/middleware"
 	"github.com/zakari/hopeitworks/backend/internal/domain/model"
 	"github.com/zakari/hopeitworks/backend/internal/domain/service"
-	"github.com/zakari/hopeitworks/backend/pkg/errors"
 )
 
 // PromptTemplateHandler implements prompt-template-related HTTP handlers.
@@ -48,14 +45,12 @@ func (h *PromptTemplateHandler) ListPromptTemplates(w http.ResponseWriter, r *ht
 // CreatePromptTemplate handles POST /projects/{projectId}/templates.
 // Only admin users can create prompt templates.
 func (h *PromptTemplateHandler) CreatePromptTemplate(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath) {
-	if !middleware.IsAdmin(r.Context()) {
-		writeErrorResponse(w, errors.NewForbidden("Admin access required"))
+	if !requireAdmin(w, r) {
 		return
 	}
 
 	var req CreatePromptTemplateRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeErrorResponse(w, errors.NewValidation("body", "invalid JSON"))
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 
@@ -89,14 +84,12 @@ func (h *PromptTemplateHandler) GetPromptTemplate(w http.ResponseWriter, r *http
 // UpdatePromptTemplate handles PUT /projects/{projectId}/templates/{templateId}.
 // Only admin users can update prompt templates.
 func (h *PromptTemplateHandler) UpdatePromptTemplate(w http.ResponseWriter, r *http.Request, _ ProjectIdPath, templateID TemplateIdPath) {
-	if !middleware.IsAdmin(r.Context()) {
-		writeErrorResponse(w, errors.NewForbidden("Admin access required"))
+	if !requireAdmin(w, r) {
 		return
 	}
 
 	var req UpdatePromptTemplateRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeErrorResponse(w, errors.NewValidation("body", "invalid JSON"))
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 
@@ -122,8 +115,7 @@ func (h *PromptTemplateHandler) UpdatePromptTemplate(w http.ResponseWriter, r *h
 // DeletePromptTemplate handles DELETE /projects/{projectId}/templates/{templateId}.
 // Only admin users can delete prompt templates.
 func (h *PromptTemplateHandler) DeletePromptTemplate(w http.ResponseWriter, r *http.Request, _ ProjectIdPath, templateID TemplateIdPath) {
-	if !middleware.IsAdmin(r.Context()) {
-		writeErrorResponse(w, errors.NewForbidden("Admin access required"))
+	if !requireAdmin(w, r) {
 		return
 	}
 

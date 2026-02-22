@@ -1,13 +1,11 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
-	"github.com/zakari/hopeitworks/backend/internal/api/middleware"
 	"github.com/zakari/hopeitworks/backend/internal/domain/model"
 	"github.com/zakari/hopeitworks/backend/internal/domain/service"
 	"github.com/zakari/hopeitworks/backend/pkg/errors"
@@ -41,8 +39,7 @@ func NewProjectUserHandler(svc *service.ProjectUserService) *ProjectUserHandler 
 
 // AddUser handles POST /api/v1/projects/{id}/users (admin only).
 func (h *ProjectUserHandler) AddUser(w http.ResponseWriter, r *http.Request) {
-	if !middleware.IsAdmin(r.Context()) {
-		writeErrorResponse(w, errors.NewForbidden("Admin access required"))
+	if !requireAdmin(w, r) {
 		return
 	}
 
@@ -54,8 +51,7 @@ func (h *ProjectUserHandler) AddUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req AddProjectUserRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeErrorResponse(w, errors.NewValidation("body", "invalid JSON"))
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 
@@ -80,8 +76,7 @@ func (h *ProjectUserHandler) AddUser(w http.ResponseWriter, r *http.Request) {
 
 // RemoveUser handles DELETE /api/v1/projects/{id}/users/{user_id} (admin only).
 func (h *ProjectUserHandler) RemoveUser(w http.ResponseWriter, r *http.Request) {
-	if !middleware.IsAdmin(r.Context()) {
-		writeErrorResponse(w, errors.NewForbidden("Admin access required"))
+	if !requireAdmin(w, r) {
 		return
 	}
 

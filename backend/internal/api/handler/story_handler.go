@@ -1,13 +1,11 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
 	"strings"
 
 	"github.com/google/uuid"
 	"github.com/zakari/hopeitworks/backend/internal/adapter/markdown"
-	"github.com/zakari/hopeitworks/backend/internal/api/middleware"
 	"github.com/zakari/hopeitworks/backend/internal/domain/model"
 	"github.com/zakari/hopeitworks/backend/internal/domain/service"
 	"github.com/zakari/hopeitworks/backend/pkg/errors"
@@ -63,14 +61,12 @@ func (h *StoryHandler) ListStories(w http.ResponseWriter, r *http.Request, proje
 // CreateStory handles POST /projects/{projectId}/stories.
 // Only admin users can create stories.
 func (h *StoryHandler) CreateStory(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath) {
-	if !middleware.IsAdmin(r.Context()) {
-		writeErrorResponse(w, errors.NewForbidden("Admin access required"))
+	if !requireAdmin(w, r) {
 		return
 	}
 
 	var req CreateStoryRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeErrorResponse(w, errors.NewValidation("body", "invalid JSON"))
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 
@@ -122,14 +118,12 @@ func (h *StoryHandler) GetStory(w http.ResponseWriter, r *http.Request, _ Projec
 // UpdateStory handles PUT /projects/{projectId}/stories/{storyId}.
 // Only admin users can update stories.
 func (h *StoryHandler) UpdateStory(w http.ResponseWriter, r *http.Request, _ ProjectIdPath, storyID StoryIdPath) {
-	if !middleware.IsAdmin(r.Context()) {
-		writeErrorResponse(w, errors.NewForbidden("Admin access required"))
+	if !requireAdmin(w, r) {
 		return
 	}
 
 	var req UpdateStoryRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeErrorResponse(w, errors.NewValidation("body", "invalid JSON"))
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 
@@ -170,8 +164,7 @@ func (h *StoryHandler) UpdateStory(w http.ResponseWriter, r *http.Request, _ Pro
 // DeleteStory handles DELETE /projects/{projectId}/stories/{storyId}.
 // Only admin users can delete stories.
 func (h *StoryHandler) DeleteStory(w http.ResponseWriter, r *http.Request, _ ProjectIdPath, storyID StoryIdPath) {
-	if !middleware.IsAdmin(r.Context()) {
-		writeErrorResponse(w, errors.NewForbidden("Admin access required"))
+	if !requireAdmin(w, r) {
 		return
 	}
 
@@ -186,14 +179,12 @@ func (h *StoryHandler) DeleteStory(w http.ResponseWriter, r *http.Request, _ Pro
 // ImportStories handles POST /projects/{projectId}/stories/import.
 // Only admin users can import stories.
 func (h *StoryHandler) ImportStories(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath) {
-	if !middleware.IsAdmin(r.Context()) {
-		writeErrorResponse(w, errors.NewForbidden("Admin access required"))
+	if !requireAdmin(w, r) {
 		return
 	}
 
 	var req ImportStoriesRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeErrorResponse(w, errors.NewValidation("body", "invalid JSON"))
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 

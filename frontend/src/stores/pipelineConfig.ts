@@ -2,6 +2,7 @@ import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import { apiClient } from '@/api/client'
 import type { components } from '@/api/schema'
+import { getApiErrorMessage } from '@/utils/apiError'
 
 export type PipelineConfig = components['schemas']['PipelineConfig']
 export type PipelineStep = components['schemas']['PipelineStep']
@@ -105,10 +106,7 @@ export const usePipelineConfigStore = defineStore('pipelineConfig', () => {
         },
       )
       if (apiError) {
-        const message =
-          (apiError as { error?: { message?: string } })?.error?.message ??
-          'Failed to save pipeline configuration'
-        throw new Error(message)
+        throw new Error(getApiErrorMessage(apiError, 'Failed to save pipeline configuration'))
       }
       config.value = data as PipelineConfig
       isDirty.value = false

@@ -32,10 +32,10 @@ func (s *EpicService) Create(ctx context.Context, params CreateEpicParams) (*mod
 	if params.Name == "" {
 		return nil, errors.NewValidation("name", "is required")
 	}
-	if len(params.Name) > 255 {
+	if len(params.Name) > model.MaxNameLength {
 		return nil, errors.NewValidation("name", "must be 255 characters or less")
 	}
-	if params.Description != nil && len(*params.Description) > 2000 {
+	if params.Description != nil && len(*params.Description) > model.MaxEpicDescriptionLength {
 		return nil, errors.NewValidation("description", "must be 2000 characters or less")
 	}
 	if params.ProjectID == uuid.Nil {
@@ -110,13 +110,13 @@ func (s *EpicService) Update(ctx context.Context, params UpdateEpicParams) (*mod
 		if *params.Name == "" {
 			return nil, errors.NewValidation("name", "must not be empty")
 		}
-		if len(*params.Name) > 255 {
+		if len(*params.Name) > model.MaxNameLength {
 			return nil, errors.NewValidation("name", "must be 255 characters or less")
 		}
 		existing.Name = *params.Name
 	}
 	if params.Description != nil {
-		if len(*params.Description) > 2000 {
+		if len(*params.Description) > model.MaxEpicDescriptionLength {
 			return nil, errors.NewValidation("description", "must be 2000 characters or less")
 		}
 		existing.Description = params.Description

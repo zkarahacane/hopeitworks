@@ -1,14 +1,11 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
 
-	"github.com/zakari/hopeitworks/backend/internal/api/middleware"
 	"github.com/zakari/hopeitworks/backend/internal/domain/model"
 	"github.com/zakari/hopeitworks/backend/internal/domain/port"
 	"github.com/zakari/hopeitworks/backend/internal/domain/service"
-	"github.com/zakari/hopeitworks/backend/pkg/errors"
 )
 
 // EpicHandler implements epic-related HTTP handlers.
@@ -51,14 +48,12 @@ func (h *EpicHandler) ListEpics(w http.ResponseWriter, r *http.Request, projectI
 // CreateEpic handles POST /projects/{projectId}/epics.
 // Only admin users can create epics.
 func (h *EpicHandler) CreateEpic(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath) {
-	if !middleware.IsAdmin(r.Context()) {
-		writeErrorResponse(w, errors.NewForbidden("Admin access required"))
+	if !requireAdmin(w, r) {
 		return
 	}
 
 	var req CreateEpicRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeErrorResponse(w, errors.NewValidation("body", "invalid JSON"))
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 
@@ -94,14 +89,12 @@ func (h *EpicHandler) GetEpic(w http.ResponseWriter, r *http.Request, _ ProjectI
 // UpdateEpic handles PUT /projects/{projectId}/epics/{epicId}.
 // Only admin users can update epics.
 func (h *EpicHandler) UpdateEpic(w http.ResponseWriter, r *http.Request, _ ProjectIdPath, epicID EpicIdPath) {
-	if !middleware.IsAdmin(r.Context()) {
-		writeErrorResponse(w, errors.NewForbidden("Admin access required"))
+	if !requireAdmin(w, r) {
 		return
 	}
 
 	var req UpdateEpicRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeErrorResponse(w, errors.NewValidation("body", "invalid JSON"))
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 
@@ -127,8 +120,7 @@ func (h *EpicHandler) UpdateEpic(w http.ResponseWriter, r *http.Request, _ Proje
 // DeleteEpic handles DELETE /projects/{projectId}/epics/{epicId}.
 // Only admin users can delete epics.
 func (h *EpicHandler) DeleteEpic(w http.ResponseWriter, r *http.Request, _ ProjectIdPath, epicID EpicIdPath) {
-	if !middleware.IsAdmin(r.Context()) {
-		writeErrorResponse(w, errors.NewForbidden("Admin access required"))
+	if !requireAdmin(w, r) {
 		return
 	}
 

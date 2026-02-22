@@ -1,5 +1,6 @@
 import { useAsyncAction } from '@/composables/useAsyncAction'
 import { apiClient } from '@/api/client'
+import { getApiErrorMessage } from '@/utils/apiError'
 
 /** Error code thrown when a story already has a run in progress (409 Conflict). */
 export const ALREADY_RUNNING_ERROR = 'ALREADY_RUNNING'
@@ -23,7 +24,7 @@ export function useRunLauncher() {
         if (response?.status === 409) {
           throw new Error(ALREADY_RUNNING_ERROR)
         }
-        throw new Error((apiError as { error?: { message?: string } })?.error?.message ?? 'Failed to launch run')
+        throw new Error(getApiErrorMessage(apiError, 'Failed to launch run'))
       }
 
       return data

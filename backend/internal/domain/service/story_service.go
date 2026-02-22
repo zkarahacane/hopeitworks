@@ -42,7 +42,7 @@ func (s *StoryService) Create(ctx context.Context, params CreateStoryParams) (*m
 	if params.Key == "" {
 		return nil, errors.NewValidation("key", "is required")
 	}
-	if len(params.Key) > 50 {
+	if len(params.Key) > model.MaxStoryKeyLength {
 		return nil, errors.NewValidation("key", "must be 50 characters or less")
 	}
 	if !storyKeyPattern.MatchString(params.Key) {
@@ -51,7 +51,7 @@ func (s *StoryService) Create(ctx context.Context, params CreateStoryParams) (*m
 	if params.Title == "" {
 		return nil, errors.NewValidation("title", "is required")
 	}
-	if len(params.Title) > 255 {
+	if len(params.Title) > model.MaxNameLength {
 		return nil, errors.NewValidation("title", "must be 255 characters or less")
 	}
 	if params.ProjectID == uuid.Nil {
@@ -166,7 +166,7 @@ func (s *StoryService) Update(ctx context.Context, params UpdateStoryParams) (*m
 		if *params.Title == "" {
 			return nil, errors.NewValidation("title", "must not be empty")
 		}
-		if len(*params.Title) > 255 {
+		if len(*params.Title) > model.MaxNameLength {
 			return nil, errors.NewValidation("title", "must be 255 characters or less")
 		}
 		existing.Title = *params.Title

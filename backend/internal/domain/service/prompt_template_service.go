@@ -32,7 +32,7 @@ func (s *PromptTemplateService) Create(ctx context.Context, params CreatePromptT
 	if params.Name == "" {
 		return nil, errors.NewValidation("name", "is required")
 	}
-	if len(params.Name) > 255 {
+	if len(params.Name) > model.MaxNameLength {
 		return nil, errors.NewValidation("name", "must be 255 characters or less")
 	}
 	if params.TemplateContent == "" {
@@ -105,7 +105,7 @@ func (s *PromptTemplateService) Update(ctx context.Context, params UpdatePromptT
 		if *params.Name == "" {
 			return nil, errors.NewValidation("name", "must not be empty")
 		}
-		if len(*params.Name) > 255 {
+		if len(*params.Name) > model.MaxNameLength {
 			return nil, errors.NewValidation("name", "must be 255 characters or less")
 		}
 		existing.Name = *params.Name

@@ -1,6 +1,7 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { apiClient } from '@/api/client'
+import { getApiErrorMessage } from '@/utils/apiError'
 
 /** Latest run summary attached to a story */
 export interface LatestRun {
@@ -154,10 +155,7 @@ export const useStoriesStore = defineStore('stories', () => {
         },
       )
       if (apiError) {
-        const message =
-          (apiError as { error?: { message?: string } })?.error?.message ??
-          'Failed to update story'
-        error.value = message
+        error.value = getApiErrorMessage(apiError, 'Failed to update story')
         return null
       }
       const updated = data as unknown as Story
@@ -186,10 +184,7 @@ export const useStoriesStore = defineStore('stories', () => {
         },
       )
       if (apiError) {
-        const message =
-          (apiError as { error?: { message?: string } })?.error?.message ??
-          'Failed to create story'
-        error.value = message
+        error.value = getApiErrorMessage(apiError, 'Failed to create story')
         return null
       }
       const created = data as unknown as Story

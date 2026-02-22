@@ -1,13 +1,10 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
 
-	"github.com/zakari/hopeitworks/backend/internal/api/middleware"
 	"github.com/zakari/hopeitworks/backend/internal/domain/model"
 	"github.com/zakari/hopeitworks/backend/internal/domain/service"
-	"github.com/zakari/hopeitworks/backend/pkg/errors"
 )
 
 // UserHandler implements user management HTTP handlers.
@@ -23,8 +20,7 @@ func NewUserHandler(svc *service.UserService) *UserHandler {
 // ListUsers handles GET /users.
 // Only admin users can list users.
 func (h *UserHandler) ListUsers(w http.ResponseWriter, r *http.Request, params ListUsersParams) {
-	if !middleware.IsAdmin(r.Context()) {
-		writeErrorResponse(w, errors.NewForbidden("Admin access required"))
+	if !requireAdmin(w, r) {
 		return
 	}
 
@@ -54,8 +50,7 @@ func (h *UserHandler) ListUsers(w http.ResponseWriter, r *http.Request, params L
 // GetUser handles GET /users/{id}.
 // Only admin users can get user details.
 func (h *UserHandler) GetUser(w http.ResponseWriter, r *http.Request, id IdPath) {
-	if !middleware.IsAdmin(r.Context()) {
-		writeErrorResponse(w, errors.NewForbidden("Admin access required"))
+	if !requireAdmin(w, r) {
 		return
 	}
 
@@ -71,14 +66,12 @@ func (h *UserHandler) GetUser(w http.ResponseWriter, r *http.Request, id IdPath)
 // UpdateUser handles PUT /users/{id}.
 // Only admin users can update users.
 func (h *UserHandler) UpdateUser(w http.ResponseWriter, r *http.Request, id IdPath) {
-	if !middleware.IsAdmin(r.Context()) {
-		writeErrorResponse(w, errors.NewForbidden("Admin access required"))
+	if !requireAdmin(w, r) {
 		return
 	}
 
 	var req UpdateUserRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeErrorResponse(w, errors.NewValidation("body", "invalid JSON"))
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 
@@ -109,8 +102,7 @@ func (h *UserHandler) UpdateUser(w http.ResponseWriter, r *http.Request, id IdPa
 // DeleteUser handles DELETE /users/{id}.
 // Only admin users can delete users.
 func (h *UserHandler) DeleteUser(w http.ResponseWriter, r *http.Request, id IdPath) {
-	if !middleware.IsAdmin(r.Context()) {
-		writeErrorResponse(w, errors.NewForbidden("Admin access required"))
+	if !requireAdmin(w, r) {
 		return
 	}
 
