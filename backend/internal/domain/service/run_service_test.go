@@ -511,7 +511,7 @@ const testPipelineYAML = `steps:
   - id: "step-2"
     name: "review"
     action_type: "review"
-    model: "claude-sonnet-4-5"
+    model: "claude-sonnet-4-6"
     auto_approve: true
     retry_policy:
       max_retries: 1
@@ -519,7 +519,7 @@ const testPipelineYAML = `steps:
   - id: "step-3"
     name: "merge"
     action_type: "merge"
-    model: "claude-sonnet-4-5"
+    model: "claude-sonnet-4-6"
     auto_approve: true
     retry_policy:
       max_retries: 0

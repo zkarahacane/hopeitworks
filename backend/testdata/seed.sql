@@ -309,7 +309,7 @@ VALUES (
   - id: 10000000-0000-0000-0000-000000000001
     name: implement
     action_type: implement
-    model: claude-sonnet-4-5
+    model: claude-sonnet-4-6
     auto_approve: false
     retry_policy:
       max_retries: 2
@@ -317,7 +317,7 @@ VALUES (
   - id: 10000000-0000-0000-0000-000000000002
     name: review
     action_type: review
-    model: claude-sonnet-4-5
+    model: claude-sonnet-4-6
     auto_approve: true
     retry_policy:
       max_retries: 1
@@ -325,7 +325,7 @@ VALUES (
   - id: 10000000-0000-0000-0000-000000000003
     name: merge
     action_type: merge
-    model: claude-sonnet-4-5
+    model: claude-sonnet-4-6
     auto_approve: false
     retry_policy:
       max_retries: 0

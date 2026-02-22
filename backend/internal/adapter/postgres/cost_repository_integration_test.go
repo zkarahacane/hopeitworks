@@ -141,7 +141,7 @@ func TestIntegration_CostRepo_SumCostByProject(t *testing.T) {
 		TokensInput:  500_000,
 		TokensOutput: 250_000,
 		CostUSD:      10.0,
-		Model:        "claude-sonnet-4-5",
+		Model:        "claude-sonnet-4-6",
 	})
 	if err != nil {
 		t.Fatalf("InsertCostRecord (step1) error = %v", err)
@@ -153,7 +153,7 @@ func TestIntegration_CostRepo_SumCostByProject(t *testing.T) {
 		TokensInput:  500_000,
 		TokensOutput: 250_000,
 		CostUSD:      10.0,
-		Model:        "claude-sonnet-4-5",
+		Model:        "claude-sonnet-4-6",
 	})
 	if err != nil {
 		t.Fatalf("InsertCostRecord (step2) error = %v", err)

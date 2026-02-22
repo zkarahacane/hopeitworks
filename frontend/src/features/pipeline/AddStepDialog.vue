@@ -11,8 +11,8 @@ import type { PipelineStep } from '@/stores/pipelineConfig'
 
 const modelOptions = [
   { label: 'Claude Opus 4.6', value: 'claude-opus-4-6' },
-  { label: 'Claude Sonnet 4.5', value: 'claude-sonnet-4-5' },
-  { label: 'Claude Haiku 4.3', value: 'claude-haiku-4-3' },
+  { label: 'Claude Sonnet 4.6', value: 'claude-sonnet-4-6' },
+  { label: 'Claude Haiku 4.5', value: 'claude-haiku-4-5' },
 ]
 
 const actionTypeOptions = [
@@ -41,7 +41,7 @@ const emit = defineEmits<{
 
 const name = ref('')
 const actionType = ref<PipelineStep['action_type']>('implement')
-const model = ref<PipelineStep['model']>('claude-sonnet-4-5')
+const model = ref<PipelineStep['model']>('claude-sonnet-4-6')
 const autoApprove = ref(false)
 const maxRetries = ref(2)
 const retryType = ref<PipelineStep['retry_policy']['retry_type']>('on-failure')
@@ -50,7 +50,7 @@ const validationError = ref<string | null>(null)
 function resetForm() {
   name.value = ''
   actionType.value = 'implement'
-  model.value = 'claude-sonnet-4-5'
+  model.value = 'claude-sonnet-4-6'
   autoApprove.value = false
   maxRetries.value = 2
   retryType.value = 'on-failure'

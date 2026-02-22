@@ -208,9 +208,9 @@ describe('usePipelineConfig', () => {
     await composableResult!.retry()
 
     const step = composableResult!.steps.value[0]!
-    const updated: PipelineStep = { ...step, model: 'claude-haiku-4-3' }
+    const updated: PipelineStep = { ...step, model: 'claude-haiku-4-5' }
     composableResult!.updateStep(0, updated)
 
-    expect(composableResult!.steps.value[0]!.model).toBe('claude-haiku-4-3')
+    expect(composableResult!.steps.value[0]!.model).toBe('claude-haiku-4-5')
   })
 })

@@ -152,10 +152,10 @@ describe('usePipelineConfigStore', () => {
       await store.fetchConfig('proj-1')
 
       const step = store.steps[0]!
-      const updated: PipelineStep = { ...step, model: 'claude-haiku-4-3' }
+      const updated: PipelineStep = { ...step, model: 'claude-haiku-4-5' }
       store.updateStep(0, updated)
 
-      expect(store.steps[0]!.model).toBe('claude-haiku-4-3')
+      expect(store.steps[0]!.model).toBe('claude-haiku-4-5')
       expect(store.isDirty).toBe(true)
     })
 

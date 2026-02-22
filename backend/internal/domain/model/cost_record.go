@@ -35,8 +35,8 @@ type Pricing struct {
 // modelPricingMap maps model names to their token pricing (USD per million tokens).
 var modelPricingMap = map[string]Pricing{
 	"claude-opus-4-6":   {InputPerMTok: 15.0, OutputPerMTok: 75.0},
-	"claude-sonnet-4-5": {InputPerMTok: 3.0, OutputPerMTok: 15.0},
-	"claude-haiku-4-3":  {InputPerMTok: 0.25, OutputPerMTok: 1.25},
+	"claude-sonnet-4-6": {InputPerMTok: 3.0, OutputPerMTok: 15.0},
+	"claude-haiku-4-5":  {InputPerMTok: 0.25, OutputPerMTok: 1.25},
 }
 
 // ComputeCostUSD computes the cost in USD for the given model and token counts.
