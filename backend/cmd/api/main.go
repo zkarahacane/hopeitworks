@@ -27,6 +27,7 @@ import (
 	"github.com/zakari/hopeitworks/backend/internal/domain/model"
 	"github.com/zakari/hopeitworks/backend/internal/domain/port"
 	"github.com/zakari/hopeitworks/backend/internal/domain/service"
+	"github.com/zakari/hopeitworks/backend/migrations"
 	pkglog "github.com/zakari/hopeitworks/backend/pkg/log"
 )
 
@@ -58,12 +59,24 @@ func run() error {
 	defer pool.Close()
 	logger.Info("database connected")
 
-	// Build event bus (dedicated connection for LISTEN/NOTIFY)
+	// Build DSN (shared by auto-migrate and event bus)
 	dsn := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s",
 		cfg.Database.User, cfg.Database.Password,
 		cfg.Database.Host, cfg.Database.Port,
 		cfg.Database.Name, cfg.Database.SSLMode,
 	)
+
+	// Auto-migrate: apply pending migrations before any service initialization
+	if cfg.Database.AutoMigrate != nil && *cfg.Database.AutoMigrate {
+		logger.Info("running database migrations")
+		if err := pgadapter.RunMigrations(migrations.FS, dsn, logger); err != nil {
+			return fmt.Errorf("running migrations: %w", err)
+		}
+	} else {
+		logger.Info("auto-migration disabled, skipping")
+	}
+
+	// Build event bus (dedicated connection for LISTEN/NOTIFY)
 	eventBus, err := pgadapter.NewEventBus(ctx, dsn, logger)
 	if err != nil {
 		return fmt.Errorf("creating event bus: %w", err)
