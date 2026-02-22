@@ -10,6 +10,10 @@ vi.mock('@/api/client', () => ({
   },
 }))
 
+vi.mock('@/composables/useSSE', () => ({
+  useSSE: vi.fn(),
+}))
+
 /** Wraps composable that calls onMounted in a simulated lifecycle */
 function withSetup<T>(composable: () => T): T {
   let result!: T

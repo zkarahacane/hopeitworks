@@ -10,6 +10,10 @@ vi.mock('@/api/client', () => ({
   },
 }))
 
+vi.mock('@/composables/useSSE', () => ({
+  useSSE: vi.fn(),
+}))
+
 /** Wraps composable that calls onMounted in a simulated lifecycle */
 function withSetup<T>(composable: () => T): T {
   let result!: T
@@ -64,7 +68,7 @@ describe('useRunDetail', () => {
   it('fetches run on mount and populates run.value', async () => {
     mockGet.mockResolvedValue({ data: mockRun, error: undefined })
 
-    const { run, isLoading } = withSetup(() => useRunDetail('run-1'))
+    const { run, isLoading } = withSetup(() => useRunDetail('run-1', ''))
     await flushPromises()
 
     expect(run.value).toEqual(mockRun)
@@ -78,7 +82,7 @@ describe('useRunDetail', () => {
       error: { error: { code: 'NOT_FOUND', message: 'Run not found' } },
     })
 
-    const { run, error } = withSetup(() => useRunDetail('run-1'))
+    const { run, error } = withSetup(() => useRunDetail('run-1', ''))
     await flushPromises()
 
     expect(run.value).toBeNull()
@@ -89,7 +93,7 @@ describe('useRunDetail', () => {
   it('retry() re-calls the API', async () => {
     mockGet.mockResolvedValue({ data: mockRun, error: undefined })
 
-    const { retry } = withSetup(() => useRunDetail('run-1'))
+    const { retry } = withSetup(() => useRunDetail('run-1', ''))
     await flushPromises()
 
     expect(mockGet).toHaveBeenCalledTimes(1)
@@ -109,7 +113,7 @@ describe('useRunDetail', () => {
       }),
     )
 
-    const { isLoading } = withSetup(() => useRunDetail('run-1'))
+    const { isLoading } = withSetup(() => useRunDetail('run-1', ''))
 
     expect(isLoading.value).toBe(true)
 
