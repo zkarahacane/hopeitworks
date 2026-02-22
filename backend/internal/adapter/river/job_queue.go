@@ -25,6 +25,9 @@ type JobQueue struct {
 // workers must have all job types registered before calling NewClient.
 func NewJobQueue(pool *pgxpool.Pool, workers *river.Workers) (*JobQueue, error) {
 	client, err := river.NewClient(riverpgxv5.New(pool), &river.Config{
+		Queues: map[string]river.QueueConfig{
+			river.QueueDefault: {MaxWorkers: 10},
+		},
 		Workers: workers,
 	})
 	if err != nil {
