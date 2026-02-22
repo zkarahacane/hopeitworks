@@ -1,6 +1,6 @@
 -- name: CreateRun :one
-INSERT INTO runs (project_id, story_id, status, pipeline_config_snapshot)
-VALUES ($1, $2, $3, $4)
+INSERT INTO runs (project_id, story_id, status, pipeline_config_snapshot, metadata)
+VALUES ($1, $2, $3, $4, $5)
 RETURNING *;
 
 -- name: GetRun :one

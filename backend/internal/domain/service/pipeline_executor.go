@@ -109,8 +109,13 @@ func (e *PipelineExecutor) ExecuteRun(ctx context.Context, runID uuid.UUID) erro
 		"started_at": now.Format(time.RFC3339),
 	})
 
-	// 4. Execute each step in order
+	// 4. Merge persisted run metadata into the shared metadata map.
+	// This carries branch_name and per-step model keys set by LaunchRun.
 	metadata := make(map[string]any)
+	for k, v := range run.Metadata {
+		metadata[k] = v
+	}
+
 	for i := range steps {
 		step := steps[i]
 
@@ -215,6 +220,15 @@ func (e *PipelineExecutor) executeStep(ctx context.Context, run *model.Run, step
 		if tmplName, ok := actionTypeToTemplateName[step.Action]; ok {
 			runCtx.Metadata["template_name"] = tmplName
 		}
+	}
+
+	// Inject per-step model from run metadata (set by LaunchRun as step_<order>_model).
+	// The model key is consumed per-step and removed after use to avoid leaking to the next step.
+	modelKey := fmt.Sprintf("step_%d_model", step.StepOrder)
+	if m, ok := runCtx.Metadata[modelKey].(string); ok && m != "" {
+		runCtx.Metadata["model"] = m
+	} else {
+		delete(runCtx.Metadata, "model")
 	}
 
 	// Execute action

@@ -177,20 +177,27 @@ func (a *AgentRunAction) createContainer(
 		repoURL = *project.RepoURL
 	}
 
+	env := []string{
+		"CLAUDE_MD_CONTENT=" + claudeMD,
+		"REPO_URL=" + repoURL,
+		"BRANCH_NAME=" + branchName,
+		"STORY_KEY=" + story.Key,
+		"PROMPT_CONTENT=" + prompt,
+		"GITHUB_TOKEN=" + os.Getenv("GITHUB_TOKEN"),
+		"CLAUDE_CODE_OAUTH_TOKEN=" + os.Getenv("CLAUDE_CODE_OAUTH_TOKEN"),
+	}
+
+	// Inject per-step model when configured in pipeline YAML.
+	if modelVal, ok := runCtx.Metadata["model"].(string); ok && modelVal != "" {
+		env = append(env, "MODEL="+modelVal)
+	}
+
 	opts := model.ContainerOpts{
 		Image:       a.config.DefaultImage,
 		NetworkName: a.config.NetworkName,
 		Memory:      a.config.DefaultMemory,
 		CPUs:        a.config.DefaultCPUs,
-		Env: []string{
-			"CLAUDE_MD_CONTENT=" + claudeMD,
-			"REPO_URL=" + repoURL,
-			"BRANCH_NAME=" + branchName,
-			"STORY_KEY=" + story.Key,
-			"PROMPT_CONTENT=" + prompt,
-			"GITHUB_TOKEN=" + os.Getenv("GITHUB_TOKEN"),
-			"CLAUDE_CODE_OAUTH_TOKEN=" + os.Getenv("CLAUDE_CODE_OAUTH_TOKEN"),
-		},
+		Env:         env,
 		Labels: map[string]string{
 			"managed_by": "hopeitworks",
 			"run_id":     runCtx.Run.ID.String(),
