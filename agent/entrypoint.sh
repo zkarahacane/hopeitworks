@@ -32,7 +32,7 @@ emit_log() {
 }
 
 # --- Validate required env vars ---
-for var in REPO_URL BRANCH_NAME CLAUDE_MD_CONTENT PROMPT_CONTENT; do
+for var in REPO_URL BRANCH_NAME CLAUDE_MD_CONTENT PROMPT_CONTENT GITHUB_TOKEN CLAUDE_CODE_OAUTH_TOKEN; do
     if [[ -z "${!var:-}" ]]; then
         emit_log "Missing required env var: $var" "error"
         exit 1
@@ -52,6 +52,9 @@ if [[ -n "${GITHUB_TOKEN:-}" ]]; then
     export GH_TOKEN="$GITHUB_TOKEN"
 fi
 
+# --- Configure Claude Code authentication ---
+export ANTHROPIC_API_KEY="$CLAUDE_CODE_OAUTH_TOKEN"
+
 # --- Clone repository ---
 emit_log "Cloning repository: $REPO_URL (branch: $BRANCH_NAME)"
 
@@ -61,19 +64,29 @@ if [[ -n "${GITHUB_TOKEN:-}" ]] && [[ "$CLONE_URL" == https://github.com/* ]]; t
 fi
 
 # Clone default branch first, then handle target branch
-git clone "$CLONE_URL" /workspace 2>&1 | while IFS= read -r line; do
-    emit_log "$line"
-done
+if ! git clone "$CLONE_URL" /workspace 2>&1; then
+    emit_log "Failed to clone repository: $REPO_URL" "error"
+    exit 1
+fi
 cd /workspace
 
 # --- Checkout target branch ---
 if git ls-remote --heads origin "$BRANCH_NAME" | grep -q "$BRANCH_NAME"; then
     emit_log "Checking out existing branch: $BRANCH_NAME"
-    git fetch origin "$BRANCH_NAME:$BRANCH_NAME"
-    git checkout "$BRANCH_NAME"
+    if ! git fetch origin "$BRANCH_NAME:$BRANCH_NAME"; then
+        emit_log "Failed to fetch branch: $BRANCH_NAME" "error"
+        exit 1
+    fi
+    if ! git checkout "$BRANCH_NAME"; then
+        emit_log "Failed to checkout branch: $BRANCH_NAME" "error"
+        exit 1
+    fi
 else
     emit_log "Creating new branch: $BRANCH_NAME"
-    git checkout -b "$BRANCH_NAME"
+    if ! git checkout -b "$BRANCH_NAME"; then
+        emit_log "Failed to create branch: $BRANCH_NAME" "error"
+        exit 1
+    fi
 fi
 
 # Configure remote to use token for push operations
