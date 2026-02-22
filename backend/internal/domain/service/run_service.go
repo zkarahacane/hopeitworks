@@ -22,6 +22,7 @@ type RunService struct {
 	pipelineConfigRepo port.PipelineConfigRepository
 	jobQueue           port.JobQueue
 	eventPub           port.EventPublisher
+	containerMgr       port.ContainerManager
 }
 
 // NewRunService creates a new RunService.
@@ -44,6 +45,11 @@ func NewRunService(
 		svc.eventPub = eventPub[0]
 	}
 	return svc
+}
+
+// SetContainerManager configures the container manager for cancellation support.
+func (s *RunService) SetContainerManager(cm port.ContainerManager) {
+	s.containerMgr = cm
 }
 
 // PipelineStepConfig represents a step in a pipeline configuration.
@@ -461,6 +467,71 @@ func (s *RunService) ResumeEpicRun(ctx context.Context, projectID, _ uuid.UUID, 
 	return s.ResumeRun(ctx, projectID, runID)
 }
 
+// CancelRun transitions a run to cancelled status, stops any running containers,
+// and marks pending/running steps as cancelled.
+func (s *RunService) CancelRun(ctx context.Context, projectID, runID uuid.UUID) (*model.Run, error) {
+	run, err := s.runRepo.GetRun(ctx, runID)
+	if err != nil {
+		return nil, err
+	}
+
+	if run.ProjectID != projectID {
+		return nil, errors.NewNotFound("run", runID)
+	}
+
+	if err := model.ValidateRunTransition(run.Status, model.RunStatusCancelled); err != nil {
+		return nil, err
+	}
+
+	// Fetch steps to cancel running/pending ones and stop containers
+	steps, err := s.runRepo.ListRunStepsByRun(ctx, runID)
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now()
+	cancelMsg := "cancelled by user"
+
+	// Stop running containers and cancel active steps
+	for _, step := range steps {
+		switch step.Status {
+		case model.StepStatusRunning, model.StepStatusWaitingApproval:
+			// Stop the container if one is running
+			if s.containerMgr != nil && step.ContainerID != nil && *step.ContainerID != "" {
+				_ = s.containerMgr.Stop(ctx, *step.ContainerID)
+			}
+			if _, err := s.runRepo.UpdateRunStepStatus(ctx, step.ID, model.StepStatusCancelled, nil, &now, &cancelMsg); err != nil {
+				return nil, err
+			}
+		case model.StepStatusPending:
+			if _, err := s.runRepo.UpdateRunStepStatus(ctx, step.ID, model.StepStatusCancelled, nil, &now, &cancelMsg); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	// Transition run to cancelled
+	updated, err := s.runRepo.UpdateRunStatus(ctx, runID, model.RunStatusCancelled, nil, &now, nil, &cancelMsg)
+	if err != nil {
+		return nil, err
+	}
+
+	s.publishRunEvent(ctx, updated.ProjectID, updated.ID, "cancelled", map[string]any{
+		"run_id":       runID.String(),
+		"status":       string(model.RunStatusCancelled),
+		"cancelled_at": now.Format(time.RFC3339),
+	})
+
+	return updated, nil
+}
+
+// CancelEpicRun cancels an epic run. This is a placeholder that operates on the run
+// identified by the epicId/runId combination. When story 7-2 implements the epic run
+// model with parent/child relationships, this method will also cancel active child runs.
+func (s *RunService) CancelEpicRun(ctx context.Context, projectID, _ uuid.UUID, runID uuid.UUID) (*model.Run, error) {
+	return s.CancelRun(ctx, projectID, runID)
+}
+
 // publishRunEvent publishes an event for a run status change.
 func (s *RunService) publishRunEvent(ctx context.Context, projectID, runID uuid.UUID, action string, payload map[string]any) {
 	if s.eventPub == nil {
@@ -482,6 +553,116 @@ func (s *RunService) publishRunEvent(ctx context.Context, projectID, runID uuid.
 	}
 
 	_ = s.eventPub.Publish(ctx, event)
+}
+
+// RetryStep retries a failed run step by creating a new retry child step and
+// re-enqueuing the run for execution. The run is transitioned back to running.
+func (s *RunService) RetryStep(ctx context.Context, runID, stepID uuid.UUID) (*model.Run, error) {
+	// 1. Fetch the run and validate ownership
+	run, err := s.runRepo.GetRun(ctx, runID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 2. Fetch the step and validate it belongs to this run
+	step, err := s.runRepo.GetRunStep(ctx, stepID)
+	if err != nil {
+		return nil, err
+	}
+	if step.RunID != runID {
+		return nil, errors.NewNotFound("step", stepID)
+	}
+
+	// 3. Validate step is in failed state
+	if step.Status != model.StepStatusFailed {
+		return nil, &errors.DomainError{
+			Category: errors.CategoryConflict,
+			Code:     "STEP_NOT_FAILED",
+			Message:  fmt.Sprintf("step %s is in %s state, only failed steps can be retried", stepID, step.Status),
+		}
+	}
+
+	// 4. Check retry limits — fetch pipeline config to get retry policy
+	maxRetries := 3 // default
+	if run.PipelineConfigSnapshot != nil {
+		var parsed model.PipelineConfigYAML
+		if err := json.Unmarshal(run.PipelineConfigSnapshot, &parsed); err == nil {
+			for _, ps := range parsed.Steps {
+				if ps.Name == step.StepName && ps.RetryPolicy.MaxRetries > 0 {
+					maxRetries = ps.RetryPolicy.MaxRetries
+					break
+				}
+			}
+		}
+	}
+
+	// Check how many retries already exist for this step chain
+	rootStepID := stepID
+	if step.ParentStepID != nil {
+		rootStepID = *step.ParentStepID
+	}
+	existingRetries, err := s.runRepo.ListRetryStepsByParent(ctx, rootStepID)
+	if err != nil {
+		return nil, err
+	}
+	if len(existingRetries) >= maxRetries {
+		return nil, &errors.DomainError{
+			Category: errors.CategoryConflict,
+			Code:     "RETRY_MAX_EXCEEDED",
+			Message:  fmt.Sprintf("max retries (%d) exceeded for step %s", maxRetries, step.StepName),
+		}
+	}
+
+	// 5. Determine retry type: incremental for first 2, then full
+	retryCount := step.RetryCount + 1
+	retryType := "incremental"
+	if retryCount > 2 {
+		retryType = "full"
+	}
+
+	// 6. Create the retry step
+	newStep := &model.RunStep{
+		ID:           uuid.New(),
+		RunID:        runID,
+		StepName:     step.StepName,
+		StepOrder:    step.StepOrder,
+		Action:       step.Action,
+		Status:       model.StepStatusPending,
+		RetryCount:   retryCount,
+		RetryType:    &retryType,
+		ParentStepID: &rootStepID,
+	}
+	_, err = s.runRepo.CreateRetryRunStep(ctx, newStep)
+	if err != nil {
+		return nil, err
+	}
+
+	// 7. Transition run back to running if it was failed
+	if run.Status == model.RunStatusFailed {
+		_, err = s.runRepo.UpdateRunStatus(ctx, runID, model.RunStatusRunning, nil, nil, nil, nil)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// 8. Enqueue the run for continued execution
+	if s.jobQueue != nil {
+		if err := s.jobQueue.EnqueueExecuteRun(ctx, runID); err != nil {
+			return nil, errors.NewInternal("enqueue execute_run job for retry", err)
+		}
+	}
+
+	// 9. Publish event
+	s.publishRunEvent(ctx, run.ProjectID, runID, "step.retry_initiated", map[string]any{
+		"run_id":        runID.String(),
+		"step_id":       stepID.String(),
+		"retry_step_id": newStep.ID.String(),
+		"retry_count":   retryCount,
+		"retry_type":    retryType,
+	})
+
+	// 10. Return the updated run with all steps
+	return s.GetRun(ctx, runID)
 }
 
 // TransitionRunStep validates and transitions a run step to a new status.

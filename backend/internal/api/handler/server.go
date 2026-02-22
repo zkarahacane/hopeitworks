@@ -236,6 +236,11 @@ func (s *Server) ListRunsByStory(w http.ResponseWriter, r *http.Request, storyID
 	s.runs.ListRunsByStory(w, r, storyID, params)
 }
 
+// RetryFailedStep delegates to RunHandler.
+func (s *Server) RetryFailedStep(w http.ResponseWriter, r *http.Request, runID RunIdPath, stepID StepIdPath) {
+	s.runs.RetryStep(w, r, runID, stepID)
+}
+
 // PauseRun delegates to RunHandler.
 func (s *Server) PauseRun(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, runID RunIdPath) {
 	s.runs.PauseRun(w, r, projectID, runID)
@@ -254,6 +259,16 @@ func (s *Server) PauseEpicRun(w http.ResponseWriter, r *http.Request, projectID 
 // ResumeEpicRun delegates to RunHandler.
 func (s *Server) ResumeEpicRun(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, epicID EpicIdPath, runID RunIdPath) {
 	s.runs.ResumeEpicRun(w, r, projectID, epicID, runID)
+}
+
+// CancelRun delegates to RunHandler.
+func (s *Server) CancelRun(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, runID RunIdPath) {
+	s.runs.CancelRun(w, r, projectID, runID)
+}
+
+// CancelEpicRun delegates to RunHandler.
+func (s *Server) CancelEpicRun(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, epicID EpicIdPath, runID RunIdPath) {
+	s.runs.CancelEpicRun(w, r, projectID, epicID, runID)
 }
 
 // GetPipelineConfig delegates to PipelineConfigHandler.

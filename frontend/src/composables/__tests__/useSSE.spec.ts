@@ -114,12 +114,17 @@ describe('useSSE', () => {
     const registeredTypes = mockInstance.listeners.map((l) => l.type)
     expect(registeredTypes).toContain('run.started')
     expect(registeredTypes).toContain('run.completed')
+    expect(registeredTypes).toContain('run.failed')
+    expect(registeredTypes).toContain('run.cancelled')
+    expect(registeredTypes).toContain('step.started')
     expect(registeredTypes).toContain('step.completed')
     expect(registeredTypes).toContain('step.failed')
+    expect(registeredTypes).toContain('step.cancelled')
     expect(registeredTypes).toContain('log.emitted')
     expect(registeredTypes).toContain('hitl.pending')
     expect(registeredTypes).toContain('hitl.approved')
     expect(registeredTypes).toContain('hitl.rejected')
+    expect(registeredTypes).toContain('story.status_updated')
   })
 
   it('dispatches hitl.approved event with parsed data', () => {

@@ -21,8 +21,10 @@ const keepaliveInterval = 30 * time.Second
 // This is a long-lived HTTP connection — it must NOT go through the oapi-codegen
 // generated mux. Register manually on the chi router.
 //
-// The http.Server.WriteTimeout must be zero or very large for SSE connections;
-// MVP relies on proxy-level timeout.
+// The handler uses http.ResponseController.SetWriteDeadline to disable the
+// server's WriteTimeout for SSE connections, allowing them to stay open
+// indefinitely. Connection lifetime is managed by client disconnect detection
+// and keepalive heartbeats.
 type SSEHandler struct {
 	eventSub        port.EventSubscriber
 	eventRepo       port.EventRepository
@@ -90,9 +92,18 @@ func (h *SSEHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Disable the server's WriteTimeout for this long-lived SSE connection.
+	// Without this, Go's http.Server.WriteTimeout (default 15s) would kill
+	// the SSE stream before the first keepalive (30s) fires.
+	rc := http.NewResponseController(w)
+	if err := rc.SetWriteDeadline(time.Time{}); err != nil {
+		h.logger.Warn("failed to clear write deadline for SSE connection", "error", err)
+	}
+
 	// Set SSE response headers
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 
 	// Replay missed events if Last-Event-ID is present

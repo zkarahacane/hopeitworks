@@ -5,38 +5,50 @@ import Skeleton from 'primevue/skeleton'
 import Message from 'primevue/message'
 import Tag from 'primevue/tag'
 import ProgressBar from 'primevue/progressbar'
-import Timeline from 'primevue/timeline'
 import Button from 'primevue/button'
 import { useToast } from 'primevue/usetoast'
-import { differenceInSeconds } from 'date-fns'
 import { useRunDetail } from '@/features/runs/composables/useRunDetail'
+import { useRunCosts } from '@/features/runs/composables/useRunCosts'
 import { useRunsStore } from '@/stores/runs'
 import RunLogViewer from '@/features/runs/RunLogViewer.vue'
+import RunTimeline from '@/features/runs/RunTimeline.vue'
+import RunCancelConfirmDialog from '@/features/runs/RunCancelConfirmDialog.vue'
 import { runStatusSeverity } from '@/utils/runStatus'
-import type { RunStep } from '@/features/runs/composables/useRunDetail'
+import { formatCostUSD } from '@/utils/formatCost'
 
 const route = useRoute()
 const runId = computed(() => route.params.id as string)
-const projectId = computed(() => route.query.projectId as string ?? '')
+const projectId = computed(() => (route.query.projectId as string) ?? '')
 
 const runsStore = useRunsStore()
 const toast = useToast()
 
-const { run: runRef, isLoading, error, retry } = useRunDetail(runId.value, projectId.value)
+const { run: runRef, isLoading, error, retry, fetchRun } = useRunDetail(runId.value, projectId.value)
 const run = computed(() => runRef.value)
 
-const stepSeverity: Record<string, string> = {
-  completed: 'success',
-  running: 'info',
-  failed: 'danger',
-  pending: 'secondary',
-  cancelled: 'warn',
-}
+const runStatus = computed(() => run.value?.status)
+const { costDetail, isLoading: isCostLoading } = useRunCosts(
+  projectId.value,
+  runId.value,
+  runStatus,
+)
+
+/** Total run cost formatted for display. */
+const totalCostDisplay = computed(() => {
+  if (!costDetail.value) return null
+  return formatCostUSD(costDetail.value.total_cost)
+})
+
 
 const canPause = computed(() => run.value?.status === 'running')
 const canResume = computed(() => run.value?.status === 'paused')
+const canCancel = computed(() => {
+  const status = run.value?.status
+  return status === 'pending' || status === 'running' || status === 'paused'
+})
 
 const pauseError = ref<string | null>(null)
+const cancelDialogVisible = ref(false)
 
 async function handlePause() {
   if (!projectId.value || !runId.value) return
@@ -46,7 +58,12 @@ async function handlePause() {
     toast.add({ severity: 'success', summary: 'Run paused', life: 3000 })
   } catch (err) {
     pauseError.value = err instanceof Error ? err.message : 'Failed to pause run'
-    toast.add({ severity: 'error', summary: 'Failed to pause run', detail: pauseError.value, life: 5000 })
+    toast.add({
+      severity: 'error',
+      summary: 'Failed to pause run',
+      detail: pauseError.value,
+      life: 5000,
+    })
   }
 }
 
@@ -58,7 +75,36 @@ async function handleResume() {
     toast.add({ severity: 'success', summary: 'Run resumed', life: 3000 })
   } catch (err) {
     pauseError.value = err instanceof Error ? err.message : 'Failed to resume run'
-    toast.add({ severity: 'error', summary: 'Failed to resume run', detail: pauseError.value, life: 5000 })
+    toast.add({
+      severity: 'error',
+      summary: 'Failed to resume run',
+      detail: pauseError.value,
+      life: 5000,
+    })
+  }
+}
+
+async function handleRetryStep(stepId: string) {
+  if (!runId.value) return
+  try {
+    await runsStore.retryStep(runId.value, stepId)
+    toast.add({ severity: 'success', summary: 'Retry initiated', life: 3000 })
+    await fetchRun()
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : 'Failed to retry step'
+    toast.add({ severity: 'error', summary: 'Failed to retry step', detail, life: 5000 })
+  }
+}
+
+async function handleCancelConfirm() {
+  if (!projectId.value || !runId.value) return
+  try {
+    await runsStore.cancelRun(projectId.value, runId.value)
+    cancelDialogVisible.value = false
+    toast.add({ severity: 'success', summary: 'Run cancelled', life: 3000 })
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Failed to cancel run'
+    toast.add({ severity: 'error', summary: 'Failed to cancel run', detail: msg, life: 5000 })
   }
 }
 
@@ -71,22 +117,11 @@ const progress = computed(() => {
   ).length
   return Math.round((completed / run.value.steps.length) * 100)
 })
-
-/** Format step duration from started_at to completed_at. */
-function formatDuration(step: RunStep): string | null {
-  if (!step.started_at) return null
-  const end = step.completed_at ? new Date(step.completed_at) : new Date()
-  const seconds = differenceInSeconds(end, new Date(step.started_at))
-  if (seconds < 60) return `${seconds}s`
-  const mins = Math.floor(seconds / 60)
-  const secs = seconds % 60
-  return `${mins}m ${secs}s`
-}
 </script>
 
 <template>
   <div class="flex flex-col h-full p-6 gap-6">
-    <!-- Page Header — always visible -->
+    <!-- Page Header -->
     <div class="flex items-center justify-between">
       <div class="flex items-center gap-3">
         <h1 class="text-xl font-bold">Run Detail</h1>
@@ -99,6 +134,13 @@ function formatDuration(step: RunStep): string | null {
       </div>
       <div class="flex items-center gap-3">
         <Tag v-if="run" :value="run.status" :severity="runStatusSeverity[run.status]" />
+        <span
+          v-if="totalCostDisplay && !isCostLoading"
+          class="text-sm font-medium text-surface-600 bg-surface-100 dark:bg-surface-800 px-2 py-1 rounded"
+          data-testid="run-total-cost"
+        >
+          {{ totalCostDisplay }}
+        </span>
         <Button
           v-if="canPause"
           label="Pause"
@@ -116,6 +158,15 @@ function formatDuration(step: RunStep): string | null {
           :loading="runsStore.isResuming"
           data-testid="resume-run-btn"
           @click="handleResume"
+        />
+        <Button
+          v-if="canCancel"
+          label="Cancel"
+          icon="pi pi-times"
+          severity="danger"
+          outlined
+          data-testid="cancel-run-btn"
+          @click="cancelDialogVisible = true"
         />
       </div>
     </div>
@@ -135,56 +186,17 @@ function formatDuration(step: RunStep): string | null {
 
     <!-- Run data -->
     <template v-else-if="run">
-
       <!-- Progress Bar -->
       <ProgressBar :value="progress" :show-value="true" />
 
-      <!-- Step Timeline -->
+      <!-- Step Timeline with retry support -->
       <div v-if="run.steps.length > 0">
         <h2 class="text-lg font-semibold mb-3">Steps</h2>
-        <Timeline :value="run.steps" align="left" class="w-full">
-          <template #marker="{ item }">
-            <Tag
-              :severity="stepSeverity[(item as RunStep).status] ?? 'secondary'"
-              class="w-8 h-8 flex items-center justify-center rounded-full"
-            >
-              <i
-                :class="{
-                  'pi pi-check': (item as RunStep).status === 'completed',
-                  'pi pi-spin pi-spinner': (item as RunStep).status === 'running',
-                  'pi pi-times': (item as RunStep).status === 'failed',
-                  'pi pi-clock': (item as RunStep).status === 'pending',
-                  'pi pi-ban': (item as RunStep).status === 'cancelled',
-                }"
-                class="text-xs"
-              />
-            </Tag>
-          </template>
-          <template #content="{ item }">
-            <div class="flex flex-col gap-1 mb-4">
-              <div class="flex items-center gap-2">
-                <span class="font-medium">{{ (item as RunStep).step_name }}</span>
-                <Tag
-                  :value="(item as RunStep).status"
-                  :severity="stepSeverity[(item as RunStep).status] ?? 'secondary'"
-                  class="text-xs"
-                />
-              </div>
-              <div class="text-sm text-surface-500 flex items-center gap-3">
-                <span>{{ (item as RunStep).action }}</span>
-                <span v-if="formatDuration(item as RunStep)" class="text-surface-400">
-                  {{ formatDuration(item as RunStep) }}
-                </span>
-              </div>
-              <div
-                v-if="(item as RunStep).error_message"
-                class="text-sm text-red-500 mt-1"
-              >
-                {{ (item as RunStep).error_message }}
-              </div>
-            </div>
-          </template>
-        </Timeline>
+        <RunTimeline
+          :steps="run.steps"
+          :retry-loading="runsStore.isRetrying"
+          @retry-step="handleRetryStep"
+        />
       </div>
 
       <!-- Live Log Viewer -->
@@ -193,5 +205,14 @@ function formatDuration(step: RunStep): string | null {
         <RunLogViewer :project-id="run.project_id" :run-id="run.id" />
       </div>
     </template>
+
+    <!-- Cancel Confirmation Dialog -->
+    <RunCancelConfirmDialog
+      :visible="cancelDialogVisible"
+      :loading="runsStore.isCancelling"
+      @confirm="handleCancelConfirm"
+      @cancel="cancelDialogVisible = false"
+      @update:visible="cancelDialogVisible = $event"
+    />
   </div>
 </template>

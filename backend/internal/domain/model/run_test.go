@@ -31,8 +31,9 @@ func TestValidateRunTransition(t *testing.T) {
 		{"completed to pending", RunStatusCompleted, RunStatusPending, true},
 		{"completed to failed", RunStatusCompleted, RunStatusFailed, true},
 
-		// Invalid transitions from failed (terminal state)
-		{"failed to running", RunStatusFailed, RunStatusRunning, true},
+		// Valid transition from failed (retry support)
+		{"failed to running", RunStatusFailed, RunStatusRunning, false},
+		// Invalid transitions from failed
 		{"failed to pending", RunStatusFailed, RunStatusPending, true},
 		{"failed to completed", RunStatusFailed, RunStatusCompleted, true},
 
