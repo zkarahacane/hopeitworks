@@ -739,8 +739,8 @@ func TestLaunchRun_ModelInMetadata(t *testing.T) {
 	if !ok {
 		t.Fatal("expected step_1_model in metadata")
 	}
-	if step1Model != "claude-sonnet-4-5" {
-		t.Errorf("expected step_1_model %q, got %q", "claude-sonnet-4-5", step1Model)
+	if step1Model != "claude-sonnet-4-6" {
+		t.Errorf("expected step_1_model %q, got %q", "claude-sonnet-4-6", step1Model)
 	}
 }
 
