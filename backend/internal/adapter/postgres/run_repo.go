@@ -56,14 +56,16 @@ func (r *RunRepo) CreateRun(ctx context.Context, run *model.Run) (*model.Run, er
 }
 
 func (r *RunRepo) GetRun(ctx context.Context, id uuid.UUID) (*model.Run, error) {
-	row, err := r.queries.GetRun(ctx, id)
+	row, err := r.queries.GetRunWithStoryKey(ctx, id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, apperrors.NewNotFound("run", id)
 		}
 		return nil, apperrors.NewInternal("failed to get run", err)
 	}
-	return toDomainRun(row), nil
+	return toDomainRunWithStoryKey(row.ID, row.ProjectID, row.StoryID, row.Status,
+		row.PipelineConfigSnapshot, row.StartedAt, row.CompletedAt, row.ErrorMessage,
+		row.CreatedAt, row.UpdatedAt, row.PausedAt, row.Metadata, row.StoryKey), nil
 }
 
 func (r *RunRepo) GetActiveRunByStory(ctx context.Context, storyID uuid.UUID) (*model.Run, error) {
@@ -78,7 +80,7 @@ func (r *RunRepo) GetActiveRunByStory(ctx context.Context, storyID uuid.UUID) (*
 }
 
 func (r *RunRepo) ListRunsByProject(ctx context.Context, projectID uuid.UUID, limit, offset int32) ([]*model.Run, error) {
-	rows, err := r.queries.ListRunsByProject(ctx, ListRunsByProjectParams{
+	rows, err := r.queries.ListRunsByProjectWithStoryKey(ctx, ListRunsByProjectWithStoryKeyParams{
 		ProjectID: projectID,
 		Limit:     limit,
 		Offset:    offset,
@@ -88,7 +90,9 @@ func (r *RunRepo) ListRunsByProject(ctx context.Context, projectID uuid.UUID, li
 	}
 	runs := make([]*model.Run, len(rows))
 	for i, row := range rows {
-		runs[i] = toDomainRun(row)
+		runs[i] = toDomainRunWithStoryKey(row.ID, row.ProjectID, row.StoryID, row.Status,
+			row.PipelineConfigSnapshot, row.StartedAt, row.CompletedAt, row.ErrorMessage,
+			row.CreatedAt, row.UpdatedAt, row.PausedAt, row.Metadata, row.StoryKey)
 	}
 	return runs, nil
 }
@@ -238,32 +242,50 @@ func (r *RunRepo) UpdateRunStepContainerInfo(ctx context.Context, id uuid.UUID, 
 
 // toDomainRun maps a sqlc-generated Run to a domain Run.
 func toDomainRun(r Run) *model.Run {
+	return toDomainRunWithStoryKey(r.ID, r.ProjectID, r.StoryID, r.Status,
+		r.PipelineConfigSnapshot, r.StartedAt, r.CompletedAt, r.ErrorMessage,
+		r.CreatedAt, r.UpdatedAt, r.PausedAt, r.Metadata, "")
+}
+
+// toDomainRunWithStoryKey maps run fields (including an optional story key from a JOIN) to a domain Run.
+func toDomainRunWithStoryKey(
+	id, projectID, storyID uuid.UUID,
+	status string,
+	pipelineConfigSnapshot []byte,
+	startedAt, completedAt pgtype.Timestamptz,
+	errorMessage pgtype.Text,
+	createdAt, updatedAt time.Time,
+	pausedAt pgtype.Timestamptz,
+	metadata []byte,
+	storyKey string,
+) *model.Run {
 	run := &model.Run{
-		ID:                     r.ID,
-		ProjectID:              r.ProjectID,
-		StoryID:                r.StoryID,
-		Status:                 model.RunStatus(r.Status),
-		PipelineConfigSnapshot: json.RawMessage(r.PipelineConfigSnapshot),
-		CreatedAt:              r.CreatedAt,
-		UpdatedAt:              r.UpdatedAt,
+		ID:                     id,
+		ProjectID:              projectID,
+		StoryID:                storyID,
+		StoryKey:               storyKey,
+		Status:                 model.RunStatus(status),
+		PipelineConfigSnapshot: json.RawMessage(pipelineConfigSnapshot),
+		CreatedAt:              createdAt,
+		UpdatedAt:              updatedAt,
 	}
-	if len(r.Metadata) > 0 {
+	if len(metadata) > 0 {
 		var meta map[string]interface{}
-		if err := json.Unmarshal(r.Metadata, &meta); err == nil {
+		if err := json.Unmarshal(metadata, &meta); err == nil {
 			run.Metadata = meta
 		}
 	}
-	if r.StartedAt.Valid {
-		run.StartedAt = &r.StartedAt.Time
+	if startedAt.Valid {
+		run.StartedAt = &startedAt.Time
 	}
-	if r.CompletedAt.Valid {
-		run.CompletedAt = &r.CompletedAt.Time
+	if completedAt.Valid {
+		run.CompletedAt = &completedAt.Time
 	}
-	if r.PausedAt.Valid {
-		run.PausedAt = &r.PausedAt.Time
+	if pausedAt.Valid {
+		run.PausedAt = &pausedAt.Time
 	}
-	if r.ErrorMessage.Valid {
-		run.ErrorMessage = &r.ErrorMessage.String
+	if errorMessage.Valid {
+		run.ErrorMessage = &errorMessage.String
 	}
 	return run
 }

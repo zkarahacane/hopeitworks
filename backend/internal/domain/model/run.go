@@ -38,6 +38,7 @@ type Run struct {
 	ID                     uuid.UUID
 	ProjectID              uuid.UUID
 	StoryID                uuid.UUID
+	StoryKey               string // optional: populated via JOIN with stories table, empty if unavailable
 	Status                 RunStatus
 	PipelineConfigSnapshot json.RawMessage
 	Metadata               map[string]interface{}

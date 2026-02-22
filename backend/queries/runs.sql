@@ -6,10 +6,28 @@ RETURNING *;
 -- name: GetRun :one
 SELECT * FROM runs WHERE id = $1;
 
+-- name: GetRunWithStoryKey :one
+SELECT r.id, r.project_id, r.story_id, r.status, r.pipeline_config_snapshot,
+       r.started_at, r.completed_at, r.error_message, r.created_at, r.updated_at,
+       r.paused_at, r.metadata, COALESCE(s.key, '') AS story_key
+FROM runs r
+LEFT JOIN stories s ON s.id = r.story_id
+WHERE r.id = $1;
+
 -- name: ListRunsByProject :many
 SELECT * FROM runs
 WHERE project_id = $1
 ORDER BY created_at DESC
+LIMIT $2 OFFSET $3;
+
+-- name: ListRunsByProjectWithStoryKey :many
+SELECT r.id, r.project_id, r.story_id, r.status, r.pipeline_config_snapshot,
+       r.started_at, r.completed_at, r.error_message, r.created_at, r.updated_at,
+       r.paused_at, r.metadata, COALESCE(s.key, '') AS story_key
+FROM runs r
+LEFT JOIN stories s ON s.id = r.story_id
+WHERE r.project_id = $1
+ORDER BY r.created_at DESC
 LIMIT $2 OFFSET $3;
 
 -- name: ListRunsByStory :many
