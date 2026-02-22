@@ -8,6 +8,7 @@ import ProjectDetailView from '@/views/ProjectDetailView.vue'
 import RunDetailView from '@/views/RunDetailView.vue'
 import StoryDetailView from '@/views/StoryDetailView.vue'
 import ApprovalsView from '@/views/ApprovalsView.vue'
+import RunsView from '@/views/RunsView.vue'
 import PipelineConfigView from '@/views/PipelineConfigView.vue'
 import PromptTemplatesView from '@/views/PromptTemplatesView.vue'
 import BoardView from '@/views/BoardView.vue'
@@ -64,6 +65,11 @@ const router = createRouter({
           component: BoardView,
         },
         {
+          path: 'runs',
+          name: 'project-runs',
+          component: () => import('@/views/ProjectRunsView.vue'),
+        },
+        {
           path: 'epics/:epicId',
           name: 'epic-detail',
           component: () => import('@/views/EpicDetailView.vue'),
@@ -110,6 +116,11 @@ const router = createRouter({
           component: () => import('@/views/HITLApprovalView.vue'),
         },
         {
+          path: 'settings',
+          name: 'project-settings',
+          component: () => import('@/views/ProjectSettingsView.vue'),
+        },
+        {
           path: 'settings/notifications',
           name: 'project-notifications',
           component: () => import('@/views/NotificationSettingsView.vue'),
@@ -132,6 +143,12 @@ const router = createRouter({
       path: '/approvals',
       name: 'approvals',
       component: ApprovalsView,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/runs',
+      name: 'runs',
+      component: RunsView,
       meta: { requiresAuth: true },
     },
     {

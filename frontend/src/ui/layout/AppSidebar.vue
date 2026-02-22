@@ -34,7 +34,7 @@ const navItems = [
   { label: 'Projects', icon: 'pi pi-folder', route: '/projects' },
   { label: 'Runs', icon: 'pi pi-play', route: '/runs' },
   { label: 'Approvals', icon: 'pi pi-bell', route: '/approvals' },
-  { label: 'Settings', icon: 'pi pi-cog', route: '/settings' },
+  { label: 'Settings', icon: 'pi pi-cog', route: '/profile' },
 ]
 
 const adminNavItems = [

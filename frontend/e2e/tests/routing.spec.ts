@@ -12,6 +12,30 @@ test.describe('Application Routing', () => {
             id: '1',
             email: 'test@test.com',
             name: 'Test User',
+            role: 'user',
+          }),
+        })
+      })
+
+      // Mock Dashboard API calls
+      await page.route('**/api/v1/projects*', async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            data: [],
+            pagination: { total: 0, page: 1, per_page: 5 },
+          }),
+        })
+      })
+
+      await page.route('**/api/v1/hitl-requests*', async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            data: [],
+            pagination: { total: 0, page: 1, per_page: 20 },
           }),
         })
       })
@@ -85,6 +109,30 @@ test.describe('Application Routing', () => {
             id: '1',
             email: 'test@test.com',
             name: 'Test User',
+            role: 'user',
+          }),
+        })
+      })
+
+      // Mock Dashboard API calls
+      await page.route('**/api/v1/projects*', async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            data: [],
+            pagination: { total: 0, page: 1, per_page: 5 },
+          }),
+        })
+      })
+
+      await page.route('**/api/v1/hitl-requests*', async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            data: [],
+            pagination: { total: 0, page: 1, per_page: 20 },
           }),
         })
       })
@@ -98,7 +146,8 @@ test.describe('Application Routing', () => {
       await expect(page.locator('h1')).toHaveText('Dashboard')
 
       // Navigate to Projects using sidebar button
-      await page.getByRole('button', { name: 'Projects' }).click()
+      const sidebar = page.locator('aside')
+      await sidebar.getByRole('button', { name: 'Projects' }).click()
       await expect(page).toHaveURL('/projects')
       await expect(page.locator('h1')).toHaveText('Projects')
     })
@@ -111,7 +160,7 @@ test.describe('Application Routing', () => {
         await route.fulfill({
           status: 401,
           contentType: 'application/json',
-          body: JSON.stringify({ message: 'Unauthorized' }),
+          body: JSON.stringify({ error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } }),
         })
       })
     })

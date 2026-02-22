@@ -101,13 +101,14 @@ export const useStoriesStore = defineStore('stories', () => {
     error.value = null
     try {
       const { data, error: apiError } = await apiClient.GET(
-        '/projects/{projectId}/stories' as '/projects/{projectId}/epics',
+        '/projects/{projectId}/stories',
         {
           params: {
             path: { projectId },
+            // epic_id is not in the OpenAPI query params for listStories; pass as extra query
             query: { epic_id: epicId } as Record<string, string>,
           },
-        } as Parameters<typeof apiClient.GET>[1],
+        },
       )
       if (apiError) {
         error.value = 'Failed to load stories'

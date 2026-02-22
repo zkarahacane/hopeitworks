@@ -44,14 +44,11 @@ export function useRunDetail(runId: string) {
     error,
     execute,
   } = useAsyncAction(async () => {
-    const { data, error: apiError } = await apiClient.GET(
-      '/runs/{runId}' as never,
-      {
-        params: { path: { runId } },
-      } as never,
-    )
+    const { data, error: apiError } = await apiClient.GET('/runs/{runId}', {
+      params: { path: { runId } },
+    })
     if (apiError) throw new Error('Failed to load run')
-    return data as unknown as RunWithSteps
+    return data as RunWithSteps
   })
 
   async function fetchRun() {

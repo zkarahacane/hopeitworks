@@ -23,9 +23,11 @@ provide('project', project)
 const tabs = [
   { label: 'Overview', icon: 'pi pi-home', route: 'project-overview' },
   { label: 'Board', icon: 'pi pi-th-large', route: 'project-board' },
+  { label: 'Runs', icon: 'pi pi-play', route: 'project-runs' },
   { label: 'Pipeline', icon: 'pi pi-cog', route: 'project-pipeline' },
   { label: 'Templates', icon: 'pi pi-file', route: 'project-templates' },
   { label: 'Costs', icon: 'pi pi-dollar', route: 'project-costs' },
+  { label: 'Settings', icon: 'pi pi-sliders-h', route: 'project-settings' },
   { label: 'Notifications', icon: 'pi pi-bell', route: 'project-notifications' },
 ]
 

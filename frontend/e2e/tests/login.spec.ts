@@ -7,7 +7,7 @@ test.describe('Login Page', () => {
       await route.fulfill({
         status: 401,
         contentType: 'application/json',
-        body: JSON.stringify({ message: 'Unauthorized' }),
+        body: JSON.stringify({ error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } }),
       })
     })
   })
@@ -86,6 +86,30 @@ test.describe('Login Page', () => {
           id: '1',
           email: 'test@test.com',
           name: 'Test User',
+          role: 'user',
+        }),
+      })
+    })
+
+    // Mock Dashboard API calls
+    await page.route('**/api/v1/projects*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: [],
+          pagination: { total: 0, page: 1, per_page: 5 },
+        }),
+      })
+    })
+
+    await page.route('**/api/v1/hitl-requests*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: [],
+          pagination: { total: 0, page: 1, per_page: 20 },
         }),
       })
     })
@@ -109,7 +133,7 @@ test.describe('Login Page', () => {
       await route.fulfill({
         status: 401,
         contentType: 'application/json',
-        body: JSON.stringify({ message: 'Invalid credentials' }),
+        body: JSON.stringify({ error: { code: 'UNAUTHORIZED', message: 'Invalid credentials' } }),
       })
     })
 
@@ -139,6 +163,7 @@ test.describe('Login Page', () => {
           id: '1',
           email: 'test@test.com',
           name: 'Test User',
+          role: 'user',
         }),
       })
     })
@@ -194,6 +219,30 @@ test.describe('Login Page', () => {
           id: '1',
           email: 'test@test.com',
           name: 'Test User',
+          role: 'user',
+        }),
+      })
+    })
+
+    // Mock Dashboard API calls
+    await page.route('**/api/v1/projects*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: [],
+          pagination: { total: 0, page: 1, per_page: 5 },
+        }),
+      })
+    })
+
+    await page.route('**/api/v1/hitl-requests*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: [],
+          pagination: { total: 0, page: 1, per_page: 20 },
         }),
       })
     })
@@ -228,6 +277,30 @@ test.describe('Login Page', () => {
           id: '1',
           email: 'test@test.com',
           name: 'Test User',
+          role: 'user',
+        }),
+      })
+    })
+
+    // Mock Dashboard API calls
+    await page.route('**/api/v1/projects*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: [],
+          pagination: { total: 0, page: 1, per_page: 5 },
+        }),
+      })
+    })
+
+    await page.route('**/api/v1/hitl-requests*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: [],
+          pagination: { total: 0, page: 1, per_page: 20 },
         }),
       })
     })

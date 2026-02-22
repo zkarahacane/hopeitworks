@@ -308,10 +308,34 @@ import RunsView from '@/views/RunsView.vue'
 
 ## Dev Agent Record
 
-_To be filled by the implementing agent._
+**Agent:** Claude Opus 4.6
+**Branch:** feat/fix-14-runs-dashboard-routing
+**Date:** 2026-02-22
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `frontend/src/ui/layout/AppSidebar.vue` | Remapped "Settings" route from `/settings` to `/profile` |
+| `frontend/src/router/index.ts` | Added `/runs` top-level route; added `project-runs` child route under `/projects/:id` |
+| `frontend/src/utils/runStatus.ts` | New — shared run status severity mapping |
+| `frontend/src/features/runs/composables/useRecentRuns.ts` | New — composable for fetching recent runs (project-scoped or cross-project fan-out) |
+| `frontend/src/views/RunsView.vue` | New — cross-project runs list page |
+| `frontend/src/views/DashboardView.vue` | Replaced placeholder with full dashboard (recent runs, pending approvals, projects) |
+| `frontend/src/views/ProjectRunsView.vue` | New — project-scoped runs tab content with duration column |
+| `frontend/src/views/ProjectDetailView.vue` | Added "Runs" tab to tabs array |
+| `frontend/src/views/RunDetailView.vue` | Refactored to import shared `runStatusSeverity` from utils |
+| `frontend/src/features/runs/__tests__/useRecentRuns.spec.ts` | New — 8 unit tests covering all composable branches |
+| `frontend/src/api/schema.d.ts` | Regenerated from OpenAPI spec |
+
+### Notes
+
+- No global `GET /runs` endpoint exists in the OpenAPI spec. The cross-project runs view uses a fan-out strategy: fetch up to 5 projects, then concurrently fetch runs per project, merge by `created_at` desc, and take top N.
+- All 523 tests pass (62 test files). ESLint and TypeScript type-check clean.
 
 ## Change Log
 
 | Date | Author | Change |
 |------|--------|--------|
 | 2026-02-22 | story-writer | Initial story created |
+| 2026-02-22 | dev-agent | Implementation complete — all ACs addressed |

@@ -26,13 +26,13 @@ const createUserSchema = toTypedSchema(
     email: z.string().min(1, 'Email is required').email('Invalid email format'),
     password: z.string().min(8, 'Password must be at least 8 characters'),
     name: z.string().min(1, 'Name is required').max(255, 'Name too long'),
-    role: z.enum(['admin', 'member']),
+    role: z.enum(['admin', 'user']),
   }),
 )
 
 const { handleSubmit, resetForm } = useForm({
   validationSchema: createUserSchema,
-  initialValues: { email: '', password: '', name: '', role: 'member' as const },
+  initialValues: { email: '', password: '', name: '', role: 'user' as const },
 })
 
 const { value: email, errorMessage: emailError } = useField<string>('email')
@@ -42,7 +42,7 @@ const { value: role, errorMessage: roleError } = useField<string>('role')
 
 const roleOptions = [
   { label: 'Admin', value: 'admin' },
-  { label: 'Member', value: 'member' },
+  { label: 'Member', value: 'user' },
 ]
 
 watch(

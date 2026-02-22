@@ -33,6 +33,29 @@ test.describe('Profile Page', () => {
         await route.fallback()
       }
     })
+
+    // Mock Dashboard API calls (for tests that navigate to /)
+    await page.route('**/api/v1/projects*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: [],
+          pagination: { total: 0, page: 1, per_page: 5 },
+        }),
+      })
+    })
+
+    await page.route('**/api/v1/hitl-requests*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: [],
+          pagination: { total: 0, page: 1, per_page: 20 },
+        }),
+      })
+    })
   })
 
   test('should display profile page with pre-filled data', async ({ page }) => {
