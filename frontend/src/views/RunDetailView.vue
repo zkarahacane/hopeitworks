@@ -9,14 +9,12 @@ import Button from 'primevue/button'
 import { useToast } from 'primevue/usetoast'
 import { useRunDetail } from '@/features/runs/composables/useRunDetail'
 import { useRunCosts } from '@/features/runs/composables/useRunCosts'
-import type { StepCostBreakdown } from '@/features/runs/composables/useRunCosts'
 import { useRunsStore } from '@/stores/runs'
 import RunLogViewer from '@/features/runs/RunLogViewer.vue'
 import RunTimeline from '@/features/runs/RunTimeline.vue'
 import RunCancelConfirmDialog from '@/features/runs/RunCancelConfirmDialog.vue'
 import { runStatusSeverity } from '@/utils/runStatus'
-import { formatCostUSD, formatTokenCount } from '@/utils/formatCost'
-import type { RunStep } from '@/features/runs/composables/useRunDetail'
+import { formatCostUSD } from '@/utils/formatCost'
 
 const route = useRoute()
 const runId = computed(() => route.params.id as string)
@@ -35,34 +33,11 @@ const { costDetail, isLoading: isCostLoading } = useRunCosts(
   runStatus,
 )
 
-/** Map of step_id → StepCostBreakdown for quick lookups in the timeline. */
-const stepCostMap = computed(() => {
-  const map = new Map<string, StepCostBreakdown>()
-  if (!costDetail.value?.steps) return map
-  for (const step of costDetail.value.steps) {
-    map.set(step.step_id, step)
-  }
-  return map
-})
-
 /** Total run cost formatted for display. */
 const totalCostDisplay = computed(() => {
   if (!costDetail.value) return null
   return formatCostUSD(costDetail.value.total_cost)
 })
-
-/** Helper to get step cost breakdown by step ID. */
-function getStepCost(stepId: string): StepCostBreakdown | undefined {
-  return stepCostMap.value.get(stepId)
-}
-
-const stepSeverity: Record<string, string> = {
-  completed: 'success',
-  running: 'info',
-  failed: 'danger',
-  pending: 'secondary',
-  cancelled: 'warn',
-}
 
 
 const canPause = computed(() => run.value?.status === 'running')
