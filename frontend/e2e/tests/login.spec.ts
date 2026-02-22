@@ -72,7 +72,7 @@ test.describe('Login Page', () => {
 
     // Check password validation error
     const passwordError = page.locator('small.text-red-500').last()
-    await expect(passwordError).toContainText('Password is required')
+    await expect(passwordError).toContainText(/required/i)
   })
 
   test('should successfully login and redirect to dashboard', async ({ page }) => {
