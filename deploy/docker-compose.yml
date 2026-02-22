@@ -27,7 +27,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hopeitworks}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hopeitworks} -d ${POSTGRES_DB:-hopeitworks_dev}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -67,6 +67,8 @@ services:
       SMTP_PORT: 1025
       SMTP_FROM: ${SMTP_FROM:-noreply@hopeitworks.local}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+    volumes:
+      - ../agent/claude-md:/app/agent/claude-md:ro
     ports:
       - "${SERVER_PORT:-8080}:8080"
     depends_on:

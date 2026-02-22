@@ -53,7 +53,8 @@ if [[ -n "${GITHUB_TOKEN:-}" ]]; then
 fi
 
 # --- Configure Claude Code authentication ---
-export ANTHROPIC_API_KEY="$CLAUDE_CODE_OAUTH_TOKEN"
+# CLAUDE_CODE_OAUTH_TOKEN is natively recognized by Claude Code (authMethod: oauth_token).
+# Do NOT remap it to ANTHROPIC_API_KEY — that expects a direct API key, not an OAuth token.
 
 # --- Clone repository ---
 emit_log "Cloning repository: $REPO_URL (branch: $BRANCH_NAME)"
@@ -108,7 +109,7 @@ emit_log "Prompt written to /tmp/prompt.md"
 emit_log "Starting Claude Code agent"
 
 EXIT_CODE=0
-claude --dangerously-skip-permissions --print --output-format stream-json < /tmp/prompt.md || EXIT_CODE=$?
+claude --dangerously-skip-permissions --print --verbose --output-format stream-json < /tmp/prompt.md || EXIT_CODE=$?
 
 # --- Emit cost event ---
 # Claude Code with --output-format stream-json emits result messages that may
