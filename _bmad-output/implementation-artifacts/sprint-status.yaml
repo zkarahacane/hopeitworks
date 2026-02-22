@@ -177,6 +177,10 @@ development_status:
   refactor-2-migrate-consumers-to-runner: done
   refactor-3-db-migration-workload-handle-cleanup: done
 
+  # Post-MVP: DX Improvements
+  post-mvp-dx: backlog
+  1-22-auto-migrate-on-startup: ready-for-dev
+
   # Post-MVP: E2E Usability Fixes
   post-mvp-e2e-usability: done
   fix-9-backend-wiring: done
