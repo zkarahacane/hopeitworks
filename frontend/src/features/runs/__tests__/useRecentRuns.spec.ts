@@ -68,7 +68,7 @@ describe('useRecentRuns', () => {
     await flushPromises()
 
     expect(runs.value).toHaveLength(2)
-    expect(runs.value[0].id).toBe('run-1')
+    expect(runs.value[0]?.id).toBe('run-1')
     expect(isLoading.value).toBe(false)
     expect(mockGet).toHaveBeenCalledTimes(1)
     expect(mockGet).toHaveBeenCalledWith('/projects/{projectId}/runs', {
