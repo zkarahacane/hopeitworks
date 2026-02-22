@@ -10,9 +10,12 @@ import Button from 'primevue/button'
 import { useToast } from 'primevue/usetoast'
 import { differenceInSeconds } from 'date-fns'
 import { useRunDetail } from '@/features/runs/composables/useRunDetail'
+import { useRunCosts } from '@/features/runs/composables/useRunCosts'
+import type { StepCostBreakdown } from '@/features/runs/composables/useRunCosts'
 import { useRunsStore } from '@/stores/runs'
 import RunLogViewer from '@/features/runs/RunLogViewer.vue'
 import { runStatusSeverity } from '@/utils/runStatus'
+import { formatCostUSD, formatTokenCount } from '@/utils/formatCost'
 import type { RunStep } from '@/features/runs/composables/useRunDetail'
 
 const route = useRoute()
@@ -24,6 +27,34 @@ const toast = useToast()
 
 const { run: runRef, isLoading, error, retry } = useRunDetail(runId.value, projectId.value)
 const run = computed(() => runRef.value)
+
+const runStatus = computed(() => run.value?.status)
+const { costDetail, isLoading: isCostLoading } = useRunCosts(
+  projectId.value,
+  runId.value,
+  runStatus,
+)
+
+/** Map of step_id → StepCostBreakdown for quick lookups in the timeline. */
+const stepCostMap = computed(() => {
+  const map = new Map<string, StepCostBreakdown>()
+  if (!costDetail.value?.steps) return map
+  for (const step of costDetail.value.steps) {
+    map.set(step.step_id, step)
+  }
+  return map
+})
+
+/** Total run cost formatted for display. */
+const totalCostDisplay = computed(() => {
+  if (!costDetail.value) return null
+  return formatCostUSD(costDetail.value.total_cost)
+})
+
+/** Helper to get step cost breakdown by step ID. */
+function getStepCost(stepId: string): StepCostBreakdown | undefined {
+  return stepCostMap.value.get(stepId)
+}
 
 const stepSeverity: Record<string, string> = {
   completed: 'success',
@@ -99,6 +130,13 @@ function formatDuration(step: RunStep): string | null {
       </div>
       <div class="flex items-center gap-3">
         <Tag v-if="run" :value="run.status" :severity="runStatusSeverity[run.status]" />
+        <span
+          v-if="totalCostDisplay && !isCostLoading"
+          class="text-sm font-medium text-surface-600 bg-surface-100 dark:bg-surface-800 px-2 py-1 rounded"
+          data-testid="run-total-cost"
+        >
+          {{ totalCostDisplay }}
+        </span>
         <Button
           v-if="canPause"
           label="Pause"
@@ -174,6 +212,24 @@ function formatDuration(step: RunStep): string | null {
                 <span>{{ (item as RunStep).action }}</span>
                 <span v-if="formatDuration(item as RunStep)" class="text-surface-400">
                   {{ formatDuration(item as RunStep) }}
+                </span>
+              </div>
+              <!-- Per-step cost breakdown -->
+              <div
+                v-if="getStepCost((item as RunStep).id)"
+                class="flex items-center gap-3 text-xs text-surface-500 mt-1"
+                data-testid="step-cost"
+              >
+                <span class="font-mono bg-surface-100 dark:bg-surface-800 px-1.5 py-0.5 rounded">
+                  {{ getStepCost((item as RunStep).id)!.model }}
+                </span>
+                <span>
+                  {{ formatTokenCount(getStepCost((item as RunStep).id)!.tokens_input) }} in
+                  /
+                  {{ formatTokenCount(getStepCost((item as RunStep).id)!.tokens_output) }} out
+                </span>
+                <span class="font-medium text-surface-700 dark:text-surface-300">
+                  {{ formatCostUSD(getStepCost((item as RunStep).id)!.cost_usd) }}
                 </span>
               </div>
               <div
