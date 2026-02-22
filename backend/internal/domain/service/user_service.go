@@ -49,18 +49,7 @@ func (s *UserService) GetByID(ctx context.Context, id uuid.UUID) (*model.User, e
 
 // List retrieves a paginated list of users.
 func (s *UserService) List(ctx context.Context, page, perPage int) (*UserListResult, error) {
-	if page < 1 {
-		page = 1
-	}
-	if perPage < 1 {
-		perPage = 20
-	}
-	if perPage > 100 {
-		perPage = 100
-	}
-
-	offset := int32((page - 1) * perPage)
-	limit := int32(perPage)
+	limit, offset := paginationToLimitOffset(page, perPage)
 
 	users, err := s.repo.List(ctx, limit, offset)
 	if err != nil {

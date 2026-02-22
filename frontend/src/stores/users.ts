@@ -2,13 +2,9 @@ import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import { apiClient } from '@/api/client'
 import type { User } from '@/stores/auth'
+import type { Pagination } from '@/types/pagination'
 
-/** Pagination metadata from API list responses */
-export interface Pagination {
-  total: number
-  page: number
-  per_page: number
-}
+export type { Pagination }
 
 /** Parameters for fetching paginated user lists */
 export interface FetchUsersParams {

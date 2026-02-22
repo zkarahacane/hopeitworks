@@ -10,6 +10,20 @@ import (
 	"github.com/zakari/hopeitworks/backend/pkg/errors"
 )
 
+// paginationDefaults extracts page and perPage from optional pointer params,
+// defaulting to page=1 and perPage=20 when nil or non-positive.
+func paginationDefaults(page, perPage *int) (int, int) {
+	p := 1
+	pp := 20
+	if page != nil && *page > 0 {
+		p = *page
+	}
+	if perPage != nil && *perPage > 0 {
+		pp = *perPage
+	}
+	return p, pp
+}
+
 // writeJSON writes a JSON response with the given status code.
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 	w.Header().Set("Content-Type", "application/json")

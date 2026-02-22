@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import Button from 'primevue/button'
 import Tag from 'primevue/tag'
+import { statusSeverity } from '@/utils/runStatus'
 import type { components } from '@/api/schema'
 
 type RunStep = components['schemas']['RunStep']
@@ -25,22 +26,6 @@ function retryLabel(step: RunStep): string {
   const num = step.retry_count ?? 1
   const type = step.retry_type ?? 'incremental'
   return `Retry #${num} (${type})`
-}
-
-/** Severity map for step status to PrimeVue Tag severity */
-function statusSeverity(status: string): 'success' | 'danger' | 'warn' | 'info' | 'secondary' {
-  switch (status) {
-    case 'completed':
-      return 'success'
-    case 'failed':
-      return 'danger'
-    case 'running':
-      return 'info'
-    case 'waiting_approval':
-      return 'warn'
-    default:
-      return 'secondary'
-  }
 }
 
 const errorContext = computed(() => props.step.error_message ?? props.parentStep?.error_message ?? '')

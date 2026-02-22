@@ -74,14 +74,7 @@ func (s *HITLService) ListPendingByProject(ctx context.Context, projectID uuid.U
 
 // ListAll returns a paginated list of HITL requests, optionally filtered by status.
 func (s *HITLService) ListAll(ctx context.Context, status *string, page, perPage int) ([]*model.HITLRequest, int64, error) {
-	if page < 1 {
-		page = 1
-	}
-	if perPage < 1 || perPage > 100 {
-		perPage = 20
-	}
-	offset := int32((page - 1) * perPage)
-	limit := int32(perPage)
+	limit, offset := paginationToLimitOffset(page, perPage)
 	items, err := s.hitlRepo.ListFiltered(ctx, status, limit, offset)
 	if err != nil {
 		return nil, 0, err

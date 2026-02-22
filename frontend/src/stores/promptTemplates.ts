@@ -1,6 +1,9 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import { apiClient } from '@/api/client'
+import type { Pagination } from '@/types/pagination'
+
+export type { Pagination }
 
 /** Template type matching the OpenAPI PromptTemplate.type enum */
 export type PromptTemplateType = 'implement' | 'retry' | 'review' | 'merge' | 'custom'
@@ -14,13 +17,6 @@ export interface PromptTemplate {
   type: PromptTemplateType
   created_at: string
   updated_at: string
-}
-
-/** Pagination metadata from API list responses */
-export interface Pagination {
-  total: number
-  page: number
-  per_page: number
 }
 
 /** Parameters for fetching paginated template lists */

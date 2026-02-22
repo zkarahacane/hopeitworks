@@ -68,18 +68,7 @@ type PromptTemplateListResult struct {
 
 // ListByProject retrieves a paginated list of prompt templates for a project.
 func (s *PromptTemplateService) ListByProject(ctx context.Context, projectID uuid.UUID, page, perPage int) (*PromptTemplateListResult, error) {
-	if page < 1 {
-		page = 1
-	}
-	if perPage < 1 {
-		perPage = 20
-	}
-	if perPage > 100 {
-		perPage = 100
-	}
-
-	offset := int32((page - 1) * perPage)
-	limit := int32(perPage)
+	limit, offset := paginationToLimitOffset(page, perPage)
 
 	templates, err := s.repo.ListByProject(ctx, projectID, limit, offset)
 	if err != nil {

@@ -1,6 +1,9 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import { apiClient } from '@/api/client'
+import type { Pagination } from '@/types/pagination'
+
+export type { Pagination }
 
 /** Project entity matching the OpenAPI Project schema */
 export interface Project {
@@ -15,13 +18,6 @@ export interface Project {
   circuit_breaker_active?: boolean
   created_at: string
   updated_at: string
-}
-
-/** Pagination metadata from API list responses */
-export interface Pagination {
-  total: number
-  page: number
-  per_page: number
 }
 
 /** Payload for creating a new project */

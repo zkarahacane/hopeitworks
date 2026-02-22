@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import Tag from 'primevue/tag'
 import RetryStepEntry from './RetryStepEntry.vue'
 import { useRunTimeline } from './composables/useRunTimeline'
+import { statusSeverity } from '@/utils/runStatus'
 import type { components } from '@/api/schema'
 
 type RunStep = components['schemas']['RunStep']
@@ -13,22 +14,6 @@ const props = defineProps<{
 
 const stepsRef = computed(() => props.steps)
 const { groupedSteps } = useRunTimeline(stepsRef)
-
-/** Severity map for step status to PrimeVue Tag severity */
-function statusSeverity(status: string): 'success' | 'danger' | 'warn' | 'info' | 'secondary' {
-  switch (status) {
-    case 'completed':
-      return 'success'
-    case 'failed':
-      return 'danger'
-    case 'running':
-      return 'info'
-    case 'waiting_approval':
-      return 'warn'
-    default:
-      return 'secondary'
-  }
-}
 
 function formatDate(iso?: string | null): string {
   if (!iso) return ''

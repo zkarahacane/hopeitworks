@@ -154,20 +154,6 @@ type RunListResult struct {
 	Total int64
 }
 
-// normalizePagination clamps page and perPage to valid defaults.
-func normalizePagination(page, perPage int) (int32, int32) {
-	if page < 1 {
-		page = 1
-	}
-	if perPage < 1 {
-		perPage = 20
-	}
-	if perPage > 100 {
-		perPage = 100
-	}
-	return int32(perPage), int32((page - 1) * perPage)
-}
-
 // enrichRunsWithSteps fetches and attaches steps (with progress) to each run.
 // TODO(perf): batch fetch steps in single query for large lists (S-4-2)
 func (s *RunService) enrichRunsWithSteps(ctx context.Context, runs []*model.Run) error {
@@ -187,7 +173,7 @@ func (s *RunService) enrichRunsWithSteps(ctx context.Context, runs []*model.Run)
 
 // ListRunsByProject retrieves a paginated list of runs for a project.
 func (s *RunService) ListRunsByProject(ctx context.Context, projectID uuid.UUID, page, perPage int) (*RunListResult, error) {
-	limit, offset := normalizePagination(page, perPage)
+	limit, offset := paginationToLimitOffset(page, perPage)
 
 	runs, err := s.runRepo.ListRunsByProject(ctx, projectID, limit, offset)
 	if err != nil {
@@ -211,7 +197,7 @@ func (s *RunService) ListRunsByProject(ctx context.Context, projectID uuid.UUID,
 
 // ListRunsByStory retrieves a paginated list of runs for a story.
 func (s *RunService) ListRunsByStory(ctx context.Context, storyID uuid.UUID, page, perPage int) (*RunListResult, error) {
-	limit, offset := normalizePagination(page, perPage)
+	limit, offset := paginationToLimitOffset(page, perPage)
 
 	runs, err := s.runRepo.ListRunsByStory(ctx, storyID, limit, offset)
 	if err != nil {

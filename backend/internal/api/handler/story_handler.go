@@ -37,14 +37,7 @@ func (h *StoryHandler) ListStories(w http.ResponseWriter, r *http.Request, proje
 		return
 	}
 
-	page := 1
-	perPage := 20
-	if params.Page != nil && *params.Page > 0 {
-		page = *params.Page
-	}
-	if params.PerPage != nil && *params.PerPage > 0 {
-		perPage = *params.PerPage
-	}
+	page, perPage := paginationDefaults(params.Page, params.PerPage)
 
 	// Status filtering
 	if params.Status != nil && *params.Status != "" {

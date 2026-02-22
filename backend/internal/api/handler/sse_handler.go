@@ -12,6 +12,7 @@ import (
 	authmw "github.com/zakari/hopeitworks/backend/internal/api/middleware"
 	"github.com/zakari/hopeitworks/backend/internal/domain/model"
 	"github.com/zakari/hopeitworks/backend/internal/domain/port"
+	"github.com/zakari/hopeitworks/backend/pkg/errors"
 )
 
 const keepaliveInterval = 30 * time.Second
@@ -50,19 +51,19 @@ func (h *SSEHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Parse project_id query param
 	projectIDStr := r.URL.Query().Get("project_id")
 	if projectIDStr == "" {
-		writeBadRequestJSON(w, "missing required query parameter: project_id")
+		writeErrorResponse(w, errors.NewValidation("project_id", "missing required query parameter"))
 		return
 	}
 	projectID, err := uuid.Parse(projectIDStr)
 	if err != nil {
-		writeBadRequestJSON(w, "invalid project_id: must be a valid UUID")
+		writeErrorResponse(w, errors.NewValidation("project_id", "must be a valid UUID"))
 		return
 	}
 
 	// Extract authenticated user from context
 	userID, ok := authmw.UserIDFromContext(r.Context())
 	if !ok {
-		writeUnauthorizedJSON(w)
+		writeErrorResponse(w, errors.NewUnauthorized("authentication required"))
 		return
 	}
 
@@ -72,11 +73,11 @@ func (h *SSEHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		isMember, memberErr := h.projectUserRepo.IsUserInProject(r.Context(), projectID, userID)
 		if memberErr != nil {
 			h.logger.Error("failed to check project membership", "error", memberErr, "project_id", projectID, "user_id", userID)
-			writeInternalErrorJSON(w)
+			writeErrorResponse(w, errors.NewInternal("check project membership", memberErr))
 			return
 		}
 		if !isMember {
-			writeForbiddenJSON(w, "you are not a member of this project")
+			writeErrorResponse(w, errors.NewForbidden("you are not a member of this project"))
 			return
 		}
 	}
@@ -85,7 +86,7 @@ func (h *SSEHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		h.logger.Error("response writer does not support http.Flusher")
-		writeInternalErrorJSON(w)
+		writeErrorResponse(w, errors.NewInternal("SSE streaming not supported", fmt.Errorf("http.Flusher not available")))
 		return
 	}
 
@@ -117,7 +118,7 @@ func (h *SSEHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	eventCh, cleanup, subErr := h.eventSub.Subscribe(r.Context(), projectID)
 	if subErr != nil {
 		h.logger.Error("failed to subscribe to events", "error", subErr, "project_id", projectID)
-		writeInternalErrorJSON(w)
+		writeErrorResponse(w, errors.NewInternal("subscribe to events", subErr))
 		return
 	}
 	defer cleanup()
@@ -168,52 +169,4 @@ func writeSSEEvent(w io.Writer, f http.Flusher, event model.Event) error {
 	}
 	f.Flush()
 	return nil
-}
-
-// writeBadRequestJSON writes a 400 error response.
-func writeBadRequestJSON(w http.ResponseWriter, msg string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusBadRequest)
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"error": map[string]interface{}{
-			"code":    "VALIDATION_ERROR",
-			"message": msg,
-		},
-	})
-}
-
-// writeUnauthorizedJSON writes a 401 error response.
-func writeUnauthorizedJSON(w http.ResponseWriter) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusUnauthorized)
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"error": map[string]interface{}{
-			"code":    "UNAUTHORIZED",
-			"message": "authentication required",
-		},
-	})
-}
-
-// writeForbiddenJSON writes a 403 error response.
-func writeForbiddenJSON(w http.ResponseWriter, msg string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusForbidden)
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"error": map[string]interface{}{
-			"code":    "FORBIDDEN",
-			"message": msg,
-		},
-	})
-}
-
-// writeInternalErrorJSON writes a 500 error response.
-func writeInternalErrorJSON(w http.ResponseWriter) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusInternalServerError)
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"error": map[string]interface{}{
-			"code":    "INTERNAL_ERROR",
-			"message": "an internal error occurred",
-		},
-	})
 }

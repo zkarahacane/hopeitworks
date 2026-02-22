@@ -22,14 +22,7 @@ func NewPromptTemplateHandler(svc *service.PromptTemplateService) *PromptTemplat
 
 // ListPromptTemplates handles GET /projects/{projectId}/templates.
 func (h *PromptTemplateHandler) ListPromptTemplates(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, params ListPromptTemplatesParams) {
-	page := 1
-	perPage := 20
-	if params.Page != nil && *params.Page > 0 {
-		page = *params.Page
-	}
-	if params.PerPage != nil && *params.PerPage > 0 {
-		perPage = *params.PerPage
-	}
+	page, perPage := paginationDefaults(params.Page, params.PerPage)
 
 	result, err := h.service.ListByProject(r.Context(), projectID, page, perPage)
 	if err != nil {

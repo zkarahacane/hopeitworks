@@ -77,18 +77,7 @@ func (s *ProjectUserService) IsUserInProject(ctx context.Context, projectID, use
 
 // ListProjectsForUser retrieves a paginated list of projects assigned to a user.
 func (s *ProjectUserService) ListProjectsForUser(ctx context.Context, userID uuid.UUID, page, perPage int) (*ListResult, error) {
-	if page < 1 {
-		page = 1
-	}
-	if perPage < 1 {
-		perPage = 20
-	}
-	if perPage > 100 {
-		perPage = 100
-	}
-
-	offset := int32((page - 1) * perPage)
-	limit := int32(perPage)
+	limit, offset := paginationToLimitOffset(page, perPage)
 
 	projects, err := s.repo.ListProjectsByUser(ctx, userID, limit, offset)
 	if err != nil {

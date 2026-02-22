@@ -21,14 +21,7 @@ func NewRunHandler(svc *service.RunService) *RunHandler {
 
 // ListRunsByProject handles GET /projects/{projectId}/runs.
 func (h *RunHandler) ListRunsByProject(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, params ListRunsByProjectParams) {
-	page := 1
-	perPage := 20
-	if params.Page != nil && *params.Page > 0 {
-		page = *params.Page
-	}
-	if params.PerPage != nil && *params.PerPage > 0 {
-		perPage = *params.PerPage
-	}
+	page, perPage := paginationDefaults(params.Page, params.PerPage)
 
 	result, err := h.service.ListRunsByProject(r.Context(), projectID, page, perPage)
 	if err != nil {
@@ -82,14 +75,7 @@ func (h *RunHandler) CreateRun(w http.ResponseWriter, r *http.Request, projectID
 
 // ListRunsByStory handles GET /stories/{storyId}/runs.
 func (h *RunHandler) ListRunsByStory(w http.ResponseWriter, r *http.Request, storyID StoryIdPath, params ListRunsByStoryParams) {
-	page := 1
-	perPage := 20
-	if params.Page != nil && *params.Page > 0 {
-		page = *params.Page
-	}
-	if params.PerPage != nil && *params.PerPage > 0 {
-		perPage = *params.PerPage
-	}
+	page, perPage := paginationDefaults(params.Page, params.PerPage)
 
 	result, err := h.service.ListRunsByStory(r.Context(), storyID, page, perPage)
 	if err != nil {
