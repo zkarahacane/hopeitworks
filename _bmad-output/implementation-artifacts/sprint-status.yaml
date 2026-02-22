@@ -177,9 +177,20 @@ development_status:
   refactor-2-migrate-consumers-to-runner: done
   refactor-3-db-migration-workload-handle-cleanup: done
 
+  # Post-MVP: Smoke Tests & Monaco Fix
+  post-mvp-smoke-monaco: done
+  fix-smoke-tests-green: done
+  fix-monaco-native-editor: done
+
   # Post-MVP: DX Improvements
   post-mvp-dx: backlog
   1-22-auto-migrate-on-startup: ready-for-dev
+
+  # Post-MVP: Agent Runtime & E2E Pipeline
+  post-mvp-agent-runtime: backlog
+  runtime-1-agent-docker-image: ready-for-dev
+  runtime-2-action-wiring-and-action-type-mapping: ready-for-dev
+  runtime-3-test-project-postgres-e2e-validation: ready-for-dev
 
   # Post-MVP: E2E Usability Fixes
   post-mvp-e2e-usability: done
@@ -708,19 +719,19 @@ parallel_waves:
     stories:
       - key: fix-8-nav-visible-unauthenticated
         domain: front
-        status: backlog
+        status: done
         cross_epic_deps: [1-9-login-page-auth-guard, 1-8-app-shell-layout-header-sidebar-status-bar]
       - key: feat-1-logout-api
         domain: back
-        status: backlog
+        status: done
         cross_epic_deps: [1-3-users-table-jwt-auth-api-register-login-auth-middleware]
       - key: feat-2-user-profile-api
         domain: back
-        status: backlog
+        status: done
         cross_epic_deps: [1-3-users-table-jwt-auth-api-register-login-auth-middleware]
       - key: feat-3-reset-password-api
         domain: back
-        status: backlog
+        status: done
         cross_epic_deps: [1-3-users-table-jwt-auth-api-register-login-auth-middleware]
     container_count: 4
     depends_on: [wave-19]
@@ -731,15 +742,15 @@ parallel_waves:
     stories:
       - key: feat-4-logout-ui
         domain: front
-        status: backlog
+        status: done
         explicit_deps: [feat-1-logout-api]
       - key: feat-5-user-profile-page
         domain: front
-        status: backlog
+        status: done
         explicit_deps: [feat-2-user-profile-api]
       - key: feat-6-reset-password-pages
         domain: front
-        status: backlog
+        status: done
         explicit_deps: [feat-3-reset-password-api]
     container_count: 3
     depends_on: [wave-20]
@@ -818,3 +829,31 @@ parallel_waves:
     container_count: 1
     depends_on: [wave-25]
     notes: "DB migration container_id → workload_handle, sqlc regen, final cleanup"
+
+  # =====================================================
+  # PHASE 9: AGENT RUNTIME (Last mile for real pipeline execution)
+  # =====================================================
+
+  wave-27:
+    phase: 9-agent-runtime
+    stories:
+      - key: runtime-1-agent-docker-image
+        domain: shared
+        status: ready-for-dev
+      - key: runtime-2-action-wiring-and-action-type-mapping
+        domain: back
+        status: ready-for-dev
+    container_count: 2
+    depends_on: [wave-26]
+    notes: "Agent Docker image + action wiring — parallel, independent"
+
+  wave-28:
+    phase: 9-agent-runtime
+    stories:
+      - key: runtime-3-test-project-postgres-e2e-validation
+        domain: shared
+        status: ready-for-dev
+        explicit_deps: [runtime-1-agent-docker-image, runtime-2-action-wiring-and-action-type-mapping]
+    container_count: 1
+    depends_on: [wave-27]
+    notes: "Fix test-project + validate real end-to-end pipeline run"
