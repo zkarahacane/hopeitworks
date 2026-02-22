@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import Tag from 'primevue/tag'
+import Button from 'primevue/button'
 import RetryStepEntry from './RetryStepEntry.vue'
 import { useRunTimeline } from './composables/useRunTimeline'
 import { statusSeverity } from '@/utils/runStatus'
@@ -10,6 +11,11 @@ type RunStep = components['schemas']['RunStep']
 
 const props = defineProps<{
   steps: RunStep[]
+  retryLoading?: boolean
+}>()
+
+const emit = defineEmits<{
+  retryStep: [stepId: string]
 }>()
 
 const stepsRef = computed(() => props.steps)
@@ -18,6 +24,15 @@ const { groupedSteps } = useRunTimeline(stepsRef)
 function formatDate(iso?: string | null): string {
   if (!iso) return ''
   return new Date(iso).toLocaleString()
+}
+
+/** Returns the last step in a group (latest retry or root) to check if retry is possible. */
+function lastStep(group: { root: RunStep; retries: RunStep[] }): RunStep {
+  return group.retries.length > 0 ? group.retries[group.retries.length - 1] : group.root
+}
+
+function canRetry(group: { root: RunStep; retries: RunStep[] }): boolean {
+  return lastStep(group).status === 'failed'
 }
 </script>
 
@@ -47,6 +62,17 @@ function formatDate(iso?: string | null): string {
         >
           → {{ formatDate(group.root.completed_at) }}
         </span>
+        <Button
+          v-if="canRetry(group)"
+          label="Retry"
+          icon="pi pi-refresh"
+          severity="warn"
+          size="small"
+          text
+          :loading="retryLoading"
+          data-testid="retry-step-btn"
+          @click="emit('retryStep', lastStep(group).id)"
+        />
       </div>
 
       <!-- Error message on root step -->

@@ -190,6 +190,17 @@ func toAPIRun(r *model.Run) Run {
 	return run
 }
 
+// RetryStep handles POST /runs/{runId}/steps/{stepId}/retry.
+func (h *RunHandler) RetryStep(w http.ResponseWriter, r *http.Request, runID RunIdPath, stepID StepIdPath) {
+	run, err := h.service.RetryStep(r.Context(), runID, stepID)
+	if err != nil {
+		writeErrorResponse(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, toAPIRunWithSteps(run))
+}
+
 // toAPIRunStep converts a domain RunStep to the API RunStep type.
 func toAPIRunStep(s *model.RunStep) RunStep {
 	step := RunStep{
@@ -215,6 +226,17 @@ func toAPIRunStep(s *model.RunStep) RunStep {
 	}
 	if s.LogTail != nil {
 		step.LogTail = s.LogTail
+	}
+	if s.ParentStepID != nil {
+		step.ParentStepId = s.ParentStepID
+	}
+	if s.RetryCount > 0 {
+		rc := s.RetryCount
+		step.RetryCount = &rc
+	}
+	if s.RetryType != nil {
+		rt := RunStepRetryType(*s.RetryType)
+		step.RetryType = &rt
 	}
 	return step
 }

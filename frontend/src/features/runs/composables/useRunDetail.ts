@@ -42,6 +42,7 @@ const RUN_REFRESH_EVENTS = new Set([
   'step.started',
   'step.completed',
   'step.failed',
+  'step.retry_initiated',
 ])
 
 /**

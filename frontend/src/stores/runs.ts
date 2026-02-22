@@ -9,6 +9,7 @@ export const useRunsStore = defineStore('runs', () => {
   const isLoading = ref(false)
   const isPausing = ref(false)
   const isResuming = ref(false)
+  const isRetrying = ref(false)
 
   /**
    * Whether the circuit breaker is currently active for the viewed project.
@@ -49,6 +50,24 @@ export const useRunsStore = defineStore('runs', () => {
       return data
     } finally {
       isResuming.value = false
+    }
+  }
+
+  /** Retry a failed step. */
+  async function retryStep(runId: string, stepId: string) {
+    isRetrying.value = true
+    try {
+      const { data, error } = await apiClient.POST(
+        '/runs/{runId}/steps/{stepId}/retry',
+        { params: { path: { runId, stepId } } },
+      )
+      if (error) throw error
+      if (data) {
+        updateRunStatus(runId, data.status)
+      }
+      return data
+    } finally {
+      isRetrying.value = false
     }
   }
 
@@ -93,9 +112,11 @@ export const useRunsStore = defineStore('runs', () => {
     isLoading,
     isPausing,
     isResuming,
+    isRetrying,
     circuitBreakerActive,
     pauseRun,
     resumeRun,
+    retryStep,
     updateRunStatus,
     handleSSEEvent,
   }

@@ -484,6 +484,116 @@ func (s *RunService) publishRunEvent(ctx context.Context, projectID, runID uuid.
 	_ = s.eventPub.Publish(ctx, event)
 }
 
+// RetryStep retries a failed run step by creating a new retry child step and
+// re-enqueuing the run for execution. The run is transitioned back to running.
+func (s *RunService) RetryStep(ctx context.Context, runID, stepID uuid.UUID) (*model.Run, error) {
+	// 1. Fetch the run and validate ownership
+	run, err := s.runRepo.GetRun(ctx, runID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 2. Fetch the step and validate it belongs to this run
+	step, err := s.runRepo.GetRunStep(ctx, stepID)
+	if err != nil {
+		return nil, err
+	}
+	if step.RunID != runID {
+		return nil, errors.NewNotFound("step", stepID)
+	}
+
+	// 3. Validate step is in failed state
+	if step.Status != model.StepStatusFailed {
+		return nil, &errors.DomainError{
+			Category: errors.CategoryConflict,
+			Code:     "STEP_NOT_FAILED",
+			Message:  fmt.Sprintf("step %s is in %s state, only failed steps can be retried", stepID, step.Status),
+		}
+	}
+
+	// 4. Check retry limits — fetch pipeline config to get retry policy
+	maxRetries := 3 // default
+	if run.PipelineConfigSnapshot != nil {
+		var parsed model.PipelineConfigYAML
+		if err := json.Unmarshal(run.PipelineConfigSnapshot, &parsed); err == nil {
+			for _, ps := range parsed.Steps {
+				if ps.Name == step.StepName && ps.RetryPolicy.MaxRetries > 0 {
+					maxRetries = ps.RetryPolicy.MaxRetries
+					break
+				}
+			}
+		}
+	}
+
+	// Check how many retries already exist for this step chain
+	rootStepID := stepID
+	if step.ParentStepID != nil {
+		rootStepID = *step.ParentStepID
+	}
+	existingRetries, err := s.runRepo.ListRetryStepsByParent(ctx, rootStepID)
+	if err != nil {
+		return nil, err
+	}
+	if len(existingRetries) >= maxRetries {
+		return nil, &errors.DomainError{
+			Category: errors.CategoryConflict,
+			Code:     "RETRY_MAX_EXCEEDED",
+			Message:  fmt.Sprintf("max retries (%d) exceeded for step %s", maxRetries, step.StepName),
+		}
+	}
+
+	// 5. Determine retry type: incremental for first 2, then full
+	retryCount := step.RetryCount + 1
+	retryType := "incremental"
+	if retryCount > 2 {
+		retryType = "full"
+	}
+
+	// 6. Create the retry step
+	newStep := &model.RunStep{
+		ID:           uuid.New(),
+		RunID:        runID,
+		StepName:     step.StepName,
+		StepOrder:    step.StepOrder,
+		Action:       step.Action,
+		Status:       model.StepStatusPending,
+		RetryCount:   retryCount,
+		RetryType:    &retryType,
+		ParentStepID: &rootStepID,
+	}
+	_, err = s.runRepo.CreateRetryRunStep(ctx, newStep)
+	if err != nil {
+		return nil, err
+	}
+
+	// 7. Transition run back to running if it was failed
+	if run.Status == model.RunStatusFailed {
+		_, err = s.runRepo.UpdateRunStatus(ctx, runID, model.RunStatusRunning, nil, nil, nil, nil)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// 8. Enqueue the run for continued execution
+	if s.jobQueue != nil {
+		if err := s.jobQueue.EnqueueExecuteRun(ctx, runID); err != nil {
+			return nil, errors.NewInternal("enqueue execute_run job for retry", err)
+		}
+	}
+
+	// 9. Publish event
+	s.publishRunEvent(ctx, run.ProjectID, runID, "step.retry_initiated", map[string]any{
+		"run_id":        runID.String(),
+		"step_id":       stepID.String(),
+		"retry_step_id": newStep.ID.String(),
+		"retry_count":   retryCount,
+		"retry_type":    retryType,
+	})
+
+	// 10. Return the updated run with all steps
+	return s.GetRun(ctx, runID)
+}
+
 // TransitionRunStep validates and transitions a run step to a new status.
 func (s *RunService) TransitionRunStep(ctx context.Context, stepID uuid.UUID, newStatus model.StepStatus) (*model.RunStep, error) {
 	step, err := s.runRepo.GetRunStep(ctx, stepID)
