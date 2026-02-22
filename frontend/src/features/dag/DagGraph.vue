@@ -32,7 +32,7 @@ const nodeTypes: Record<string, any> = {
 </script>
 
 <template>
-  <div class="dag-graph-container h-full">
+  <div class="dag-graph-container flex h-full flex-col">
     <div v-if="isLoading" class="flex items-center justify-center h-full">
       <Skeleton width="100%" height="100%" />
     </div>
@@ -50,7 +50,7 @@ const nodeTypes: Record<string, any> = {
       :edges="edges"
       :node-types="nodeTypes"
       fit-view-on-init
-      class="h-full"
+      class="flex-1"
     >
       <Controls />
       <MiniMap />
@@ -61,5 +61,6 @@ const nodeTypes: Record<string, any> = {
 <style scoped>
 .dag-graph-container {
   min-height: 400px;
+  height: 100%;
 }
 </style>

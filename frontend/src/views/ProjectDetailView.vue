@@ -76,7 +76,7 @@ watch(
 </script>
 
 <template>
-  <div class="flex flex-col">
+  <div class="flex h-full flex-col">
     <!-- Header -->
     <div class="flex items-center gap-3 border-b border-surface-200 px-6 py-4">
       <Button
