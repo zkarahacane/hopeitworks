@@ -27,6 +27,7 @@ const tabs = [
   { label: 'Pipeline', icon: 'pi pi-cog', route: 'project-pipeline' },
   { label: 'Templates', icon: 'pi pi-file', route: 'project-templates' },
   { label: 'Costs', icon: 'pi pi-dollar', route: 'project-costs' },
+  { label: 'Settings', icon: 'pi pi-sliders-h', route: 'project-settings' },
   { label: 'Notifications', icon: 'pi pi-bell', route: 'project-notifications' },
 ]
 

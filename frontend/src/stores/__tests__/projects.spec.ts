@@ -4,11 +4,13 @@ import { useProjectsStore } from '../projects'
 
 const mockGet = vi.fn()
 const mockPost = vi.fn()
+const mockPut = vi.fn()
 
 vi.mock('@/api/client', () => ({
   apiClient: {
     GET: (...args: unknown[]) => mockGet(...args),
     POST: (...args: unknown[]) => mockPost(...args),
+    PUT: (...args: unknown[]) => mockPut(...args),
   },
 }))
 
@@ -17,6 +19,7 @@ describe('useProjectsStore', () => {
     setActivePinia(createPinia())
     mockGet.mockReset()
     mockPost.mockReset()
+    mockPut.mockReset()
   })
 
   it('starts with default state', () => {
@@ -197,5 +200,106 @@ describe('useProjectsStore', () => {
 
     const store = useProjectsStore()
     await expect(store.createProject({ name: 'Test' })).rejects.toThrow('Network failure')
+  })
+
+  it('createProject passes new fields (repo_url, git_provider, agent_runtime, default_model) to API', async () => {
+    const createdProject = {
+      id: 'p2',
+      name: 'Full Project',
+      description: 'Desc',
+      repo_url: 'https://github.com/org/repo',
+      git_provider: 'github',
+      agent_runtime: 'docker',
+      default_model: 'claude-opus-4-5',
+      owner_id: 'u1',
+      created_at: '2026-02-22T10:00:00Z',
+      updated_at: '2026-02-22T10:00:00Z',
+    }
+
+    mockPost.mockResolvedValue({ data: createdProject, error: undefined })
+
+    const store = useProjectsStore()
+    const result = await store.createProject({
+      name: 'Full Project',
+      description: 'Desc',
+      repo_url: 'https://github.com/org/repo',
+      git_provider: 'github',
+      agent_runtime: 'docker',
+      default_model: 'claude-opus-4-5',
+    })
+
+    expect(result).toEqual(createdProject)
+    expect(mockPost).toHaveBeenCalledWith('/projects', {
+      body: {
+        name: 'Full Project',
+        description: 'Desc',
+        repo_url: 'https://github.com/org/repo',
+        git_provider: 'github',
+        agent_runtime: 'docker',
+        default_model: 'claude-opus-4-5',
+      },
+    })
+  })
+
+  it('updateProject returns updated project on success', async () => {
+    const updatedProject = {
+      id: 'p1',
+      name: 'Updated Project',
+      description: 'Updated desc',
+      repo_url: 'https://github.com/org/updated-repo',
+      git_provider: 'github',
+      agent_runtime: 'docker',
+      default_model: 'claude-opus-4-5',
+      owner_id: 'u1',
+      created_at: '2026-02-16T10:00:00Z',
+      updated_at: '2026-02-22T12:00:00Z',
+    }
+
+    mockPut.mockResolvedValue({ data: updatedProject, error: undefined })
+
+    const store = useProjectsStore()
+    const result = await store.updateProject('p1', {
+      name: 'Updated Project',
+      description: 'Updated desc',
+      repo_url: 'https://github.com/org/updated-repo',
+      git_provider: 'github',
+      agent_runtime: 'docker',
+      default_model: 'claude-opus-4-5',
+    })
+
+    expect(result).toEqual(updatedProject)
+    expect(mockPut).toHaveBeenCalledWith('/projects/{id}', {
+      params: { path: { id: 'p1' } },
+      body: {
+        name: 'Updated Project',
+        description: 'Updated desc',
+        repo_url: 'https://github.com/org/updated-repo',
+        git_provider: 'github',
+        agent_runtime: 'docker',
+        default_model: 'claude-opus-4-5',
+      },
+    })
+  })
+
+  it('updateProject throws with API error message', async () => {
+    mockPut.mockResolvedValue({
+      data: undefined,
+      error: { error: { code: 'NOT_FOUND', message: 'Project not found' } },
+    })
+
+    const store = useProjectsStore()
+    await expect(store.updateProject('p999', { name: 'X' })).rejects.toThrow('Project not found')
+  })
+
+  it('updateProject throws fallback message when API error has no message', async () => {
+    mockPut.mockResolvedValue({
+      data: undefined,
+      error: { error: { code: 'INTERNAL' } },
+    })
+
+    const store = useProjectsStore()
+    await expect(store.updateProject('p1', { name: 'X' })).rejects.toThrow(
+      'Failed to update project',
+    )
   })
 })

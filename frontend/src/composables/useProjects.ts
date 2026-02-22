@@ -22,6 +22,7 @@ export function useProjects() {
   }
 
   const createProject = useAsyncAction(store.createProject)
+  const updateProject = useAsyncAction(store.updateProject)
 
   return {
     projects: computed(() => store.items),
@@ -31,5 +32,6 @@ export function useProjects() {
     fetchProjects,
     retry,
     createProject,
+    updateProject,
   }
 }
