@@ -1,7 +1,22 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
-import { Editor } from '@guolao/vue-monaco-editor'
-import type * as monacoEditor from 'monaco-editor'
+import { ref, watch, onMounted, onBeforeUnmount, shallowRef } from 'vue'
+import * as monaco from 'monaco-editor'
+import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
+import jsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker'
+import cssWorker from 'monaco-editor/esm/vs/language/css/css.worker?worker'
+import htmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker'
+import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
+
+/** Configure Monaco web workers for Vite bundling */
+self.MonacoEnvironment = {
+  getWorker(_: unknown, label: string) {
+    if (label === 'json') return new jsonWorker()
+    if (label === 'css' || label === 'scss' || label === 'less') return new cssWorker()
+    if (label === 'html' || label === 'handlebars' || label === 'razor') return new htmlWorker()
+    if (label === 'typescript' || label === 'javascript') return new tsWorker()
+    return new editorWorker()
+  },
+}
 
 interface Props {
   modelValue: string
@@ -18,22 +33,65 @@ const emit = defineEmits<{
   'update:modelValue': [value: string]
 }>()
 
-const editorInstance = ref<monacoEditor.editor.IStandaloneCodeEditor | null>(null)
-const monacoInstance = ref<typeof monacoEditor | null>(null)
+const container = ref<HTMLDivElement | null>(null)
+const editorInstance = shallowRef<monaco.editor.IStandaloneCodeEditor | null>(null)
 
-const editorOptions = {
-  readOnly: props.readonly,
-  minimap: { enabled: false },
-  wordWrap: 'on' as const,
-  automaticLayout: true,
-  scrollBeyondLastLine: false,
-  fontSize: 14,
-  lineNumbers: 'on' as const,
-  renderWhitespace: 'boundary' as const,
-  tabSize: 2,
-}
+/**
+ * Guard flag to prevent emit loops.
+ * When we programmatically set model content (e.g. from prop sync),
+ * we set this flag so the onDidChangeModelContent handler skips the emit.
+ */
+let suppressChangeEvent = false
 
-/** Update readonly option when the prop changes */
+onMounted(() => {
+  if (!container.value) return
+
+  const editor = monaco.editor.create(container.value, {
+    value: props.modelValue ?? '',
+    language: props.language,
+    theme: 'vs-dark',
+    readOnly: props.readonly,
+    minimap: { enabled: false },
+    wordWrap: 'on',
+    automaticLayout: true,
+    scrollBeyondLastLine: false,
+    fontSize: 14,
+    lineNumbers: 'on',
+    renderWhitespace: 'boundary',
+    tabSize: 2,
+  })
+
+  editorInstance.value = editor
+
+  editor.onDidChangeModelContent(() => {
+    if (suppressChangeEvent) return
+    const value = editor.getValue()
+    if (value !== props.modelValue) {
+      emit('update:modelValue', value)
+    }
+  })
+})
+
+onBeforeUnmount(() => {
+  editorInstance.value?.dispose()
+  editorInstance.value = null
+})
+
+/** Sync external prop changes into the editor (e.g. template switch) */
+watch(
+  () => props.modelValue,
+  (newVal) => {
+    const editor = editorInstance.value
+    if (!editor) return
+    const currentValue = editor.getValue()
+    if (newVal !== currentValue) {
+      suppressChangeEvent = true
+      editor.setValue(newVal ?? '')
+      suppressChangeEvent = false
+    }
+  },
+)
+
 watch(
   () => props.readonly,
   (readOnly) => {
@@ -41,46 +99,46 @@ watch(
   },
 )
 
-function handleMount(editor: monacoEditor.editor.IStandaloneCodeEditor, monaco: typeof monacoEditor) {
-  editorInstance.value = editor
-  monacoInstance.value = monaco
-}
+watch(
+  () => props.language,
+  (language) => {
+    const model = editorInstance.value?.getModel()
+    if (model && language) {
+      monaco.editor.setModelLanguage(model, language)
+    }
+  },
+)
 
-function handleChange(value: string | undefined) {
-  emit('update:modelValue', value ?? '')
-}
-
-/** Insert text at the current cursor position */
+/** Insert text at the current cursor position without triggering infinite loops */
 function insertAtCursor(text: string) {
   const editor = editorInstance.value
-  const monaco = monacoInstance.value
-  if (!editor || !monaco) return
+  if (!editor) return
+
+  editor.focus()
 
   const selection = editor.getSelection()
   if (!selection) return
 
-  const range = new monaco.Range(
-    selection.startLineNumber,
-    selection.startColumn,
-    selection.endLineNumber,
-    selection.endColumn,
-  )
+  const op: monaco.editor.IIdentifiedSingleEditOperation = {
+    range: selection,
+    text,
+    forceMoveMarkers: true,
+  }
 
-  editor.executeEdits('', [{ range, text, forceMoveMarkers: true }])
-  editor.focus()
+  editor.executeEdits('insertAtCursor', [op])
+
+  // Move cursor to end of inserted text
+  const endPosition = editor.getModel()?.getPositionAt(
+    editor.getModel()!.getOffsetAt(selection.getStartPosition()) + text.length,
+  )
+  if (endPosition) {
+    editor.setPosition(endPosition)
+  }
 }
 
 defineExpose({ insertAtCursor })
 </script>
 
 <template>
-  <Editor
-    :value="modelValue"
-    :language="language"
-    theme="vs-dark"
-    :options="editorOptions"
-    height="100%"
-    @mount="handleMount"
-    @change="handleChange"
-  />
+  <div ref="container" class="h-full w-full" />
 </template>

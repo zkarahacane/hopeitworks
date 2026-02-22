@@ -168,15 +168,17 @@ test.describe('Template Editor', () => {
       await page.goto(`/projects/${PROJECT_ID}/templates/t1`)
 
       await expect(page.getByText('Context Variables')).toBeVisible()
+      // Use button role selectors to target sidebar buttons specifically,
+      // avoiding strict mode violations when Monaco editor also renders the same text
       await expect(page.getByRole('button', { name: '{{story_key}} Unique story' })).toBeVisible()
-      await expect(page.getByText('{{story_title}}')).toBeVisible()
-      await expect(page.getByText('{{story_objective}}')).toBeVisible()
-      await expect(page.getByText('{{target_files}}')).toBeVisible()
-      await expect(page.getByText('{{acceptance_criteria}}')).toBeVisible()
-      await expect(page.getByText('{{error_context}}')).toBeVisible()
-      await expect(page.getByText('{{diff_content}}')).toBeVisible()
-      await expect(page.getByText('{{branch_name}}')).toBeVisible()
-      await expect(page.getByText('{{repo_url}}')).toBeVisible()
+      await expect(page.getByRole('button', { name: '{{story_title}} Story title' })).toBeVisible()
+      await expect(page.getByRole('button', { name: '{{story_objective}} Story objective' })).toBeVisible()
+      await expect(page.getByRole('button', { name: '{{target_files}} Array of target' })).toBeVisible()
+      await expect(page.getByRole('button', { name: '{{acceptance_criteria}} Story acceptance' })).toBeVisible()
+      await expect(page.getByRole('button', { name: '{{error_context}} Error output' })).toBeVisible()
+      await expect(page.getByRole('button', { name: '{{diff_content}} Git diff' })).toBeVisible()
+      await expect(page.getByRole('button', { name: '{{branch_name}} Git branch' })).toBeVisible()
+      await expect(page.getByRole('button', { name: '{{repo_url}} Git repository' })).toBeVisible()
     })
   })
 
