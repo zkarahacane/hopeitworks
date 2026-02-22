@@ -188,7 +188,7 @@ development_status:
 
   # Post-MVP: Agent Runtime & E2E Pipeline
   post-mvp-agent-runtime: backlog
-  runtime-1-agent-docker-image: ready-for-dev
+  runtime-1-agent-docker-image: done
   runtime-2-action-wiring-and-action-type-mapping: ready-for-dev
   runtime-3-test-project-postgres-e2e-validation: ready-for-dev
 
@@ -839,7 +839,7 @@ parallel_waves:
     stories:
       - key: runtime-1-agent-docker-image
         domain: shared
-        status: ready-for-dev
+        status: done
       - key: runtime-2-action-wiring-and-action-type-mapping
         domain: back
         status: ready-for-dev

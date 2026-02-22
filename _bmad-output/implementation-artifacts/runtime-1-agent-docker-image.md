@@ -1,6 +1,6 @@
 # Story runtime-1: Agent Docker Image and Entrypoint
 
-**Status:** ready-for-dev
+**Status:** done
 **Branch:** `feat/runtime-1-agent-docker-image`
 **Commit scope:** `agent`
 
@@ -228,3 +228,9 @@ The **runtime agent image** (`agent/Dockerfile`) is intentionally minimal:
 - `scripts/entrypoint.sh` — reference BMAD entrypoint (pipeline mode, not for runtime)
 - `backend/internal/adapter/action/agent_run.go` — how the image is launched (env vars, container opts)
 - `backend/internal/adapter/docker/` — DockerContainerManager and DockerLogStreamer implementations
+
+---
+
+## Change Log
+
+- Merged to develop via PR #134 (2026-02-22)
