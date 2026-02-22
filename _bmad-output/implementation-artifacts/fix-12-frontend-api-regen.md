@@ -1,6 +1,6 @@
 # Story fix-12: [FRONT] Regenerate API schema and fix type safety issues
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 

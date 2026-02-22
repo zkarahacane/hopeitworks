@@ -1,4 +1,4 @@
-# generated: 2026-02-21
+# generated: 2026-02-22
 # project: hopeitworks
 # project_key: NOKEY
 # tracking_system: file-system
@@ -33,7 +33,7 @@
 # - SM typically creates next story after previous one is 'done' to incorporate learnings
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
-generated: 2026-02-21
+generated: 2026-02-22
 project: hopeitworks
 project_key: NOKEY
 tracking_system: file-system
@@ -178,14 +178,13 @@ development_status:
   refactor-3-db-migration-workload-handle-cleanup: done
 
   # Post-MVP: E2E Usability Fixes
-  post-mvp-e2e-usability: backlog
-
-  fix-9-backend-wiring: review
-  fix-10-openapi-project-fields: review
-  fix-11-missing-service-methods: dev-complete
-  fix-12-frontend-api-regen: backlog
-  fix-13-project-repo-form: backlog
-  fix-14-runs-dashboard-routing: backlog
+  post-mvp-e2e-usability: done
+  fix-9-backend-wiring: done
+  fix-10-openapi-project-fields: done
+  fix-11-missing-service-methods: done
+  fix-12-frontend-api-regen: done
+  fix-13-project-repo-form: done
+  fix-14-runs-dashboard-routing: done
 
 # PARALLEL EXECUTION WAVES
 # =================
@@ -751,13 +750,13 @@ parallel_waves:
     stories:
       - key: fix-9-backend-wiring
         domain: back
-        status: backlog
+        status: done
       - key: fix-10-openapi-project-fields
         domain: shared
-        status: backlog
+        status: done
       - key: fix-11-missing-service-methods
         domain: back
-        status: backlog
+        status: done
     container_count: 3
     depends_on: [wave-21]
     notes: "Backend fixes: server.go delegations, PipelineExecutor nil, auth role, OpenAPI project fields, missing service methods — all parallel"
@@ -767,15 +766,15 @@ parallel_waves:
     stories:
       - key: fix-12-frontend-api-regen
         domain: front
-        status: backlog
+        status: done
         explicit_deps: [fix-10-openapi-project-fields]
       - key: fix-13-project-repo-form
         domain: front
-        status: backlog
+        status: done
         explicit_deps: [fix-10-openapi-project-fields, fix-12-frontend-api-regen]
       - key: fix-14-runs-dashboard-routing
         domain: front
-        status: backlog
+        status: done
     container_count: 3
     depends_on: [wave-22]
     notes: "Frontend fixes: regen API types, project repo form, runs page + dashboard + sidebar — all parallel"
