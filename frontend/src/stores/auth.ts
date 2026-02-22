@@ -34,7 +34,7 @@ export const useAuthStore = defineStore('auth', {
           body: { email, password },
         })
         if (apiError || !data) {
-          this.error = (apiError as { message?: string })?.message ?? 'Invalid email or password'
+          this.error = (apiError as { error?: { message?: string } })?.error?.message ?? 'Invalid email or password'
           return false
         }
         this.user = { ...data, role: data.role ?? 'user' } as User

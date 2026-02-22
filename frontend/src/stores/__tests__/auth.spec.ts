@@ -44,7 +44,7 @@ describe('useAuthStore', () => {
     it('returns false and sets error on API error', async () => {
       mockPost.mockResolvedValue({
         data: undefined,
-        error: { message: 'Invalid credentials' },
+        error: { error: { message: 'Invalid credentials' } },
       })
 
       const store = useAuthStore()
