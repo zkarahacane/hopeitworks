@@ -171,6 +171,12 @@ development_status:
   feat-5-user-profile-page: done
   feat-6-reset-password-pages: done
 
+  # Post-MVP: Runner Abstraction Refactoring
+  post-mvp-runner-refactor: done
+  refactor-1-runner-interface-agent-spec-model: done
+  refactor-2-migrate-consumers-to-runner: done
+  refactor-3-db-migration-workload-handle-cleanup: done
+
   # Post-MVP: E2E Usability Fixes
   post-mvp-e2e-usability: backlog
 
@@ -773,3 +779,39 @@ parallel_waves:
     container_count: 3
     depends_on: [wave-22]
     notes: "Frontend fixes: regen API types, project repo form, runs page + dashboard + sidebar — all parallel"
+
+  # =====================================================
+  # PHASE 8: RUNNER ABSTRACTION (Container → Runner refactoring)
+  # =====================================================
+
+  wave-24:
+    phase: 8-runner-refactor
+    stories:
+      - key: refactor-1-runner-interface-agent-spec-model
+        domain: back
+        status: done
+    container_count: 1
+    depends_on: [wave-23]
+    notes: "Create Runner interface (4 methods), AgentSpec model, Docker adapter — additive, no breaking changes"
+
+  wave-25:
+    phase: 8-runner-refactor
+    stories:
+      - key: refactor-2-migrate-consumers-to-runner
+        domain: back
+        status: done
+        explicit_deps: [refactor-1-runner-interface-agent-spec-model]
+    container_count: 1
+    depends_on: [wave-24]
+    notes: "Migrate agent_run, orphan_cleaner, timeout_enforcer to Runner — delete ContainerManager"
+
+  wave-26:
+    phase: 8-runner-refactor
+    stories:
+      - key: refactor-3-db-migration-workload-handle-cleanup
+        domain: back
+        status: done
+        explicit_deps: [refactor-2-migrate-consumers-to-runner]
+    container_count: 1
+    depends_on: [wave-25]
+    notes: "DB migration container_id → workload_handle, sqlc regen, final cleanup"
