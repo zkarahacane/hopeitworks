@@ -46,4 +46,6 @@ var ValidActionTypes = map[string]bool{
 	"merge":     true,
 	"test":      true,
 	"custom":    true,
+	"ci_poll":   true,
+	"hitl_gate": true,
 }
