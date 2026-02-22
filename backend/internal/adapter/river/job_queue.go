@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
+	"github.com/riverqueue/river/rivermigrate"
 
 	"github.com/zakari/hopeitworks/backend/internal/domain/port"
 )
@@ -23,7 +24,16 @@ type JobQueue struct {
 
 // NewJobQueue creates a new JobQueue.
 // workers must have all job types registered before calling NewClient.
+// River tables are auto-migrated on creation.
 func NewJobQueue(pool *pgxpool.Pool, workers *river.Workers) (*JobQueue, error) {
+	migrator, err := rivermigrate.New(riverpgxv5.New(pool), nil)
+	if err != nil {
+		return nil, fmt.Errorf("create river migrator: %w", err)
+	}
+	if _, err := migrator.Migrate(context.Background(), rivermigrate.DirectionUp, nil); err != nil {
+		return nil, fmt.Errorf("run river migrations: %w", err)
+	}
+
 	client, err := river.NewClient(riverpgxv5.New(pool), &river.Config{
 		Queues: map[string]river.QueueConfig{
 			river.QueueDefault: {MaxWorkers: 10},
