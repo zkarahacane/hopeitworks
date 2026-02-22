@@ -8,8 +8,8 @@ export interface Project {
   name: string
   description?: string
   repo_url?: string
-  git_provider?: string
-  agent_runtime?: string
+  git_provider?: 'github' | 'gitlab' | 'bitbucket'
+  agent_runtime?: 'docker' | 'kubernetes'
   default_model?: string
   owner_id: string
   circuit_breaker_active?: boolean
@@ -28,20 +28,20 @@ export interface Pagination {
 export interface CreateProjectPayload {
   name: string
   description?: string
-  repo_url?: string
-  git_provider?: string
-  agent_runtime?: string
-  default_model?: string
+  repo_url?: string | null
+  git_provider?: 'github' | 'gitlab' | 'bitbucket'
+  agent_runtime?: 'docker' | 'kubernetes'
+  default_model?: string | null
 }
 
 /** Payload for updating an existing project */
 export interface UpdateProjectPayload {
   name?: string
   description?: string
-  repo_url?: string
-  git_provider?: string
-  agent_runtime?: string
-  default_model?: string
+  repo_url?: string | null
+  git_provider?: 'github' | 'gitlab' | 'bitbucket'
+  agent_runtime?: 'docker' | 'kubernetes'
+  default_model?: string | null
 }
 
 /** Parameters for fetching paginated project lists */
