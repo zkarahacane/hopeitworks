@@ -5,7 +5,7 @@ export interface User {
   id: string
   email: string
   name: string
-  role: 'admin' | 'member'
+  role: 'admin' | 'user'
   created_at?: string
   updated_at?: string
 }
@@ -30,19 +30,14 @@ export const useAuthStore = defineStore('auth', {
       this.loading = true
       this.error = null
       try {
-        const res = await fetch('/api/v1/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ email, password }),
+        const { data, error: apiError } = await apiClient.POST('/auth/login', {
+          body: { email, password },
         })
-        if (!res.ok) {
-          const body = await res.json().catch(() => null)
-          this.error = body?.message ?? 'Invalid email or password'
+        if (apiError || !data) {
+          this.error = (apiError as { error?: { message?: string } })?.error?.message ?? 'Invalid email or password'
           return false
         }
-        const json = await res.json()
-        this.user = { ...json, role: json.role ?? 'member' } as User
+        this.user = { ...data, role: data.role ?? 'user' } as User
         return true
       } catch {
         this.error = 'Network error. Please try again.'
@@ -53,10 +48,7 @@ export const useAuthStore = defineStore('auth', {
     },
 
     async logout(): Promise<void> {
-      await fetch('/api/v1/auth/logout', {
-        method: 'POST',
-        credentials: 'include',
-      }).catch(() => {})
+      await apiClient.POST('/auth/logout', {}).catch(() => {})
       this.user = null
       this.error = null
     },
@@ -65,10 +57,8 @@ export const useAuthStore = defineStore('auth', {
       this.loading = true
       this.error = null
       try {
-        await fetch('/api/v1/auth/forgot-password', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email }),
+        await apiClient.POST('/auth/forgot-password', {
+          body: { email },
         })
         // Always return true — never disclose whether email is registered
         return true
@@ -84,15 +74,13 @@ export const useAuthStore = defineStore('auth', {
       this.loading = true
       this.error = null
       try {
-        const res = await fetch('/api/v1/auth/reset-password', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token, password }),
+        const { error: apiError } = await apiClient.POST('/auth/reset-password', {
+          body: { token, password },
         })
-        if (!res.ok) {
-          const body = await res.json().catch(() => null)
+        if (apiError) {
           this.error =
-            body?.error?.message ?? 'Token expired or invalid. Please request a new link.'
+            (apiError as { error?: { message?: string } })?.error?.message ??
+            'Token expired or invalid. Please request a new link.'
           return false
         }
         return true
@@ -107,15 +95,8 @@ export const useAuthStore = defineStore('auth', {
     async checkAuth(): Promise<void> {
       this.loading = true
       try {
-        const res = await fetch('/api/v1/auth/me', {
-          credentials: 'include',
-        })
-        if (res.ok) {
-          const json = await res.json()
-          this.user = { ...json, role: json.role ?? 'member' } as User
-        } else {
-          this.user = null
-        }
+        const { data } = await apiClient.GET('/auth/me')
+        this.user = data ? { ...data, role: data.role ?? 'user' } as User : null
       } catch {
         this.user = null
       } finally {
@@ -132,7 +113,7 @@ export const useAuthStore = defineStore('auth', {
           this.error = 'Failed to load profile'
           return
         }
-        this.user = { ...data, role: data.role ?? 'member' } as User
+        this.user = { ...data, role: data.role ?? 'user' } as User
       } catch {
         this.error = 'Network error. Please try again.'
       } finally {
@@ -147,7 +128,7 @@ export const useAuthStore = defineStore('auth', {
       if (apiError || !data) {
         throw new Error('Failed to update profile')
       }
-      const updated = { ...data, role: data.role ?? 'member' } as User
+      const updated = { ...data, role: data.role ?? 'user' } as User
       this.user = updated
       return updated
     },

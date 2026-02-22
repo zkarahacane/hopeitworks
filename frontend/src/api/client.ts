@@ -3,9 +3,13 @@ import type { paths } from './schema'
 import router from '@/router'
 
 const authMiddleware: Middleware = {
-  async onResponse({ response }) {
+  async onResponse({ request, response }) {
     if (response.status === 401) {
-      await router.push({ name: 'login' })
+      const url = new URL(request.url, window.location.origin)
+      // Skip redirect for auth endpoints — those 401s are handled by callers
+      if (!url.pathname.startsWith('/api/v1/auth/')) {
+        await router.push({ name: 'login' })
+      }
     }
     return response
   },

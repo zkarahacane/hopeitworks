@@ -21,6 +21,7 @@ test.describe('App Shell Layout', () => {
           id: '1',
           email: 'test@test.com',
           name: 'Test',
+          role: 'user',
         }),
       })
     })

@@ -7,7 +7,7 @@ test.describe('Login Page', () => {
       await route.fulfill({
         status: 401,
         contentType: 'application/json',
-        body: JSON.stringify({ message: 'Unauthorized' }),
+        body: JSON.stringify({ error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } }),
       })
     })
   })
@@ -86,6 +86,7 @@ test.describe('Login Page', () => {
           id: '1',
           email: 'test@test.com',
           name: 'Test User',
+          role: 'user',
         }),
       })
     })
@@ -109,7 +110,7 @@ test.describe('Login Page', () => {
       await route.fulfill({
         status: 401,
         contentType: 'application/json',
-        body: JSON.stringify({ message: 'Invalid credentials' }),
+        body: JSON.stringify({ error: { code: 'UNAUTHORIZED', message: 'Invalid credentials' } }),
       })
     })
 
@@ -139,6 +140,7 @@ test.describe('Login Page', () => {
           id: '1',
           email: 'test@test.com',
           name: 'Test User',
+          role: 'user',
         }),
       })
     })
@@ -194,6 +196,7 @@ test.describe('Login Page', () => {
           id: '1',
           email: 'test@test.com',
           name: 'Test User',
+          role: 'user',
         }),
       })
     })
@@ -228,6 +231,7 @@ test.describe('Login Page', () => {
           id: '1',
           email: 'test@test.com',
           name: 'Test User',
+          role: 'user',
         }),
       })
     })

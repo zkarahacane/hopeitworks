@@ -29,7 +29,7 @@ const mockUsers = [
     id: '2',
     email: 'user@example.com',
     name: 'Regular User',
-    role: 'member',
+    role: 'user',
     created_at: '2026-01-16T10:00:00Z',
     updated_at: '2026-01-16T10:00:00Z',
   },
@@ -83,7 +83,7 @@ describe('useUsersStore', () => {
 
   it('createUser calls register endpoint and refreshes', async () => {
     mockPost.mockResolvedValue({
-      data: { id: '3', email: 'new@example.com', name: 'New', role: 'member' },
+      data: { id: '3', email: 'new@example.com', name: 'New', role: 'user' },
       error: undefined,
     })
     mockGet.mockResolvedValue({

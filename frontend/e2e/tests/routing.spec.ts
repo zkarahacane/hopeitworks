@@ -12,6 +12,7 @@ test.describe('Application Routing', () => {
             id: '1',
             email: 'test@test.com',
             name: 'Test User',
+            role: 'user',
           }),
         })
       })
@@ -85,6 +86,7 @@ test.describe('Application Routing', () => {
             id: '1',
             email: 'test@test.com',
             name: 'Test User',
+            role: 'user',
           }),
         })
       })
@@ -111,7 +113,7 @@ test.describe('Application Routing', () => {
         await route.fulfill({
           status: 401,
           contentType: 'application/json',
-          body: JSON.stringify({ message: 'Unauthorized' }),
+          body: JSON.stringify({ error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } }),
         })
       })
     })

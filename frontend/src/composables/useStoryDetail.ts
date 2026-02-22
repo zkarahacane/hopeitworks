@@ -15,13 +15,11 @@ export function useStoryDetail(projectId: string, storyId: string) {
     execute,
   } = useAsyncAction(async () => {
     const { data, error: apiError } = await apiClient.GET(
-      '/projects/{projectId}/stories/{storyId}' as never,
-      {
-        params: { path: { projectId, storyId } },
-      } as never,
+      '/projects/{projectId}/stories/{storyId}',
+      { params: { path: { projectId, storyId } } },
     )
     if (apiError) throw new Error('Failed to load story')
-    return data as unknown as Story
+    return data as Story
   })
 
   async function fetchStory() {

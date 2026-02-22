@@ -26,7 +26,8 @@ export function setupAuthGuard(router: Router) {
       return { path: '/login', query: { redirect: to.fullPath } }
     }
     if (to.path === '/login' && auth.isAuthenticated) {
-      return { path: '/' }
+      const redirect = to.query.redirect as string
+      return { path: redirect || '/' }
     }
   })
 }
