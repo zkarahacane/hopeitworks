@@ -25,6 +25,29 @@ test.describe('App Shell Layout', () => {
       })
     })
 
+    // Mock Dashboard API calls (Dashboard loads projects, HITL requests, and runs on mount)
+    await page.route('**/api/v1/projects*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: [],
+          pagination: { total: 0, page: 1, per_page: 5 },
+        }),
+      })
+    })
+
+    await page.route('**/api/v1/hitl-requests*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: [],
+          pagination: { total: 0, page: 1, per_page: 20 },
+        }),
+      })
+    })
+
     // Navigate to the root route (Dashboard)
     await page.goto('/')
   })
