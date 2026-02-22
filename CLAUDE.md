@@ -378,14 +378,14 @@ Both sides generate types and clients from the same OpenAPI spec. Never manually
 | Epic | Description | Status |
 |------|-------------|--------|
 | Epic 1 | Project scaffolding & foundation | IN PROGRESS |
-| Epic 2 | Story board & management | NOT STARTED |
-| Epic 3 | Pipeline execution engine | NOT STARTED |
-| Epic 4 | Agent runtime & container management | NOT STARTED |
+| Epic 2 | Story board & management | IN PROGRESS |
+| Epic 3 | Pipeline execution engine | IN PROGRESS |
+| Epic 4 | Agent runtime & container management | IN PROGRESS |
 | Epic 5 | DAG scheduler & epic runs | NOT STARTED |
 | Epic 6 | HITL gates & approval workflow | NOT STARTED |
 | Epic 7 | Pipeline configuration & templates | NOT STARTED |
-| Epic 8 | Real-time monitoring & SSE | NOT STARTED |
-| Epic 9 | Cost tracking & observability | NOT STARTED |
+| Epic 8 | Real-time monitoring & SSE | IN PROGRESS |
+| Epic 9 | Cost tracking & observability | IN PROGRESS |
 | Epic 10 | Reference project & validation | NOT STARTED |
 
 ### Completed
@@ -394,6 +394,18 @@ Both sides generate types and clients from the same OpenAPI spec. Never manually
 - Story 1-2: OpenAPI 3.0 spec + code generation pipeline
 - Story 1-7: Vue 3 scaffolding + PrimeVue 4 + Tailwind CSS v4
 - Story 1-14: CLAUDE.md files for agent scoping
+- Story 2-1: Epic CRUD API and board view
+- Story 2-2: Stories CRUD API with status filtering
+- Story 3-10: Run launch API endpoint (single story)
+- Story 3-11: Pipeline executor with step sequencing
+- Story 4-1: Docker agent runtime with container lifecycle
+- Story 4-2: Agent entrypoint with Claude Code integration
+- Story 8-1: SSE event infrastructure (Postgres NOTIFY + SSE handler)
+- Story 8-2: Run/step status SSE events and frontend wiring
+- Auth: Login, logout, forgot/reset password, user profile
+- Admin: User management CRUD
+- Pipeline runtime fixes: River timeout, OAuth auth, healthcheck, template mount
+- Pipeline wiring: story_key in Run API, story status transitions on run complete
 
 ## Known Constraints
 
