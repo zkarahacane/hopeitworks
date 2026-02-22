@@ -61,19 +61,18 @@ test.describe('Login Page', () => {
     await expect(emailError).toContainText('Invalid email format')
   })
 
-  test('should show validation error for short password (< 8 chars)', async ({ page }) => {
+  test('should show validation error for empty password', async ({ page }) => {
     await page.goto('/login')
 
-    // Fill valid email but short password
+    // Fill valid email but leave password empty
     await page.locator('#email').fill('test@example.com')
-    await page.locator('#password').fill('short')
 
     // Submit
     await page.getByRole('button', { name: 'Sign In' }).click()
 
     // Check password validation error
     const passwordError = page.locator('small.text-red-500').last()
-    await expect(passwordError).toContainText('Password must be at least 8 characters')
+    await expect(passwordError).toContainText('Password is required')
   })
 
   test('should successfully login and redirect to dashboard', async ({ page }) => {

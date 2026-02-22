@@ -70,7 +70,7 @@ test.describe('Template Editor', () => {
 
       // Variable sidebar visible
       await expect(page.getByText('Context Variables')).toBeVisible()
-      await expect(page.getByText('{{story_key}}')).toBeVisible()
+      await expect(page.getByRole('button', { name: '{{story_key}} Unique story' })).toBeVisible()
     })
 
     test('shows empty editor for create mode', async ({ page }) => {
@@ -168,7 +168,7 @@ test.describe('Template Editor', () => {
       await page.goto(`/projects/${PROJECT_ID}/templates/t1`)
 
       await expect(page.getByText('Context Variables')).toBeVisible()
-      await expect(page.getByText('{{story_key}}')).toBeVisible()
+      await expect(page.getByRole('button', { name: '{{story_key}} Unique story' })).toBeVisible()
       await expect(page.getByText('{{story_title}}')).toBeVisible()
       await expect(page.getByText('{{story_objective}}')).toBeVisible()
       await expect(page.getByText('{{target_files}}')).toBeVisible()
