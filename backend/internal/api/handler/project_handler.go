@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -76,14 +75,12 @@ func (h *ProjectHandler) ListProjects(w http.ResponseWriter, r *http.Request, pa
 // CreateProject handles POST /projects.
 // Only admin users can create projects.
 func (h *ProjectHandler) CreateProject(w http.ResponseWriter, r *http.Request) {
-	if !middleware.IsAdmin(r.Context()) {
-		writeErrorResponse(w, errors.NewForbidden("Admin access required"))
+	if !requireAdmin(w, r) {
 		return
 	}
 
 	var req CreateProjectRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeErrorResponse(w, errors.NewValidation("body", "invalid JSON"))
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 
@@ -137,14 +134,12 @@ func (h *ProjectHandler) GetProject(w http.ResponseWriter, r *http.Request, id I
 // UpdateProject handles PUT /projects/{id}.
 // Only admin users can update projects.
 func (h *ProjectHandler) UpdateProject(w http.ResponseWriter, r *http.Request, id IdPath) {
-	if !middleware.IsAdmin(r.Context()) {
-		writeErrorResponse(w, errors.NewForbidden("Admin access required"))
+	if !requireAdmin(w, r) {
 		return
 	}
 
 	var req UpdateProjectRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeErrorResponse(w, errors.NewValidation("body", "invalid JSON"))
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 
@@ -182,8 +177,7 @@ func (h *ProjectHandler) UpdateProject(w http.ResponseWriter, r *http.Request, i
 // DeleteProject handles DELETE /projects/{id}.
 // Only admin users can delete projects.
 func (h *ProjectHandler) DeleteProject(w http.ResponseWriter, r *http.Request, id IdPath) {
-	if !middleware.IsAdmin(r.Context()) {
-		writeErrorResponse(w, errors.NewForbidden("Admin access required"))
+	if !requireAdmin(w, r) {
 		return
 	}
 
@@ -198,8 +192,7 @@ func (h *ProjectHandler) DeleteProject(w http.ResponseWriter, r *http.Request, i
 // ResetCircuitBreaker handles POST /projects/{id}/circuit-breaker/reset.
 // Only admin users can reset the circuit breaker.
 func (h *ProjectHandler) ResetCircuitBreaker(w http.ResponseWriter, r *http.Request, id IdPath) {
-	if !middleware.IsAdmin(r.Context()) {
-		writeErrorResponse(w, errors.NewForbidden("Admin access required"))
+	if !requireAdmin(w, r) {
 		return
 	}
 

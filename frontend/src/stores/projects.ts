@@ -2,6 +2,7 @@ import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import { apiClient } from '@/api/client'
 import type { Pagination } from '@/types/pagination'
+import { getApiErrorMessage } from '@/utils/apiError'
 
 export type { Pagination }
 
@@ -90,10 +91,7 @@ export const useProjectsStore = defineStore('projects', () => {
       body: payload,
     })
     if (apiError) {
-      const message =
-        (apiError as { error?: { message?: string } })?.error?.message ??
-        'Failed to create project'
-      throw new Error(message)
+      throw new Error(getApiErrorMessage(apiError, 'Failed to create project'))
     }
     return data as Project
   }
@@ -105,10 +103,7 @@ export const useProjectsStore = defineStore('projects', () => {
       body: payload,
     })
     if (apiError) {
-      const message =
-        (apiError as { error?: { message?: string } })?.error?.message ??
-        'Failed to update project'
-      throw new Error(message)
+      throw new Error(getApiErrorMessage(apiError, 'Failed to update project'))
     }
     return data as Project
   }

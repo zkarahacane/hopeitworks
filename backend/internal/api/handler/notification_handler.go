@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -39,8 +38,7 @@ func (h *NotificationHandler) ListNotificationConfigs(w http.ResponseWriter, r *
 // CreateNotificationConfig handles POST /projects/{projectId}/notifications.
 func (h *NotificationHandler) CreateNotificationConfig(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath) {
 	var req CreateNotificationConfigRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeErrorResponse(w, errors.NewValidation("body", "invalid JSON"))
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 
@@ -76,8 +74,7 @@ func (h *NotificationHandler) CreateNotificationConfig(w http.ResponseWriter, r 
 // UpdateNotificationConfig handles PUT /projects/{projectId}/notifications/{notificationId}.
 func (h *NotificationHandler) UpdateNotificationConfig(w http.ResponseWriter, r *http.Request, _ ProjectIdPath, notificationID NotificationIdPath) {
 	var req UpdateNotificationConfigRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeErrorResponse(w, errors.NewValidation("body", "invalid JSON"))
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 

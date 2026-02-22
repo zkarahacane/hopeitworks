@@ -43,10 +43,10 @@ func (s *ProjectService) Create(ctx context.Context, params CreateProjectParams)
 	if params.Name == "" {
 		return nil, errors.NewValidation("name", "is required")
 	}
-	if len(params.Name) > 255 {
+	if len(params.Name) > model.MaxNameLength {
 		return nil, errors.NewValidation("name", "must be 255 characters or less")
 	}
-	if params.Description != nil && len(*params.Description) > 1000 {
+	if params.Description != nil && len(*params.Description) > model.MaxProjectDescriptionLength {
 		return nil, errors.NewValidation("description", "must be 1000 characters or less")
 	}
 
@@ -141,13 +141,13 @@ func (s *ProjectService) Update(ctx context.Context, params UpdateProjectParams)
 		if *params.Name == "" {
 			return nil, errors.NewValidation("name", "must not be empty")
 		}
-		if len(*params.Name) > 255 {
+		if len(*params.Name) > model.MaxNameLength {
 			return nil, errors.NewValidation("name", "must be 255 characters or less")
 		}
 		existing.Name = *params.Name
 	}
 	if params.Description != nil {
-		if len(*params.Description) > 1000 {
+		if len(*params.Description) > model.MaxProjectDescriptionLength {
 			return nil, errors.NewValidation("description", "must be 1000 characters or less")
 		}
 		existing.Description = params.Description

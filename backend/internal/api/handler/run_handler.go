@@ -47,8 +47,7 @@ func (h *RunHandler) ListRunsByProject(w http.ResponseWriter, r *http.Request, p
 // CreateRun handles POST /projects/{projectId}/runs.
 func (h *RunHandler) CreateRun(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath) {
 	var req CreateRunRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeErrorResponse(w, errors.NewValidation("body", "invalid JSON"))
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 

@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { apiClient } from '@/api/client'
+import { getApiErrorMessage } from '@/utils/apiError'
 
 export interface User {
   id: string
@@ -34,7 +35,7 @@ export const useAuthStore = defineStore('auth', {
           body: { email, password },
         })
         if (apiError || !data) {
-          this.error = (apiError as { error?: { message?: string } })?.error?.message ?? 'Invalid email or password'
+          this.error = getApiErrorMessage(apiError, 'Invalid email or password')
           return false
         }
         this.user = { ...data, role: data.role ?? 'user' } as User
@@ -78,9 +79,7 @@ export const useAuthStore = defineStore('auth', {
           body: { token, password },
         })
         if (apiError) {
-          this.error =
-            (apiError as { error?: { message?: string } })?.error?.message ??
-            'Token expired or invalid. Please request a new link.'
+          this.error = getApiErrorMessage(apiError, 'Token expired or invalid. Please request a new link.')
           return false
         }
         return true

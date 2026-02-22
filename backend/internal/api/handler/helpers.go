@@ -6,9 +6,30 @@ import (
 
 	"github.com/google/uuid"
 	openapi_types "github.com/oapi-codegen/runtime/types"
+	"github.com/zakari/hopeitworks/backend/internal/api/middleware"
 	"github.com/zakari/hopeitworks/backend/internal/domain/model"
 	"github.com/zakari/hopeitworks/backend/pkg/errors"
 )
+
+// decodeJSONBody decodes the request body into dst and writes a validation
+// error response if the body contains invalid JSON. Returns true on success.
+func decodeJSONBody(w http.ResponseWriter, r *http.Request, dst interface{}) bool {
+	if err := json.NewDecoder(r.Body).Decode(dst); err != nil {
+		writeErrorResponse(w, errors.NewValidation("body", "invalid JSON"))
+		return false
+	}
+	return true
+}
+
+// requireAdmin checks whether the current user is an admin and writes a
+// forbidden error response if not. Returns true when the user is an admin.
+func requireAdmin(w http.ResponseWriter, r *http.Request) bool {
+	if !middleware.IsAdmin(r.Context()) {
+		writeErrorResponse(w, errors.NewForbidden("Admin access required"))
+		return false
+	}
+	return true
+}
 
 // paginationDefaults extracts page and perPage from optional pointer params,
 // defaulting to page=1 and perPage=20 when nil or non-positive.

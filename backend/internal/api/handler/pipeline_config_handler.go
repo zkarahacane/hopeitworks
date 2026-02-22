@@ -1,13 +1,11 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"github.com/google/uuid"
 	"gopkg.in/yaml.v3"
 
-	"github.com/zakari/hopeitworks/backend/internal/api/middleware"
 	"github.com/zakari/hopeitworks/backend/internal/domain/model"
 	"github.com/zakari/hopeitworks/backend/internal/domain/service"
 	"github.com/zakari/hopeitworks/backend/pkg/errors"
@@ -43,14 +41,12 @@ func (h *PipelineConfigHandler) GetPipelineConfig(w http.ResponseWriter, r *http
 // UpdatePipelineConfig handles PUT /projects/{projectId}/pipeline.
 // Only admin users can update pipeline configs.
 func (h *PipelineConfigHandler) UpdatePipelineConfig(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath) {
-	if !middleware.IsAdmin(r.Context()) {
-		writeErrorResponse(w, errors.NewForbidden("Admin access required"))
+	if !requireAdmin(w, r) {
 		return
 	}
 
 	var req UpdatePipelineConfigRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeErrorResponse(w, errors.NewValidation("body", "invalid JSON"))
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 

@@ -14,6 +14,7 @@ import Toast from 'primevue/toast'
 import { useAsyncAction } from '@/composables/useAsyncAction'
 import { useApprovalActions } from '@/features/approvals/composables/useApprovalActions'
 import { apiClient } from '@/api/client'
+import { getApiErrorMessage } from '@/utils/apiError'
 import DiffViewer from '@/features/approvals/DiffViewer.vue'
 
 const route = useRoute()
@@ -36,7 +37,7 @@ const fetchAction = useAsyncAction(async () => {
   const { data, error } = await apiClient.GET('/hitl-requests/by-step/{stepId}', {
     params: { path: { stepId: stepId.value } },
   })
-  if (error) throw new Error((error as { error?: { message?: string } }).error?.message ?? 'Failed to load review')
+  if (error) throw new Error(getApiErrorMessage(error, 'Failed to load review'))
   return data
 })
 

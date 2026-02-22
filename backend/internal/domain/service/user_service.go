@@ -78,7 +78,7 @@ func (s *UserService) Update(ctx context.Context, params UpdateUserParams) (*mod
 		if *params.Name == "" {
 			return nil, errors.NewValidation("name", "must not be empty")
 		}
-		if len(*params.Name) > 255 {
+		if len(*params.Name) > model.MaxNameLength {
 			return nil, errors.NewValidation("name", "must be 255 characters or less")
 		}
 		existing.Name = *params.Name
@@ -120,7 +120,7 @@ func (s *UserService) UpdateProfile(ctx context.Context, params UpdateProfilePar
 		if *params.Name == "" {
 			return nil, errors.NewValidation("name", "must not be empty")
 		}
-		if len(*params.Name) > 255 {
+		if len(*params.Name) > model.MaxNameLength {
 			return nil, errors.NewValidation("name", "must be 255 characters or less")
 		}
 		existing.Name = *params.Name

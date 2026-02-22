@@ -1,12 +1,13 @@
 import { useAsyncAction } from '@/composables/useAsyncAction'
 import { apiClient } from '@/api/client'
+import { getApiErrorMessage } from '@/utils/apiError'
 
 export function useApprovalActions() {
   const approveAction = useAsyncAction(async (hitlRequestId: string) => {
     const { data, error } = await apiClient.POST('/hitl-requests/{hitlRequestId}/approve', {
       params: { path: { hitlRequestId } },
     })
-    if (error) throw new Error((error as { error?: { message?: string } }).error?.message ?? 'Approve failed')
+    if (error) throw new Error(getApiErrorMessage(error, 'Approve failed'))
     return data
   })
 
@@ -15,7 +16,7 @@ export function useApprovalActions() {
       params: { path: { hitlRequestId } },
       body: { reason },
     })
-    if (error) throw new Error((error as { error?: { message?: string } }).error?.message ?? 'Reject failed')
+    if (error) throw new Error(getApiErrorMessage(error, 'Reject failed'))
     return data
   })
 
