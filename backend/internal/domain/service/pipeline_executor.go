@@ -34,6 +34,7 @@ var errStepSuspended = errors.New("step suspended for approval")
 // PipelineExecutor orchestrates sequential execution of pipeline steps.
 type PipelineExecutor struct {
 	runRepo        port.RunRepository
+	storyRepo      port.StoryRepository
 	actionReg      port.ActionRegistry
 	eventPub       port.EventPublisher
 	circuitBreaker *CircuitBreakerService
@@ -43,12 +44,14 @@ type PipelineExecutor struct {
 // NewPipelineExecutor creates a new pipeline executor.
 func NewPipelineExecutor(
 	runRepo port.RunRepository,
+	storyRepo port.StoryRepository,
 	actionReg port.ActionRegistry,
 	eventPub port.EventPublisher,
 	logger *slog.Logger,
 ) *PipelineExecutor {
 	return &PipelineExecutor{
 		runRepo:   runRepo,
+		storyRepo: storyRepo,
 		actionReg: actionReg,
 		eventPub:  eventPub,
 		logger:    logger,
@@ -108,6 +111,9 @@ func (e *PipelineExecutor) ExecuteRun(ctx context.Context, runID uuid.UUID) erro
 		"status":     string(model.RunStatusRunning),
 		"started_at": now.Format(time.RFC3339),
 	})
+
+	// Transition story to "running"
+	e.updateStoryStatus(ctx, run, model.StoryStatusRunning)
 
 	// 4. Merge persisted run metadata into the shared metadata map.
 	// This carries branch_name and per-step model keys set by LaunchRun.
@@ -169,6 +175,9 @@ func (e *PipelineExecutor) ExecuteRun(ctx context.Context, runID uuid.UUID) erro
 		"status":       string(model.RunStatusCompleted),
 		"completed_at": completedAt.Format(time.RFC3339),
 	})
+
+	// Transition story to "done"
+	e.updateStoryStatus(ctx, run, model.StoryStatusDone)
 
 	// Reset circuit breaker count on success
 	if e.circuitBreaker != nil {
@@ -291,6 +300,9 @@ func (e *PipelineExecutor) handleStepFailure(ctx context.Context, run *model.Run
 		"status":        string(model.RunStatusFailed),
 		"error_message": errMsg,
 	})
+
+	// Transition story to "failed"
+	e.updateStoryStatus(ctx, run, model.StoryStatusFailed)
 }
 
 // handleCancellation marks step and run as cancelled, publishes events.
@@ -322,6 +334,48 @@ func (e *PipelineExecutor) handleCancellation(run *model.Run, step *model.RunSte
 	e.publishEvent(bgCtx, run.ProjectID, "run", run.ID, "cancelled", map[string]any{
 		"run_id": run.ID.String(),
 		"status": string(model.RunStatusCancelled),
+	})
+}
+
+// updateStoryStatus fetches the story linked to the run and updates its status.
+// Errors are logged without failing the run execution — story status is best-effort.
+func (e *PipelineExecutor) updateStoryStatus(ctx context.Context, run *model.Run, status string) {
+	if run.StoryID == uuid.Nil {
+		return
+	}
+
+	story, err := e.storyRepo.GetByID(ctx, run.StoryID)
+	if err != nil {
+		e.logger.Error("failed to fetch story for status update",
+			"story_id", run.StoryID,
+			"run_id", run.ID,
+			"target_status", status,
+			"error", err,
+		)
+		return
+	}
+
+	story.Status = status
+	if _, err := e.storyRepo.Update(ctx, story); err != nil {
+		e.logger.Error("failed to update story status",
+			"story_id", run.StoryID,
+			"run_id", run.ID,
+			"target_status", status,
+			"error", err,
+		)
+		return
+	}
+
+	e.logger.Info("story status updated",
+		"story_id", run.StoryID,
+		"run_id", run.ID,
+		"status", status,
+	)
+
+	e.publishEvent(ctx, run.ProjectID, "story", run.StoryID, "status_updated", map[string]any{
+		"story_id": run.StoryID.String(),
+		"run_id":   run.ID.String(),
+		"status":   status,
 	})
 }
 

@@ -103,6 +103,49 @@ type stepStatusCall struct {
 	ErrorMsg    *string
 }
 
+// mockStoryRepoForExecutor implements port.StoryRepository for PipelineExecutor testing.
+type mockStoryRepoForExecutor struct {
+	getByIDFn func(ctx context.Context, id uuid.UUID) (*model.Story, error)
+	updateFn  func(ctx context.Context, story *model.Story) (*model.Story, error)
+}
+
+func (m *mockStoryRepoForExecutor) Create(_ context.Context, story *model.Story) (*model.Story, error) {
+	return story, nil
+}
+func (m *mockStoryRepoForExecutor) GetByID(ctx context.Context, id uuid.UUID) (*model.Story, error) {
+	if m.getByIDFn != nil {
+		return m.getByIDFn(ctx, id)
+	}
+	return nil, nil
+}
+func (m *mockStoryRepoForExecutor) GetByKey(_ context.Context, _ uuid.UUID, _ string) (*model.Story, error) {
+	return nil, nil
+}
+func (m *mockStoryRepoForExecutor) ListByProject(_ context.Context, _ uuid.UUID, _, _ int32) ([]*model.Story, error) {
+	return nil, nil
+}
+func (m *mockStoryRepoForExecutor) ListByStatus(_ context.Context, _ uuid.UUID, _ []string, _, _ int32) ([]*model.Story, error) {
+	return nil, nil
+}
+func (m *mockStoryRepoForExecutor) ListByEpic(_ context.Context, _ uuid.UUID, _, _ int32) ([]*model.Story, error) {
+	return nil, nil
+}
+func (m *mockStoryRepoForExecutor) CountByProject(_ context.Context, _ uuid.UUID) (int64, error) {
+	return 0, nil
+}
+func (m *mockStoryRepoForExecutor) CountByStatus(_ context.Context, _ uuid.UUID, _ []string) (int64, error) {
+	return 0, nil
+}
+func (m *mockStoryRepoForExecutor) Update(ctx context.Context, story *model.Story) (*model.Story, error) {
+	if m.updateFn != nil {
+		return m.updateFn(ctx, story)
+	}
+	return story, nil
+}
+func (m *mockStoryRepoForExecutor) Delete(_ context.Context, _ uuid.UUID) error {
+	return nil
+}
+
 // executorTestFixture provides shared test setup for PipelineExecutor tests.
 type executorTestFixture struct {
 	runID     uuid.UUID
@@ -112,6 +155,7 @@ type executorTestFixture struct {
 	run       *model.Run
 
 	runRepo   *mockRunRepo
+	storyRepo *mockStoryRepoForExecutor
 	actionReg *mockActionRegistry
 	eventPub  *mockEventPublisher
 	executor  *PipelineExecutor
@@ -128,6 +172,17 @@ func newExecutorTestFixture(stepCount int) *executorTestFixture {
 		storyID:   uuid.New(),
 		actionReg: newMockActionRegistry(),
 		eventPub:  newMockEventPublisher(),
+	}
+
+	// storyRepo returns a basic story by default so updateStoryStatus doesn't panic.
+	f.storyRepo = &mockStoryRepoForExecutor{
+		getByIDFn: func(_ context.Context, id uuid.UUID) (*model.Story, error) {
+			return &model.Story{
+				ID:        id,
+				ProjectID: f.projectID,
+				Status:    model.StoryStatusBacklog,
+			}, nil
+		},
 	}
 
 	f.run = &model.Run{
@@ -220,7 +275,7 @@ func newExecutorTestFixture(stepCount int) *executorTestFixture {
 		},
 	}
 
-	f.executor = NewPipelineExecutor(f.runRepo, f.actionReg, f.eventPub, testLogger())
+	f.executor = NewPipelineExecutor(f.runRepo, f.storyRepo, f.actionReg, f.eventPub, testLogger())
 
 	return f
 }
@@ -316,14 +371,18 @@ func TestExecuteRun_EventsPublishedInOrder(t *testing.T) {
 	events := f.eventPub.getEvents()
 
 	// Expected event order:
-	// run.started, step.started(0), step.completed(0), step.started(1), step.completed(1), run.completed
+	// run.started, story.status_updated(running),
+	// step.started(0), step.completed(0), step.started(1), step.completed(1),
+	// run.completed, story.status_updated(done)
 	expectedEvents := []string{
 		"run.started",
+		"story.status_updated",
 		"step.started",
 		"step.completed",
 		"step.started",
 		"step.completed",
 		"run.completed",
+		"story.status_updated",
 	}
 
 	if len(events) != len(expectedEvents) {
@@ -349,9 +408,9 @@ func TestExecuteRun_EventsPublishedInOrder(t *testing.T) {
 		t.Errorf("run.started payload: expected status running, got %v", startedPayload["status"])
 	}
 
-	// Verify step events include step_id and step_name
+	// Verify step events include step_id and step_name (now at index 2, after story.status_updated)
 	var stepPayload map[string]any
-	if err := json.Unmarshal(events[1].Event.Payload, &stepPayload); err != nil {
+	if err := json.Unmarshal(events[2].Event.Payload, &stepPayload); err != nil {
 		t.Fatalf("failed to unmarshal step.started payload: %v", err)
 	}
 	if _, ok := stepPayload["step_id"]; !ok {
@@ -361,9 +420,9 @@ func TestExecuteRun_EventsPublishedInOrder(t *testing.T) {
 		t.Error("step.started payload: missing step_name")
 	}
 
-	// Verify run.completed event payload
+	// Verify run.completed event payload (at index 6, before final story.status_updated)
 	var completedPayload map[string]any
-	if err := json.Unmarshal(events[len(events)-1].Event.Payload, &completedPayload); err != nil {
+	if err := json.Unmarshal(events[6].Event.Payload, &completedPayload); err != nil {
 		t.Fatalf("failed to unmarshal run.completed payload: %v", err)
 	}
 	if completedPayload["run_id"] != f.runID.String() {
@@ -706,14 +765,18 @@ func TestExecuteRun_FailureEventOrder(t *testing.T) {
 	events := f.eventPub.getEvents()
 
 	// Expected event order:
-	// run.started, step.started(0), step.completed(0), step.started(1), step.failed(1), run.failed
+	// run.started, story.status_updated(running),
+	// step.started(0), step.completed(0), step.started(1), step.failed(1),
+	// run.failed, story.status_updated(failed)
 	expectedEvents := []string{
 		"run.started",
+		"story.status_updated",
 		"step.started",
 		"step.completed",
 		"step.started",
 		"step.failed",
 		"run.failed",
+		"story.status_updated",
 	}
 
 	if len(events) != len(expectedEvents) {

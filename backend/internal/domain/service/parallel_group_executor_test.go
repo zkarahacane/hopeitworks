@@ -83,7 +83,7 @@ func TestParallelGroupExecutor_Execute_HappyPath(t *testing.T) {
 
 	runSvc := NewRunService(runRepo, projectRepo, storyRepo, mockPCR, &mockJobQueue{})
 	actionReg := newMockActionRegistry()
-	pipeExec := NewPipelineExecutor(runRepo, actionReg, eventPub, logger)
+	pipeExec := NewPipelineExecutor(runRepo, storyRepo, actionReg, eventPub, logger)
 	executor := NewParallelGroupExecutor(epicRunRepo, runSvc, pipeExec, eventPub, logger)
 
 	err := executor.Execute(context.Background(), epicRun, dag)
@@ -178,7 +178,7 @@ func TestParallelGroupExecutor_Execute_FailFast(t *testing.T) {
 
 	runSvc := NewRunService(runRepo, projectRepo, storyRepo, mockPCR, &mockJobQueue{})
 	actionReg := newMockActionRegistry()
-	pipeExec := NewPipelineExecutor(runRepo, actionReg, eventPub, logger)
+	pipeExec := NewPipelineExecutor(runRepo, storyRepo, actionReg, eventPub, logger)
 	executor := NewParallelGroupExecutor(epicRunRepo, runSvc, pipeExec, eventPub, logger)
 
 	err := executor.Execute(context.Background(), epicRun, dag)

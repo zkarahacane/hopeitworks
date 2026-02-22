@@ -399,7 +399,7 @@ func TestIntegration_PipelineValidation_Execution(t *testing.T) {
 	eventRepo := postgres.NewEventRepo(queries)
 
 	// Create pipeline executor
-	executor := service.NewPipelineExecutor(runRepo, actionReg, eventRepo, logger)
+	executor := service.NewPipelineExecutor(runRepo, storyRepo, actionReg, eventRepo, logger)
 
 	// Execute the pipeline
 	err = executor.ExecuteRun(ctx, run.ID)
@@ -590,7 +590,7 @@ func TestIntegration_PipelineValidation_FullFlow(t *testing.T) {
 	actionReg.Register(&noopAction{name: "review"})
 
 	eventRepo := postgres.NewEventRepo(queries)
-	executor := service.NewPipelineExecutor(runRepo, actionReg, eventRepo, logger)
+	executor := service.NewPipelineExecutor(runRepo, storyRepo, actionReg, eventRepo, logger)
 
 	err = executor.ExecuteRun(ctx, run.ID)
 	if err != nil {
