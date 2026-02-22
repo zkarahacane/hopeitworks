@@ -22,7 +22,7 @@ const projectId = computed(() => route.query.projectId as string ?? '')
 const runsStore = useRunsStore()
 const toast = useToast()
 
-const { run: runRef, isLoading, error, retry } = useRunDetail(runId.value)
+const { run: runRef, isLoading, error, retry } = useRunDetail(runId.value, projectId.value)
 const run = computed(() => runRef.value)
 
 const stepSeverity: Record<string, string> = {

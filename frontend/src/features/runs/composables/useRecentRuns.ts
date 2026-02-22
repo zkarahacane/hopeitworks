@@ -1,5 +1,6 @@
 import { ref, onMounted } from 'vue'
 import { apiClient } from '@/api/client'
+import { useSSE } from '@/composables/useSSE'
 
 /** Lightweight run shape for list views (matches OpenAPI Run schema fields). */
 export interface RunSummary {
@@ -101,6 +102,16 @@ export function useRecentRuns(options?: { projectId?: string; limit?: number }) 
     }
     allRuns.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     runs.value = allRuns.slice(0, limit)
+  }
+
+  // When scoped to a single project, subscribe to SSE so the list stays live
+  // without polling. The global (no-projectId) list only updates on manual refresh.
+  if (projectId) {
+    useSSE(projectId, (eventName) => {
+      if (eventName === 'run.started' || eventName === 'run.completed' || eventName === 'run.failed') {
+        fetchRuns()
+      }
+    })
   }
 
   onMounted(fetchRuns)

@@ -1,5 +1,6 @@
 import { onMounted } from 'vue'
 import { useAsyncAction } from '@/composables/useAsyncAction'
+import { useSSE } from '@/composables/useSSE'
 import { apiClient } from '@/api/client'
 
 /** Run with steps shape matching the API RunWithSteps schema. */
@@ -33,11 +34,23 @@ export interface RunStep {
   created_at: string
 }
 
+/** SSE event types that should trigger a run data refetch. */
+const RUN_REFRESH_EVENTS = new Set([
+  'run.started',
+  'run.completed',
+  'run.failed',
+  'step.started',
+  'step.completed',
+  'step.failed',
+])
+
 /**
  * Composable for fetching a single run by ID with its steps.
  * Uses useAsyncAction to wrap the API call with loading/error state.
+ * Subscribes to SSE events for the given project and refetches whenever
+ * a run or step event matches the current run ID.
  */
-export function useRunDetail(runId: string) {
+export function useRunDetail(runId: string, projectId: string) {
   const {
     data: run,
     isLoading,
@@ -53,6 +66,19 @@ export function useRunDetail(runId: string) {
 
   async function fetchRun() {
     await execute()
+  }
+
+  // Subscribe to SSE events if a projectId is available so run/step status
+  // changes are reflected immediately without polling.
+  if (projectId) {
+    useSSE(projectId, (eventName, data) => {
+      if (!RUN_REFRESH_EVENTS.has(eventName)) return
+      const payload = data as { run_id?: string; step?: { run_id?: string } }
+      // Events carry run_id at the top level or nested inside a step object.
+      const eventRunId = payload.run_id ?? payload.step?.run_id
+      if (eventRunId && eventRunId !== runId) return
+      fetchRun()
+    })
   }
 
   onMounted(fetchRun)

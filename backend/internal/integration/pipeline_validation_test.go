@@ -22,10 +22,10 @@ import (
 	"github.com/zakari/hopeitworks/backend/internal/testutil"
 )
 
-// testProjectStoriesPath returns the path to test-project/stories/todo-stories.md.
+// testProjectStoriesPath returns the path to testdata/todo-stories.md.
 func testProjectStoriesPath() string {
 	_, filename, _, _ := runtime.Caller(0)
-	return filepath.Join(filepath.Dir(filename), "..", "..", "..", "test-project", "stories", "todo-stories.md")
+	return filepath.Join(filepath.Dir(filename), "..", "..", "testdata", "todo-stories.md")
 }
 
 const (
