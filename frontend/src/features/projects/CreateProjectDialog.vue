@@ -42,7 +42,7 @@ const createProjectSchema = toTypedSchema(
   }),
 )
 
-const { defineField, handleSubmit, errors, resetForm, validate, setTouched } = useForm({
+const { defineField, handleSubmit, errors, resetForm } = useForm({
   validationSchema: createProjectSchema,
   initialValues: {
     git_provider: 'github',
@@ -59,37 +59,20 @@ const [defaultModel, defaultModelAttrs] = defineField('default_model')
 
 const { createProject } = useProjects()
 
-async function onSubmit() {
-  // Mark all fields as touched so validation errors are shown
-  setTouched({
-    name: true,
-    description: true,
-    repo_url: true,
-    git_provider: true,
-    agent_runtime: true,
-    default_model: true,
+const onSubmit = handleSubmit(async (values) => {
+  const project = await createProject.execute({
+    name: values.name,
+    description: values.description || undefined,
+    repo_url: values.repo_url,
+    git_provider: values.git_provider,
+    agent_runtime: values.agent_runtime,
+    default_model: values.default_model || undefined,
   })
-
-  const { valid } = await validate()
-  if (!valid) {
-    return
+  if (project) {
+    emit('created', project as Project)
+    close()
   }
-
-  await handleSubmit(async (values) => {
-    const project = await createProject.execute({
-      name: values.name,
-      description: values.description || undefined,
-      repo_url: values.repo_url,
-      git_provider: values.git_provider,
-      agent_runtime: values.agent_runtime,
-      default_model: values.default_model || undefined,
-    })
-    if (project) {
-      emit('created', project as Project)
-      close()
-    }
-  })()
-}
+})
 
 function close() {
   resetForm()
