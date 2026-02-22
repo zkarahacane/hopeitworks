@@ -12,6 +12,7 @@ import { differenceInSeconds } from 'date-fns'
 import { useRunDetail } from '@/features/runs/composables/useRunDetail'
 import { useRunsStore } from '@/stores/runs'
 import RunLogViewer from '@/features/runs/RunLogViewer.vue'
+import { runStatusSeverity } from '@/utils/runStatus'
 import type { RunStep } from '@/features/runs/composables/useRunDetail'
 
 const route = useRoute()
@@ -23,15 +24,6 @@ const toast = useToast()
 
 const { run: runRef, isLoading, error, retry } = useRunDetail(runId.value)
 const run = computed(() => runRef.value)
-
-const runStatusSeverity: Record<string, 'info' | 'success' | 'warn' | 'danger' | 'secondary'> = {
-  pending: 'secondary',
-  running: 'info',
-  paused: 'warn',
-  completed: 'success',
-  failed: 'danger',
-  cancelled: 'warn',
-}
 
 const stepSeverity: Record<string, string> = {
   completed: 'success',

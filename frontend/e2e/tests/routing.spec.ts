@@ -16,6 +16,29 @@ test.describe('Application Routing', () => {
           }),
         })
       })
+
+      // Mock Dashboard API calls
+      await page.route('**/api/v1/projects*', async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            data: [],
+            pagination: { total: 0, page: 1, per_page: 5 },
+          }),
+        })
+      })
+
+      await page.route('**/api/v1/hitl-requests*', async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            data: [],
+            pagination: { total: 0, page: 1, per_page: 20 },
+          }),
+        })
+      })
     })
 
     test('should render Dashboard view at /', async ({ page }) => {
@@ -90,6 +113,29 @@ test.describe('Application Routing', () => {
           }),
         })
       })
+
+      // Mock Dashboard API calls
+      await page.route('**/api/v1/projects*', async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            data: [],
+            pagination: { total: 0, page: 1, per_page: 5 },
+          }),
+        })
+      })
+
+      await page.route('**/api/v1/hitl-requests*', async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            data: [],
+            pagination: { total: 0, page: 1, per_page: 20 },
+          }),
+        })
+      })
     })
 
     test('should navigate between routes using sidebar links (Dashboard → Projects)', async ({
@@ -100,7 +146,8 @@ test.describe('Application Routing', () => {
       await expect(page.locator('h1')).toHaveText('Dashboard')
 
       // Navigate to Projects using sidebar button
-      await page.getByRole('button', { name: 'Projects' }).click()
+      const sidebar = page.locator('aside')
+      await sidebar.getByRole('button', { name: 'Projects' }).click()
       await expect(page).toHaveURL('/projects')
       await expect(page.locator('h1')).toHaveText('Projects')
     })

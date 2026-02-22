@@ -26,6 +26,29 @@ test.describe('App Shell Layout', () => {
       })
     })
 
+    // Mock Dashboard API calls (Dashboard loads projects, HITL requests, and runs on mount)
+    await page.route('**/api/v1/projects*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: [],
+          pagination: { total: 0, page: 1, per_page: 5 },
+        }),
+      })
+    })
+
+    await page.route('**/api/v1/hitl-requests*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: [],
+          pagination: { total: 0, page: 1, per_page: 20 },
+        }),
+      })
+    })
+
     // Navigate to the root route (Dashboard)
     await page.goto('/')
   })
@@ -50,11 +73,12 @@ test.describe('App Shell Layout', () => {
       // Set viewport to desktop size
       await page.setViewportSize({ width: 1280, height: 720 })
 
-      // Check for all navigation items
-      const dashboardButton = page.getByRole('button', { name: 'Dashboard' })
-      const projectsButton = page.getByRole('button', { name: 'Projects' })
-      const runsButton = page.getByRole('button', { name: 'Runs' })
-      const settingsButton = page.getByRole('button', { name: 'Settings' })
+      // Check for all navigation items in the sidebar specifically
+      const sidebar = page.locator('aside')
+      const dashboardButton = sidebar.getByRole('button', { name: 'Dashboard' })
+      const projectsButton = sidebar.getByRole('button', { name: 'Projects' })
+      const runsButton = sidebar.getByRole('button', { name: 'Runs' })
+      const settingsButton = sidebar.getByRole('button', { name: 'Settings' })
 
       await expect(dashboardButton).toBeVisible()
       await expect(projectsButton).toBeVisible()
@@ -68,15 +92,16 @@ test.describe('App Shell Layout', () => {
       // Set viewport to desktop size
       await page.setViewportSize({ width: 1280, height: 720 })
 
-      // Click on Projects navigation item
-      const projectsButton = page.getByRole('button', { name: 'Projects' })
+      // Click on Projects navigation item in sidebar
+      const sidebar = page.locator('aside')
+      const projectsButton = sidebar.getByRole('button', { name: 'Projects' })
       await projectsButton.click()
 
       // Verify URL changed to /projects
       await expect(page).toHaveURL('/projects')
 
       // Navigate back to Dashboard
-      const dashboardButton = page.getByRole('button', { name: 'Dashboard' })
+      const dashboardButton = sidebar.getByRole('button', { name: 'Dashboard' })
       await dashboardButton.click()
 
       // Verify URL changed back to /

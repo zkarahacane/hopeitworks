@@ -91,6 +91,29 @@ test.describe('Login Page', () => {
       })
     })
 
+    // Mock Dashboard API calls
+    await page.route('**/api/v1/projects*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: [],
+          pagination: { total: 0, page: 1, per_page: 5 },
+        }),
+      })
+    })
+
+    await page.route('**/api/v1/hitl-requests*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: [],
+          pagination: { total: 0, page: 1, per_page: 20 },
+        }),
+      })
+    })
+
     await page.goto('/login')
 
     // Fill valid credentials
@@ -201,6 +224,29 @@ test.describe('Login Page', () => {
       })
     })
 
+    // Mock Dashboard API calls
+    await page.route('**/api/v1/projects*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: [],
+          pagination: { total: 0, page: 1, per_page: 5 },
+        }),
+      })
+    })
+
+    await page.route('**/api/v1/hitl-requests*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: [],
+          pagination: { total: 0, page: 1, per_page: 20 },
+        }),
+      })
+    })
+
     await page.goto('/login')
 
     // Verify no shell chrome before login
@@ -232,6 +278,29 @@ test.describe('Login Page', () => {
           email: 'test@test.com',
           name: 'Test User',
           role: 'user',
+        }),
+      })
+    })
+
+    // Mock Dashboard API calls
+    await page.route('**/api/v1/projects*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: [],
+          pagination: { total: 0, page: 1, per_page: 5 },
+        }),
+      })
+    })
+
+    await page.route('**/api/v1/hitl-requests*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: [],
+          pagination: { total: 0, page: 1, per_page: 20 },
         }),
       })
     })

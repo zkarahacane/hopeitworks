@@ -8,6 +8,7 @@ import ProjectDetailView from '@/views/ProjectDetailView.vue'
 import RunDetailView from '@/views/RunDetailView.vue'
 import StoryDetailView from '@/views/StoryDetailView.vue'
 import ApprovalsView from '@/views/ApprovalsView.vue'
+import RunsView from '@/views/RunsView.vue'
 import PipelineConfigView from '@/views/PipelineConfigView.vue'
 import PromptTemplatesView from '@/views/PromptTemplatesView.vue'
 import BoardView from '@/views/BoardView.vue'
@@ -62,6 +63,11 @@ const router = createRouter({
           path: 'board',
           name: 'project-board',
           component: BoardView,
+        },
+        {
+          path: 'runs',
+          name: 'project-runs',
+          component: () => import('@/views/ProjectRunsView.vue'),
         },
         {
           path: 'epics/:epicId',
@@ -132,6 +138,12 @@ const router = createRouter({
       path: '/approvals',
       name: 'approvals',
       component: ApprovalsView,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/runs',
+      name: 'runs',
+      component: RunsView,
       meta: { requiresAuth: true },
     },
     {
