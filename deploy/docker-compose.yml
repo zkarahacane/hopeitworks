@@ -41,20 +41,31 @@ services:
       dockerfile: Dockerfile
     container_name: hopeitworks-api
     environment:
+      # --- application ---
       APP_ENV: ${APP_ENV:-development}
       LOG_LEVEL: ${LOG_LEVEL:-debug}
       SERVER_PORT: ${SERVER_PORT:-8080}
+      # --- database ---
       DB_HOST: postgres
       DB_PORT: 5432
       DB_NAME: ${POSTGRES_DB:-hopeitworks_dev}
       DB_USER: ${POSTGRES_USER:-hopeitworks}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-hopeitworks_dev_password}
       DB_SSLMODE: disable
+      # --- auth ---
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-key-change-in-production}
+      # --- docker / agent runtime ---
       DOCKER_HOST: tcp://socket-proxy:2375
       DOCKER_AGENT_NETWORK: ${DOCKER_AGENT_NETWORK:-deploy_hopeitworks_agent-network}
+      AGENT_IMAGE: ${AGENT_IMAGE:-hopeitworks/agent:latest}
+      CLAUDE_MD_PATH: ${CLAUDE_MD_PATH:-agent/claude-md}
+      # --- agent tokens (required for pipeline execution) ---
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+      CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN}
+      # --- smtp ---
       SMTP_HOST: mailhog
       SMTP_PORT: 1025
-      SMTP_FROM: noreply@hopeitworks.local
+      SMTP_FROM: ${SMTP_FROM:-noreply@hopeitworks.local}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
     ports:
       - "${SERVER_PORT:-8080}:8080"
