@@ -121,7 +121,7 @@ describe('useEpicRunStore', () => {
     const store = useEpicRunStore()
     await store.fetchEpicRun('proj-1', 'run-1')
 
-    store.handleSSEEvent('epic_run.story.completed', { story_id: 's2' })
+    store.handleSSEEvent('epic_run.story.completed', { payload: { story_id: 's2' } })
 
     const story = store.epicRun!.stories.find((s) => s.story_id === 's2')
     expect(story!.status).toBe('completed')
@@ -133,7 +133,7 @@ describe('useEpicRunStore', () => {
     const store = useEpicRunStore()
     await store.fetchEpicRun('proj-1', 'run-1')
 
-    store.handleSSEEvent('epic_run.failed', {})
+    store.handleSSEEvent('epic_run.failed', { payload: {} })
 
     expect(store.epicRun!.status).toBe('failed')
   })
@@ -144,7 +144,7 @@ describe('useEpicRunStore', () => {
     const store = useEpicRunStore()
     await store.fetchEpicRun('proj-1', 'run-1')
 
-    store.handleSSEEvent('epic_run.completed', {})
+    store.handleSSEEvent('epic_run.completed', { payload: {} })
 
     expect(store.epicRun!.status).toBe('completed')
   })
@@ -152,7 +152,7 @@ describe('useEpicRunStore', () => {
   it('handleSSEEvent does nothing when epicRun is null', () => {
     const store = useEpicRunStore()
     // Should not throw
-    store.handleSSEEvent('epic_run.story.completed', { story_id: 's1' })
+    store.handleSSEEvent('epic_run.story.completed', { payload: { story_id: 's1' } })
     expect(store.epicRun).toBeNull()
   })
 

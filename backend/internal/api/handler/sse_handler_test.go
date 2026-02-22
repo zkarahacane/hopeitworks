@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -72,8 +73,21 @@ func (m *mockEventSubscriber) closeChan(projectID uuid.UUID) {
 // --- Mock EventRepository ---
 
 type mockEventRepository struct {
-	events []*model.Event
-	err    error
+	events   []*model.Event
+	eventMap map[uuid.UUID]*model.Event
+	err      error
+}
+
+func (m *mockEventRepository) GetEventByID(_ context.Context, id uuid.UUID) (*model.Event, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	if m.eventMap != nil {
+		if e, ok := m.eventMap[id]; ok {
+			return e, nil
+		}
+	}
+	return nil, fmt.Errorf("event not found: %s", id)
 }
 
 func (m *mockEventRepository) GetEventsSince(_ context.Context, _ uuid.UUID, _ uuid.UUID) ([]*model.Event, error) {
