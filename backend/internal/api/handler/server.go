@@ -236,6 +236,11 @@ func (s *Server) ListRunsByStory(w http.ResponseWriter, r *http.Request, storyID
 	s.runs.ListRunsByStory(w, r, storyID, params)
 }
 
+// RetryFailedStep delegates to RunHandler.
+func (s *Server) RetryFailedStep(w http.ResponseWriter, r *http.Request, runID RunIdPath, stepID StepIdPath) {
+	s.runs.RetryStep(w, r, runID, stepID)
+}
+
 // PauseRun delegates to RunHandler.
 func (s *Server) PauseRun(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, runID RunIdPath) {
 	s.runs.PauseRun(w, r, projectID, runID)

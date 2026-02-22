@@ -93,6 +93,7 @@ var validRunTransitions = map[RunStatus][]RunStatus{
 	RunStatusPending: {RunStatusRunning, RunStatusCancelled},
 	RunStatusRunning: {RunStatusPaused, RunStatusCompleted, RunStatusFailed, RunStatusCancelled},
 	RunStatusPaused:  {RunStatusRunning, RunStatusCancelled},
+	RunStatusFailed:  {RunStatusRunning}, // retry transitions failed run back to running
 }
 
 var validStepTransitions = map[StepStatus][]StepStatus{

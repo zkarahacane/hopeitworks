@@ -877,6 +877,33 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /runs/{runId}/steps/{stepId}/retry:
+    post:
+      operationId: retryFailedStep
+      summary: Retry a failed run step
+      description: >
+        Triggers a retry of a failed run step. Creates a new retry step as a child
+        of the failed step and enqueues the incremental retry action for execution.
+        The run is transitioned back to running if it was in failed state.
+        Returns 409 if the step is not in failed state or max retries exceeded.
+      tags: [runs]
+      parameters:
+        - $ref: "#/components/parameters/RunIdPath"
+        - $ref: "#/components/parameters/StepIdPath"
+      responses:
+        "200":
+          description: Retry initiated, returns updated run with steps
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunWithSteps"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
   /projects/{projectId}/runs/{runId}/pause:
     post:
       operationId: pauseRun

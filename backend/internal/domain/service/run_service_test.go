@@ -14,18 +14,20 @@ import (
 
 // mockRunRepo implements port.RunRepository for testing.
 type mockRunRepo struct {
-	createRunFn           func(ctx context.Context, run *model.Run) (*model.Run, error)
-	getRunFn              func(ctx context.Context, id uuid.UUID) (*model.Run, error)
-	getActiveRunByStoryFn func(ctx context.Context, storyID uuid.UUID) (*model.Run, error)
-	listRunsByProjectFn   func(ctx context.Context, projectID uuid.UUID, limit, offset int32) ([]*model.Run, error)
-	listRunsByStoryFn     func(ctx context.Context, storyID uuid.UUID, limit, offset int32) ([]*model.Run, error)
-	updateRunStatusFn     func(ctx context.Context, id uuid.UUID, status model.RunStatus, startedAt, completedAt, pausedAt *time.Time, errorMsg *string) (*model.Run, error)
-	countRunsByProjectFn  func(ctx context.Context, projectID uuid.UUID) (int64, error)
-	countRunsByStoryFn    func(ctx context.Context, storyID uuid.UUID) (int64, error)
-	createRunStepFn       func(ctx context.Context, step *model.RunStep) (*model.RunStep, error)
-	getRunStepFn          func(ctx context.Context, id uuid.UUID) (*model.RunStep, error)
-	listRunStepsByRunFn   func(ctx context.Context, runID uuid.UUID) ([]*model.RunStep, error)
-	updateRunStepStatusFn func(ctx context.Context, id uuid.UUID, status model.StepStatus, startedAt, completedAt *time.Time, errorMsg *string) (*model.RunStep, error)
+	createRunFn              func(ctx context.Context, run *model.Run) (*model.Run, error)
+	getRunFn                 func(ctx context.Context, id uuid.UUID) (*model.Run, error)
+	getActiveRunByStoryFn    func(ctx context.Context, storyID uuid.UUID) (*model.Run, error)
+	listRunsByProjectFn      func(ctx context.Context, projectID uuid.UUID, limit, offset int32) ([]*model.Run, error)
+	listRunsByStoryFn        func(ctx context.Context, storyID uuid.UUID, limit, offset int32) ([]*model.Run, error)
+	updateRunStatusFn        func(ctx context.Context, id uuid.UUID, status model.RunStatus, startedAt, completedAt, pausedAt *time.Time, errorMsg *string) (*model.Run, error)
+	countRunsByProjectFn     func(ctx context.Context, projectID uuid.UUID) (int64, error)
+	countRunsByStoryFn       func(ctx context.Context, storyID uuid.UUID) (int64, error)
+	createRunStepFn          func(ctx context.Context, step *model.RunStep) (*model.RunStep, error)
+	getRunStepFn             func(ctx context.Context, id uuid.UUID) (*model.RunStep, error)
+	listRunStepsByRunFn      func(ctx context.Context, runID uuid.UUID) ([]*model.RunStep, error)
+	updateRunStepStatusFn    func(ctx context.Context, id uuid.UUID, status model.StepStatus, startedAt, completedAt *time.Time, errorMsg *string) (*model.RunStep, error)
+	createRetryRunStepFn     func(ctx context.Context, step *model.RunStep) (*model.RunStep, error)
+	listRetryStepsByParentFn func(ctx context.Context, parentStepID uuid.UUID) ([]*model.RunStep, error)
 }
 
 func (m *mockRunRepo) CreateRun(ctx context.Context, run *model.Run) (*model.Run, error) {
@@ -104,10 +106,16 @@ func (m *mockRunRepo) UpdateRunStepStatus(ctx context.Context, id uuid.UUID, sta
 func (m *mockRunRepo) UpdateRunStepContainerInfo(_ context.Context, id uuid.UUID, _ *string, _ *string) (*model.RunStep, error) {
 	return &model.RunStep{ID: id}, nil
 }
-func (m *mockRunRepo) CreateRetryRunStep(_ context.Context, step *model.RunStep) (*model.RunStep, error) {
+func (m *mockRunRepo) CreateRetryRunStep(ctx context.Context, step *model.RunStep) (*model.RunStep, error) {
+	if m.createRetryRunStepFn != nil {
+		return m.createRetryRunStepFn(ctx, step)
+	}
 	return step, nil
 }
-func (m *mockRunRepo) ListRetryStepsByParent(_ context.Context, _ uuid.UUID) ([]*model.RunStep, error) {
+func (m *mockRunRepo) ListRetryStepsByParent(ctx context.Context, parentStepID uuid.UUID) ([]*model.RunStep, error) {
+	if m.listRetryStepsByParentFn != nil {
+		return m.listRetryStepsByParentFn(ctx, parentStepID)
+	}
 	return nil, nil
 }
 
@@ -1486,6 +1494,174 @@ func TestListRunsByProject_ProgressPopulated(t *testing.T) {
 	}
 	if result.Runs[1].Progress != 100 {
 		t.Errorf("run2: expected progress 100, got %d", result.Runs[1].Progress)
+	}
+}
+
+// ── RetryStep Tests ──────────────────────────────────────────────────────────
+
+func TestRetryStep_Success(t *testing.T) {
+	runID := uuid.New()
+	stepID := uuid.New()
+	projectID := uuid.New()
+	errMsg := "agent failed"
+
+	runRepo := &mockRunRepo{
+		getRunFn: func(_ context.Context, id uuid.UUID) (*model.Run, error) {
+			return &model.Run{
+				ID:        id,
+				ProjectID: projectID,
+				Status:    model.RunStatusFailed,
+			}, nil
+		},
+		getRunStepFn: func(_ context.Context, id uuid.UUID) (*model.RunStep, error) {
+			return &model.RunStep{
+				ID:           id,
+				RunID:        runID,
+				StepName:     "implement",
+				StepOrder:    0,
+				Action:       "agent_run",
+				Status:       model.StepStatusFailed,
+				ErrorMessage: &errMsg,
+				RetryCount:   0,
+			}, nil
+		},
+		listRetryStepsByParentFn: func(_ context.Context, _ uuid.UUID) ([]*model.RunStep, error) {
+			return nil, nil // no existing retries
+		},
+		updateRunStatusFn: func(_ context.Context, id uuid.UUID, status model.RunStatus, _, _, _ *time.Time, _ *string) (*model.Run, error) {
+			return &model.Run{ID: id, ProjectID: projectID, Status: status}, nil
+		},
+		createRetryRunStepFn: func(_ context.Context, step *model.RunStep) (*model.RunStep, error) {
+			return step, nil
+		},
+		listRunStepsByRunFn: func(_ context.Context, _ uuid.UUID) ([]*model.RunStep, error) {
+			return []*model.RunStep{
+				{ID: stepID, Status: model.StepStatusFailed},
+			}, nil
+		},
+	}
+
+	var enqueuedRunID uuid.UUID
+	jobQueue := &mockJobQueue{
+		enqueueExecuteRunFn: func(_ context.Context, id uuid.UUID) error {
+			enqueuedRunID = id
+			return nil
+		},
+	}
+
+	svc := NewRunService(runRepo, newMockProjectRepoForService(), nil, nil, jobQueue)
+	run, err := svc.RetryStep(context.Background(), runID, stepID)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if run == nil {
+		t.Fatal("expected run, got nil")
+	}
+	if enqueuedRunID != runID {
+		t.Errorf("expected enqueued run ID %s, got %s", runID, enqueuedRunID)
+	}
+}
+
+func TestRetryStep_StepNotFailed(t *testing.T) {
+	runID := uuid.New()
+	stepID := uuid.New()
+
+	runRepo := &mockRunRepo{
+		getRunFn: func(_ context.Context, id uuid.UUID) (*model.Run, error) {
+			return &model.Run{ID: id, Status: model.RunStatusCompleted}, nil
+		},
+		getRunStepFn: func(_ context.Context, id uuid.UUID) (*model.RunStep, error) {
+			return &model.RunStep{
+				ID:     id,
+				RunID:  runID,
+				Status: model.StepStatusCompleted,
+			}, nil
+		},
+	}
+
+	svc := NewRunService(runRepo, newMockProjectRepoForService(), nil, nil, nil)
+	_, err := svc.RetryStep(context.Background(), runID, stepID)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	domainErr, ok := err.(*errors.DomainError)
+	if !ok {
+		t.Fatalf("expected *errors.DomainError, got %T", err)
+	}
+	if domainErr.Code != "STEP_NOT_FAILED" {
+		t.Errorf("expected STEP_NOT_FAILED code, got %s", domainErr.Code)
+	}
+}
+
+func TestRetryStep_StepNotInRun(t *testing.T) {
+	runID := uuid.New()
+	stepID := uuid.New()
+	otherRunID := uuid.New()
+
+	runRepo := &mockRunRepo{
+		getRunFn: func(_ context.Context, id uuid.UUID) (*model.Run, error) {
+			return &model.Run{ID: id, Status: model.RunStatusFailed}, nil
+		},
+		getRunStepFn: func(_ context.Context, id uuid.UUID) (*model.RunStep, error) {
+			return &model.RunStep{
+				ID:     id,
+				RunID:  otherRunID, // different run
+				Status: model.StepStatusFailed,
+			}, nil
+		},
+	}
+
+	svc := NewRunService(runRepo, newMockProjectRepoForService(), nil, nil, nil)
+	_, err := svc.RetryStep(context.Background(), runID, stepID)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	domainErr, ok := err.(*errors.DomainError)
+	if !ok {
+		t.Fatalf("expected *errors.DomainError, got %T", err)
+	}
+	if domainErr.Category != errors.CategoryNotFound {
+		t.Errorf("expected not_found category, got %s", domainErr.Category)
+	}
+}
+
+func TestRetryStep_MaxRetriesExceeded(t *testing.T) {
+	runID := uuid.New()
+	stepID := uuid.New()
+
+	runRepo := &mockRunRepo{
+		getRunFn: func(_ context.Context, id uuid.UUID) (*model.Run, error) {
+			return &model.Run{ID: id, Status: model.RunStatusFailed}, nil
+		},
+		getRunStepFn: func(_ context.Context, id uuid.UUID) (*model.RunStep, error) {
+			return &model.RunStep{
+				ID:         id,
+				RunID:      runID,
+				Status:     model.StepStatusFailed,
+				RetryCount: 0,
+			}, nil
+		},
+		listRetryStepsByParentFn: func(_ context.Context, _ uuid.UUID) ([]*model.RunStep, error) {
+			// 3 existing retries means max exceeded (default max is 3)
+			return []*model.RunStep{
+				{ID: uuid.New(), RetryCount: 1},
+				{ID: uuid.New(), RetryCount: 2},
+				{ID: uuid.New(), RetryCount: 3},
+			}, nil
+		},
+	}
+
+	svc := NewRunService(runRepo, newMockProjectRepoForService(), nil, nil, nil)
+	_, err := svc.RetryStep(context.Background(), runID, stepID)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	domainErr, ok := err.(*errors.DomainError)
+	if !ok {
+		t.Fatalf("expected *errors.DomainError, got %T", err)
+	}
+	if domainErr.Code != "RETRY_MAX_EXCEEDED" {
+		t.Errorf("expected RETRY_MAX_EXCEEDED code, got %s", domainErr.Code)
 	}
 }
 
