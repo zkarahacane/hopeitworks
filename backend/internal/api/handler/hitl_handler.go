@@ -99,6 +99,16 @@ func (h *HITLHandler) RejectHITLRequest(w http.ResponseWriter, r *http.Request, 
 	writeJSON(w, http.StatusOK, toAPIHITLRequest(req))
 }
 
+// ListHITLRequests handles GET /hitl-requests — implementation deferred to fix-11.
+func (h *HITLHandler) ListHITLRequests(w http.ResponseWriter, _ *http.Request, _ ListHITLRequestsParams) {
+	writeError(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "not implemented")
+}
+
+// GetHITLRequestByStep handles GET /run-steps/{stepId}/hitl-request — implementation deferred to fix-11.
+func (h *HITLHandler) GetHITLRequestByStep(w http.ResponseWriter, _ *http.Request, _ StepIdPath) {
+	writeError(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "not implemented")
+}
+
 // toAPIHITLRequest converts a domain HITLRequest to the API HITLRequest type.
 func toAPIHITLRequest(req *model.HITLRequest) HITLRequest {
 	r := HITLRequest{

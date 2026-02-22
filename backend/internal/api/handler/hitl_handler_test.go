@@ -447,3 +447,46 @@ func TestHITLHandler_RejectHITLRequest(t *testing.T) {
 		})
 	}
 }
+
+// ── Stub method tests (fix-9) ───────────────────────────────────────────
+
+func TestListHITLRequests_ReturnsNotImplemented(t *testing.T) {
+	h, _, _ := setupHITLHandler()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/hitl-requests", nil)
+	rec := httptest.NewRecorder()
+	h.ListHITLRequests(rec, req, ListHITLRequestsParams{})
+
+	if rec.Code != http.StatusNotImplemented {
+		t.Errorf("expected 501, got %d", rec.Code)
+	}
+
+	var resp errorEnvelope
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if resp.Error.Code != codeNotImplemented {
+		t.Errorf("expected error code NOT_IMPLEMENTED, got %s", resp.Error.Code)
+	}
+}
+
+func TestGetHITLRequestByStep_ReturnsNotImplemented(t *testing.T) {
+	h, _, _ := setupHITLHandler()
+
+	stepID := uuid.New()
+	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/run-steps/%s/hitl-request", stepID), nil)
+	rec := httptest.NewRecorder()
+	h.GetHITLRequestByStep(rec, req, StepIdPath(stepID))
+
+	if rec.Code != http.StatusNotImplemented {
+		t.Errorf("expected 501, got %d", rec.Code)
+	}
+
+	var resp errorEnvelope
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if resp.Error.Code != codeNotImplemented {
+		t.Errorf("expected error code NOT_IMPLEMENTED, got %s", resp.Error.Code)
+	}
+}

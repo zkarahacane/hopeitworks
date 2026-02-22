@@ -325,3 +325,33 @@ func (s *Server) UpdateNotificationConfig(w http.ResponseWriter, r *http.Request
 func (s *Server) DeleteNotificationConfig(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, notificationID NotificationIdPath) {
 	s.notifications.DeleteNotificationConfig(w, r, projectID, notificationID)
 }
+
+// ResetCircuitBreaker delegates to ProjectHandler.
+func (s *Server) ResetCircuitBreaker(w http.ResponseWriter, r *http.Request, id IdPath) {
+	s.projects.ResetCircuitBreaker(w, r, id)
+}
+
+// ListHITLRequests delegates to HITLHandler.
+func (s *Server) ListHITLRequests(w http.ResponseWriter, r *http.Request, params ListHITLRequestsParams) {
+	s.hitl.ListHITLRequests(w, r, params)
+}
+
+// GetHITLRequestByStep delegates to HITLHandler.
+func (s *Server) GetHITLRequestByStep(w http.ResponseWriter, r *http.Request, stepID StepIdPath) {
+	s.hitl.GetHITLRequestByStep(w, r, stepID)
+}
+
+// GetProjectCostChart delegates to CostHandler.
+func (s *Server) GetProjectCostChart(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, params GetProjectCostChartParams) {
+	s.costs.GetProjectCostChart(w, r, projectID, params)
+}
+
+// GetProjectCostRuns delegates to CostHandler.
+func (s *Server) GetProjectCostRuns(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, params GetProjectCostRunsParams) {
+	s.costs.GetProjectCostRuns(w, r, projectID, params)
+}
+
+// TestNotificationConfig delegates to NotificationHandler.
+func (s *Server) TestNotificationConfig(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, notificationID NotificationIdPath) {
+	s.notifications.TestNotificationConfig(w, r, projectID, notificationID)
+}
