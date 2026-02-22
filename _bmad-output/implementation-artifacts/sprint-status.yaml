@@ -5,7 +5,7 @@
 # story_location: _bmad-output/implementation-artifacts
 
 # STATUS DEFINITIONS:
-# ==================
+# ===========
 # Epic Status:
 #   - backlog: Epic not yet started
 #   - in-progress: Epic actively being worked on
@@ -27,7 +27,7 @@
 #   - done: Retrospective has been completed
 #
 # WORKFLOW NOTES:
-# ===============
+# ========
 # - Epic transitions to 'in-progress' automatically when first story is created
 # - Stories can be worked in parallel if team capacity allows
 # - SM typically creates next story after previous one is 'done' to incorporate learnings
@@ -173,15 +173,17 @@ development_status:
 
   # Post-MVP: E2E Usability Fixes
   post-mvp-e2e-usability: backlog
+
   fix-9-backend-wiring: review
-  fix-10-openapi-project-fields: backlog
+  fix-10-openapi-project-fields: review
+
   fix-11-missing-service-methods: backlog
   fix-12-frontend-api-regen: backlog
   fix-13-project-repo-form: backlog
   fix-14-runs-dashboard-routing: backlog
 
 # PARALLEL EXECUTION WAVES
-# ========================
+# =================
 # Stories in the same wave can run simultaneously in separate containers.
 # Each wave must complete (merged to main) before the next wave starts.
 # Domain tags: back=Backend, front=Frontend, shared=Shared
@@ -210,9 +212,9 @@ development_status:
 # IMPORTANT: All stories in a wave must be MERGED to main before starting the next wave.
 
 parallel_waves:
-  # ============================================================
+  # =====================================================
   # PHASE 1: FOUNDATION (Epic 1 - Project scaffolding & auth)
-  # ============================================================
+  # =====================================================
 
   wave-1:
     phase: 1-foundation
@@ -312,10 +314,10 @@ parallel_waves:
     depends_on: [wave-3]
     notes: "Final E1 frontend pages + dev seed data - Epic 1 COMPLETE after this wave"
 
-  # ============================================================
+  # =====================================================
   # PHASE 2: CORE PLATFORM (Epics 2, 3, 6 in parallel)
   # Requires: E1 foundation (auth, projects, RBAC, app shell)
-  # ============================================================
+  # =====================================================
 
   wave-5:
     phase: 2-core-platform
@@ -469,10 +471,10 @@ parallel_waves:
     depends_on: [wave-8]
     notes: "E2 markdown import - Epic 2 COMPLETE after this wave"
 
-  # ============================================================
+  # =====================================================
   # PHASE 3: EXTENSIONS (Epics 4, 5, 7, 8, 9)
   # Requires: E3 pipeline functional (runs, executor, agent action)
-  # ============================================================
+  # =====================================================
 
   wave-10:
     phase: 3-extensions
@@ -598,10 +600,10 @@ parallel_waves:
     depends_on: [wave-11]
     notes: "Final extension stories - Epics 5, 7 COMPLETE after this wave"
 
-  # ============================================================
+  # =====================================================
   # PHASE 4: VALIDATION (Epic 10 - Reference test project)
   # Requires: E3 pipeline + E6 config complete
-  # ============================================================
+  # =====================================================
 
   wave-13:
     phase: 4-validation
@@ -636,9 +638,9 @@ parallel_waves:
     depends_on: [wave-14]
     notes: "Full pipeline validation - Epic 10 COMPLETE, PROJECT MVP DONE"
 
-  # ============================================================
+  # =====================================================
   # PHASE 5: POST-MVP BUG FIXES (from E2E smoke testing)
-  # ============================================================
+  # =====================================================
 
   wave-16:
     phase: 5-bugfixes
@@ -689,9 +691,9 @@ parallel_waves:
     depends_on: [wave-18]
     notes: "Final test fixes: selector refinements + pipeline config 404 — parallel"
 
-  # ============================================================
+  # =====================================================
   # PHASE 6: AUTH ENHANCEMENTS (Post-MVP features)
-  # ============================================================
+  # =====================================================
 
   wave-20:
     phase: 6-auth-enhancements
@@ -735,9 +737,9 @@ parallel_waves:
     depends_on: [wave-20]
     notes: "Auth frontend: logout button, profile page, forgot/reset password pages — all parallel"
 
-  # ============================================================
+  # =====================================================
   # PHASE 7: E2E USABILITY FIXES (from UX walkthrough audit)
-  # ============================================================
+  # =====================================================
 
   wave-22:
     phase: 7-e2e-usability

@@ -97,8 +97,19 @@ func (h *ProjectHandler) CreateProject(w http.ResponseWriter, r *http.Request) {
 	userID, _ := middleware.UserIDFromContext(r.Context())
 
 	params := service.CreateProjectParams{
-		Name:        req.Name,
-		Description: req.Description,
+		Name:         req.Name,
+		Description:  req.Description,
+		RepoURL:      req.RepoUrl,
+		GitTokenEnv:  req.GitTokenEnv,
+		DefaultModel: req.DefaultModel,
+	}
+	if req.GitProvider != nil {
+		s := string(*req.GitProvider)
+		params.GitProvider = &s
+	}
+	if req.AgentRuntime != nil {
+		s := string(*req.AgentRuntime)
+		params.AgentRuntime = &s
 	}
 	if userID != uuid.Nil {
 		params.OwnerID = &userID
@@ -145,11 +156,25 @@ func (h *ProjectHandler) UpdateProject(w http.ResponseWriter, r *http.Request, i
 	}
 
 	params := service.UpdateProjectParams{
-		ID:          id,
-		Name:        req.Name,
-		Description: req.Description,
-		MaxBudget:   req.MaxBudget,
-		SetBudget:   req.MaxBudget != nil,
+		ID:           id,
+		Name:         req.Name,
+		Description:  req.Description,
+		MaxBudget:    req.MaxBudget,
+		SetBudget:    req.MaxBudget != nil,
+		RepoURL:      req.RepoUrl,
+		SetRepoURL:   req.RepoUrl != nil,
+		GitTokenEnv:  req.GitTokenEnv,
+		SetTokenEnv:  req.GitTokenEnv != nil,
+		DefaultModel: req.DefaultModel,
+		SetModel:     req.DefaultModel != nil,
+	}
+	if req.GitProvider != nil {
+		s := string(*req.GitProvider)
+		params.GitProvider = &s
+	}
+	if req.AgentRuntime != nil {
+		s := string(*req.AgentRuntime)
+		params.AgentRuntime = &s
 	}
 
 	project, err := h.service.Update(r.Context(), params)

@@ -26,11 +26,16 @@ func (s *ProjectService) SetPipelineConfigService(pcs *PipelineConfigService) {
 	s.pipelineConfigService = pcs
 }
 
-// CreateParams holds parameters for creating a project.
+// CreateProjectParams holds parameters for creating a project.
 type CreateProjectParams struct {
-	Name        string
-	Description *string
-	OwnerID     *uuid.UUID
+	Name         string
+	Description  *string
+	OwnerID      *uuid.UUID
+	RepoURL      *string
+	GitProvider  *string
+	GitTokenEnv  *string
+	AgentRuntime *string
+	DefaultModel *string
 }
 
 // Create validates inputs and creates a new project.
@@ -49,8 +54,17 @@ func (s *ProjectService) Create(ctx context.Context, params CreateProjectParams)
 		Name:         params.Name,
 		Description:  params.Description,
 		OwnerID:      params.OwnerID,
+		RepoURL:      params.RepoURL,
 		GitProvider:  "github",
 		AgentRuntime: "docker",
+		GitTokenEnv:  params.GitTokenEnv,
+		DefaultModel: params.DefaultModel,
+	}
+	if params.GitProvider != nil && *params.GitProvider != "" {
+		project.GitProvider = *params.GitProvider
+	}
+	if params.AgentRuntime != nil && *params.AgentRuntime != "" {
+		project.AgentRuntime = *params.AgentRuntime
 	}
 
 	created, err := s.repo.Create(ctx, project)
@@ -112,11 +126,19 @@ func (s *ProjectService) List(ctx context.Context, page, perPage int) (*ListResu
 
 // UpdateProjectParams holds parameters for updating a project.
 type UpdateProjectParams struct {
-	ID          uuid.UUID
-	Name        *string
-	Description *string
-	MaxBudget   *float64
-	SetBudget   bool // true when max_budget field is explicitly set (allows setting to nil)
+	ID           uuid.UUID
+	Name         *string
+	Description  *string
+	MaxBudget    *float64
+	SetBudget    bool // true when max_budget field is explicitly set (allows setting to nil)
+	RepoURL      *string
+	SetRepoURL   bool // true when repo_url field is explicitly set (allows clearing)
+	GitProvider  *string
+	GitTokenEnv  *string
+	SetTokenEnv  bool // true when git_token_env field is explicitly set (allows clearing)
+	AgentRuntime *string
+	DefaultModel *string
+	SetModel     bool // true when default_model field is explicitly set (allows clearing)
 }
 
 // Update validates inputs and updates an existing project.
@@ -143,6 +165,21 @@ func (s *ProjectService) Update(ctx context.Context, params UpdateProjectParams)
 	}
 	if params.SetBudget {
 		existing.MaxBudget = params.MaxBudget
+	}
+	if params.GitProvider != nil {
+		existing.GitProvider = *params.GitProvider
+	}
+	if params.AgentRuntime != nil {
+		existing.AgentRuntime = *params.AgentRuntime
+	}
+	if params.SetRepoURL {
+		existing.RepoURL = params.RepoURL
+	}
+	if params.SetTokenEnv {
+		existing.GitTokenEnv = params.GitTokenEnv
+	}
+	if params.SetModel {
+		existing.DefaultModel = params.DefaultModel
 	}
 
 	return s.repo.Update(ctx, existing)

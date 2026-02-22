@@ -1893,6 +1893,31 @@ components:
           type: string
           format: uuid
           example: 550e8400-e29b-41d4-a716-446655440000
+        repo_url:
+          type: string
+          nullable: true
+          description: URL of the project's git repository
+          example: "https://github.com/org/my-project"
+        git_provider:
+          type: string
+          enum: [github, gitlab, bitbucket]
+          description: Git provider for this project
+          example: github
+        git_token_env:
+          type: string
+          nullable: true
+          description: Name of the environment variable holding the git token (not the token itself)
+          example: GITHUB_TOKEN
+        agent_runtime:
+          type: string
+          enum: [docker, kubernetes]
+          description: Container runtime used to execute agent steps
+          example: docker
+        default_model:
+          type: string
+          nullable: true
+          description: Default Claude model override for agent steps in this project
+          example: claude-opus-4-6
         max_budget:
           type: number
           format: double
@@ -1936,6 +1961,31 @@ components:
           type: string
           maxLength: 1000
           example: A sample project
+        repo_url:
+          type: string
+          nullable: true
+          description: URL of the project's git repository
+          example: "https://github.com/org/my-project"
+        git_provider:
+          type: string
+          enum: [github, gitlab, bitbucket]
+          description: "Git provider for this project (defaults to 'github' if omitted)"
+          example: github
+        git_token_env:
+          type: string
+          nullable: true
+          description: Name of the environment variable holding the git token (not the token itself)
+          example: GITHUB_TOKEN
+        agent_runtime:
+          type: string
+          enum: [docker, kubernetes]
+          description: "Container runtime used to execute agent steps (defaults to 'docker' if omitted)"
+          example: docker
+        default_model:
+          type: string
+          nullable: true
+          description: Default Claude model override for agent steps in this project
+          example: claude-opus-4-6
 
     UpdateProjectRequest:
       type: object
@@ -1955,6 +2005,31 @@ components:
           nullable: true
           description: Maximum budget for the project in USD (informational only)
           example: 100.00
+        repo_url:
+          type: string
+          nullable: true
+          description: URL of the project's git repository
+          example: "https://github.com/org/my-project"
+        git_provider:
+          type: string
+          enum: [github, gitlab, bitbucket]
+          description: Git provider for this project
+          example: github
+        git_token_env:
+          type: string
+          nullable: true
+          description: Name of the environment variable holding the git token (not the token itself)
+          example: GITHUB_TOKEN
+        agent_runtime:
+          type: string
+          enum: [docker, kubernetes]
+          description: Container runtime used to execute agent steps
+          example: docker
+        default_model:
+          type: string
+          nullable: true
+          description: Default Claude model override for agent steps in this project
+          example: claude-opus-4-6
 
     ProjectList:
       type: object
