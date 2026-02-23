@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import Drawer from 'primevue/drawer'
 import Tag from 'primevue/tag'
+import Button from 'primevue/button'
 import Message from 'primevue/message'
 import LogViewer from '@/ui/composed/LogViewer.vue'
 import { useStepLogs } from './composables/useStepLogs'
@@ -16,11 +17,13 @@ const props = defineProps<{
   runId: string
   projectId: string
   visible: boolean
+  retryLoading?: boolean
 }>()
 
 const emit = defineEmits<{
   close: []
   'update:visible': [value: boolean]
+  retry: [stepId: string]
 }>()
 
 const stepId = computed(() => props.step?.id ?? null)
@@ -52,6 +55,7 @@ const duration = computed(() => {
 })
 
 const isRunning = computed(() => props.step?.status === 'running')
+const canRetry = computed(() => props.step?.status === 'failed')
 
 function handleVisibleUpdate(value: boolean) {
   emit('update:visible', value)
@@ -85,6 +89,16 @@ function handleVisibleUpdate(value: boolean) {
             :value="step.status"
             :severity="statusSeverity(step.status)"
             data-testid="step-status"
+          />
+          <Button
+            v-if="canRetry"
+            label="Retry"
+            icon="pi pi-refresh"
+            severity="warn"
+            size="small"
+            :loading="retryLoading"
+            data-testid="retry-step-btn"
+            @click="emit('retry', step.id)"
           />
         </div>
         <div class="flex items-center gap-4 text-sm text-surface-500">
