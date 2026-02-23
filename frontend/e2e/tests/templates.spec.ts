@@ -2,37 +2,43 @@ import { test, expect } from '@playwright/test'
 
 const PROJECT_ID = 'p1'
 
-const mockTemplates = [
+const mockAgents = [
   {
-    id: 't1',
+    id: 'a1',
     project_id: PROJECT_ID,
     name: 'Implement Feature',
+    model: 'claude-opus-4-6',
+    image: 'ghcr.io/org/agent:latest',
     template_content: 'You are a developer...',
-    type: 'implement',
+    scope: 'project',
     created_at: '2026-02-10T10:00:00Z',
     updated_at: '2026-02-10T10:00:00Z',
   },
   {
-    id: 't2',
+    id: 'a2',
     project_id: PROJECT_ID,
     name: 'Code Review',
+    model: 'claude-sonnet-4-6',
+    image: 'ghcr.io/org/reviewer:latest',
     template_content: 'You are a code reviewer...',
-    type: 'review',
+    scope: 'project',
     created_at: '2026-02-11T10:00:00Z',
     updated_at: '2026-02-12T10:00:00Z',
   },
   {
-    id: 't3',
+    id: 'a3',
     project_id: PROJECT_ID,
     name: 'Merge Strategy',
+    model: 'claude-haiku-3-5',
+    image: 'ghcr.io/org/merger:latest',
     template_content: 'You are a merge specialist...',
-    type: 'merge',
+    scope: 'global',
     created_at: '2026-02-13T10:00:00Z',
     updated_at: '2026-02-14T10:00:00Z',
   },
 ]
 
-test.describe('Prompt Template List Page', () => {
+test.describe('Agent List Page', () => {
   test.describe('as regular user', () => {
     test.beforeEach(async ({ page }) => {
       await page.route('**/api/v1/auth/me', async (route) => {
@@ -49,7 +55,7 @@ test.describe('Prompt Template List Page', () => {
       })
 
       await page.route(`**/api/v1/projects/${PROJECT_ID}`, async (route) => {
-        if (route.request().url().includes('/templates')) return route.fallback()
+        if (route.request().url().includes('/agents')) return route.fallback()
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
@@ -65,49 +71,50 @@ test.describe('Prompt Template List Page', () => {
     })
 
     test('displays template list in DataTable when API returns templates', async ({ page }) => {
-      await page.route(`**/api/v1/projects/${PROJECT_ID}/templates*`, async (route) => {
+      await page.route(`**/api/v1/projects/${PROJECT_ID}/agents*`, async (route) => {
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({
-            data: mockTemplates,
+            data: mockAgents,
             pagination: { total: 3, page: 1, per_page: 20 },
           }),
         })
       })
 
-      await page.goto(`/projects/${PROJECT_ID}/templates`)
+      await page.goto(`/projects/${PROJECT_ID}/agents`)
 
-      await expect(page.getByRole('heading', { name: 'Prompt Templates' })).toBeVisible()
+      await expect(page.getByRole('heading', { name: 'Agents' })).toBeVisible()
       await expect(page.getByText('Implement Feature')).toBeVisible()
       await expect(page.getByText('Code Review')).toBeVisible()
       await expect(page.getByText('Merge Strategy')).toBeVisible()
 
       await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible()
-      await expect(page.getByRole('columnheader', { name: 'Type' })).toBeVisible()
-      await expect(page.getByRole('columnheader', { name: 'Last Updated' })).toBeVisible()
+      await expect(page.getByRole('columnheader', { name: 'Scope' })).toBeVisible()
+      await expect(page.getByRole('columnheader', { name: 'Model' })).toBeVisible()
+      await expect(page.getByRole('columnheader', { name: 'Image' })).toBeVisible()
     })
 
-    test('does not show Create Template button for non-admin user', async ({ page }) => {
-      await page.route(`**/api/v1/projects/${PROJECT_ID}/templates*`, async (route) => {
+    test('does not show New Agent button for non-admin user', async ({ page }) => {
+      await page.route(`**/api/v1/projects/${PROJECT_ID}/agents*`, async (route) => {
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({
-            data: mockTemplates,
+            data: mockAgents,
             pagination: { total: 3, page: 1, per_page: 20 },
           }),
         })
       })
 
-      await page.goto(`/projects/${PROJECT_ID}/templates`)
+      await page.goto(`/projects/${PROJECT_ID}/agents`)
 
       await expect(page.getByText('Implement Feature')).toBeVisible()
-      await expect(page.getByRole('button', { name: 'Create Template' })).not.toBeVisible()
+      await expect(page.getByRole('button', { name: 'New Agent' })).not.toBeVisible()
     })
 
     test('displays empty state when API returns no templates', async ({ page }) => {
-      await page.route(`**/api/v1/projects/${PROJECT_ID}/templates*`, async (route) => {
+      await page.route(`**/api/v1/projects/${PROJECT_ID}/agents*`, async (route) => {
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
@@ -118,17 +125,17 @@ test.describe('Prompt Template List Page', () => {
         })
       })
 
-      await page.goto(`/projects/${PROJECT_ID}/templates`)
+      await page.goto(`/projects/${PROJECT_ID}/agents`)
 
       await expect(
-        page.getByText('No prompt templates found for this project.'),
+        page.getByText('No agents found for this project.'),
       ).toBeVisible()
-      await expect(page.getByRole('button', { name: 'Create Template' })).not.toBeVisible()
+      await expect(page.getByRole('button', { name: 'New Agent' })).not.toBeVisible()
     })
 
     test('displays error state with retry button on API failure', async ({ page }) => {
       let callCount = 0
-      await page.route(`**/api/v1/projects/${PROJECT_ID}/templates*`, async (route) => {
+      await page.route(`**/api/v1/projects/${PROJECT_ID}/agents*`, async (route) => {
         callCount++
         if (callCount === 1) {
           await route.fulfill({
@@ -143,16 +150,16 @@ test.describe('Prompt Template List Page', () => {
             status: 200,
             contentType: 'application/json',
             body: JSON.stringify({
-              data: mockTemplates,
+              data: mockAgents,
               pagination: { total: 3, page: 1, per_page: 20 },
             }),
           })
         }
       })
 
-      await page.goto(`/projects/${PROJECT_ID}/templates`)
+      await page.goto(`/projects/${PROJECT_ID}/agents`)
 
-      await expect(page.getByText('Failed to load templates')).toBeVisible()
+      await expect(page.getByText('Failed to load agents')).toBeVisible()
       await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible()
 
       await page.getByRole('button', { name: 'Retry' }).click()
@@ -160,49 +167,49 @@ test.describe('Prompt Template List Page', () => {
       await expect(page.getByText('Implement Feature')).toBeVisible()
     })
 
-    test('navigates to template detail when clicking a row', async ({ page }) => {
-      await page.route(`**/api/v1/projects/${PROJECT_ID}/templates*`, async (route) => {
+    test('navigates to agent editor when clicking a row', async ({ page }) => {
+      await page.route(`**/api/v1/projects/${PROJECT_ID}/agents*`, async (route) => {
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({
-            data: mockTemplates,
+            data: mockAgents,
             pagination: { total: 3, page: 1, per_page: 20 },
           }),
         })
       })
 
-      await page.goto(`/projects/${PROJECT_ID}/templates`)
+      await page.goto(`/projects/${PROJECT_ID}/agents`)
 
       await page.getByText('Implement Feature').click()
 
-      await expect(page).toHaveURL(`/projects/${PROJECT_ID}/templates/t1`)
+      await expect(page).toHaveURL(`/projects/${PROJECT_ID}/agents/t1`)
     })
 
-    test('filters templates by type', async ({ page }) => {
-      await page.route(`**/api/v1/projects/${PROJECT_ID}/templates*`, async (route) => {
+    test('filters agents by scope', async ({ page }) => {
+      await page.route(`**/api/v1/projects/${PROJECT_ID}/agents*`, async (route) => {
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({
-            data: mockTemplates,
+            data: mockAgents,
             pagination: { total: 3, page: 1, per_page: 20 },
           }),
         })
       })
 
-      await page.goto(`/projects/${PROJECT_ID}/templates`)
+      await page.goto(`/projects/${PROJECT_ID}/agents`)
 
       await expect(page.getByText('Implement Feature')).toBeVisible()
       await expect(page.getByText('Code Review')).toBeVisible()
       await expect(page.getByText('Merge Strategy')).toBeVisible()
 
-      await page.locator('#type-filter').click()
-      await page.getByText('Review', { exact: true }).click()
+      await page.locator('#scope-filter').click()
+      await page.getByText('Global', { exact: true }).click()
 
-      await expect(page.getByText('Code Review')).toBeVisible()
+      await expect(page.getByText('Merge Strategy')).toBeVisible()
       await expect(page.getByText('Implement Feature')).not.toBeVisible()
-      await expect(page.getByText('Merge Strategy')).not.toBeVisible()
+      await expect(page.getByText('Code Review')).not.toBeVisible()
     })
   })
 
@@ -222,7 +229,7 @@ test.describe('Prompt Template List Page', () => {
       })
 
       await page.route(`**/api/v1/projects/${PROJECT_ID}`, async (route) => {
-        if (route.request().url().includes('/templates')) return route.fallback()
+        if (route.request().url().includes('/agents')) return route.fallback()
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
@@ -237,45 +244,45 @@ test.describe('Prompt Template List Page', () => {
       })
     })
 
-    test('shows Create Template button for admin user', async ({ page }) => {
-      await page.route(`**/api/v1/projects/${PROJECT_ID}/templates*`, async (route) => {
+    test('shows New Agent button for admin user', async ({ page }) => {
+      await page.route(`**/api/v1/projects/${PROJECT_ID}/agents*`, async (route) => {
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({
-            data: mockTemplates,
+            data: mockAgents,
             pagination: { total: 3, page: 1, per_page: 20 },
           }),
         })
       })
 
-      await page.goto(`/projects/${PROJECT_ID}/templates`)
+      await page.goto(`/projects/${PROJECT_ID}/agents`)
 
       await expect(page.getByText('Implement Feature')).toBeVisible()
-      await expect(page.getByRole('button', { name: 'Create Template' })).toBeVisible()
+      await expect(page.getByRole('button', { name: 'New Agent' })).toBeVisible()
     })
 
-    test('navigates to create page when clicking Create Template', async ({ page }) => {
-      await page.route(`**/api/v1/projects/${PROJECT_ID}/templates*`, async (route) => {
+    test('navigates to create page when clicking New Agent', async ({ page }) => {
+      await page.route(`**/api/v1/projects/${PROJECT_ID}/agents*`, async (route) => {
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({
-            data: mockTemplates,
+            data: mockAgents,
             pagination: { total: 3, page: 1, per_page: 20 },
           }),
         })
       })
 
-      await page.goto(`/projects/${PROJECT_ID}/templates`)
+      await page.goto(`/projects/${PROJECT_ID}/agents`)
 
-      await page.getByRole('button', { name: 'Create Template' }).click()
+      await page.getByRole('button', { name: 'New Agent' }).click()
 
-      await expect(page).toHaveURL(`/projects/${PROJECT_ID}/templates/new`)
+      await expect(page).toHaveURL(`/projects/${PROJECT_ID}/agents/new`)
     })
 
-    test('shows Create Template CTA in empty state for admin', async ({ page }) => {
-      await page.route(`**/api/v1/projects/${PROJECT_ID}/templates*`, async (route) => {
+    test('shows New Agent CTA in empty state for admin', async ({ page }) => {
+      await page.route(`**/api/v1/projects/${PROJECT_ID}/agents*`, async (route) => {
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
@@ -286,12 +293,12 @@ test.describe('Prompt Template List Page', () => {
         })
       })
 
-      await page.goto(`/projects/${PROJECT_ID}/templates`)
+      await page.goto(`/projects/${PROJECT_ID}/agents`)
 
       await expect(
-        page.getByText('No prompt templates found for this project.'),
+        page.getByText('No agents found for this project.'),
       ).toBeVisible()
-      await expect(page.getByRole('button', { name: 'Create Template' })).toBeVisible()
+      await expect(page.getByRole('button', { name: 'New Agent' })).toBeVisible()
     })
   })
 })

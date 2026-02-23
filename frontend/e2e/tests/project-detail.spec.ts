@@ -40,7 +40,7 @@ test.describe('Project Detail — Tabbed Navigation', () => {
     await page.route('**/api/v1/projects/p1', async (route) => {
       if (route.request().url().includes('/epics')) return route.fallback()
       if (route.request().url().includes('/pipeline')) return route.fallback()
-      if (route.request().url().includes('/templates')) return route.fallback()
+      if (route.request().url().includes('/agents')) return route.fallback()
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -86,7 +86,7 @@ test.describe('Project Detail — Tabbed Navigation', () => {
     await expect(tabMenu.getByText('Overview')).toBeVisible()
     await expect(tabMenu.getByText('Board')).toBeVisible()
     await expect(tabMenu.getByText('Pipeline')).toBeVisible()
-    await expect(tabMenu.getByText('Templates')).toBeVisible()
+    await expect(tabMenu.getByText('Agents')).toBeVisible()
   })
 
   test('Overview tab is active by default at /projects/:id', async ({ page }) => {
@@ -122,13 +122,13 @@ test.describe('Project Detail — Tabbed Navigation', () => {
     await expect(page.getByRole('heading', { name: 'Pipeline Configuration' })).toBeVisible()
   })
 
-  test('clicking Templates tab navigates to templates sub-page', async ({ page }) => {
+  test('clicking Agents tab navigates to templates sub-page', async ({ page }) => {
     await page.goto('/projects/p1')
 
-    await page.getByTestId('project-tabs').getByText('Templates').click()
+    await page.getByTestId('project-tabs').getByText('Agents').click()
 
-    await expect(page).toHaveURL('/projects/p1/templates')
-    await expect(page.getByRole('heading', { name: 'Prompt Templates', exact: true })).toBeVisible()
+    await expect(page).toHaveURL('/projects/p1/agents')
+    await expect(page.getByRole('heading', { name: 'Prompt Agents', exact: true })).toBeVisible()
   })
 
   test('back button navigates to projects list', async ({ page }) => {
@@ -153,7 +153,7 @@ test.describe('Project Detail — Tabbed Navigation', () => {
     await page.route('**/api/v1/projects/p1', async (route) => {
       if (route.request().url().includes('/epics')) return route.fallback()
       if (route.request().url().includes('/pipeline')) return route.fallback()
-      if (route.request().url().includes('/templates')) return route.fallback()
+      if (route.request().url().includes('/agents')) return route.fallback()
       await route.fulfill({
         status: 404,
         contentType: 'application/json',
