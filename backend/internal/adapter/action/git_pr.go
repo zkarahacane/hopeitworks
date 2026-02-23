@@ -17,28 +17,36 @@ import (
 type GitPRAction struct {
 	gitProviderFactory port.GitProviderFactory
 	storyRepo          port.StoryRepository
+	projectRepo        port.ProjectRepository
 	logger             *slog.Logger
 }
 
 // NewGitPRAction creates a new GitPRAction.
-func NewGitPRAction(gitProviderFactory port.GitProviderFactory, storyRepo port.StoryRepository, logger *slog.Logger) *GitPRAction {
-	return &GitPRAction{gitProviderFactory: gitProviderFactory, storyRepo: storyRepo, logger: logger}
+func NewGitPRAction(gitProviderFactory port.GitProviderFactory, storyRepo port.StoryRepository, projectRepo port.ProjectRepository, logger *slog.Logger) *GitPRAction {
+	return &GitPRAction{gitProviderFactory: gitProviderFactory, storyRepo: storyRepo, projectRepo: projectRepo, logger: logger}
 }
 
 // Name returns the action identifier.
 func (a *GitPRAction) Name() string { return "git_pr" }
 
-// Execute creates a pull request using the GitProvider.
+// Execute creates a pull request using the GitProvider via remote API (no local clone needed).
 // It reads configuration from runCtx.Metadata:
 //   - title_template: PR title template with {story_key}, {story_title}, {scope}, {branch_name} placeholders
 //   - target_branch: base branch for the PR (default: "main")
 //   - draft: "true" to create a draft PR
-//   - work_dir: working directory for git operations
 //   - branch_name: source branch (required, typically set by git_branch step)
 func (a *GitPRAction) Execute(ctx context.Context, runCtx *model.RunContext) error {
 	gitProvider, err := a.gitProviderFactory.ForProjectID(ctx, runCtx.ProjectID)
 	if err != nil {
 		return fmt.Errorf("resolve git provider: %w", err)
+	}
+
+	project, err := a.projectRepo.GetByID(ctx, runCtx.ProjectID)
+	if err != nil {
+		return fmt.Errorf("fetch project: %w", err)
+	}
+	if project.RepoURL == nil || *project.RepoURL == "" {
+		return fmt.Errorf("git_pr: project has no repo_url configured")
 	}
 
 	// Read config from metadata
@@ -51,11 +59,6 @@ func (a *GitPRAction) Execute(ctx context.Context, runCtx *model.RunContext) err
 		targetBranch = "main"
 	}
 	draft := metadataString(runCtx.Metadata, "draft") == "true"
-
-	workDir := metadataString(runCtx.Metadata, "work_dir")
-	if workDir == "" {
-		return fmt.Errorf("git_pr: work_dir not found in run context metadata")
-	}
 
 	branchName := metadataString(runCtx.Metadata, "branch_name")
 	if branchName == "" {
@@ -88,7 +91,7 @@ func (a *GitPRAction) Execute(ctx context.Context, runCtx *model.RunContext) err
 		"branch", branchName, "target", targetBranch,
 		"story_key", story.Key, "draft", draft)
 
-	prURL, err := gitProvider.CreatePR(ctx, workDir, title, body, targetBranch)
+	prURL, err := gitProvider.CreateRemotePR(ctx, *project.RepoURL, title, body, branchName, targetBranch)
 	if err != nil {
 		return fmt.Errorf("create PR: %w", err)
 	}

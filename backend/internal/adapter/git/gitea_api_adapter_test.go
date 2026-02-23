@@ -396,3 +396,152 @@ func TestStripCredentials(t *testing.T) {
 		t.Errorf("expected path preserved, got %q", got)
 	}
 }
+
+func TestGiteaAPIAdapter_CreateRemoteBranch(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("expected POST, got %s", r.Method)
+		}
+		if !strings.Contains(r.URL.Path, "/api/v1/repos/myorg/myrepo/branches") {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+
+		var body giteaCreateBranchRequest
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("failed to decode request body: %v", err)
+		}
+		if body.NewBranchName != "feat/S-01-my-feature" {
+			t.Errorf("expected new_branch_name %q, got %q", "feat/S-01-my-feature", body.NewBranchName)
+		}
+		if body.OldBranchName != "main" {
+			t.Errorf("expected old_branch_name %q, got %q", "main", body.OldBranchName)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"name":"feat/S-01-my-feature"}`))
+	}))
+	defer srv.Close()
+
+	adapter := NewGiteaAPIAdapter(srv.URL, "test-token", nil, testLogger())
+
+	repoURL := fmt.Sprintf("%s/myorg/myrepo", srv.URL)
+	err := adapter.CreateRemoteBranch(context.Background(), repoURL, "feat/S-01-my-feature", "main")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestGiteaAPIAdapter_CreateRemotePR(t *testing.T) {
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("expected POST, got %s", r.Method)
+		}
+		if !strings.Contains(r.URL.Path, "/api/v1/repos/myorg/myrepo/pulls") {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+
+		var body giteaPRRequest
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("failed to decode request body: %v", err)
+		}
+		if body.Head != "feat/S-01-test" {
+			t.Errorf("expected head %q, got %q", "feat/S-01-test", body.Head)
+		}
+		if body.Base != "main" {
+			t.Errorf("expected base %q, got %q", "main", body.Base)
+		}
+
+		resp := giteaPRResponse{
+			Number:  42,
+			HTMLURL: fmt.Sprintf("%s/myorg/myrepo/pulls/42", srv.URL),
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer srv.Close()
+
+	adapter := NewGiteaAPIAdapter(srv.URL, "test-token", nil, testLogger())
+
+	repoURL := fmt.Sprintf("%s/myorg/myrepo", srv.URL)
+	prURL, err := adapter.CreateRemotePR(context.Background(), repoURL, "test PR", "body text", "feat/S-01-test", "main")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(prURL, "/pulls/42") {
+		t.Errorf("expected PR URL with /pulls/42, got %q", prURL)
+	}
+}
+
+func TestGiteaAPIAdapter_GetRemoteCIStatus(t *testing.T) {
+	tests := []struct {
+		name       string
+		statuses   []giteaCommitStatus
+		wantStatus string
+	}{
+		{
+			name:       "no statuses",
+			statuses:   []giteaCommitStatus{},
+			wantStatus: "no_checks",
+		},
+		{
+			name:       "all success",
+			statuses:   []giteaCommitStatus{{Status: "success"}, {Status: "success"}},
+			wantStatus: "pass",
+		},
+		{
+			name:       "one failure",
+			statuses:   []giteaCommitStatus{{Status: "success"}, {Status: "failure"}},
+			wantStatus: "fail",
+		},
+		{
+			name:       "one pending",
+			statuses:   []giteaCommitStatus{{Status: "success"}, {Status: "pending"}},
+			wantStatus: "pending",
+		},
+		{
+			name:       "error state",
+			statuses:   []giteaCommitStatus{{Status: "error"}},
+			wantStatus: "fail",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mux := http.NewServeMux()
+			mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+				if strings.Contains(r.URL.Path, "/pulls/") && !strings.Contains(r.URL.Path, "/statuses") {
+					// PR details endpoint
+					w.Header().Set("Content-Type", "application/json")
+					_ = json.NewEncoder(w).Encode(map[string]any{
+						"head": map[string]string{"sha": "abc123def"},
+					})
+					return
+				}
+				if strings.Contains(r.URL.Path, "/statuses") {
+					// Commit statuses endpoint
+					w.Header().Set("Content-Type", "application/json")
+					_ = json.NewEncoder(w).Encode(tt.statuses)
+					return
+				}
+				t.Errorf("unexpected path: %s", r.URL.Path)
+			})
+
+			srv := httptest.NewServer(mux)
+			defer srv.Close()
+
+			adapter := NewGiteaAPIAdapter(srv.URL, "test-token", nil, testLogger())
+
+			prURL := fmt.Sprintf("%s/owner/repo/pulls/10", srv.URL)
+			status, err := adapter.GetRemoteCIStatus(context.Background(), prURL)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if status != tt.wantStatus {
+				t.Errorf("got status %q, want %q", status, tt.wantStatus)
+			}
+		})
+	}
+}

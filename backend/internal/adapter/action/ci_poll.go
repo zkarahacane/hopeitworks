@@ -59,8 +59,6 @@ func (a *CIPollAction) Execute(ctx context.Context, runCtx *model.RunContext) er
 		return fmt.Errorf("resolve git provider: %w", err)
 	}
 
-	workDir, _ := runCtx.Metadata["work_dir"].(string)
-
 	pollInterval := a.config.DefaultPollInterval
 	if secs, ok := runCtx.Metadata["poll_interval_seconds"].(float64); ok && secs > 0 {
 		pollInterval = time.Duration(secs) * time.Second
@@ -85,9 +83,9 @@ func (a *CIPollAction) Execute(ctx context.Context, runCtx *model.RunContext) er
 			}
 			return fmt.Errorf("CI_POLL_TIMEOUT: timed out after %v waiting for CI on %s", timeout, prURL)
 		case <-ticker.C:
-			status, err := gitProvider.GetCIStatus(pollCtx, workDir)
+			status, err := gitProvider.GetRemoteCIStatus(pollCtx, prURL)
 			if err != nil {
-				a.logger.Warn("ci_poll: GetCIStatus error", "error", err, "pr_url", prURL)
+				a.logger.Warn("ci_poll: GetRemoteCIStatus error", "error", err, "pr_url", prURL)
 				a.publishPollingEvent(ctx, runCtx, prURL, "error")
 				continue
 			}

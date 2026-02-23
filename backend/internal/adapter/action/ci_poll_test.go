@@ -23,25 +23,34 @@ const (
 // --- Mocks for CIPollAction ---
 
 type ciMockGitProvider struct {
-	mu            sync.Mutex
-	getCIStatusFn func(ctx context.Context, workDir string) (string, error)
-	calls         int
+	mu                  sync.Mutex
+	getRemoteCIStatusFn func(ctx context.Context, prURL string) (string, error)
+	calls               int
 }
 
-func (m *ciMockGitProvider) GetCIStatus(ctx context.Context, workDir string) (string, error) {
+func (m *ciMockGitProvider) GetRemoteCIStatus(ctx context.Context, prURL string) (string, error) {
 	m.mu.Lock()
 	m.calls++
 	m.mu.Unlock()
-	return m.getCIStatusFn(ctx, workDir)
+	return m.getRemoteCIStatusFn(ctx, prURL)
 }
 
 func (m *ciMockGitProvider) CloneRepo(_ context.Context, _ string, _ string) error    { return nil }
 func (m *ciMockGitProvider) CreateBranch(_ context.Context, _ string, _ string) error { return nil }
-func (m *ciMockGitProvider) Push(_ context.Context, _ string, _ string) error         { return nil }
+func (m *ciMockGitProvider) CreateRemoteBranch(_ context.Context, _ string, _ string, _ string) error {
+	return nil
+}
+func (m *ciMockGitProvider) Push(_ context.Context, _ string, _ string) error { return nil }
 func (m *ciMockGitProvider) CreatePR(_ context.Context, _ string, _ string, _ string, _ string) (string, error) {
 	return "", nil
 }
-func (m *ciMockGitProvider) MergePR(_ context.Context, _ string, _ string) error   { return nil }
+func (m *ciMockGitProvider) CreateRemotePR(_ context.Context, _ string, _ string, _ string, _ string, _ string) (string, error) {
+	return "", nil
+}
+func (m *ciMockGitProvider) MergePR(_ context.Context, _ string, _ string) error { return nil }
+func (m *ciMockGitProvider) GetCIStatus(_ context.Context, _ string) (string, error) {
+	return "", nil
+}
 func (m *ciMockGitProvider) GetPRDiff(_ context.Context, _ string) (string, error) { return "", nil }
 
 func (m *ciMockGitProvider) getCalls() int {
@@ -124,7 +133,11 @@ func TestCIPollAction_Name(t *testing.T) {
 }
 
 func TestCIPollAction_Execute_MissingPRURL(t *testing.T) {
-	gitProvider := &ciMockGitProvider{}
+	gitProvider := &ciMockGitProvider{
+		getRemoteCIStatusFn: func(_ context.Context, _ string) (string, error) {
+			return ciStatusPass, nil
+		},
+	}
 	factory := &ciMockGitProviderFactory{provider: gitProvider}
 	eventPub := &ciMockEventPublisher{}
 
@@ -139,15 +152,15 @@ func TestCIPollAction_Execute_MissingPRURL(t *testing.T) {
 		t.Fatalf("expected error to contain %q, got %q", "CI_POLL_MISSING_PR_URL", err.Error())
 	}
 
-	// GetCIStatus should never be called
+	// GetRemoteCIStatus should never be called
 	if gitProvider.getCalls() != 0 {
-		t.Fatalf("expected 0 GetCIStatus calls, got %d", gitProvider.getCalls())
+		t.Fatalf("expected 0 GetRemoteCIStatus calls, got %d", gitProvider.getCalls())
 	}
 }
 
 func TestCIPollAction_Execute_HappyPath_PassOnFirstTick(t *testing.T) {
 	gitProvider := &ciMockGitProvider{
-		getCIStatusFn: func(_ context.Context, _ string) (string, error) {
+		getRemoteCIStatusFn: func(_ context.Context, _ string) (string, error) {
 			return ciStatusPass, nil
 		},
 	}
@@ -164,9 +177,9 @@ func TestCIPollAction_Execute_HappyPath_PassOnFirstTick(t *testing.T) {
 		t.Fatalf("expected nil error, got %v", err)
 	}
 
-	// One GetCIStatus call for the "pass"
+	// One GetRemoteCIStatus call for the "pass"
 	if gitProvider.getCalls() != 1 {
-		t.Fatalf("expected 1 GetCIStatus call, got %d", gitProvider.getCalls())
+		t.Fatalf("expected 1 GetRemoteCIStatus call, got %d", gitProvider.getCalls())
 	}
 
 	// One event published (for the "pass" status)
@@ -185,7 +198,7 @@ func TestCIPollAction_Execute_HappyPath_PassOnFirstTick(t *testing.T) {
 func TestCIPollAction_Execute_PendingThenPass(t *testing.T) {
 	callCount := 0
 	gitProvider := &ciMockGitProvider{
-		getCIStatusFn: func(_ context.Context, _ string) (string, error) {
+		getRemoteCIStatusFn: func(_ context.Context, _ string) (string, error) {
 			callCount++
 			if callCount < 3 {
 				return ciStatusPending, nil
@@ -208,7 +221,7 @@ func TestCIPollAction_Execute_PendingThenPass(t *testing.T) {
 
 	// 3 calls: pending, pending, pass
 	if gitProvider.getCalls() != 3 {
-		t.Fatalf("expected 3 GetCIStatus calls, got %d", gitProvider.getCalls())
+		t.Fatalf("expected 3 GetRemoteCIStatus calls, got %d", gitProvider.getCalls())
 	}
 
 	// 3 events published (2 pending + 1 pass)
@@ -226,7 +239,7 @@ func TestCIPollAction_Execute_PendingThenPass(t *testing.T) {
 func TestCIPollAction_Execute_CIFailure(t *testing.T) {
 	prURL := "https://github.com/owner/repo/pull/3"
 	gitProvider := &ciMockGitProvider{
-		getCIStatusFn: func(_ context.Context, _ string) (string, error) {
+		getRemoteCIStatusFn: func(_ context.Context, _ string) (string, error) {
 			return ciStatusFail, nil
 		},
 	}
@@ -250,7 +263,7 @@ func TestCIPollAction_Execute_CIFailure(t *testing.T) {
 
 func TestCIPollAction_Execute_Timeout(t *testing.T) {
 	gitProvider := &ciMockGitProvider{
-		getCIStatusFn: func(_ context.Context, _ string) (string, error) {
+		getRemoteCIStatusFn: func(_ context.Context, _ string) (string, error) {
 			return ciStatusPending, nil
 		},
 	}
@@ -279,7 +292,7 @@ func TestCIPollAction_Execute_Timeout(t *testing.T) {
 func TestCIPollAction_Execute_ContextCancellation(t *testing.T) {
 	ready := make(chan struct{})
 	gitProvider := &ciMockGitProvider{
-		getCIStatusFn: func(ctx context.Context, _ string) (string, error) {
+		getRemoteCIStatusFn: func(ctx context.Context, _ string) (string, error) {
 			// Signal that we're inside the poll loop, then block.
 			select {
 			case ready <- struct{}{}:

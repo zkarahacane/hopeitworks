@@ -16,24 +16,28 @@ import (
 
 // --- git_branch-specific mocks ---
 
-type branchCall struct {
-	WorkDir    string
+type remoteBranchCall struct {
+	RepoURL    string
 	BranchName string
+	BaseBranch string
 }
 
 type gbMockGitProvider struct {
-	mu             sync.Mutex
-	createBranchFn func(ctx context.Context, workDir, branchName string) error
-	branchCalls    []branchCall
+	mu                   sync.Mutex
+	createRemoteBranchFn func(ctx context.Context, repoURL, branchName, baseBranch string) error
+	remoteBranchCalls    []remoteBranchCall
 }
 
 func (m *gbMockGitProvider) CloneRepo(_ context.Context, _ string, _ string) error { return nil }
-func (m *gbMockGitProvider) CreateBranch(ctx context.Context, workDir, branchName string) error {
+func (m *gbMockGitProvider) CreateBranch(_ context.Context, _ string, _ string) error {
+	return nil
+}
+func (m *gbMockGitProvider) CreateRemoteBranch(ctx context.Context, repoURL, branchName, baseBranch string) error {
 	m.mu.Lock()
-	m.branchCalls = append(m.branchCalls, branchCall{WorkDir: workDir, BranchName: branchName})
+	m.remoteBranchCalls = append(m.remoteBranchCalls, remoteBranchCall{RepoURL: repoURL, BranchName: branchName, BaseBranch: baseBranch})
 	m.mu.Unlock()
-	if m.createBranchFn != nil {
-		return m.createBranchFn(ctx, workDir, branchName)
+	if m.createRemoteBranchFn != nil {
+		return m.createRemoteBranchFn(ctx, repoURL, branchName, baseBranch)
 	}
 	return nil
 }
@@ -41,19 +45,25 @@ func (m *gbMockGitProvider) Push(_ context.Context, _ string, _ string) error { 
 func (m *gbMockGitProvider) CreatePR(_ context.Context, _ string, _ string, _ string, _ string) (string, error) {
 	return "", nil
 }
+func (m *gbMockGitProvider) CreateRemotePR(_ context.Context, _ string, _ string, _ string, _ string, _ string) (string, error) {
+	return "", nil
+}
 func (m *gbMockGitProvider) MergePR(_ context.Context, _ string, _ string) error { return nil }
 func (m *gbMockGitProvider) GetCIStatus(_ context.Context, _ string) (string, error) {
-	return "pass", nil
+	return ciStatusPass, nil
+}
+func (m *gbMockGitProvider) GetRemoteCIStatus(_ context.Context, _ string) (string, error) {
+	return ciStatusPass, nil
 }
 func (m *gbMockGitProvider) GetPRDiff(_ context.Context, _ string) (string, error) {
 	return "", nil
 }
 
-func (m *gbMockGitProvider) getBranchCalls() []branchCall {
+func (m *gbMockGitProvider) getRemoteBranchCalls() []remoteBranchCall {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	result := make([]branchCall, len(m.branchCalls))
-	copy(result, m.branchCalls)
+	result := make([]remoteBranchCall, len(m.remoteBranchCalls))
+	copy(result, m.remoteBranchCalls)
 	return result
 }
 
@@ -102,7 +112,40 @@ func (m *gbMockStoryRepo) Update(_ context.Context, s *model.Story) (*model.Stor
 }
 func (m *gbMockStoryRepo) Delete(_ context.Context, _ uuid.UUID) error { return nil }
 
+type gbMockProjectRepo struct {
+	getByIDFn func(ctx context.Context, id uuid.UUID) (*model.Project, error)
+}
+
+func (m *gbMockProjectRepo) Create(_ context.Context, p *model.Project) (*model.Project, error) {
+	return p, nil
+}
+func (m *gbMockProjectRepo) GetByID(ctx context.Context, id uuid.UUID) (*model.Project, error) {
+	if m.getByIDFn != nil {
+		return m.getByIDFn(ctx, id)
+	}
+	return nil, apperrors.NewNotFound("project", id)
+}
+func (m *gbMockProjectRepo) List(_ context.Context, _, _ int32) ([]*model.Project, error) {
+	return nil, nil
+}
+func (m *gbMockProjectRepo) Count(_ context.Context) (int64, error) { return 0, nil }
+func (m *gbMockProjectRepo) Update(_ context.Context, p *model.Project) (*model.Project, error) {
+	return p, nil
+}
+func (m *gbMockProjectRepo) Delete(_ context.Context, _ uuid.UUID) error { return nil }
+func (m *gbMockProjectRepo) IncrementCircuitBreakerCount(_ context.Context, _ uuid.UUID) (*model.Project, error) {
+	return nil, nil
+}
+func (m *gbMockProjectRepo) ResetCircuitBreaker(_ context.Context, _ uuid.UUID) (*model.Project, error) {
+	return nil, nil
+}
+
 // --- Helpers ---
+
+const (
+	testRepoURL    = "https://github.com/owner/repo"
+	testBaseBranch = "main"
+)
 
 func gbRunCtx(cfg map[string]string, metadata map[string]any) *model.RunContext {
 	runID := uuid.New()
@@ -130,10 +173,19 @@ func gbRunCtx(cfg map[string]string, metadata map[string]any) *model.RunContext 
 	}
 }
 
+func gbDefaultProjectRepo(_ uuid.UUID) *gbMockProjectRepo {
+	repoURL := testRepoURL
+	return &gbMockProjectRepo{
+		getByIDFn: func(_ context.Context, id uuid.UUID) (*model.Project, error) {
+			return &model.Project{ID: id, RepoURL: &repoURL}, nil
+		},
+	}
+}
+
 // --- Tests ---
 
 func TestGitBranchAction_Name(t *testing.T) {
-	a := action.NewGitBranchAction(&gbMockGitProviderFactory{}, nil, testLogger())
+	a := action.NewGitBranchAction(&gbMockGitProviderFactory{}, nil, nil, testLogger())
 	if a.Name() != "git_branch" {
 		t.Fatalf("expected Name() = %q, got %q", "git_branch", a.Name())
 	}
@@ -141,6 +193,7 @@ func TestGitBranchAction_Name(t *testing.T) {
 
 func TestGitBranchAction_Execute_HappyPath(t *testing.T) {
 	storyID := uuid.New()
+	projectID := uuid.New()
 	gitProvider := &gbMockGitProvider{}
 	factory := &gbMockGitProviderFactory{provider: gitProvider}
 	storyRepo := &gbMockStoryRepo{
@@ -148,32 +201,36 @@ func TestGitBranchAction_Execute_HappyPath(t *testing.T) {
 			return &model.Story{ID: id, Key: "S-03", Title: "Add login page"}, nil
 		},
 	}
+	projectRepo := gbDefaultProjectRepo(projectID)
 
-	a := action.NewGitBranchAction(factory, storyRepo, testLogger())
+	a := action.NewGitBranchAction(factory, storyRepo, projectRepo, testLogger())
 
 	cfg := map[string]string{
 		"branch_pattern": "feat/{story_key}-{slug}",
-		"base_branch":    "main",
-		"work_dir":       "/tmp/repo",
+		"base_branch":    testBaseBranch,
 	}
 	runCtx := gbRunCtx(cfg, map[string]any{})
 	runCtx.StoryID = storyID
+	runCtx.ProjectID = projectID
 
 	err := a.Execute(context.Background(), runCtx)
 	if err != nil {
 		t.Fatalf("expected nil error, got %v", err)
 	}
 
-	// Verify CreateBranch was called with correct args
-	calls := gitProvider.getBranchCalls()
+	// Verify CreateRemoteBranch was called with correct args
+	calls := gitProvider.getRemoteBranchCalls()
 	if len(calls) != 1 {
-		t.Fatalf("expected 1 CreateBranch call, got %d", len(calls))
+		t.Fatalf("expected 1 CreateRemoteBranch call, got %d", len(calls))
 	}
-	if calls[0].WorkDir != "/tmp/repo" {
-		t.Fatalf("expected work_dir %q, got %q", "/tmp/repo", calls[0].WorkDir)
+	if calls[0].RepoURL != testRepoURL {
+		t.Fatalf("expected repo_url %q, got %q", testRepoURL, calls[0].RepoURL)
 	}
 	if calls[0].BranchName != "feat/S-03-add-login-page" {
 		t.Fatalf("expected branch %q, got %q", "feat/S-03-add-login-page", calls[0].BranchName)
+	}
+	if calls[0].BaseBranch != testBaseBranch {
+		t.Fatalf("expected base_branch %q, got %q", testBaseBranch, calls[0].BaseBranch)
 	}
 
 	// Verify metadata was set
@@ -203,6 +260,7 @@ func TestGitBranchAction_SlugDerivation(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.title, func(t *testing.T) {
+			projectID := uuid.New()
 			gitProvider := &gbMockGitProvider{}
 			factory := &gbMockGitProviderFactory{provider: gitProvider}
 			storyRepo := &gbMockStoryRepo{
@@ -210,23 +268,24 @@ func TestGitBranchAction_SlugDerivation(t *testing.T) {
 					return &model.Story{ID: id, Key: "S-01", Title: tc.title}, nil
 				},
 			}
+			projectRepo := gbDefaultProjectRepo(projectID)
 
-			a := action.NewGitBranchAction(factory, storyRepo, testLogger())
+			a := action.NewGitBranchAction(factory, storyRepo, projectRepo, testLogger())
 
 			cfg := map[string]string{
 				"branch_pattern": "feat/{story_key}-{slug}",
-				"work_dir":       "/tmp/repo",
 			}
 			runCtx := gbRunCtx(cfg, map[string]any{})
+			runCtx.ProjectID = projectID
 
 			err := a.Execute(context.Background(), runCtx)
 			if err != nil {
 				t.Fatalf("expected nil error, got %v", err)
 			}
 
-			calls := gitProvider.getBranchCalls()
+			calls := gitProvider.getRemoteBranchCalls()
 			if len(calls) != 1 {
-				t.Fatalf("expected 1 CreateBranch call, got %d", len(calls))
+				t.Fatalf("expected 1 CreateRemoteBranch call, got %d", len(calls))
 			}
 
 			expectedBranch := "feat/S-01-" + tc.expected
@@ -238,6 +297,7 @@ func TestGitBranchAction_SlugDerivation(t *testing.T) {
 }
 
 func TestGitBranchAction_Execute_DefaultBaseBranch(t *testing.T) {
+	projectID := uuid.New()
 	gitProvider := &gbMockGitProvider{}
 	factory := &gbMockGitProviderFactory{provider: gitProvider}
 	storyRepo := &gbMockStoryRepo{
@@ -245,32 +305,36 @@ func TestGitBranchAction_Execute_DefaultBaseBranch(t *testing.T) {
 			return &model.Story{ID: id, Key: "S-05", Title: "Some feature"}, nil
 		},
 	}
+	projectRepo := gbDefaultProjectRepo(projectID)
 
-	a := action.NewGitBranchAction(factory, storyRepo, testLogger())
+	a := action.NewGitBranchAction(factory, storyRepo, projectRepo, testLogger())
 
 	// No base_branch in config — should default to "main"
-	cfg := map[string]string{
-		"work_dir": "/tmp/repo",
-	}
+	cfg := map[string]string{}
 	runCtx := gbRunCtx(cfg, map[string]any{})
+	runCtx.ProjectID = projectID
 
 	err := a.Execute(context.Background(), runCtx)
 	if err != nil {
 		t.Fatalf("expected nil error, got %v", err)
 	}
 
-	calls := gitProvider.getBranchCalls()
+	calls := gitProvider.getRemoteBranchCalls()
 	if len(calls) != 1 {
-		t.Fatalf("expected 1 CreateBranch call, got %d", len(calls))
+		t.Fatalf("expected 1 CreateRemoteBranch call, got %d", len(calls))
 	}
 
 	// Verify branch was created (default pattern "feat/{story_key}-{slug}")
 	if calls[0].BranchName != "feat/S-05-some-feature" {
 		t.Fatalf("expected branch %q, got %q", "feat/S-05-some-feature", calls[0].BranchName)
 	}
+	if calls[0].BaseBranch != testBaseBranch {
+		t.Fatalf("expected base_branch %q, got %q", testBaseBranch, calls[0].BaseBranch)
+	}
 }
 
 func TestGitBranchAction_Execute_CustomFixPattern(t *testing.T) {
+	projectID := uuid.New()
 	gitProvider := &gbMockGitProvider{}
 	factory := &gbMockGitProviderFactory{provider: gitProvider}
 	storyRepo := &gbMockStoryRepo{
@@ -278,23 +342,24 @@ func TestGitBranchAction_Execute_CustomFixPattern(t *testing.T) {
 			return &model.Story{ID: id, Key: "BUG-7", Title: "Fix null pointer"}, nil
 		},
 	}
+	projectRepo := gbDefaultProjectRepo(projectID)
 
-	a := action.NewGitBranchAction(factory, storyRepo, testLogger())
+	a := action.NewGitBranchAction(factory, storyRepo, projectRepo, testLogger())
 
 	cfg := map[string]string{
 		"branch_pattern": "fix/{story_key}-{slug}",
-		"work_dir":       "/tmp/repo",
 	}
 	runCtx := gbRunCtx(cfg, map[string]any{})
+	runCtx.ProjectID = projectID
 
 	err := a.Execute(context.Background(), runCtx)
 	if err != nil {
 		t.Fatalf("expected nil error, got %v", err)
 	}
 
-	calls := gitProvider.getBranchCalls()
+	calls := gitProvider.getRemoteBranchCalls()
 	if len(calls) != 1 {
-		t.Fatalf("expected 1 CreateBranch call, got %d", len(calls))
+		t.Fatalf("expected 1 CreateRemoteBranch call, got %d", len(calls))
 	}
 	if !strings.HasPrefix(calls[0].BranchName, "fix/") {
 		t.Fatalf("expected branch to start with %q, got %q", "fix/", calls[0].BranchName)
@@ -305,9 +370,10 @@ func TestGitBranchAction_Execute_CustomFixPattern(t *testing.T) {
 }
 
 func TestGitBranchAction_Execute_GitProviderFailure(t *testing.T) {
+	projectID := uuid.New()
 	gitProvider := &gbMockGitProvider{
-		createBranchFn: func(_ context.Context, _, _ string) error {
-			return fmt.Errorf("git checkout failed: branch already exists")
+		createRemoteBranchFn: func(_ context.Context, _, _, _ string) error {
+			return fmt.Errorf("git API failed: branch already exists")
 		},
 	}
 	factory := &gbMockGitProviderFactory{provider: gitProvider}
@@ -316,17 +382,17 @@ func TestGitBranchAction_Execute_GitProviderFailure(t *testing.T) {
 			return &model.Story{ID: id, Key: "S-01", Title: "Test"}, nil
 		},
 	}
+	projectRepo := gbDefaultProjectRepo(projectID)
 
-	a := action.NewGitBranchAction(factory, storyRepo, testLogger())
+	a := action.NewGitBranchAction(factory, storyRepo, projectRepo, testLogger())
 
-	cfg := map[string]string{
-		"work_dir": "/tmp/repo",
-	}
+	cfg := map[string]string{}
 	runCtx := gbRunCtx(cfg, map[string]any{})
+	runCtx.ProjectID = projectID
 
 	err := a.Execute(context.Background(), runCtx)
 	if err == nil {
-		t.Fatal("expected error when CreateBranch fails")
+		t.Fatal("expected error when CreateRemoteBranch fails")
 	}
 	if !strings.Contains(err.Error(), "create branch") {
 		t.Fatalf("expected error containing %q, got %q", "create branch", err.Error())
@@ -339,6 +405,7 @@ func TestGitBranchAction_Execute_GitProviderFailure(t *testing.T) {
 }
 
 func TestGitBranchAction_Execute_StoryNotFound(t *testing.T) {
+	projectID := uuid.New()
 	gitProvider := &gbMockGitProvider{}
 	factory := &gbMockGitProviderFactory{provider: gitProvider}
 	storyRepo := &gbMockStoryRepo{
@@ -346,13 +413,13 @@ func TestGitBranchAction_Execute_StoryNotFound(t *testing.T) {
 			return nil, apperrors.NewNotFound("story", id)
 		},
 	}
+	projectRepo := gbDefaultProjectRepo(projectID)
 
-	a := action.NewGitBranchAction(factory, storyRepo, testLogger())
+	a := action.NewGitBranchAction(factory, storyRepo, projectRepo, testLogger())
 
-	cfg := map[string]string{
-		"work_dir": "/tmp/repo",
-	}
+	cfg := map[string]string{}
 	runCtx := gbRunCtx(cfg, map[string]any{})
+	runCtx.ProjectID = projectID
 
 	err := a.Execute(context.Background(), runCtx)
 	if err == nil {
@@ -363,13 +430,14 @@ func TestGitBranchAction_Execute_StoryNotFound(t *testing.T) {
 	}
 
 	// Verify GitProvider was NOT called
-	calls := gitProvider.getBranchCalls()
+	calls := gitProvider.getRemoteBranchCalls()
 	if len(calls) != 0 {
-		t.Fatalf("expected no CreateBranch calls when story fetch fails, got %d", len(calls))
+		t.Fatalf("expected no CreateRemoteBranch calls when story fetch fails, got %d", len(calls))
 	}
 }
 
-func TestGitBranchAction_Execute_MissingWorkDir(t *testing.T) {
+func TestGitBranchAction_Execute_MissingRepoURL(t *testing.T) {
+	projectID := uuid.New()
 	gitProvider := &gbMockGitProvider{}
 	factory := &gbMockGitProviderFactory{provider: gitProvider}
 	storyRepo := &gbMockStoryRepo{
@@ -377,60 +445,36 @@ func TestGitBranchAction_Execute_MissingWorkDir(t *testing.T) {
 			return &model.Story{ID: id, Key: "S-01", Title: "Test"}, nil
 		},
 	}
+	// Project has no repo_url
+	projectRepo := &gbMockProjectRepo{
+		getByIDFn: func(_ context.Context, id uuid.UUID) (*model.Project, error) {
+			return &model.Project{ID: id}, nil
+		},
+	}
 
-	a := action.NewGitBranchAction(factory, storyRepo, testLogger())
+	a := action.NewGitBranchAction(factory, storyRepo, projectRepo, testLogger())
 
-	// No work_dir in config or metadata
 	cfg := map[string]string{}
 	runCtx := gbRunCtx(cfg, map[string]any{})
+	runCtx.ProjectID = projectID
 
 	err := a.Execute(context.Background(), runCtx)
 	if err == nil {
-		t.Fatal("expected error when work_dir is missing")
+		t.Fatal("expected error when repo_url is missing")
 	}
-	if !strings.Contains(err.Error(), "work_dir") {
-		t.Fatalf("expected error containing %q, got %q", "work_dir", err.Error())
+	if !strings.Contains(err.Error(), "repo_url") {
+		t.Fatalf("expected error containing %q, got %q", "repo_url", err.Error())
 	}
 
 	// Verify GitProvider was NOT called
-	calls := gitProvider.getBranchCalls()
+	calls := gitProvider.getRemoteBranchCalls()
 	if len(calls) != 0 {
-		t.Fatalf("expected no CreateBranch calls when work_dir missing, got %d", len(calls))
-	}
-}
-
-func TestGitBranchAction_Execute_WorkDirFromMetadata(t *testing.T) {
-	gitProvider := &gbMockGitProvider{}
-	factory := &gbMockGitProviderFactory{provider: gitProvider}
-	storyRepo := &gbMockStoryRepo{
-		getByIDFn: func(_ context.Context, id uuid.UUID) (*model.Story, error) {
-			return &model.Story{ID: id, Key: "S-01", Title: "Test"}, nil
-		},
-	}
-
-	a := action.NewGitBranchAction(factory, storyRepo, testLogger())
-
-	// work_dir only in metadata, not in config
-	cfg := map[string]string{}
-	runCtx := gbRunCtx(cfg, map[string]any{
-		"work_dir": "/tmp/from-metadata",
-	})
-
-	err := a.Execute(context.Background(), runCtx)
-	if err != nil {
-		t.Fatalf("expected nil error, got %v", err)
-	}
-
-	calls := gitProvider.getBranchCalls()
-	if len(calls) != 1 {
-		t.Fatalf("expected 1 CreateBranch call, got %d", len(calls))
-	}
-	if calls[0].WorkDir != "/tmp/from-metadata" {
-		t.Fatalf("expected work_dir %q, got %q", "/tmp/from-metadata", calls[0].WorkDir)
+		t.Fatalf("expected no CreateRemoteBranch calls when repo_url missing, got %d", len(calls))
 	}
 }
 
 func TestGitBranchAction_Execute_NilConfig(t *testing.T) {
+	projectID := uuid.New()
 	gitProvider := &gbMockGitProvider{}
 	factory := &gbMockGitProviderFactory{provider: gitProvider}
 	storyRepo := &gbMockStoryRepo{
@@ -438,22 +482,22 @@ func TestGitBranchAction_Execute_NilConfig(t *testing.T) {
 			return &model.Story{ID: id, Key: "S-01", Title: "Test"}, nil
 		},
 	}
+	projectRepo := gbDefaultProjectRepo(projectID)
 
-	a := action.NewGitBranchAction(factory, storyRepo, testLogger())
+	a := action.NewGitBranchAction(factory, storyRepo, projectRepo, testLogger())
 
-	// nil Config on RunStep, work_dir in metadata
-	runCtx := gbRunCtx(nil, map[string]any{
-		"work_dir": "/tmp/repo",
-	})
+	// nil Config on RunStep
+	runCtx := gbRunCtx(nil, map[string]any{})
+	runCtx.ProjectID = projectID
 
 	err := a.Execute(context.Background(), runCtx)
 	if err != nil {
 		t.Fatalf("expected nil error, got %v", err)
 	}
 
-	calls := gitProvider.getBranchCalls()
+	calls := gitProvider.getRemoteBranchCalls()
 	if len(calls) != 1 {
-		t.Fatalf("expected 1 CreateBranch call, got %d", len(calls))
+		t.Fatalf("expected 1 CreateRemoteBranch call, got %d", len(calls))
 	}
 	// Default pattern should be used
 	if !strings.HasPrefix(calls[0].BranchName, "feat/S-01-") {

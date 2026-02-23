@@ -10,46 +10,58 @@ import (
 	"github.com/zakari/hopeitworks/backend/internal/adapter/action"
 	"github.com/zakari/hopeitworks/backend/internal/domain/model"
 	"github.com/zakari/hopeitworks/backend/internal/domain/port"
+	apperrors "github.com/zakari/hopeitworks/backend/pkg/errors"
 )
 
 const (
 	testPRURL     = "https://github.com/owner/repo/pull/42"
 	testPRURLAlt  = "https://github.com/owner/repo/pull/1"
-	testWorkDir   = "/tmp/clone/repo"
 	testBranchPR  = "feat/S-03-add-login-page"
 	testBranchAlt = "feat/S-03-test"
+	prTestRepoURL = "https://github.com/owner/repo"
 )
 
 // --- Mocks for GitPRAction ---
 
-type prMockGitProvider struct {
-	createPRFn func(ctx context.Context, workDir, title, body, baseBranch string) (string, error)
-	calls      []prCreatePRCall
-}
-
-type prCreatePRCall struct {
-	WorkDir    string
+type prRemoteCreatePRCall struct {
+	RepoURL    string
 	Title      string
 	Body       string
+	HeadBranch string
 	BaseBranch string
 }
 
-func (m *prMockGitProvider) CreatePR(ctx context.Context, workDir, title, body, baseBranch string) (string, error) {
-	m.calls = append(m.calls, prCreatePRCall{
-		WorkDir:    workDir,
+type prMockGitProvider struct {
+	createRemotePRFn func(ctx context.Context, repoURL, title, body, headBranch, baseBranch string) (string, error)
+	calls            []prRemoteCreatePRCall
+}
+
+func (m *prMockGitProvider) CreateRemotePR(ctx context.Context, repoURL, title, body, headBranch, baseBranch string) (string, error) {
+	m.calls = append(m.calls, prRemoteCreatePRCall{
+		RepoURL:    repoURL,
 		Title:      title,
 		Body:       body,
+		HeadBranch: headBranch,
 		BaseBranch: baseBranch,
 	})
-	return m.createPRFn(ctx, workDir, title, body, baseBranch)
+	return m.createRemotePRFn(ctx, repoURL, title, body, headBranch, baseBranch)
 }
 
 func (m *prMockGitProvider) CloneRepo(_ context.Context, _ string, _ string) error    { return nil }
 func (m *prMockGitProvider) CreateBranch(_ context.Context, _ string, _ string) error { return nil }
-func (m *prMockGitProvider) Push(_ context.Context, _ string, _ string) error         { return nil }
-func (m *prMockGitProvider) MergePR(_ context.Context, _ string, _ string) error      { return nil }
-func (m *prMockGitProvider) GetCIStatus(_ context.Context, _ string) (string, error)  { return "", nil }
-func (m *prMockGitProvider) GetPRDiff(_ context.Context, _ string) (string, error)    { return "", nil }
+func (m *prMockGitProvider) CreateRemoteBranch(_ context.Context, _ string, _ string, _ string) error {
+	return nil
+}
+func (m *prMockGitProvider) Push(_ context.Context, _ string, _ string) error { return nil }
+func (m *prMockGitProvider) CreatePR(_ context.Context, _ string, _ string, _ string, _ string) (string, error) {
+	return "", nil
+}
+func (m *prMockGitProvider) MergePR(_ context.Context, _ string, _ string) error     { return nil }
+func (m *prMockGitProvider) GetCIStatus(_ context.Context, _ string) (string, error) { return "", nil }
+func (m *prMockGitProvider) GetRemoteCIStatus(_ context.Context, _ string) (string, error) {
+	return "", nil
+}
+func (m *prMockGitProvider) GetPRDiff(_ context.Context, _ string) (string, error) { return "", nil }
 
 type prMockGitProviderFactory struct {
 	provider port.GitProvider
@@ -94,6 +106,34 @@ func (m *prMockStoryRepo) Update(_ context.Context, _ *model.Story) (*model.Stor
 }
 func (m *prMockStoryRepo) Delete(_ context.Context, _ uuid.UUID) error { return nil }
 
+type prMockProjectRepo struct {
+	getByIDFn func(ctx context.Context, id uuid.UUID) (*model.Project, error)
+}
+
+func (m *prMockProjectRepo) Create(_ context.Context, p *model.Project) (*model.Project, error) {
+	return p, nil
+}
+func (m *prMockProjectRepo) GetByID(ctx context.Context, id uuid.UUID) (*model.Project, error) {
+	if m.getByIDFn != nil {
+		return m.getByIDFn(ctx, id)
+	}
+	return nil, apperrors.NewNotFound("project", id)
+}
+func (m *prMockProjectRepo) List(_ context.Context, _, _ int32) ([]*model.Project, error) {
+	return nil, nil
+}
+func (m *prMockProjectRepo) Count(_ context.Context) (int64, error) { return 0, nil }
+func (m *prMockProjectRepo) Update(_ context.Context, p *model.Project) (*model.Project, error) {
+	return p, nil
+}
+func (m *prMockProjectRepo) Delete(_ context.Context, _ uuid.UUID) error { return nil }
+func (m *prMockProjectRepo) IncrementCircuitBreakerCount(_ context.Context, _ uuid.UUID) (*model.Project, error) {
+	return nil, nil
+}
+func (m *prMockProjectRepo) ResetCircuitBreaker(_ context.Context, _ uuid.UUID) (*model.Project, error) {
+	return nil, nil
+}
+
 // --- Helpers ---
 
 func buildPRRunCtx(metadata map[string]any) *model.RunContext {
@@ -133,10 +173,19 @@ func newTestStory(storyID uuid.UUID) *model.Story {
 	}
 }
 
+func prDefaultProjectRepo() *prMockProjectRepo {
+	repoURL := prTestRepoURL
+	return &prMockProjectRepo{
+		getByIDFn: func(_ context.Context, id uuid.UUID) (*model.Project, error) {
+			return &model.Project{ID: id, RepoURL: &repoURL}, nil
+		},
+	}
+}
+
 // --- Tests ---
 
 func TestGitPRAction_Name(t *testing.T) {
-	a := action.NewGitPRAction(&prMockGitProviderFactory{}, nil, testLogger())
+	a := action.NewGitPRAction(&prMockGitProviderFactory{}, nil, nil, testLogger())
 	if a.Name() != "git_pr" {
 		t.Fatalf("expected Name() = %q, got %q", "git_pr", a.Name())
 	}
@@ -144,7 +193,7 @@ func TestGitPRAction_Name(t *testing.T) {
 
 func TestGitPRAction_Execute_HappyPath(t *testing.T) {
 	gitProvider := &prMockGitProvider{
-		createPRFn: func(_ context.Context, _, _, _, _ string) (string, error) {
+		createRemotePRFn: func(_ context.Context, _, _, _, _, _ string) (string, error) {
 			return testPRURL, nil
 		},
 	}
@@ -159,11 +208,11 @@ func TestGitPRAction_Execute_HappyPath(t *testing.T) {
 			return newTestStory(storyID), nil
 		},
 	}
+	projectRepo := prDefaultProjectRepo()
 
-	a := action.NewGitPRAction(factory, storyRepo, testLogger())
+	a := action.NewGitPRAction(factory, storyRepo, projectRepo, testLogger())
 	runCtx := buildPRRunCtx(map[string]any{
 		"branch_name":    testBranchPR,
-		"work_dir":       testWorkDir,
 		"target_branch":  "develop",
 		"title_template": "feat({scope}): {story_title}",
 	})
@@ -180,16 +229,19 @@ func TestGitPRAction_Execute_HappyPath(t *testing.T) {
 		t.Fatalf("expected Metadata[pr_url] = %q, got %q", testPRURL, prURL)
 	}
 
-	// Verify CreatePR was called with correct args
+	// Verify CreateRemotePR was called with correct args
 	if len(gitProvider.calls) != 1 {
-		t.Fatalf("expected 1 CreatePR call, got %d", len(gitProvider.calls))
+		t.Fatalf("expected 1 CreateRemotePR call, got %d", len(gitProvider.calls))
 	}
 	call := gitProvider.calls[0]
-	if call.WorkDir != testWorkDir {
-		t.Errorf("expected workDir = %q, got %q", testWorkDir, call.WorkDir)
+	if call.RepoURL != prTestRepoURL {
+		t.Errorf("expected repoURL = %q, got %q", prTestRepoURL, call.RepoURL)
 	}
 	if call.Title != "feat(backend): Add login page" {
 		t.Errorf("expected title = %q, got %q", "feat(backend): Add login page", call.Title)
+	}
+	if call.HeadBranch != testBranchPR {
+		t.Errorf("expected headBranch = %q, got %q", testBranchPR, call.HeadBranch)
 	}
 	if call.BaseBranch != "develop" {
 		t.Errorf("expected baseBranch = %q, got %q", "develop", call.BaseBranch)
@@ -208,7 +260,7 @@ func TestGitPRAction_Execute_HappyPath(t *testing.T) {
 
 func TestGitPRAction_Execute_DefaultTargetBranch(t *testing.T) {
 	gitProvider := &prMockGitProvider{
-		createPRFn: func(_ context.Context, _, _, _, _ string) (string, error) {
+		createRemotePRFn: func(_ context.Context, _, _, _, _, _ string) (string, error) {
 			return testPRURLAlt, nil
 		},
 	}
@@ -220,11 +272,11 @@ func TestGitPRAction_Execute_DefaultTargetBranch(t *testing.T) {
 			return newTestStory(storyID), nil
 		},
 	}
+	projectRepo := prDefaultProjectRepo()
 
-	a := action.NewGitPRAction(factory, storyRepo, testLogger())
+	a := action.NewGitPRAction(factory, storyRepo, projectRepo, testLogger())
 	runCtx := buildPRRunCtx(map[string]any{
 		"branch_name": testBranchPR,
-		"work_dir":    testWorkDir,
 		// No target_branch — should default to "main"
 	})
 	runCtx.StoryID = storyID
@@ -235,7 +287,7 @@ func TestGitPRAction_Execute_DefaultTargetBranch(t *testing.T) {
 	}
 
 	if len(gitProvider.calls) != 1 {
-		t.Fatalf("expected 1 CreatePR call, got %d", len(gitProvider.calls))
+		t.Fatalf("expected 1 CreateRemotePR call, got %d", len(gitProvider.calls))
 	}
 	if gitProvider.calls[0].BaseBranch != "main" {
 		t.Errorf("expected default baseBranch = %q, got %q", "main", gitProvider.calls[0].BaseBranch)
@@ -244,7 +296,7 @@ func TestGitPRAction_Execute_DefaultTargetBranch(t *testing.T) {
 
 func TestGitPRAction_Execute_DraftFlag(t *testing.T) {
 	gitProvider := &prMockGitProvider{
-		createPRFn: func(_ context.Context, _, _, _, _ string) (string, error) {
+		createRemotePRFn: func(_ context.Context, _, _, _, _, _ string) (string, error) {
 			return testPRURLAlt, nil
 		},
 	}
@@ -256,11 +308,11 @@ func TestGitPRAction_Execute_DraftFlag(t *testing.T) {
 			return newTestStory(storyID), nil
 		},
 	}
+	projectRepo := prDefaultProjectRepo()
 
-	a := action.NewGitPRAction(factory, storyRepo, testLogger())
+	a := action.NewGitPRAction(factory, storyRepo, projectRepo, testLogger())
 	runCtx := buildPRRunCtx(map[string]any{
 		"branch_name": testBranchPR,
-		"work_dir":    testWorkDir,
 		"draft":       "true",
 	})
 	runCtx.StoryID = storyID
@@ -271,7 +323,7 @@ func TestGitPRAction_Execute_DraftFlag(t *testing.T) {
 	}
 
 	if len(gitProvider.calls) != 1 {
-		t.Fatalf("expected 1 CreatePR call, got %d", len(gitProvider.calls))
+		t.Fatalf("expected 1 CreateRemotePR call, got %d", len(gitProvider.calls))
 	}
 	if !strings.HasPrefix(gitProvider.calls[0].Title, "[Draft] ") {
 		t.Errorf("expected title to start with %q, got %q", "[Draft] ", gitProvider.calls[0].Title)
@@ -280,7 +332,7 @@ func TestGitPRAction_Execute_DraftFlag(t *testing.T) {
 
 func TestGitPRAction_Execute_MissingBranchName(t *testing.T) {
 	gitProvider := &prMockGitProvider{
-		createPRFn: func(_ context.Context, _, _, _, _ string) (string, error) {
+		createRemotePRFn: func(_ context.Context, _, _, _, _, _ string) (string, error) {
 			return "", nil
 		},
 	}
@@ -290,10 +342,10 @@ func TestGitPRAction_Execute_MissingBranchName(t *testing.T) {
 			return newTestStory(uuid.New()), nil
 		},
 	}
+	projectRepo := prDefaultProjectRepo()
 
-	a := action.NewGitPRAction(factory, storyRepo, testLogger())
+	a := action.NewGitPRAction(factory, storyRepo, projectRepo, testLogger())
 	runCtx := buildPRRunCtx(map[string]any{
-		"work_dir": testWorkDir,
 		// No branch_name
 	})
 
@@ -305,15 +357,15 @@ func TestGitPRAction_Execute_MissingBranchName(t *testing.T) {
 		t.Fatalf("expected error to mention branch_name, got %q", err.Error())
 	}
 
-	// CreatePR should NOT be called
+	// CreateRemotePR should NOT be called
 	if len(gitProvider.calls) != 0 {
-		t.Fatalf("expected 0 CreatePR calls, got %d", len(gitProvider.calls))
+		t.Fatalf("expected 0 CreateRemotePR calls, got %d", len(gitProvider.calls))
 	}
 }
 
-func TestGitPRAction_Execute_MissingWorkDir(t *testing.T) {
+func TestGitPRAction_Execute_MissingRepoURL(t *testing.T) {
 	gitProvider := &prMockGitProvider{
-		createPRFn: func(_ context.Context, _, _, _, _ string) (string, error) {
+		createRemotePRFn: func(_ context.Context, _, _, _, _, _ string) (string, error) {
 			return "", nil
 		},
 	}
@@ -323,24 +375,29 @@ func TestGitPRAction_Execute_MissingWorkDir(t *testing.T) {
 			return newTestStory(uuid.New()), nil
 		},
 	}
+	// Project has no repo_url
+	projectRepo := &prMockProjectRepo{
+		getByIDFn: func(_ context.Context, id uuid.UUID) (*model.Project, error) {
+			return &model.Project{ID: id}, nil
+		},
+	}
 
-	a := action.NewGitPRAction(factory, storyRepo, testLogger())
+	a := action.NewGitPRAction(factory, storyRepo, projectRepo, testLogger())
 	runCtx := buildPRRunCtx(map[string]any{
 		"branch_name": testBranchAlt,
-		// No work_dir
 	})
 
 	err := a.Execute(context.Background(), runCtx)
 	if err == nil {
-		t.Fatal("expected error when work_dir is missing")
+		t.Fatal("expected error when repo_url is missing")
 	}
-	if !strings.Contains(err.Error(), "work_dir") {
-		t.Fatalf("expected error to mention work_dir, got %q", err.Error())
+	if !strings.Contains(err.Error(), "repo_url") {
+		t.Fatalf("expected error to mention repo_url, got %q", err.Error())
 	}
 
-	// CreatePR should NOT be called
+	// CreateRemotePR should NOT be called
 	if len(gitProvider.calls) != 0 {
-		t.Fatalf("expected 0 CreatePR calls, got %d", len(gitProvider.calls))
+		t.Fatalf("expected 0 CreateRemotePR calls, got %d", len(gitProvider.calls))
 	}
 }
 
@@ -380,7 +437,7 @@ func TestGitPRAction_Execute_TitleRendering(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			gitProvider := &prMockGitProvider{
-				createPRFn: func(_ context.Context, _, _, _, _ string) (string, error) {
+				createRemotePRFn: func(_ context.Context, _, _, _, _, _ string) (string, error) {
 					return testPRURLAlt, nil
 				},
 			}
@@ -394,11 +451,11 @@ func TestGitPRAction_Execute_TitleRendering(t *testing.T) {
 					return story, nil
 				},
 			}
+			projectRepo := prDefaultProjectRepo()
 
-			a := action.NewGitPRAction(factory, storyRepo, testLogger())
+			a := action.NewGitPRAction(factory, storyRepo, projectRepo, testLogger())
 			meta := map[string]any{
 				"branch_name": testBranchAlt,
-				"work_dir":    testWorkDir,
 			}
 			if tt.template != "" {
 				meta["title_template"] = tt.template
@@ -412,7 +469,7 @@ func TestGitPRAction_Execute_TitleRendering(t *testing.T) {
 			}
 
 			if len(gitProvider.calls) != 1 {
-				t.Fatalf("expected 1 CreatePR call, got %d", len(gitProvider.calls))
+				t.Fatalf("expected 1 CreateRemotePR call, got %d", len(gitProvider.calls))
 			}
 			if gitProvider.calls[0].Title != tt.expectedTitle {
 				t.Errorf("expected title = %q, got %q", tt.expectedTitle, gitProvider.calls[0].Title)
@@ -424,7 +481,7 @@ func TestGitPRAction_Execute_TitleRendering(t *testing.T) {
 func TestGitPRAction_Execute_GitProviderFailure(t *testing.T) {
 	gitError := fmt.Errorf("gh CLI: command failed")
 	gitProvider := &prMockGitProvider{
-		createPRFn: func(_ context.Context, _, _, _, _ string) (string, error) {
+		createRemotePRFn: func(_ context.Context, _, _, _, _, _ string) (string, error) {
 			return "", gitError
 		},
 	}
@@ -436,11 +493,11 @@ func TestGitPRAction_Execute_GitProviderFailure(t *testing.T) {
 			return newTestStory(storyID), nil
 		},
 	}
+	projectRepo := prDefaultProjectRepo()
 
-	a := action.NewGitPRAction(factory, storyRepo, testLogger())
+	a := action.NewGitPRAction(factory, storyRepo, projectRepo, testLogger())
 	runCtx := buildPRRunCtx(map[string]any{
 		"branch_name": testBranchAlt,
-		"work_dir":    testWorkDir,
 	})
 	runCtx.StoryID = storyID
 
@@ -463,7 +520,7 @@ func TestGitPRAction_Execute_GitProviderFailure(t *testing.T) {
 
 func TestGitPRAction_Execute_StoryNotFound(t *testing.T) {
 	gitProvider := &prMockGitProvider{
-		createPRFn: func(_ context.Context, _, _, _, _ string) (string, error) {
+		createRemotePRFn: func(_ context.Context, _, _, _, _, _ string) (string, error) {
 			return "", nil
 		},
 	}
@@ -475,11 +532,11 @@ func TestGitPRAction_Execute_StoryNotFound(t *testing.T) {
 			return nil, storyError
 		},
 	}
+	projectRepo := prDefaultProjectRepo()
 
-	a := action.NewGitPRAction(factory, storyRepo, testLogger())
+	a := action.NewGitPRAction(factory, storyRepo, projectRepo, testLogger())
 	runCtx := buildPRRunCtx(map[string]any{
 		"branch_name": testBranchAlt,
-		"work_dir":    testWorkDir,
 	})
 
 	err := a.Execute(context.Background(), runCtx)
@@ -490,16 +547,16 @@ func TestGitPRAction_Execute_StoryNotFound(t *testing.T) {
 		t.Errorf("expected error to contain %q, got %q", "fetch story", err.Error())
 	}
 
-	// CreatePR should NOT be called
+	// CreateRemotePR should NOT be called
 	if len(gitProvider.calls) != 0 {
-		t.Fatalf("expected 0 CreatePR calls, got %d", len(gitProvider.calls))
+		t.Fatalf("expected 0 CreateRemotePR calls, got %d", len(gitProvider.calls))
 	}
 }
 
 func TestGitPRAction_Execute_ObjectiveTruncation(t *testing.T) {
 	longObjective := strings.Repeat("A", 600)
 	gitProvider := &prMockGitProvider{
-		createPRFn: func(_ context.Context, _, _, _, _ string) (string, error) {
+		createRemotePRFn: func(_ context.Context, _, _, _, _, _ string) (string, error) {
 			return testPRURLAlt, nil
 		},
 	}
@@ -513,11 +570,11 @@ func TestGitPRAction_Execute_ObjectiveTruncation(t *testing.T) {
 			return story, nil
 		},
 	}
+	projectRepo := prDefaultProjectRepo()
 
-	a := action.NewGitPRAction(factory, storyRepo, testLogger())
+	a := action.NewGitPRAction(factory, storyRepo, projectRepo, testLogger())
 	runCtx := buildPRRunCtx(map[string]any{
 		"branch_name": testBranchAlt,
-		"work_dir":    testWorkDir,
 	})
 	runCtx.StoryID = storyID
 
@@ -531,7 +588,7 @@ func TestGitPRAction_Execute_ObjectiveTruncation(t *testing.T) {
 	if strings.Contains(body, longObjective) {
 		t.Error("expected objective to be truncated")
 	}
-	if !strings.Contains(body, "…") {
+	if !strings.Contains(body, "\u2026") {
 		t.Error("expected truncated objective to end with ellipsis")
 	}
 }

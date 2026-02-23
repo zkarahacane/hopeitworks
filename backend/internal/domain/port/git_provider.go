@@ -37,4 +37,23 @@ type GitProvider interface {
 	// GetPRDiff returns the diff content for the given pull request URL.
 	// prURL: full PR URL (e.g., "https://github.com/owner/repo/pull/123").
 	GetPRDiff(ctx context.Context, prURL string) (string, error)
+
+	// CreateRemoteBranch creates a new branch on the remote repository via API.
+	// repoURL: full HTTPS URL of the repository.
+	// branchName: name of the new branch to create.
+	// baseBranch: name of the existing branch to branch from (e.g., "main").
+	CreateRemoteBranch(ctx context.Context, repoURL string, branchName string, baseBranch string) error
+
+	// CreateRemotePR creates a pull request via API and returns the PR URL.
+	// repoURL: full HTTPS URL of the repository.
+	// title: PR title.
+	// body: PR description.
+	// headBranch: source branch name.
+	// baseBranch: target branch name.
+	CreateRemotePR(ctx context.Context, repoURL string, title string, body string, headBranch string, baseBranch string) (prURL string, err error)
+
+	// GetRemoteCIStatus returns CI status for a PR identified by its URL.
+	// prURL: full PR URL.
+	// Returns: "pass", "fail", "pending", "no_checks".
+	GetRemoteCIStatus(ctx context.Context, prURL string) (status string, err error)
 }
