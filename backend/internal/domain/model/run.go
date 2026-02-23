@@ -87,6 +87,9 @@ type RunStep struct {
 	// ParentStepID is the ID of the step this was retried from; nil for original steps.
 	ParentStepID *uuid.UUID
 	CreatedAt    time.Time
+	// Config holds step-specific configuration from the pipeline YAML.
+	// This is a transient field populated by the executor at runtime, not persisted in the database.
+	Config map[string]string
 }
 
 var validRunTransitions = map[RunStatus][]RunStatus{

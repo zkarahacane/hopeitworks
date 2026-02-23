@@ -216,6 +216,13 @@ func (e *PipelineExecutor) executeStep(ctx context.Context, run *model.Run, step
 		return fmt.Errorf("action lookup failed for %q: %w", step.Action, err)
 	}
 
+	// Inject per-step config from the pipeline config snapshot into step.Config.
+	// This makes step-specific config (e.g., branch_pattern, base_branch) available
+	// to actions via runCtx.RunStep.Config without parsing the snapshot themselves.
+	if step.Config == nil {
+		step.Config = e.extractStepConfig(run.PipelineConfigSnapshot, step.StepOrder)
+	}
+
 	// Build run context
 	runCtx := &model.RunContext{
 		Run:       run,
@@ -401,4 +408,24 @@ func (e *PipelineExecutor) publishEvent(ctx context.Context, projectID uuid.UUID
 	if err := e.eventPub.Publish(ctx, event); err != nil {
 		e.logger.Error("failed to publish event", "event_type", event.EventName(), "error", err)
 	}
+}
+
+// extractStepConfig parses the pipeline config snapshot and returns the Config
+// map for the step at the given order index. Returns nil if parsing fails or
+// the step has no config.
+func (e *PipelineExecutor) extractStepConfig(snapshot json.RawMessage, stepOrder int) map[string]string {
+	if len(snapshot) == 0 {
+		return nil
+	}
+	var parsed model.PipelineConfigYAML
+	if err := json.Unmarshal(snapshot, &parsed); err != nil {
+		e.logger.Warn("failed to parse pipeline config snapshot for step config",
+			"step_order", stepOrder, "error", err)
+		return nil
+	}
+	flatSteps := parsed.FlatSteps()
+	if stepOrder < 0 || stepOrder >= len(flatSteps) {
+		return nil
+	}
+	return flatSteps[stepOrder].Config
 }
