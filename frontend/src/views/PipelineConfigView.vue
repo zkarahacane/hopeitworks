@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useToast } from 'primevue/usetoast'
 import Button from 'primevue/button'
+import ConfirmDialog from 'primevue/confirmdialog'
 import Message from 'primevue/message'
 import Skeleton from 'primevue/skeleton'
 import Toast from 'primevue/toast'
@@ -18,6 +19,7 @@ const { user } = useAuth()
 
 const projectId = computed(() => route.params.id as string)
 const {
+  groups,
   steps,
   isLoading,
   isSaving,
@@ -25,29 +27,58 @@ const {
   isDirty,
   retry,
   saveConfig,
-  addStep,
-  removeStep,
-  reorderSteps,
-  updateStep,
+  addGroup,
+  removeGroup,
+  renameGroup,
+  addStepToGroup,
+  removeStepFromGroup,
+  updateStepInGroup,
+  reorderStepsInGroup,
+  reorderGroups,
 } = usePipelineConfig(projectId)
 
 const isAdmin = computed(() => user.value?.role === 'admin')
 const showAddDialog = ref(false)
+const addStepTargetGroupId = ref<string | null>(null)
+
+function handleAddGroup() {
+  addGroup()
+}
+
+function handleRenameGroup(groupId: string, name: string) {
+  renameGroup(groupId, name)
+}
+
+function handleRemoveGroup(groupId: string) {
+  removeGroup(groupId)
+}
+
+function handleOpenAddStep(groupId: string) {
+  addStepTargetGroupId.value = groupId
+  showAddDialog.value = true
+}
 
 function handleAddStep(step: PipelineStep) {
-  addStep(step)
+  if (addStepTargetGroupId.value) {
+    addStepToGroup(addStepTargetGroupId.value, step)
+  }
+  addStepTargetGroupId.value = null
 }
 
-function handleUpdateStep(index: number, step: PipelineStep) {
-  updateStep(index, step)
+function handleUpdateStep(groupId: string, stepId: string, step: PipelineStep) {
+  updateStepInGroup(groupId, stepId, step)
 }
 
-function handleRemoveStep(index: number) {
-  removeStep(index)
+function handleRemoveStep(groupId: string, stepId: string) {
+  removeStepFromGroup(groupId, stepId)
 }
 
-function handleReorder(fromIndex: number, toIndex: number) {
-  reorderSteps(fromIndex, toIndex)
+function handleReorderGroups(fromIndex: number, toIndex: number) {
+  reorderGroups(fromIndex, toIndex)
+}
+
+function handleReorderStep(groupId: string, fromIndex: number, toIndex: number) {
+  reorderStepsInGroup(groupId, fromIndex, toIndex)
 }
 
 async function handleSave() {
@@ -76,11 +107,11 @@ async function handleSave() {
       <h1 class="text-2xl font-bold">Pipeline Configuration</h1>
       <div v-if="isAdmin && !isLoading && !error" class="flex gap-2">
         <Button
-          label="Add Step"
-          icon="pi pi-plus"
+          label="Add Group"
+          icon="pi pi-folder-plus"
           severity="secondary"
-          data-testid="add-step-btn"
-          @click="showAddDialog = true"
+          data-testid="add-group-btn"
+          @click="handleAddGroup"
         />
         <Button
           label="Save"
@@ -111,7 +142,7 @@ async function handleSave() {
 
     <!-- Empty state -->
     <Message
-      v-else-if="steps.length === 0"
+      v-else-if="groups.length === 0 || steps.length === 0"
       severity="info"
       :closable="false"
       data-testid="empty-message"
@@ -119,31 +150,36 @@ async function handleSave() {
       <span>No pipeline steps configured.</span>
       <Button
         v-if="isAdmin"
-        label="Add your first step"
+        label="Add your first group"
         text
         size="small"
         class="ml-2"
-        @click="showAddDialog = true"
+        @click="handleAddGroup"
       />
     </Message>
 
-    <!-- Step list -->
+    <!-- Group list -->
     <PipelineStepList
       v-else
-      :steps="steps"
+      :groups="groups"
       :is-admin="isAdmin"
-      @update="handleUpdateStep"
-      @remove="handleRemoveStep"
-      @reorder="handleReorder"
+      @rename-group="handleRenameGroup"
+      @remove-group="handleRemoveGroup"
+      @add-step="handleOpenAddStep"
+      @update-step="handleUpdateStep"
+      @remove-step="handleRemoveStep"
+      @reorder-groups="handleReorderGroups"
+      @reorder-step="handleReorderStep"
     />
 
-    <!-- Add step dialog (admin only) -->
+    <!-- Add step dialog (admin only, scoped to target group) -->
     <AddStepDialog
       v-if="isAdmin"
       v-model:visible="showAddDialog"
       @add="handleAddStep"
     />
 
+    <ConfirmDialog />
     <Toast />
   </div>
 </template>

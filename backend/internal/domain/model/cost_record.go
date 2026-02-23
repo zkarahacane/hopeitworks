@@ -11,12 +11,23 @@ type CostRecord struct {
 	ID           uuid.UUID
 	RunStepID    uuid.UUID
 	ProjectID    uuid.UUID
+	AgentID      *uuid.UUID
 	TokensInput  int64
 	TokensOutput int64
 	// CostUSD is the total cost in US dollars for this step.
 	CostUSD   float64
 	Model     string
 	CreatedAt time.Time
+}
+
+// AgentCostBreakdown aggregates cost data per agent for a project.
+type AgentCostBreakdown struct {
+	AgentID      uuid.UUID
+	AgentName    string
+	TokensInput  int64
+	TokensOutput int64
+	CostUSD      float64
+	RunsCount    int32
 }
 
 // CostEvent is an intermediate accumulation type parsed from agent NDJSON output.

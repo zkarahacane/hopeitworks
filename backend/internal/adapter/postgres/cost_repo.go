@@ -37,6 +37,7 @@ func (r *CostRepo) InsertCostRecord(ctx context.Context, record *model.CostRecor
 		TokensOutput: record.TokensOutput,
 		CostUsd:      numericFromFloat64Cost(record.CostUSD),
 		Model:        record.Model,
+		AgentID:      uuidFromPtr(record.AgentID),
 	}
 
 	row, err := r.queries.InsertCostRecord(ctx, params)
@@ -251,6 +252,7 @@ func toDomainCostRecord(c CostRecord) *model.CostRecord {
 		ID:           c.ID,
 		RunStepID:    c.RunStepID,
 		ProjectID:    c.ProjectID,
+		AgentID:      pgtypeToUUIDPtr(c.AgentID),
 		TokensInput:  c.TokensInput,
 		TokensOutput: c.TokensOutput,
 		CostUSD:      numericToFloat64(c.CostUsd),
@@ -268,6 +270,37 @@ func numericFromFloat64Cost(f float64) pgtype.Numeric {
 		Exp:   -6,
 		Valid: true,
 	}
+}
+
+// ListByProjectByAgent returns cost breakdown by agent for a project.
+func (r *CostRepo) ListByProjectByAgent(ctx context.Context, projectID uuid.UUID) ([]model.AgentCostBreakdown, error) {
+	rows, err := r.queries.ListCostsByProjectByAgent(ctx, projectID)
+	if err != nil {
+		return nil, apperrors.NewInternal("failed to list costs by project by agent", err)
+	}
+
+	results := make([]model.AgentCostBreakdown, len(rows))
+	for i, row := range rows {
+		agentID := row.AgentID.Bytes
+		results[i] = model.AgentCostBreakdown{
+			AgentID:      agentID,
+			AgentName:    row.AgentName,
+			TokensInput:  row.TokensInput,
+			TokensOutput: row.TokensOutput,
+			CostUSD:      numericToFloat64(row.CostUsd),
+			RunsCount:    row.RunsCount,
+		}
+	}
+	return results, nil
+}
+
+// pgtypeToUUIDPtr converts a pgtype.UUID to a *uuid.UUID.
+func pgtypeToUUIDPtr(u pgtype.UUID) *uuid.UUID {
+	if !u.Valid {
+		return nil
+	}
+	id := uuid.UUID(u.Bytes)
+	return &id
 }
 
 // toInt64 converts an interface{} from COALESCE aggregate results to int64.

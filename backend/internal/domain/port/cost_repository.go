@@ -45,4 +45,7 @@ type CostRepository interface {
 
 	// CountCostsByProjectByRun returns the count of distinct runs with costs.
 	CountCostsByProjectByRun(ctx context.Context, projectID uuid.UUID, since time.Time) (int64, error)
+
+	// ListByProjectByAgent returns cost breakdown by agent for a project.
+	ListByProjectByAgent(ctx context.Context, projectID uuid.UUID) ([]model.AgentCostBreakdown, error)
 }

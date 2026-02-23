@@ -37,6 +37,9 @@ func (r *HITLRepo) Create(ctx context.Context, req *model.HITLRequest) (*model.H
 	if req.DiffContent != nil {
 		params.DiffContent = pgtype.Text{String: *req.DiffContent, Valid: true}
 	}
+	if req.Message != nil {
+		params.Message = pgtype.Text{String: *req.Message, Valid: true}
+	}
 
 	row, err := r.queries.CreateHITLRequest(ctx, params)
 	if err != nil {
@@ -172,6 +175,9 @@ func toDomainHITLRequest(row HitlRequest) *model.HITLRequest {
 	}
 	if row.DiffContent.Valid {
 		req.DiffContent = &row.DiffContent.String
+	}
+	if row.Message.Valid {
+		req.Message = &row.Message.String
 	}
 	if row.ResolvedAt.Valid {
 		req.ResolvedAt = &row.ResolvedAt.Time

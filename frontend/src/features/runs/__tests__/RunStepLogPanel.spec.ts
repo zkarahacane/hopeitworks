@@ -201,4 +201,25 @@ describe('RunStepLogPanel', () => {
     mountPanel({ step: makeStep({ id: 'step-42' }), visible: true, projectId: 'proj-X', runId: 'run-X' })
     expect(mockedUseStepLogs).toHaveBeenCalledWith('proj-X', 'run-X', expect.any(Object))
   })
+
+  it('shows retry button when step status is failed', () => {
+    mountPanel({ step: makeStep({ status: 'failed' }), visible: true })
+    expect(wrapper.find('[data-testid="retry-step-btn"]').exists()).toBe(true)
+  })
+
+  it('does not show retry button when step status is running', () => {
+    mountPanel({ step: makeStep({ status: 'running' }), visible: true })
+    expect(wrapper.find('[data-testid="retry-step-btn"]').exists()).toBe(false)
+  })
+
+  it('does not show retry button when step status is completed', () => {
+    mountPanel({ step: makeStep({ status: 'completed' }), visible: true })
+    expect(wrapper.find('[data-testid="retry-step-btn"]').exists()).toBe(false)
+  })
+
+  it('emits retry with step id when retry button is clicked', async () => {
+    mountPanel({ step: makeStep({ id: 'step-99', status: 'failed' }), visible: true })
+    await wrapper.find('[data-testid="retry-step-btn"]').trigger('click')
+    expect(wrapper.emitted('retry')?.[0]).toEqual(['step-99'])
+  })
 })

@@ -10,15 +10,12 @@ import { useToast } from 'primevue/usetoast'
 import { useRunDetail } from '@/features/runs/composables/useRunDetail'
 import { useRunCosts } from '@/features/runs/composables/useRunCosts'
 import { useRunsStore } from '@/stores/runs'
-import RunLogViewer from '@/features/runs/RunLogViewer.vue'
-import RunTimeline from '@/features/runs/RunTimeline.vue'
+import RunPipelineView from '@/features/runs/RunPipelineView.vue'
 import RunCancelConfirmDialog from '@/features/runs/RunCancelConfirmDialog.vue'
 import RunStepLogPanel from '@/features/runs/RunStepLogPanel.vue'
 import { runStatusSeverity } from '@/utils/runStatus'
 import { formatCostUSD, formatTokenCount } from '@/utils/formatCost'
-import type { components } from '@/api/schema'
-
-type RunStep = components['schemas']['RunStep']
+import type { RunStep } from '@/features/runs/composables/useRunDetail'
 
 const route = useRoute()
 const runId = computed(() => route.params.id as string)
@@ -43,6 +40,9 @@ const totalCostDisplay = computed(() => {
   return formatCostUSD(costDetail.value.total_cost)
 })
 
+/** Unwrapped cost detail for template usage */
+const cost = computed(() => costDetail.value)
+
 
 const canPause = computed(() => run.value?.status === 'running')
 const canResume = computed(() => run.value?.status === 'paused')
@@ -56,7 +56,7 @@ const cancelDialogVisible = ref(false)
 const selectedStep = ref<RunStep | null>(null)
 const stepPanelVisible = ref(false)
 
-function handleSelectStep(step: RunStep) {
+function handleStepSelected(step: RunStep) {
   selectedStep.value = step
   stepPanelVisible.value = true
 }
@@ -155,10 +155,10 @@ const progress = computed(() => {
           data-testid="run-total-cost"
         >
           {{ totalCostDisplay }}
-          <template v-if="costDetail.value?.total_tokens_input !== undefined || costDetail.value?.total_tokens_output !== undefined">
+          <template v-if="cost?.total_tokens_input !== undefined || cost?.total_tokens_output !== undefined">
             <span class="mx-1 text-surface-400">|</span>
-            <span class="text-surface-500">In: {{ formatTokenCount(costDetail.value?.total_tokens_input ?? 0) }}</span>
-            <span class="ml-1 text-surface-500">Out: {{ formatTokenCount(costDetail.value?.total_tokens_output ?? 0) }}</span>
+            <span class="text-surface-500">In: {{ formatTokenCount(cost?.total_tokens_input ?? 0) }}</span>
+            <span class="ml-1 text-surface-500">Out: {{ formatTokenCount(cost?.total_tokens_output ?? 0) }}</span>
           </template>
         </span>
         <Button
@@ -209,19 +209,8 @@ const progress = computed(() => {
       <!-- Progress Bar -->
       <ProgressBar :value="progress" :show-value="true" />
 
-      <!-- Step Timeline with retry support -->
-      <div v-if="run.steps.length > 0">
-        <h2 class="text-lg font-semibold mb-3">Steps</h2>
-        <RunTimeline
-          :steps="run.steps"
-          :retry-loading="runsStore.isRetrying"
-          @retry-step="handleRetryStep"
-          @select-step="handleSelectStep"
-        />
-      </div>
-
       <!-- Step Cost Breakdown -->
-      <div v-if="costDetail.value?.steps && costDetail.value.steps.length > 0">
+      <div v-if="cost?.steps && cost.steps.length > 0">
         <h2 class="text-lg font-semibold mb-3">Step Costs</h2>
         <div class="rounded-lg border border-surface-200 bg-surface-0 overflow-hidden">
           <table class="w-full text-sm">
@@ -235,7 +224,7 @@ const progress = computed(() => {
               </tr>
             </thead>
             <tbody class="divide-y divide-surface-100">
-              <tr v-for="step in costDetail.value.steps" :key="step.step_id">
+              <tr v-for="step in cost.steps" :key="step.step_id">
                 <td class="px-4 py-2 font-medium">{{ step.step_name }}</td>
                 <td class="px-4 py-2 text-surface-500">{{ step.model }}</td>
                 <td class="px-4 py-2 text-right">{{ formatTokenCount(step.tokens_input) }}</td>
@@ -247,10 +236,15 @@ const progress = computed(() => {
         </div>
       </div>
 
-      <!-- Live Log Viewer -->
-      <div>
-        <h2 class="text-lg font-semibold mb-3">Live Logs</h2>
-        <RunLogViewer :project-id="run.project_id" :run-id="run.id" />
+      <!-- Horizontal Pipeline View -->
+      <div class="flex-1 min-h-0">
+        <h2 class="text-lg font-semibold mb-3">Steps</h2>
+        <RunPipelineView
+          :run="run"
+          :steps="run.steps"
+          data-testid="run-pipeline-view"
+          @step-selected="handleStepSelected"
+        />
       </div>
     </template>
 
@@ -263,15 +257,17 @@ const progress = computed(() => {
       @update:visible="cancelDialogVisible = $event"
     />
 
-    <!-- Step Log Panel -->
+    <!-- Step Log Panel (slide-in drawer from right) -->
     <RunStepLogPanel
       v-if="run"
       :step="selectedStep"
       :run-id="run.id"
       :project-id="run.project_id"
       :visible="stepPanelVisible"
+      :retry-loading="runsStore.isRetrying"
       @close="handleCloseStepPanel"
       @update:visible="stepPanelVisible = $event"
+      @retry="handleRetryStep"
     />
   </div>
 </template>

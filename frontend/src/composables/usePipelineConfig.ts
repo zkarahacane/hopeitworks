@@ -51,8 +51,41 @@ export function usePipelineConfig(projectId: Ref<string>) {
     store.updateStep(index, step)
   }
 
+  function addGroup(name?: string) {
+    store.addGroup(name)
+  }
+
+  function removeGroup(groupId: string) {
+    store.removeGroup(groupId)
+  }
+
+  function renameGroup(groupId: string, name: string) {
+    store.renameGroup(groupId, name)
+  }
+
+  function addStepToGroup(groupId: string, step: PipelineStep) {
+    store.addStepToGroup(groupId, step)
+  }
+
+  function removeStepFromGroup(groupId: string, stepId: string) {
+    store.removeStepFromGroup(groupId, stepId)
+  }
+
+  function updateStepInGroup(groupId: string, stepId: string, step: PipelineStep) {
+    store.updateStepInGroup(groupId, stepId, step)
+  }
+
+  function reorderStepsInGroup(groupId: string, fromIndex: number, toIndex: number) {
+    store.reorderStepsInGroup(groupId, fromIndex, toIndex)
+  }
+
+  function reorderGroups(fromIndex: number, toIndex: number) {
+    store.reorderGroups(fromIndex, toIndex)
+  }
+
   return {
     config: computed(() => store.config),
+    groups: computed(() => store.groups),
     steps: computed(() => store.steps),
     isLoading: computed(() => store.isLoading),
     isSaving: computed(() => store.isSaving),
@@ -65,5 +98,13 @@ export function usePipelineConfig(projectId: Ref<string>) {
     removeStep,
     reorderSteps,
     updateStep,
+    addGroup,
+    removeGroup,
+    renameGroup,
+    addStepToGroup,
+    removeStepFromGroup,
+    updateStepInGroup,
+    reorderStepsInGroup,
+    reorderGroups,
   }
 }

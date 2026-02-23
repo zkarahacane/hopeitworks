@@ -356,6 +356,73 @@ func TestAgentService_Update(t *testing.T) {
 	}
 }
 
+func TestAgentService_ListMerged(t *testing.T) {
+	repo := newMockAgentRepo()
+	svc := NewAgentService(repo)
+
+	projectID := uuid.New()
+
+	// Add 2 global agents
+	for i := 0; i < 2; i++ {
+		id := uuid.New()
+		repo.agents[id] = &model.Agent{
+			ID:              id,
+			Name:            "global-" + id.String()[:8],
+			TemplateContent: "global content",
+			Scope:           model.AgentScopeGlobal,
+		}
+	}
+
+	// Add 3 project-specific agents for projectID
+	for i := 0; i < 3; i++ {
+		id := uuid.New()
+		pid := projectID
+		repo.agents[id] = &model.Agent{
+			ID:              id,
+			Name:            "project-" + id.String()[:8],
+			ProjectID:       &pid,
+			TemplateContent: "project content",
+			Scope:           model.AgentScopeProject,
+		}
+	}
+
+	// Add 1 agent for a different project (should not appear)
+	otherProjectID := uuid.New()
+	otherID := uuid.New()
+	repo.agents[otherID] = &model.Agent{
+		ID:              otherID,
+		Name:            "other-project-agent",
+		ProjectID:       &otherProjectID,
+		TemplateContent: "other content",
+		Scope:           model.AgentScopeProject,
+	}
+
+	result, err := svc.ListMerged(context.Background(), projectID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Total != 5 {
+		t.Errorf("expected 5 merged agents (2 global + 3 project), got %d", result.Total)
+	}
+
+	// Verify global agents are identifiable (ProjectID is nil)
+	globalCount := 0
+	projectCount := 0
+	for _, a := range result.Agents {
+		if a.ProjectID == nil {
+			globalCount++
+		} else if *a.ProjectID == projectID {
+			projectCount++
+		}
+	}
+	if globalCount != 2 {
+		t.Errorf("expected 2 global agents, got %d", globalCount)
+	}
+	if projectCount != 3 {
+		t.Errorf("expected 3 project agents, got %d", projectCount)
+	}
+}
+
 func TestAgentService_Delete(t *testing.T) {
 	repo := newMockAgentRepo()
 	svc := NewAgentService(repo)

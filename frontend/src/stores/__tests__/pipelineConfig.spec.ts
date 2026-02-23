@@ -187,8 +187,134 @@ describe('usePipelineConfigStore', () => {
       store.reorderSteps(0, 1)
       store.updateStep(0, makeStep())
       store.updateGroups([])
+      store.addGroup()
+      store.removeGroup('x')
+      store.renameGroup('x', 'y')
+      store.addStepToGroup('x', makeStep())
+      store.removeStepFromGroup('x', 'y')
+      store.updateStepInGroup('x', 'y', makeStep())
+      store.reorderStepsInGroup('x', 0, 1)
+      store.reorderGroups(0, 1)
       expect(store.config).toBeNull()
       expect(store.isDirty).toBe(false)
+    })
+  })
+
+  describe('group CRUD', () => {
+    beforeEach(async () => {
+      mockGet.mockResolvedValue({ data: mockConfig, error: undefined })
+    })
+
+    it('addGroup adds a new empty group', async () => {
+      const store = usePipelineConfigStore()
+      await store.fetchConfig('proj-1')
+
+      store.addGroup('Review')
+
+      expect(store.groups).toHaveLength(2)
+      expect(store.groups[1]!.name).toBe('Review')
+      expect(store.groups[1]!.steps).toEqual([])
+      expect(store.isDirty).toBe(true)
+    })
+
+    it('addGroup uses default name', async () => {
+      const store = usePipelineConfigStore()
+      await store.fetchConfig('proj-1')
+
+      store.addGroup()
+
+      expect(store.groups).toHaveLength(2)
+      expect(store.groups[1]!.name).toBe('New Group')
+    })
+
+    it('removeGroup removes a group by id', async () => {
+      const store = usePipelineConfigStore()
+      await store.fetchConfig('proj-1')
+
+      store.addGroup('Review')
+      const reviewGroupId = store.groups[1]!.id
+
+      store.removeGroup(reviewGroupId)
+
+      expect(store.groups).toHaveLength(1)
+      expect(store.groups[0]!.name).toBe('Development')
+      expect(store.isDirty).toBe(true)
+    })
+
+    it('renameGroup updates group name', async () => {
+      const store = usePipelineConfigStore()
+      await store.fetchConfig('proj-1')
+
+      store.renameGroup('dev', 'Setup')
+
+      expect(store.groups[0]!.name).toBe('Setup')
+      expect(store.isDirty).toBe(true)
+    })
+
+    it('addStepToGroup adds a step to a specific group', async () => {
+      const store = usePipelineConfigStore()
+      await store.fetchConfig('proj-1')
+
+      store.addGroup('Review')
+      const reviewGroupId = store.groups[1]!.id
+      const newStep = makeStep({ id: 's-new', name: 'lint' })
+      store.addStepToGroup(reviewGroupId, newStep)
+
+      expect(store.groups[1]!.steps).toHaveLength(1)
+      expect(store.groups[1]!.steps[0]!.id).toBe('s-new')
+      // Original group unchanged
+      expect(store.groups[0]!.steps).toHaveLength(3)
+    })
+
+    it('removeStepFromGroup removes a step from a specific group', async () => {
+      const store = usePipelineConfigStore()
+      await store.fetchConfig('proj-1')
+
+      store.removeStepFromGroup('dev', 's2')
+
+      expect(store.groups[0]!.steps).toHaveLength(2)
+      expect(store.groups[0]!.steps.find((s: PipelineStep) => s.id === 's2')).toBeUndefined()
+      expect(store.isDirty).toBe(true)
+    })
+
+    it('updateStepInGroup updates a step within a group', async () => {
+      const store = usePipelineConfigStore()
+      await store.fetchConfig('proj-1')
+
+      const step = store.groups[0]!.steps[0]!
+      const updated = { ...step, model: 'claude-haiku-4-5' as const }
+      store.updateStepInGroup('dev', 's1', updated)
+
+      expect(store.groups[0]!.steps[0]!.model).toBe('claude-haiku-4-5')
+      expect(store.isDirty).toBe(true)
+    })
+
+    it('reorderStepsInGroup reorders steps within a group', async () => {
+      const store = usePipelineConfigStore()
+      await store.fetchConfig('proj-1')
+
+      store.reorderStepsInGroup('dev', 0, 2)
+
+      expect(store.groups[0]!.steps[0]!.id).toBe('s2')
+      expect(store.groups[0]!.steps[1]!.id).toBe('s3')
+      expect(store.groups[0]!.steps[2]!.id).toBe('s1')
+      expect(store.isDirty).toBe(true)
+    })
+
+    it('reorderGroups moves a group to a new position', async () => {
+      const store = usePipelineConfigStore()
+      await store.fetchConfig('proj-1')
+
+      store.addGroup('Review')
+      store.addGroup('Deploy')
+
+      // Move 'Deploy' (index 2) to position 0
+      store.reorderGroups(2, 0)
+
+      expect(store.groups[0]!.name).toBe('Deploy')
+      expect(store.groups[1]!.name).toBe('Development')
+      expect(store.groups[2]!.name).toBe('Review')
+      expect(store.isDirty).toBe(true)
     })
   })
 

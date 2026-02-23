@@ -202,6 +202,21 @@ func run() error {
 	actionReg.Register(hitlGateAction)
 	logger.Info("hitl_gate action registered")
 
+	// Git Branch action (no Docker required)
+	gitBranchAction := actionadapter.NewGitBranchAction(gitProvider, storyRepo, logger)
+	actionReg.Register(gitBranchAction)
+	logger.Info("git_branch action registered")
+
+	// Git PR action (no Docker required)
+	gitPRAction := actionadapter.NewGitPRAction(gitProvider, storyRepo, logger)
+	actionReg.Register(gitPRAction)
+	logger.Info("git_pr action registered")
+
+	// Human action (no Docker required)
+	humanAction := actionadapter.NewHumanAction(hitlRepo, runRepo, storyRepo, eventRepo, logger)
+	actionReg.Register(humanAction)
+	logger.Info("human action registered")
+
 	// Notification action (no Docker required)
 	notificationAction := actionadapter.NewNotificationAction(eventRepo, storyRepo, logger)
 	actionReg.Register(notificationAction)

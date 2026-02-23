@@ -60,7 +60,112 @@ export const usePipelineConfigStore = defineStore('pipelineConfig', () => {
     }
   }
 
-  /** Add a step to the first group (or creates a default group if none exist) */
+  /** Add a new empty group to the pipeline config */
+  function addGroup(name = 'New Group') {
+    if (!config.value) return
+    const newGroup: PipelineGroup = {
+      id: crypto.randomUUID(),
+      name,
+      steps: [],
+    }
+    config.value = {
+      ...config.value,
+      groups: [...config.value.groups, newGroup],
+    }
+    isDirty.value = true
+  }
+
+  /** Remove a group by id (and all its steps) */
+  function removeGroup(groupId: string) {
+    if (!config.value) return
+    config.value = {
+      ...config.value,
+      groups: config.value.groups.filter((g: PipelineGroup) => g.id !== groupId),
+    }
+    isDirty.value = true
+  }
+
+  /** Update a group name in place */
+  function renameGroup(groupId: string, name: string) {
+    if (!config.value) return
+    config.value = {
+      ...config.value,
+      groups: config.value.groups.map((g: PipelineGroup) =>
+        g.id === groupId ? { ...g, name } : g,
+      ),
+    }
+    isDirty.value = true
+  }
+
+  /** Add a step to a specific group by group id */
+  function addStepToGroup(groupId: string, step: PipelineStep) {
+    if (!config.value) return
+    config.value = {
+      ...config.value,
+      groups: config.value.groups.map((g: PipelineGroup) =>
+        g.id === groupId ? { ...g, steps: [...g.steps, step] } : g,
+      ),
+    }
+    isDirty.value = true
+  }
+
+  /** Remove a step from a specific group */
+  function removeStepFromGroup(groupId: string, stepId: string) {
+    if (!config.value) return
+    config.value = {
+      ...config.value,
+      groups: config.value.groups.map((g: PipelineGroup) =>
+        g.id === groupId
+          ? { ...g, steps: g.steps.filter((s: PipelineStep) => s.id !== stepId) }
+          : g,
+      ),
+    }
+    isDirty.value = true
+  }
+
+  /** Update a step within a specific group by step id */
+  function updateStepInGroup(groupId: string, stepId: string, step: PipelineStep) {
+    if (!config.value) return
+    config.value = {
+      ...config.value,
+      groups: config.value.groups.map((g: PipelineGroup) =>
+        g.id === groupId
+          ? { ...g, steps: g.steps.map((s: PipelineStep) => (s.id === stepId ? step : s)) }
+          : g,
+      ),
+    }
+    isDirty.value = true
+  }
+
+  /** Reorder steps within a specific group */
+  function reorderStepsInGroup(groupId: string, fromIndex: number, toIndex: number) {
+    if (!config.value) return
+    config.value = {
+      ...config.value,
+      groups: config.value.groups.map((g: PipelineGroup) => {
+        if (g.id !== groupId) return g
+        const newSteps = [...g.steps]
+        const [moved] = newSteps.splice(fromIndex, 1)
+        if (!moved) return g
+        newSteps.splice(toIndex, 0, moved)
+        return { ...g, steps: newSteps }
+      }),
+    }
+    isDirty.value = true
+  }
+
+  /** Reorder groups by moving from one index to another */
+  function reorderGroups(fromIndex: number, toIndex: number) {
+    if (!config.value) return
+    const newGroups = [...config.value.groups]
+    const [moved] = newGroups.splice(fromIndex, 1)
+    if (!moved) return
+    newGroups.splice(toIndex, 0, moved)
+    config.value = { ...config.value, groups: newGroups }
+    isDirty.value = true
+  }
+
+  /** Add a step to the last group (or creates a default group if none exist) */
   function addStep(step: PipelineStep) {
     if (!config.value) return
     const currentGroups = [...config.value.groups]
@@ -177,6 +282,14 @@ export const usePipelineConfigStore = defineStore('pipelineConfig', () => {
     isSaving,
     fetchConfig,
     updateGroups,
+    addGroup,
+    removeGroup,
+    renameGroup,
+    addStepToGroup,
+    removeStepFromGroup,
+    updateStepInGroup,
+    reorderStepsInGroup,
+    reorderGroups,
     addStep,
     removeStep,
     reorderSteps,

@@ -42,9 +42,9 @@ func (q *Queries) CountPendingHITLRequestsByProject(ctx context.Context, project
 }
 
 const createHITLRequest = `-- name: CreateHITLRequest :one
-INSERT INTO hitl_requests (id, run_step_id, gate_type, diff_content, status, created_at)
-VALUES ($1, $2, $3, $4, $5, now())
-RETURNING id, run_step_id, gate_type, diff_content, status, resolved_at, resolved_by, rejection_reason, created_at, diff_url
+INSERT INTO hitl_requests (id, run_step_id, gate_type, diff_content, message, status, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, now())
+RETURNING id, run_step_id, gate_type, diff_content, message, status, resolved_at, resolved_by, rejection_reason, created_at, diff_url
 `
 
 type CreateHITLRequestParams struct {
@@ -52,6 +52,7 @@ type CreateHITLRequestParams struct {
 	RunStepID   uuid.UUID   `json:"run_step_id"`
 	GateType    string      `json:"gate_type"`
 	DiffContent pgtype.Text `json:"diff_content"`
+	Message     pgtype.Text `json:"message"`
 	Status      string      `json:"status"`
 }
 
@@ -61,6 +62,7 @@ func (q *Queries) CreateHITLRequest(ctx context.Context, arg CreateHITLRequestPa
 		arg.RunStepID,
 		arg.GateType,
 		arg.DiffContent,
+		arg.Message,
 		arg.Status,
 	)
 	var i HitlRequest
@@ -69,6 +71,7 @@ func (q *Queries) CreateHITLRequest(ctx context.Context, arg CreateHITLRequestPa
 		&i.RunStepID,
 		&i.GateType,
 		&i.DiffContent,
+		&i.Message,
 		&i.Status,
 		&i.ResolvedAt,
 		&i.ResolvedBy,
@@ -80,7 +83,7 @@ func (q *Queries) CreateHITLRequest(ctx context.Context, arg CreateHITLRequestPa
 }
 
 const getHITLRequest = `-- name: GetHITLRequest :one
-SELECT id, run_step_id, gate_type, diff_content, status, resolved_at, resolved_by, rejection_reason, created_at, diff_url FROM hitl_requests WHERE id = $1
+SELECT id, run_step_id, gate_type, diff_content, message, status, resolved_at, resolved_by, rejection_reason, created_at, diff_url FROM hitl_requests WHERE id = $1
 `
 
 func (q *Queries) GetHITLRequest(ctx context.Context, id uuid.UUID) (HitlRequest, error) {
@@ -91,6 +94,7 @@ func (q *Queries) GetHITLRequest(ctx context.Context, id uuid.UUID) (HitlRequest
 		&i.RunStepID,
 		&i.GateType,
 		&i.DiffContent,
+		&i.Message,
 		&i.Status,
 		&i.ResolvedAt,
 		&i.ResolvedBy,
@@ -102,7 +106,7 @@ func (q *Queries) GetHITLRequest(ctx context.Context, id uuid.UUID) (HitlRequest
 }
 
 const getHITLRequestByRunStepID = `-- name: GetHITLRequestByRunStepID :one
-SELECT id, run_step_id, gate_type, diff_content, status, resolved_at, resolved_by, rejection_reason, created_at, diff_url FROM hitl_requests WHERE run_step_id = $1 LIMIT 1
+SELECT id, run_step_id, gate_type, diff_content, message, status, resolved_at, resolved_by, rejection_reason, created_at, diff_url FROM hitl_requests WHERE run_step_id = $1 LIMIT 1
 `
 
 func (q *Queries) GetHITLRequestByRunStepID(ctx context.Context, runStepID uuid.UUID) (HitlRequest, error) {
@@ -113,6 +117,7 @@ func (q *Queries) GetHITLRequestByRunStepID(ctx context.Context, runStepID uuid.
 		&i.RunStepID,
 		&i.GateType,
 		&i.DiffContent,
+		&i.Message,
 		&i.Status,
 		&i.ResolvedAt,
 		&i.ResolvedBy,
@@ -124,7 +129,7 @@ func (q *Queries) GetHITLRequestByRunStepID(ctx context.Context, runStepID uuid.
 }
 
 const listHITLRequestsFiltered = `-- name: ListHITLRequestsFiltered :many
-SELECT id, run_step_id, gate_type, diff_content, status, resolved_at, resolved_by, rejection_reason, created_at, diff_url FROM hitl_requests
+SELECT id, run_step_id, gate_type, diff_content, message, status, resolved_at, resolved_by, rejection_reason, created_at, diff_url FROM hitl_requests
 WHERE ($1::text = '' OR status = $1::text)
 ORDER BY created_at DESC
 LIMIT $2 OFFSET $3
@@ -150,6 +155,7 @@ func (q *Queries) ListHITLRequestsFiltered(ctx context.Context, arg ListHITLRequ
 			&i.RunStepID,
 			&i.GateType,
 			&i.DiffContent,
+			&i.Message,
 			&i.Status,
 			&i.ResolvedAt,
 			&i.ResolvedBy,
@@ -224,7 +230,7 @@ const updateHITLRequestStatus = `-- name: UpdateHITLRequestStatus :one
 UPDATE hitl_requests
 SET status = $2, resolved_at = $3, resolved_by = $4, rejection_reason = $5
 WHERE id = $1
-RETURNING id, run_step_id, gate_type, diff_content, status, resolved_at, resolved_by, rejection_reason, created_at, diff_url
+RETURNING id, run_step_id, gate_type, diff_content, message, status, resolved_at, resolved_by, rejection_reason, created_at, diff_url
 `
 
 type UpdateHITLRequestStatusParams struct {
@@ -249,6 +255,7 @@ func (q *Queries) UpdateHITLRequestStatus(ctx context.Context, arg UpdateHITLReq
 		&i.RunStepID,
 		&i.GateType,
 		&i.DiffContent,
+		&i.Message,
 		&i.Status,
 		&i.ResolvedAt,
 		&i.ResolvedBy,

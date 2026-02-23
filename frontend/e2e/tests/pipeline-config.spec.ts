@@ -104,7 +104,7 @@ test.describe('Pipeline Configuration Page', () => {
     test('shows admin controls: Add Step and Save buttons', async ({ page }) => {
       await page.goto('/projects/proj-1/pipeline')
 
-      await expect(page.getByTestId('add-step-btn')).toBeVisible()
+      await expect(page.getByTestId('add-step-to-group')).toBeVisible()
       await expect(page.getByTestId('save-config-btn')).toBeVisible()
       await expect(page.getByTestId('save-config-btn')).toBeDisabled()
     })
@@ -145,7 +145,7 @@ test.describe('Pipeline Configuration Page', () => {
     test('adds a new step via the dialog', async ({ page }) => {
       await page.goto('/projects/proj-1/pipeline')
 
-      await page.getByTestId('add-step-btn').click()
+      await page.getByTestId('add-step-to-group').click()
 
       // Dialog should appear
       await expect(page.getByText('Add Pipeline Step')).toBeVisible()
@@ -161,7 +161,7 @@ test.describe('Pipeline Configuration Page', () => {
     test('validates required step name in add dialog', async ({ page }) => {
       await page.goto('/projects/proj-1/pipeline')
 
-      await page.getByTestId('add-step-btn').click()
+      await page.getByTestId('add-step-to-group').click()
       await page.getByTestId('add-step-submit').click()
 
       await expect(page.locator('small').getByText('Step name is required')).toBeVisible()
@@ -235,7 +235,7 @@ test.describe('Pipeline Configuration Page', () => {
     test('does not show admin controls', async ({ page }) => {
       await page.goto('/projects/proj-1/pipeline')
 
-      await expect(page.getByTestId('add-step-btn')).not.toBeVisible()
+      await expect(page.getByTestId('add-step-to-group')).not.toBeVisible()
       await expect(page.getByTestId('save-config-btn')).not.toBeVisible()
       await expect(page.getByTestId('move-up')).not.toBeVisible()
       await expect(page.getByTestId('move-down')).not.toBeVisible()
