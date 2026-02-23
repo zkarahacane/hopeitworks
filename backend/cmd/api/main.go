@@ -207,6 +207,11 @@ func run() error {
 	actionReg.Register(gitBranchAction)
 	logger.Info("git_branch action registered")
 
+	// Git PR action (no Docker required)
+	gitPRAction := actionadapter.NewGitPRAction(gitProvider, storyRepo, logger)
+	actionReg.Register(gitPRAction)
+	logger.Info("git_pr action registered")
+
 	// Cost tracking (for agent_run action)
 	costSvc := costService
 
