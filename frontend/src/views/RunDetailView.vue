@@ -40,6 +40,9 @@ const totalCostDisplay = computed(() => {
   return formatCostUSD(costDetail.value.total_cost)
 })
 
+/** Unwrapped cost detail for template usage */
+const cost = computed(() => costDetail.value)
+
 
 const canPause = computed(() => run.value?.status === 'running')
 const canResume = computed(() => run.value?.status === 'paused')
@@ -152,10 +155,10 @@ const progress = computed(() => {
           data-testid="run-total-cost"
         >
           {{ totalCostDisplay }}
-          <template v-if="costDetail?.total_tokens_input !== undefined || costDetail?.total_tokens_output !== undefined">
+          <template v-if="cost?.total_tokens_input !== undefined || cost?.total_tokens_output !== undefined">
             <span class="mx-1 text-surface-400">|</span>
-            <span class="text-surface-500">In: {{ formatTokenCount(costDetail?.total_tokens_input ?? 0) }}</span>
-            <span class="ml-1 text-surface-500">Out: {{ formatTokenCount(costDetail?.total_tokens_output ?? 0) }}</span>
+            <span class="text-surface-500">In: {{ formatTokenCount(cost?.total_tokens_input ?? 0) }}</span>
+            <span class="ml-1 text-surface-500">Out: {{ formatTokenCount(cost?.total_tokens_output ?? 0) }}</span>
           </template>
         </span>
         <Button
@@ -207,7 +210,7 @@ const progress = computed(() => {
       <ProgressBar :value="progress" :show-value="true" />
 
       <!-- Step Cost Breakdown -->
-      <div v-if="costDetail?.steps && costDetail.steps.length > 0">
+      <div v-if="cost?.steps && cost.steps.length > 0">
         <h2 class="text-lg font-semibold mb-3">Step Costs</h2>
         <div class="rounded-lg border border-surface-200 bg-surface-0 overflow-hidden">
           <table class="w-full text-sm">
@@ -221,7 +224,7 @@ const progress = computed(() => {
               </tr>
             </thead>
             <tbody class="divide-y divide-surface-100">
-              <tr v-for="step in costDetail.steps" :key="step.step_id">
+              <tr v-for="step in cost.steps" :key="step.step_id">
                 <td class="px-4 py-2 font-medium">{{ step.step_name }}</td>
                 <td class="px-4 py-2 text-surface-500">{{ step.model }}</td>
                 <td class="px-4 py-2 text-right">{{ formatTokenCount(step.tokens_input) }}</td>
