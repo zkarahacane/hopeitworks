@@ -321,28 +321,29 @@ func (m *mockRunRepo) getContainerInfoCalls() []containerInfoCall {
 	return result
 }
 
-type mockPromptTemplateRepo struct{}
+// mockAgentRepo implements port.AgentRepository for tests.
+// Returns empty lists so TemplateService falls back to default templates.
+type mockAgentRepo struct{}
 
-func (m *mockPromptTemplateRepo) Create(_ context.Context, _ *model.PromptTemplate) (*model.PromptTemplate, error) {
+func (m *mockAgentRepo) CreateAgent(_ context.Context, a *model.Agent) (*model.Agent, error) {
+	return a, nil
+}
+func (m *mockAgentRepo) GetAgent(_ context.Context, _ uuid.UUID) (*model.Agent, error) {
+	return nil, errors.NewNotFound("agent", "unknown")
+}
+func (m *mockAgentRepo) ListAgentsByProject(_ context.Context, _ uuid.UUID) ([]*model.Agent, error) {
 	return nil, nil
 }
-func (m *mockPromptTemplateRepo) GetByID(_ context.Context, _ uuid.UUID) (*model.PromptTemplate, error) {
+func (m *mockAgentRepo) ListGlobalAgents(_ context.Context) ([]*model.Agent, error) {
 	return nil, nil
 }
-func (m *mockPromptTemplateRepo) GetByProjectAndName(_ context.Context, _ uuid.UUID, _ string) (*model.PromptTemplate, error) {
-	// Return not found so the TemplateService falls back to defaults
-	return nil, errors.NewNotFound("prompt_template", "implement")
-}
-func (m *mockPromptTemplateRepo) ListByProject(_ context.Context, _ uuid.UUID, _, _ int32) ([]*model.PromptTemplate, error) {
+func (m *mockAgentRepo) ListAgentsByProjectMerged(_ context.Context, _ uuid.UUID) ([]*model.Agent, error) {
 	return nil, nil
 }
-func (m *mockPromptTemplateRepo) CountByProject(_ context.Context, _ uuid.UUID) (int64, error) {
-	return 0, nil
+func (m *mockAgentRepo) UpdateAgent(_ context.Context, a *model.Agent) (*model.Agent, error) {
+	return a, nil
 }
-func (m *mockPromptTemplateRepo) Update(_ context.Context, t *model.PromptTemplate) (*model.PromptTemplate, error) {
-	return t, nil
-}
-func (m *mockPromptTemplateRepo) Delete(_ context.Context, _ uuid.UUID) error { return nil }
+func (m *mockAgentRepo) DeleteAgent(_ context.Context, _ uuid.UUID) error { return nil }
 
 type mockTemplateRenderer struct{}
 
@@ -507,9 +508,9 @@ func newAgentRunFixture(t *testing.T) *agentRunFixture {
 	claudeMDDir := setupTestClaudeMDDir(t)
 
 	// Create a real TemplateService with mock dependencies
-	promptTemplateRepo := &mockPromptTemplateRepo{}
+	agentRepo := &mockAgentRepo{}
 	renderer := &mockTemplateRenderer{}
-	f.templateSvc = service.NewTemplateService(promptTemplateRepo, renderer, testLogger())
+	f.templateSvc = service.NewTemplateService(agentRepo, renderer, testLogger())
 
 	// Create a CostService with a no-op mock repository
 	f.costSvc = service.NewCostService(&mockCostRepo{}, nil, nil, nil, testLogger())

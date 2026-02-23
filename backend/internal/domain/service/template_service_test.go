@@ -25,59 +25,71 @@ func (m *mockTemplateRenderer) Render(templateContent string, ctx *model.Templat
 	return templateContent, nil
 }
 
-// mockTemplateRepo extends mockPromptTemplateRepo with GetByProjectAndName.
-type mockTemplateRepo struct {
-	templates          map[string]*model.PromptTemplate // keyed by "projectID:name"
-	getByProjAndNameFn func(ctx context.Context, projectID uuid.UUID, name string) (*model.PromptTemplate, error)
+// mockAgentRepoForTemplate implements port.AgentRepository for TemplateService tests.
+type mockAgentRepoForTemplate struct {
+	agents       []*model.Agent
+	listMergedFn func(ctx context.Context, projectID uuid.UUID) ([]*model.Agent, error)
 }
 
-func newMockTemplateRepo() *mockTemplateRepo {
-	return &mockTemplateRepo{
-		templates: make(map[string]*model.PromptTemplate),
+func newMockAgentRepoForTemplate() *mockAgentRepoForTemplate {
+	return &mockAgentRepoForTemplate{
+		agents: make([]*model.Agent, 0),
 	}
 }
 
-func (m *mockTemplateRepo) Create(_ context.Context, tmpl *model.PromptTemplate) (*model.PromptTemplate, error) {
-	tmpl.ID = uuid.New()
-	key := tmpl.ProjectID.String() + ":" + tmpl.Name
-	m.templates[key] = tmpl
-	return tmpl, nil
+func (m *mockAgentRepoForTemplate) CreateAgent(_ context.Context, a *model.Agent) (*model.Agent, error) {
+	a.ID = uuid.New()
+	m.agents = append(m.agents, a)
+	return a, nil
 }
 
-func (m *mockTemplateRepo) GetByID(_ context.Context, id uuid.UUID) (*model.PromptTemplate, error) {
-	for _, t := range m.templates {
-		if t.ID == id {
-			return t, nil
+func (m *mockAgentRepoForTemplate) GetAgent(_ context.Context, id uuid.UUID) (*model.Agent, error) {
+	for _, a := range m.agents {
+		if a.ID == id {
+			return a, nil
 		}
 	}
-	return nil, errors.NewNotFound("prompt_template", id)
+	return nil, errors.NewNotFound("agent", id)
 }
 
-func (m *mockTemplateRepo) GetByProjectAndName(ctx context.Context, projectID uuid.UUID, name string) (*model.PromptTemplate, error) {
-	if m.getByProjAndNameFn != nil {
-		return m.getByProjAndNameFn(ctx, projectID, name)
+func (m *mockAgentRepoForTemplate) ListAgentsByProject(_ context.Context, projectID uuid.UUID) ([]*model.Agent, error) {
+	var result []*model.Agent
+	for _, a := range m.agents {
+		if a.ProjectID != nil && *a.ProjectID == projectID {
+			result = append(result, a)
+		}
 	}
-	key := projectID.String() + ":" + name
-	t, ok := m.templates[key]
-	if !ok {
-		return nil, errors.NewNotFound("prompt_template", name)
+	return result, nil
+}
+
+func (m *mockAgentRepoForTemplate) ListGlobalAgents(_ context.Context) ([]*model.Agent, error) {
+	var result []*model.Agent
+	for _, a := range m.agents {
+		if a.Scope == "global" {
+			result = append(result, a)
+		}
 	}
-	return t, nil
+	return result, nil
 }
 
-func (m *mockTemplateRepo) ListByProject(_ context.Context, _ uuid.UUID, _, _ int32) ([]*model.PromptTemplate, error) {
-	return nil, nil
+func (m *mockAgentRepoForTemplate) ListAgentsByProjectMerged(ctx context.Context, projectID uuid.UUID) ([]*model.Agent, error) {
+	if m.listMergedFn != nil {
+		return m.listMergedFn(ctx, projectID)
+	}
+	var result []*model.Agent
+	for _, a := range m.agents {
+		if a.Scope == "global" || (a.ProjectID != nil && *a.ProjectID == projectID) {
+			result = append(result, a)
+		}
+	}
+	return result, nil
 }
 
-func (m *mockTemplateRepo) CountByProject(_ context.Context, _ uuid.UUID) (int64, error) {
-	return 0, nil
+func (m *mockAgentRepoForTemplate) UpdateAgent(_ context.Context, a *model.Agent) (*model.Agent, error) {
+	return a, nil
 }
 
-func (m *mockTemplateRepo) Update(_ context.Context, tmpl *model.PromptTemplate) (*model.PromptTemplate, error) {
-	return tmpl, nil
-}
-
-func (m *mockTemplateRepo) Delete(_ context.Context, _ uuid.UUID) error {
+func (m *mockAgentRepoForTemplate) DeleteAgent(_ context.Context, _ uuid.UUID) error {
 	return nil
 }
 
@@ -86,7 +98,7 @@ func templateTestLogger() *slog.Logger {
 }
 
 func TestTemplateService_RenderForStory_DBTemplate(t *testing.T) {
-	repo := newMockTemplateRepo()
+	repo := newMockAgentRepoForTemplate()
 	renderer := &mockTemplateRenderer{
 		renderFn: func(templateContent string, _ *model.TemplateContext) (string, error) {
 			return "rendered:" + templateContent, nil
@@ -95,14 +107,13 @@ func TestTemplateService_RenderForStory_DBTemplate(t *testing.T) {
 	svc := NewTemplateService(repo, renderer, templateTestLogger())
 
 	projectID := uuid.New()
-	tmplID := uuid.New()
-	repo.templates[projectID.String()+":implement"] = &model.PromptTemplate{
-		ID:              tmplID,
-		ProjectID:       projectID,
+	repo.agents = append(repo.agents, &model.Agent{
+		ID:              uuid.New(),
+		ProjectID:       &projectID,
 		Name:            "implement",
 		TemplateContent: "DB template content for {{story_key}}",
-		Type:            model.TemplateTypeImplement,
-	}
+		Scope:           "project",
+	})
 
 	tmplCtx := &model.TemplateContext{StoryKey: "S-42"}
 	result, err := svc.RenderForStory(context.Background(), projectID, "implement", tmplCtx)
@@ -116,7 +127,7 @@ func TestTemplateService_RenderForStory_DBTemplate(t *testing.T) {
 }
 
 func TestTemplateService_RenderForStory_FallbackToDefault(t *testing.T) {
-	repo := newMockTemplateRepo() // no templates in DB
+	repo := newMockAgentRepoForTemplate() // no agents in DB
 	renderer := &mockTemplateRenderer{
 		renderFn: func(templateContent string, _ *model.TemplateContext) (string, error) {
 			return "rendered:" + templateContent, nil
@@ -141,7 +152,7 @@ func TestTemplateService_RenderForStory_FallbackToDefault(t *testing.T) {
 }
 
 func TestTemplateService_RenderForStory_UnknownTemplate(t *testing.T) {
-	repo := newMockTemplateRepo()
+	repo := newMockAgentRepoForTemplate()
 	renderer := &mockTemplateRenderer{}
 	svc := NewTemplateService(repo, renderer, templateTestLogger())
 
@@ -166,16 +177,15 @@ func TestTemplateService_RenderForStory_UnknownTemplate(t *testing.T) {
 }
 
 func TestTemplateService_RenderForStory_RendererError(t *testing.T) {
-	repo := newMockTemplateRepo()
+	repo := newMockAgentRepoForTemplate()
 	projectID := uuid.New()
-	tmplID := uuid.New()
-	repo.templates[projectID.String()+":implement"] = &model.PromptTemplate{
-		ID:              tmplID,
-		ProjectID:       projectID,
+	repo.agents = append(repo.agents, &model.Agent{
+		ID:              uuid.New(),
+		ProjectID:       &projectID,
 		Name:            "implement",
 		TemplateContent: "{{#if broken",
-		Type:            model.TemplateTypeImplement,
-	}
+		Scope:           "project",
+	})
 
 	renderer := &mockTemplateRenderer{
 		renderFn: func(_ string, _ *model.TemplateContext) (string, error) {
@@ -204,7 +214,7 @@ func TestTemplateService_RenderForStory_RendererError(t *testing.T) {
 }
 
 func TestTemplateService_RenderForStory_AllDefaultTemplates(t *testing.T) {
-	repo := newMockTemplateRepo()
+	repo := newMockAgentRepoForTemplate()
 	renderer := &mockTemplateRenderer{
 		renderFn: func(templateContent string, _ *model.TemplateContext) (string, error) {
 			return templateContent, nil
@@ -240,8 +250,8 @@ func TestTemplateService_RenderForStory_AllDefaultTemplates(t *testing.T) {
 }
 
 func TestTemplateService_RenderForStory_RepoInternalError(t *testing.T) {
-	repo := newMockTemplateRepo()
-	repo.getByProjAndNameFn = func(_ context.Context, _ uuid.UUID, _ string) (*model.PromptTemplate, error) {
+	repo := newMockAgentRepoForTemplate()
+	repo.listMergedFn = func(_ context.Context, _ uuid.UUID) ([]*model.Agent, error) {
 		return nil, errors.NewInternal("database connection lost", nil)
 	}
 	renderer := &mockTemplateRenderer{}

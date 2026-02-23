@@ -6,24 +6,24 @@ import "net/http"
 // It embeds Unimplemented to satisfy methods that are not yet implemented.
 type Server struct {
 	Unimplemented
-	auth            *AuthHandler
-	projects        *ProjectHandler
-	users           *UserHandler
-	profile         *ProfileHandler
-	epics           *EpicHandler
-	stories         *StoryHandler
-	promptTemplates *PromptTemplateHandler
-	runs            *RunHandler
-	pipelineConfig  *PipelineConfigHandler
-	hitl            *HITLHandler
-	costs           *CostHandler
-	notifications   *NotificationHandler
-	epicRuns        *EpicRunHandler
+	auth           *AuthHandler
+	projects       *ProjectHandler
+	users          *UserHandler
+	profile        *ProfileHandler
+	epics          *EpicHandler
+	stories        *StoryHandler
+	agents         *AgentHandler
+	runs           *RunHandler
+	pipelineConfig *PipelineConfigHandler
+	hitl           *HITLHandler
+	costs          *CostHandler
+	notifications  *NotificationHandler
+	epicRuns       *EpicRunHandler
 }
 
 // NewServer creates a new Server with the given handlers.
-func NewServer(auth *AuthHandler, projects *ProjectHandler, users *UserHandler, profile *ProfileHandler, epics *EpicHandler, stories *StoryHandler, promptTemplates *PromptTemplateHandler, runs *RunHandler, pipelineConfig *PipelineConfigHandler, hitl *HITLHandler, costs *CostHandler, notifications *NotificationHandler, epicRuns *EpicRunHandler) *Server {
-	return &Server{auth: auth, projects: projects, users: users, profile: profile, epics: epics, stories: stories, promptTemplates: promptTemplates, runs: runs, pipelineConfig: pipelineConfig, hitl: hitl, costs: costs, notifications: notifications, epicRuns: epicRuns}
+func NewServer(auth *AuthHandler, projects *ProjectHandler, users *UserHandler, profile *ProfileHandler, epics *EpicHandler, stories *StoryHandler, agents *AgentHandler, runs *RunHandler, pipelineConfig *PipelineConfigHandler, hitl *HITLHandler, costs *CostHandler, notifications *NotificationHandler, epicRuns *EpicRunHandler) *Server {
+	return &Server{auth: auth, projects: projects, users: users, profile: profile, epics: epics, stories: stories, agents: agents, runs: runs, pipelineConfig: pipelineConfig, hitl: hitl, costs: costs, notifications: notifications, epicRuns: epicRuns}
 }
 
 // RegisterUser delegates to AuthHandler.
@@ -186,29 +186,34 @@ func (s *Server) ImportStories(w http.ResponseWriter, r *http.Request, projectID
 	s.stories.ImportStories(w, r, projectID)
 }
 
-// ListPromptTemplates delegates to PromptTemplateHandler.
-func (s *Server) ListPromptTemplates(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, params ListPromptTemplatesParams) {
-	s.promptTemplates.ListPromptTemplates(w, r, projectID, params)
+// ListGlobalAgents delegates to AgentHandler.
+func (s *Server) ListGlobalAgents(w http.ResponseWriter, r *http.Request, params ListGlobalAgentsParams) {
+	s.agents.ListGlobalAgents(w, r, params)
 }
 
-// CreatePromptTemplate delegates to PromptTemplateHandler.
-func (s *Server) CreatePromptTemplate(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath) {
-	s.promptTemplates.CreatePromptTemplate(w, r, projectID)
+// ListProjectAgents delegates to AgentHandler.
+func (s *Server) ListProjectAgents(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, params ListProjectAgentsParams) {
+	s.agents.ListProjectAgents(w, r, projectID, params)
 }
 
-// GetPromptTemplate delegates to PromptTemplateHandler.
-func (s *Server) GetPromptTemplate(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, templateID TemplateIdPath) {
-	s.promptTemplates.GetPromptTemplate(w, r, projectID, templateID)
+// CreateAgent delegates to AgentHandler.
+func (s *Server) CreateAgent(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath) {
+	s.agents.CreateAgent(w, r, projectID)
 }
 
-// UpdatePromptTemplate delegates to PromptTemplateHandler.
-func (s *Server) UpdatePromptTemplate(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, templateID TemplateIdPath) {
-	s.promptTemplates.UpdatePromptTemplate(w, r, projectID, templateID)
+// GetAgent delegates to AgentHandler.
+func (s *Server) GetAgent(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, agentID AgentIdPath) {
+	s.agents.GetAgent(w, r, projectID, agentID)
 }
 
-// DeletePromptTemplate delegates to PromptTemplateHandler.
-func (s *Server) DeletePromptTemplate(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, templateID TemplateIdPath) {
-	s.promptTemplates.DeletePromptTemplate(w, r, projectID, templateID)
+// UpdateAgent delegates to AgentHandler.
+func (s *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, agentID AgentIdPath) {
+	s.agents.UpdateAgent(w, r, projectID, agentID)
+}
+
+// DeleteAgent delegates to AgentHandler.
+func (s *Server) DeleteAgent(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, agentID AgentIdPath) {
+	s.agents.DeleteAgent(w, r, projectID, agentID)
 }
 
 // ListRunsByProject delegates to RunHandler.

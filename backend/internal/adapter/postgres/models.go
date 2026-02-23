@@ -58,6 +58,19 @@ func (ns NullEpicRunStatus) Value() (driver.Value, error) {
 	return string(ns.EpicRunStatus), nil
 }
 
+type Agent struct {
+	ID              uuid.UUID   `json:"id"`
+	ProjectID       pgtype.UUID `json:"project_id"`
+	Name            string      `json:"name"`
+	TemplateContent string      `json:"template_content"`
+	Type            string      `json:"type"`
+	CreatedAt       time.Time   `json:"created_at"`
+	UpdatedAt       time.Time   `json:"updated_at"`
+	Scope           string      `json:"scope"`
+	Model           pgtype.Text `json:"model"`
+	Image           pgtype.Text `json:"image"`
+}
+
 type CostRecord struct {
 	ID           uuid.UUID      `json:"id"`
 	RunStepID    uuid.UUID      `json:"run_step_id"`
@@ -171,16 +184,6 @@ type ProjectUser struct {
 	UserID    uuid.UUID `json:"user_id"`
 	Role      string    `json:"role"`
 	CreatedAt time.Time `json:"created_at"`
-}
-
-type PromptTemplate struct {
-	ID              uuid.UUID `json:"id"`
-	ProjectID       uuid.UUID `json:"project_id"`
-	Name            string    `json:"name"`
-	TemplateContent string    `json:"template_content"`
-	Type            string    `json:"type"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 type RevokedToken struct {

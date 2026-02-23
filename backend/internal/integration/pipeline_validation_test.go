@@ -294,8 +294,9 @@ func TestIntegration_PipelineValidation_RunCreation(t *testing.T) {
 		if err := json.Unmarshal(run.PipelineConfigSnapshot, &snapshot); err != nil {
 			t.Fatalf("failed to unmarshal config snapshot: %v", err)
 		}
-		if len(snapshot.Steps) != 3 {
-			t.Errorf("expected 3 steps in snapshot, got %d", len(snapshot.Steps))
+		flatSteps := snapshot.FlatSteps()
+		if len(flatSteps) != 3 {
+			t.Errorf("expected 3 steps in snapshot, got %d", len(flatSteps))
 		}
 	})
 

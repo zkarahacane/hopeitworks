@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"gopkg.in/yaml.v3"
 
 	"github.com/zakari/hopeitworks/backend/internal/domain/model"
 	"github.com/zakari/hopeitworks/backend/internal/domain/port"
@@ -301,9 +300,9 @@ func (s *RunService) LaunchRun(ctx context.Context, projectID, storyID uuid.UUID
 		return nil, err
 	}
 
-	// 5. Parse YAML steps
-	var parsed model.PipelineConfigYAML
-	if err := yaml.Unmarshal([]byte(pipelineCfg.ConfigYAML), &parsed); err != nil {
+	// 5. Parse YAML steps (backward-compatible: legacy flat steps auto-wrapped in group)
+	parsed, err := model.ParsePipelineConfigYAML([]byte(pipelineCfg.ConfigYAML))
+	if err != nil {
 		return nil, errors.NewInternal("parse pipeline config", err)
 	}
 	flatSteps := parsed.FlatSteps()

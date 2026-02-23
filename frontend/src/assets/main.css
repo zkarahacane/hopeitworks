@@ -3,3 +3,17 @@
 @import 'tailwindcss/preflight.css' layer(tailwind-base);
 @import 'tailwindcss/theme.css' layer(tailwind-base);
 @import 'tailwindcss/utilities.css' layer(tailwind-utilities);
+
+/* Running step pulse animation for pipeline view */
+@keyframes pulse-run {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+.running-indicator {
+  animation: pulse-run 1.2s ease-in-out infinite;
+}
