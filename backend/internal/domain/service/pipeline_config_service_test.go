@@ -279,33 +279,84 @@ func TestPipelineConfigService_SeedDefault_ParsesCorrectly(t *testing.T) {
 		t.Fatalf("default YAML failed to parse: %v", err)
 	}
 
-	expectedGroups := []struct {
-		name        string
-		actionTypes []string
-	}{
-		{"Setup", []string{"git_branch"}},
-		{"Development", []string{"agent_run"}},
-		{"Review", []string{"agent_run"}},
-		{"Merge", []string{"git_pr"}},
-		{"Delivery", []string{"ci_poll", "notification"}},
+	// AC #1: 5 groups with correct names and IDs
+	type expectedStep struct {
+		id         string
+		name       string
+		actionType string
+		config     map[string]string
+	}
+	type expectedGroup struct {
+		id    string
+		name  string
+		steps []expectedStep
 	}
 
-	if len(parsed.Groups) != len(expectedGroups) {
-		t.Fatalf("expected %d groups, got %d", len(expectedGroups), len(parsed.Groups))
+	expected := []expectedGroup{
+		{
+			id: "setup", name: "Setup",
+			steps: []expectedStep{
+				{id: "git-branch", name: "Create Branch", actionType: "git_branch", config: map[string]string{"base_branch": "main"}},
+			},
+		},
+		{
+			id: "development", name: "Development",
+			steps: []expectedStep{
+				{id: "agent-implement", name: "Implement Story", actionType: "agent_run", config: map[string]string{"role": "dev", "phase": "dev-story"}},
+			},
+		},
+		{
+			id: "review", name: "Review",
+			steps: []expectedStep{
+				{id: "agent-review", name: "Code Review", actionType: "agent_run", config: map[string]string{"role": "review", "phase": "code-review"}},
+			},
+		},
+		{
+			id: "merge", name: "Merge",
+			steps: []expectedStep{
+				{id: "git-pr", name: "Create & Merge PR", actionType: "git_pr", config: map[string]string{"strategy": "squash"}},
+			},
+		},
+		{
+			id: "delivery", name: "Delivery",
+			steps: []expectedStep{
+				{id: "ci-poll", name: "Wait for CI", actionType: "ci_poll", config: map[string]string{"timeout_minutes": "30"}},
+				{id: "notify", name: "Notify Completion", actionType: "notification", config: map[string]string{"channel": "default"}},
+			},
+		},
 	}
 
-	for i, expected := range expectedGroups {
+	if len(parsed.Groups) != len(expected) {
+		t.Fatalf("expected %d groups, got %d", len(expected), len(parsed.Groups))
+	}
+
+	for i, eg := range expected {
 		group := parsed.Groups[i]
-		if group.Name != expected.name {
-			t.Errorf("group[%d]: expected name %q, got %q", i, expected.name, group.Name)
+		if group.ID != eg.id {
+			t.Errorf("group[%d]: expected id %q, got %q", i, eg.id, group.ID)
 		}
-		if len(group.Steps) != len(expected.actionTypes) {
-			t.Errorf("group[%d] %q: expected %d steps, got %d", i, expected.name, len(expected.actionTypes), len(group.Steps))
+		if group.Name != eg.name {
+			t.Errorf("group[%d]: expected name %q, got %q", i, eg.name, group.Name)
+		}
+		if len(group.Steps) != len(eg.steps) {
+			t.Errorf("group[%d] %q: expected %d steps, got %d", i, eg.name, len(eg.steps), len(group.Steps))
 			continue
 		}
-		for j, expectedAction := range expected.actionTypes {
-			if group.Steps[j].ActionType != expectedAction {
-				t.Errorf("group[%d].steps[%d]: expected action_type %q, got %q", i, j, expectedAction, group.Steps[j].ActionType)
+		for j, es := range eg.steps {
+			step := group.Steps[j]
+			if step.ID != es.id {
+				t.Errorf("group[%d].steps[%d]: expected id %q, got %q", i, j, es.id, step.ID)
+			}
+			if step.Name != es.name {
+				t.Errorf("group[%d].steps[%d]: expected name %q, got %q", i, j, es.name, step.Name)
+			}
+			if step.ActionType != es.actionType {
+				t.Errorf("group[%d].steps[%d]: expected action_type %q, got %q", i, j, es.actionType, step.ActionType)
+			}
+			for key, val := range es.config {
+				if step.Config[key] != val {
+					t.Errorf("group[%d].steps[%d].config[%s]: expected %q, got %q", i, j, key, val, step.Config[key])
+				}
 			}
 		}
 	}
