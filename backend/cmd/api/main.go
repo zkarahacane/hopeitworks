@@ -217,6 +217,11 @@ func run() error {
 	actionReg.Register(humanAction)
 	logger.Info("human action registered")
 
+	// Notification action (no Docker required)
+	notificationAction := actionadapter.NewNotificationAction(eventRepo, storyRepo, logger)
+	actionReg.Register(notificationAction)
+	logger.Info("notification action registered")
+
 	// Cost tracking (for agent_run action)
 	costSvc := costService
 
