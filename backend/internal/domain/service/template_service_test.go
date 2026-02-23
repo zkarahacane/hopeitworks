@@ -27,8 +27,8 @@ func (m *mockTemplateRenderer) Render(templateContent string, ctx *model.Templat
 
 // mockAgentRepoForTemplate implements port.AgentRepository for TemplateService tests.
 type mockAgentRepoForTemplate struct {
-	agents              []*model.Agent
-	listMergedFn        func(ctx context.Context, projectID uuid.UUID) ([]*model.Agent, error)
+	agents       []*model.Agent
+	listMergedFn func(ctx context.Context, projectID uuid.UUID) ([]*model.Agent, error)
 }
 
 func newMockAgentRepoForTemplate() *mockAgentRepoForTemplate {

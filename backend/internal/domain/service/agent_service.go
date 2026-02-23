@@ -43,13 +43,13 @@ func (s *AgentService) Create(ctx context.Context, params CreateAgentParams) (*m
 
 	scope := params.Scope
 	if scope == "" {
-		scope = "project"
+		scope = model.AgentScopeProject
 	}
-	if scope != "global" && scope != "project" {
+	if scope != model.AgentScopeGlobal && scope != model.AgentScopeProject {
 		return nil, errors.NewValidation("scope", "must be 'global' or 'project'")
 	}
 
-	if scope == "project" && (params.ProjectID == nil || *params.ProjectID == uuid.Nil) {
+	if scope == model.AgentScopeProject && (params.ProjectID == nil || *params.ProjectID == uuid.Nil) {
 		return nil, errors.NewValidation("project_id", "is required for project-scoped agents")
 	}
 

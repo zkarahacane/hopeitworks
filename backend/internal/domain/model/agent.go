@@ -6,6 +6,12 @@ import (
 	"github.com/google/uuid"
 )
 
+// Agent scope constants.
+const (
+	AgentScopeGlobal  = "global"
+	AgentScopeProject = "project"
+)
+
 // Agent represents an AI agent definition with its runtime configuration and prompt template.
 // Agents can be scoped globally (available to all projects) or to a specific project.
 type Agent struct {

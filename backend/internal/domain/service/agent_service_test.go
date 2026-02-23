@@ -50,7 +50,7 @@ func (m *mockAgentRepo) ListAgentsByProject(_ context.Context, projectID uuid.UU
 func (m *mockAgentRepo) ListGlobalAgents(_ context.Context) ([]*model.Agent, error) {
 	var result []*model.Agent
 	for _, a := range m.agents {
-		if a.Scope == "global" {
+		if a.Scope == model.AgentScopeGlobal {
 			result = append(result, a)
 		}
 	}
@@ -60,7 +60,7 @@ func (m *mockAgentRepo) ListGlobalAgents(_ context.Context) ([]*model.Agent, err
 func (m *mockAgentRepo) ListAgentsByProjectMerged(_ context.Context, projectID uuid.UUID) ([]*model.Agent, error) {
 	var result []*model.Agent
 	for _, a := range m.agents {
-		if a.Scope == "global" || (a.ProjectID != nil && *a.ProjectID == projectID) {
+		if a.Scope == model.AgentScopeGlobal || (a.ProjectID != nil && *a.ProjectID == projectID) {
 			result = append(result, a)
 		}
 	}
@@ -94,7 +94,7 @@ func TestAgentService_Create(t *testing.T) {
 				Model:           "claude-opus-4-6",
 				Image:           "hopeitworks/agent:latest",
 				TemplateContent: "You are an agent...",
-				Scope:           "project",
+				Scope:           model.AgentScopeProject,
 			},
 			wantErr: false,
 		},
@@ -105,7 +105,7 @@ func TestAgentService_Create(t *testing.T) {
 				Model:           "claude-sonnet-4-6",
 				Image:           "hopeitworks/agent:latest",
 				TemplateContent: "Global agent template",
-				Scope:           "global",
+				Scope:           model.AgentScopeGlobal,
 			},
 			wantErr: false,
 		},
@@ -153,7 +153,7 @@ func TestAgentService_Create(t *testing.T) {
 			params: CreateAgentParams{
 				Name:            "Test",
 				TemplateContent: "content",
-				Scope:           "project",
+				Scope:           model.AgentScopeProject,
 			},
 			wantErr: true,
 			errCode: "VALIDATION_ERROR",
@@ -211,7 +211,7 @@ func TestAgentService_GetByID(t *testing.T) {
 		Name:            "test-agent",
 		ProjectID:       &projectID,
 		TemplateContent: "content",
-		Scope:           "project",
+		Scope:           model.AgentScopeProject,
 	}
 
 	result, err := svc.GetByID(context.Background(), id)
@@ -247,7 +247,7 @@ func TestAgentService_ListGlobal(t *testing.T) {
 			ID:              id,
 			Name:            "global-" + id.String()[:8],
 			TemplateContent: "content",
-			Scope:           "global",
+			Scope:           model.AgentScopeGlobal,
 		}
 	}
 
@@ -259,7 +259,7 @@ func TestAgentService_ListGlobal(t *testing.T) {
 		Name:            "project-agent",
 		ProjectID:       &projectID,
 		TemplateContent: "content",
-		Scope:           "project",
+		Scope:           model.AgentScopeProject,
 	}
 
 	result, err := svc.ListGlobal(context.Background())
@@ -283,7 +283,7 @@ func TestAgentService_Update(t *testing.T) {
 		Name:            "original",
 		Model:           "claude-sonnet-4-6",
 		TemplateContent: "original content",
-		Scope:           "project",
+		Scope:           model.AgentScopeProject,
 	}
 
 	tests := []struct {
@@ -367,7 +367,7 @@ func TestAgentService_Delete(t *testing.T) {
 		Name:            "to-delete",
 		ProjectID:       &projectID,
 		TemplateContent: "content",
-		Scope:           "project",
+		Scope:           model.AgentScopeProject,
 	}
 
 	err := svc.Delete(context.Background(), id)

@@ -60,7 +60,7 @@ func (m *mockAgentRepo) ListAgentsByProject(_ context.Context, projectID uuid.UU
 func (m *mockAgentRepo) ListGlobalAgents(_ context.Context) ([]*model.Agent, error) {
 	var result []*model.Agent
 	for _, a := range m.agents {
-		if a.Scope == "global" {
+		if a.Scope == model.AgentScopeGlobal {
 			result = append(result, a)
 		}
 	}
@@ -70,7 +70,7 @@ func (m *mockAgentRepo) ListGlobalAgents(_ context.Context) ([]*model.Agent, err
 func (m *mockAgentRepo) ListAgentsByProjectMerged(_ context.Context, projectID uuid.UUID) ([]*model.Agent, error) {
 	var result []*model.Agent
 	for _, a := range m.agents {
-		if a.Scope == "global" || (a.ProjectID != nil && *a.ProjectID == projectID) {
+		if a.Scope == model.AgentScopeGlobal || (a.ProjectID != nil && *a.ProjectID == projectID) {
 			result = append(result, a)
 		}
 	}
@@ -348,7 +348,7 @@ func TestListGlobalAgents(t *testing.T) {
 			ID:              id,
 			Name:            "global-" + id.String()[:8],
 			TemplateContent: "content",
-			Scope:           "global",
+			Scope:           model.AgentScopeGlobal,
 		}
 	}
 
@@ -412,7 +412,7 @@ func TestListProjectAgents(t *testing.T) {
 		ID:              globalID,
 		Name:            "global-agent",
 		TemplateContent: "content",
-		Scope:           "global",
+		Scope:           model.AgentScopeGlobal,
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects/"+projectID.String()+"/agents", nil)
