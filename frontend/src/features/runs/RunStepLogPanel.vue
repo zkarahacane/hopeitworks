@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, toRef } from 'vue'
+import { computed } from 'vue'
 import Drawer from 'primevue/drawer'
 import Tag from 'primevue/tag'
 import Message from 'primevue/message'
@@ -24,8 +24,7 @@ const emit = defineEmits<{
 }>()
 
 const stepId = computed(() => props.step?.id ?? null)
-const stepIdRef = toRef(stepId)
-const { lines, sseStatus, clearLogs } = useStepLogs(props.projectId, props.runId, stepIdRef)
+const { lines, sseStatus, clearLogs } = useStepLogs(props.projectId, props.runId, stepId)
 
 /** Format an ISO timestamp to HH:mm:ss. */
 function formatTime(iso?: string | null): string {
