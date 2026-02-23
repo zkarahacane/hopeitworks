@@ -111,12 +111,6 @@ emit_log "Starting Claude Code agent"
 EXIT_CODE=0
 claude --dangerously-skip-permissions --print --verbose --output-format stream-json < /tmp/prompt.md || EXIT_CODE=$?
 
-# --- Emit cost event ---
-# Claude Code with --output-format stream-json emits result messages that may
-# contain token usage. If we cannot parse it, emit a zero-cost placeholder so
-# the log streamer is never blocked waiting for a cost line.
-echo '{"type":"cost","input_tokens":0,"output_tokens":0,"model":"unknown"}'
-
 # --- Propagate exit code ---
 if [[ "$EXIT_CODE" -ne 0 ]]; then
     emit_log "Agent exited with code $EXIT_CODE" "error"
