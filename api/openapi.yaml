@@ -2878,8 +2878,8 @@ components:
           example: implement
         action_type:
           type: string
-          enum: [implement, review, merge, test, custom]
-          example: implement
+          enum: [agent_run, git_branch, git_pr, notification, human, ci_poll, hitl_gate]
+          example: agent_run
         model:
           type: string
           enum: [claude-opus-4-6, claude-sonnet-4-6, claude-haiku-4-5]
@@ -2889,6 +2889,29 @@ components:
           example: false
         retry_policy:
           $ref: "#/components/schemas/RetryPolicy"
+        config:
+          type: object
+          additionalProperties:
+            type: string
+          description: Optional per-action-type configuration key-value pairs
+
+    PipelineGroup:
+      type: object
+      required:
+        - id
+        - name
+        - steps
+      properties:
+        id:
+          type: string
+          description: Unique identifier for this group within the pipeline config
+        name:
+          type: string
+          description: Human-readable name for the group (e.g. "Setup", "Development")
+        steps:
+          type: array
+          items:
+            $ref: "#/components/schemas/PipelineStep"
 
     RetryPolicy:
       type: object
@@ -2910,17 +2933,18 @@ components:
       type: object
       required:
         - project_id
-        - steps
+        - groups
         - updated_at
       properties:
         project_id:
           type: string
           format: uuid
           example: 660e8400-e29b-41d4-a716-446655440000
-        steps:
+        groups:
           type: array
           items:
-            $ref: "#/components/schemas/PipelineStep"
+            $ref: "#/components/schemas/PipelineGroup"
+          description: Ordered list of step groups. Groups are executed sequentially; steps within a group are executed sequentially.
         updated_at:
           type: string
           format: date-time
@@ -2929,12 +2953,13 @@ components:
     UpdatePipelineConfigRequest:
       type: object
       required:
-        - steps
+        - groups
       properties:
-        steps:
+        groups:
           type: array
           items:
-            $ref: "#/components/schemas/PipelineStep"
+            $ref: "#/components/schemas/PipelineGroup"
+          description: Ordered list of step groups.
 
     # ── Run ──────────────────────────────────────────────────────────
     Run:

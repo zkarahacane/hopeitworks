@@ -16,11 +16,13 @@ const modelOptions = [
 ]
 
 const actionTypeOptions = [
-  { label: 'Implement', value: 'implement' },
-  { label: 'Review', value: 'review' },
-  { label: 'Merge', value: 'merge' },
-  { label: 'Test', value: 'test' },
-  { label: 'Custom', value: 'custom' },
+  { label: 'Agent Run', value: 'agent_run' },
+  { label: 'Git Branch', value: 'git_branch' },
+  { label: 'Git PR', value: 'git_pr' },
+  { label: 'Notification', value: 'notification' },
+  { label: 'Human', value: 'human' },
+  { label: 'CI Poll', value: 'ci_poll' },
+  { label: 'HITL Gate', value: 'hitl_gate' },
 ]
 
 const retryTypeOptions = [
@@ -40,7 +42,7 @@ const emit = defineEmits<{
 }>()
 
 const name = ref('')
-const actionType = ref<PipelineStep['action_type']>('implement')
+const actionType = ref<PipelineStep['action_type']>('agent_run')
 const model = ref<PipelineStep['model']>('claude-sonnet-4-6')
 const autoApprove = ref(false)
 const maxRetries = ref(2)
@@ -49,7 +51,7 @@ const validationError = ref<string | null>(null)
 
 function resetForm() {
   name.value = ''
-  actionType.value = 'implement'
+  actionType.value = 'agent_run'
   model.value = 'claude-sonnet-4-6'
   autoApprove.value = false
   maxRetries.value = 2

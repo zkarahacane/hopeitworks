@@ -306,7 +306,8 @@ func (s *RunService) LaunchRun(ctx context.Context, projectID, storyID uuid.UUID
 	if err := yaml.Unmarshal([]byte(pipelineCfg.ConfigYAML), &parsed); err != nil {
 		return nil, errors.NewInternal("parse pipeline config", err)
 	}
-	if len(parsed.Steps) == 0 {
+	flatSteps := parsed.FlatSteps()
+	if len(flatSteps) == 0 {
 		return nil, &errors.DomainError{
 			Category: errors.CategoryValidation,
 			Code:     "PIPELINE_CONFIG_EMPTY",
@@ -328,7 +329,7 @@ func (s *RunService) LaunchRun(ctx context.Context, projectID, storyID uuid.UUID
 
 	// Build per-step model map from pipeline config (keyed by step order)
 	stepModels := make(map[string]string)
-	for i, stepCfg := range parsed.Steps {
+	for i, stepCfg := range flatSteps {
 		if stepCfg.Model != "" {
 			stepModels[fmt.Sprintf("step_%d_model", i)] = stepCfg.Model
 		}
@@ -351,8 +352,8 @@ func (s *RunService) LaunchRun(ctx context.Context, projectID, storyID uuid.UUID
 	}
 
 	// 9. Create RunSteps
-	steps := make([]model.RunStep, 0, len(parsed.Steps))
-	for i, stepCfg := range parsed.Steps {
+	steps := make([]model.RunStep, 0, len(flatSteps))
+	for i, stepCfg := range flatSteps {
 		step := &model.RunStep{
 			RunID:     createdRun.ID,
 			StepName:  stepCfg.Name,
@@ -587,7 +588,7 @@ func (s *RunService) RetryStep(ctx context.Context, runID, stepID uuid.UUID) (*m
 	if run.PipelineConfigSnapshot != nil {
 		var parsed model.PipelineConfigYAML
 		if err := json.Unmarshal(run.PipelineConfigSnapshot, &parsed); err == nil {
-			for _, ps := range parsed.Steps {
+			for _, ps := range parsed.FlatSteps() {
 				if ps.Name == step.StepName && ps.RetryPolicy.MaxRetries > 0 {
 					maxRetries = ps.RetryPolicy.MaxRetries
 					break
