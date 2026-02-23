@@ -125,13 +125,13 @@ type HitlRequest struct {
 	RunStepID       uuid.UUID          `json:"run_step_id"`
 	GateType        string             `json:"gate_type"`
 	DiffContent     pgtype.Text        `json:"diff_content"`
-	Message         pgtype.Text        `json:"message"`
 	Status          string             `json:"status"`
 	ResolvedAt      pgtype.Timestamptz `json:"resolved_at"`
 	ResolvedBy      pgtype.UUID        `json:"resolved_by"`
 	RejectionReason pgtype.Text        `json:"rejection_reason"`
 	CreatedAt       time.Time          `json:"created_at"`
 	DiffUrl         pgtype.Text        `json:"diff_url"`
+	Message         pgtype.Text        `json:"message"`
 }
 
 type NotificationConfig struct {
