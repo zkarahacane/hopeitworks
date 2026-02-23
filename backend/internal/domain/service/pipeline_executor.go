@@ -22,10 +22,10 @@ var ErrRunPaused = fmt.Errorf("run paused")
 // actionTypeToTemplateName maps pipeline config action_type values to prompt template names.
 // Includes both new action types and legacy aliases for backward compatibility.
 var actionTypeToTemplateName = map[string]string{
-	"agent_run":  TemplateNameImplement,
-	"implement":  TemplateNameImplement,
-	"review":     TemplateNameReview,
-	"merge":      TemplateNameMerge,
+	"agent_run": TemplateNameImplement,
+	"implement": TemplateNameImplement,
+	"review":    TemplateNameReview,
+	"merge":     TemplateNameMerge,
 }
 
 // errStepSuspended is returned by executeStep when the step transitions

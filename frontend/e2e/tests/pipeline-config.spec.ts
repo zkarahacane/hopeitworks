@@ -29,7 +29,13 @@ const mockSteps = [
 
 const mockPipelineConfig = {
   project_id: 'proj-1',
-  steps: mockSteps,
+  groups: [
+    {
+      id: 'default',
+      name: 'Default',
+      steps: mockSteps,
+    },
+  ],
   updated_at: '2026-02-15T10:30:00Z',
 }
 
@@ -78,7 +84,7 @@ test.describe('Pipeline Configuration Page', () => {
             contentType: 'application/json',
             body: JSON.stringify({
               ...mockPipelineConfig,
-              steps: body.steps,
+              groups: body.groups,
               updated_at: new Date().toISOString(),
             }),
           })
