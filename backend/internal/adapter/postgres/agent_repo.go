@@ -161,7 +161,10 @@ func toDomainAgent(a Agent) *model.Agent {
 	return agent
 }
 
-// textFromString converts a Go string to pgtype.Text. Empty strings are stored as valid empty strings.
+// textFromString converts a Go string to pgtype.Text. Empty strings are stored as NULL.
 func textFromString(s string) pgtype.Text {
+	if s == "" {
+		return pgtype.Text{String: "", Valid: false}
+	}
 	return pgtype.Text{String: s, Valid: true}
 }
