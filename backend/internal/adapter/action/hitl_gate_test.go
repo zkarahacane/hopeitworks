@@ -152,13 +152,22 @@ func (m *hitlMockGitProvider) CloneRepo(_ context.Context, _ string, _ string) e
 func (m *hitlMockGitProvider) CreateBranch(_ context.Context, _ string, _ string) error {
 	return nil
 }
+func (m *hitlMockGitProvider) CreateRemoteBranch(_ context.Context, _ string, _ string, _ string) error {
+	return nil
+}
 func (m *hitlMockGitProvider) Push(_ context.Context, _ string, _ string) error { return nil }
 func (m *hitlMockGitProvider) CreatePR(_ context.Context, _ string, _ string, _ string, _ string) (string, error) {
 	return "", nil
 }
+func (m *hitlMockGitProvider) CreateRemotePR(_ context.Context, _ string, _ string, _ string, _ string, _ string) (string, error) {
+	return "", nil
+}
 func (m *hitlMockGitProvider) MergePR(_ context.Context, _ string, _ string) error { return nil }
 func (m *hitlMockGitProvider) GetCIStatus(_ context.Context, _ string) (string, error) {
-	return "pass", nil
+	return ciStatusPass, nil
+}
+func (m *hitlMockGitProvider) GetRemoteCIStatus(_ context.Context, _ string) (string, error) {
+	return ciStatusPass, nil
 }
 func (m *hitlMockGitProvider) GetPRDiff(ctx context.Context, prURL string) (string, error) {
 	m.mu.Lock()

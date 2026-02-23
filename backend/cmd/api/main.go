@@ -203,12 +203,12 @@ func run() error {
 	logger.Info("hitl_gate action registered")
 
 	// Git Branch action (no Docker required)
-	gitBranchAction := actionadapter.NewGitBranchAction(gitProviderFactory, storyRepo, logger)
+	gitBranchAction := actionadapter.NewGitBranchAction(gitProviderFactory, storyRepo, projectRepo, logger)
 	actionReg.Register(gitBranchAction)
 	logger.Info("git_branch action registered")
 
 	// Git PR action (no Docker required)
-	gitPRAction := actionadapter.NewGitPRAction(gitProviderFactory, storyRepo, logger)
+	gitPRAction := actionadapter.NewGitPRAction(gitProviderFactory, storyRepo, projectRepo, logger)
 	actionReg.Register(gitPRAction)
 	logger.Info("git_pr action registered")
 

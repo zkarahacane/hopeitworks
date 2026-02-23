@@ -352,6 +352,180 @@ func (a *GiteaAPIAdapter) GetPRDiff(ctx context.Context, prURL string) (string, 
 	return string(respBody), nil
 }
 
+// giteaCreateBranchRequest is the JSON body for creating a Gitea branch via API.
+type giteaCreateBranchRequest struct {
+	NewBranchName string `json:"new_branch_name"`
+	OldBranchName string `json:"old_branch_name"`
+}
+
+// CreateRemoteBranch creates a new branch on the remote Gitea repository via API.
+func (a *GiteaAPIAdapter) CreateRemoteBranch(ctx context.Context, repoURL string, branchName string, baseBranch string) error {
+	owner, repo, err := parseGiteaRepoOwnerAndName(repoURL)
+	if err != nil {
+		return fmt.Errorf("parse repo URL: %w", err)
+	}
+
+	a.logger.DebugContext(ctx, "creating remote branch via gitea API",
+		"owner", owner, "repo", repo,
+		"branch_name", branchName, "base_branch", baseBranch,
+	)
+
+	reqBody := giteaCreateBranchRequest{
+		NewBranchName: branchName,
+		OldBranchName: baseBranch,
+	}
+
+	endpoint := fmt.Sprintf("%s/api/v1/repos/%s/%s/branches", a.baseURL, owner, repo)
+	_, err = a.doJSON(ctx, http.MethodPost, endpoint, reqBody)
+	if err != nil {
+		return errors.NewDomainError(
+			errors.ErrCodeGitOperationFailed,
+			fmt.Sprintf("failed to create remote branch %q: %v", branchName, err),
+			map[string]any{"owner": owner, "repo": repo, "branch_name": branchName, "base_branch": baseBranch},
+		)
+	}
+
+	return nil
+}
+
+// CreateRemotePR creates a pull request via the Gitea API and returns the PR URL.
+func (a *GiteaAPIAdapter) CreateRemotePR(ctx context.Context, repoURL string, title string, body string, headBranch string, baseBranch string) (string, error) {
+	owner, repo, err := parseGiteaRepoOwnerAndName(repoURL)
+	if err != nil {
+		return "", fmt.Errorf("parse repo URL: %w", err)
+	}
+
+	a.logger.DebugContext(ctx, "creating remote PR via gitea API",
+		"owner", owner, "repo", repo,
+		"head", headBranch, "base", baseBranch,
+	)
+
+	reqBody := giteaPRRequest{
+		Title: title,
+		Body:  body,
+		Head:  headBranch,
+		Base:  baseBranch,
+	}
+
+	endpoint := fmt.Sprintf("%s/api/v1/repos/%s/%s/pulls", a.baseURL, owner, repo)
+	respBody, err := a.doJSON(ctx, http.MethodPost, endpoint, reqBody)
+	if err != nil {
+		return "", errors.NewDomainError(
+			errors.ErrCodeGitOperationFailed,
+			fmt.Sprintf("failed to create remote PR via Gitea API: %v", err),
+			map[string]any{"owner": owner, "repo": repo, "head": headBranch, "base": baseBranch},
+		)
+	}
+
+	var pr giteaPRResponse
+	if err := json.Unmarshal(respBody, &pr); err != nil {
+		return "", errors.NewDomainError(
+			errors.ErrCodeGitOperationFailed,
+			fmt.Sprintf("failed to parse PR response: %v", err),
+			map[string]any{"response": string(respBody)},
+		)
+	}
+
+	prURL := pr.HTMLURL
+	if prURL == "" {
+		prURL = fmt.Sprintf("%s/%s/%s/pulls/%d", a.baseURL, owner, repo, pr.Number)
+	}
+
+	return prURL, nil
+}
+
+// giteaPRDetailResponse represents the relevant fields of a Gitea PR detail response.
+type giteaPRDetailResponse struct {
+	Head struct {
+		Sha string `json:"sha"`
+	} `json:"head"`
+}
+
+// GetRemoteCIStatus returns CI status for a PR identified by its URL via the Gitea API.
+func (a *GiteaAPIAdapter) GetRemoteCIStatus(ctx context.Context, prURL string) (string, error) {
+	owner, repo, index, err := parseGiteaPRIndex(prURL)
+	if err != nil {
+		return "", errors.NewDomainError(
+			errors.ErrCodeInvalidInput,
+			fmt.Sprintf("failed to parse PR URL %s: %v", prURL, err),
+			map[string]any{"pr_url": prURL},
+		)
+	}
+
+	a.logger.DebugContext(ctx, "getting remote CI status via gitea API",
+		"owner", owner, "repo", repo, "pr_index", index,
+	)
+
+	// Get PR details to find head SHA
+	prEndpoint := fmt.Sprintf("%s/api/v1/repos/%s/%s/pulls/%d", a.baseURL, owner, repo, index)
+	prBody, err := a.doGet(ctx, prEndpoint, "application/json")
+	if err != nil {
+		return "", errors.NewDomainError(
+			errors.ErrCodeGitOperationFailed,
+			fmt.Sprintf("failed to get PR details: %v", err),
+			map[string]any{"pr_url": prURL},
+		)
+	}
+
+	var prDetail giteaPRDetailResponse
+	if err := json.Unmarshal(prBody, &prDetail); err != nil {
+		return "", errors.NewDomainError(
+			errors.ErrCodeGitOperationFailed,
+			fmt.Sprintf("failed to parse PR response: %v", err),
+			map[string]any{"response": string(prBody)},
+		)
+	}
+
+	sha := prDetail.Head.Sha
+	if sha == "" {
+		return CIStatusNoChecks, nil
+	}
+
+	// Get commit statuses
+	statusEndpoint := fmt.Sprintf("%s/api/v1/repos/%s/%s/commits/%s/statuses", a.baseURL, owner, repo, sha)
+	respBody, err := a.doGet(ctx, statusEndpoint, "application/json")
+	if err != nil {
+		return "", errors.NewDomainError(
+			errors.ErrCodeGitOperationFailed,
+			fmt.Sprintf("failed to get CI status: %v", err),
+			map[string]any{"owner": owner, "repo": repo, "sha": sha},
+		)
+	}
+
+	var statuses []giteaCommitStatus
+	if err := json.Unmarshal(respBody, &statuses); err != nil {
+		return "", errors.NewDomainError(
+			errors.ErrCodeGitOperationFailed,
+			fmt.Sprintf("failed to parse commit statuses: %v", err),
+			map[string]any{"response": string(respBody)},
+		)
+	}
+
+	if len(statuses) == 0 {
+		return CIStatusNoChecks, nil
+	}
+
+	hasPending := false
+	for _, s := range statuses {
+		state := s.Status
+		if state == "" {
+			state = s.State
+		}
+		switch state {
+		case "failure", "error":
+			return CIStatusFail, nil
+		case "pending", "running":
+			hasPending = true
+		}
+	}
+
+	if hasPending {
+		return CIStatusPending, nil
+	}
+
+	return CIStatusPass, nil
+}
+
 // --- Helpers ---
 
 // doJSON makes an HTTP request with a JSON body and returns the response body.

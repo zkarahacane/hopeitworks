@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/zakari/hopeitworks/backend/internal/domain/port"
@@ -17,6 +18,9 @@ import (
 const (
 	ciStatusPending = CIStatusPending
 	ciStatusFail    = CIStatusFail
+
+	// conclusionFailure is the GitHub check conclusion for a failed check.
+	conclusionFailure = "failure"
 )
 
 // branchNamePattern validates conventional branch naming: feat/{key}-{slug} or fix/{key}-{slug}.
@@ -246,7 +250,7 @@ func (a *GhCliAdapter) GetCIStatus(ctx context.Context, workDir string) (string,
 			continue
 		}
 
-		if check.Conclusion == "failure" || check.Conclusion == "timed_out" || check.Conclusion == "action_required" {
+		if check.Conclusion == conclusionFailure || check.Conclusion == "timed_out" || check.Conclusion == "action_required" {
 			return ciStatusFail, nil
 		}
 	}
@@ -273,4 +277,207 @@ func (a *GhCliAdapter) GetPRDiff(ctx context.Context, prURL string) (string, err
 		)
 	}
 	return out, nil
+}
+
+// githubRepoPattern matches GitHub repo URLs like:
+// https://github.com/owner/repo
+// https://github.com/owner/repo.git
+var githubRepoPattern = regexp.MustCompile(`^https?://[^/]+/([^/]+)/([^/]+?)(?:\.git)?$`)
+
+// githubPRPattern matches GitHub PR URLs like:
+// https://github.com/owner/repo/pull/123
+var githubPRPattern = regexp.MustCompile(`^https?://[^/]+/([^/]+)/([^/]+)/pull/(\d+)$`)
+
+// parseGitHubOwnerRepo extracts owner and repo from a GitHub repository URL.
+func parseGitHubOwnerRepo(repoURL string) (owner, repo string, err error) {
+	matches := githubRepoPattern.FindStringSubmatch(repoURL)
+	if matches == nil {
+		return "", "", fmt.Errorf("cannot parse GitHub repo URL: %s", repoURL)
+	}
+	return matches[1], matches[2], nil
+}
+
+// parseGitHubPR extracts owner, repo, and PR number from a GitHub PR URL.
+func parseGitHubPR(prURL string) (owner, repo string, number int, err error) {
+	matches := githubPRPattern.FindStringSubmatch(prURL)
+	if matches == nil {
+		return "", "", 0, fmt.Errorf("cannot parse GitHub PR URL: %s", prURL)
+	}
+	n, err := strconv.Atoi(matches[3])
+	if err != nil {
+		return "", "", 0, fmt.Errorf("invalid PR number in URL %s: %w", prURL, err)
+	}
+	return matches[1], matches[2], n, nil
+}
+
+// CreateRemoteBranch creates a new branch on the remote repository via the GitHub API.
+func (a *GhCliAdapter) CreateRemoteBranch(ctx context.Context, repoURL string, branchName string, baseBranch string) error {
+	owner, repo, err := parseGitHubOwnerRepo(repoURL)
+	if err != nil {
+		return errors.NewDomainError(
+			errors.ErrCodeInvalidInput,
+			fmt.Sprintf("failed to parse repo URL: %v", err),
+			map[string]any{"repo_url": repoURL},
+		)
+	}
+
+	a.logger.DebugContext(ctx, "creating remote branch via API",
+		"owner", owner, "repo", repo,
+		"branch_name", branchName, "base_branch", baseBranch,
+	)
+
+	// Get the SHA of the base branch
+	apiPath := fmt.Sprintf("repos/%s/%s/git/ref/heads/%s", owner, repo, baseBranch)
+	sha, err := a.runner.Run(ctx, ".", "gh", "api", apiPath, "--jq", ".object.sha")
+	if err != nil {
+		return errors.NewDomainError(
+			errors.ErrCodeGitOperationFailed,
+			fmt.Sprintf("failed to get base branch %q SHA: %v", baseBranch, err),
+			map[string]any{"owner": owner, "repo": repo, "base_branch": baseBranch},
+		)
+	}
+
+	// Create the new branch ref
+	sha = strings.TrimSpace(sha)
+	refPath := fmt.Sprintf("repos/%s/%s/git/refs", owner, repo)
+	ref := fmt.Sprintf("refs/heads/%s", branchName)
+	_, err = a.runner.Run(ctx, ".", "gh", "api", refPath,
+		"-f", fmt.Sprintf("ref=%s", ref),
+		"-f", fmt.Sprintf("sha=%s", sha),
+	)
+	if err != nil {
+		return errors.NewDomainError(
+			errors.ErrCodeGitOperationFailed,
+			fmt.Sprintf("failed to create remote branch %q: %v", branchName, err),
+			map[string]any{"owner": owner, "repo": repo, "branch_name": branchName, "sha": sha},
+		)
+	}
+
+	return nil
+}
+
+// CreateRemotePR creates a pull request via the GitHub API and returns the PR URL.
+func (a *GhCliAdapter) CreateRemotePR(ctx context.Context, repoURL string, title string, body string, headBranch string, baseBranch string) (string, error) {
+	owner, repo, err := parseGitHubOwnerRepo(repoURL)
+	if err != nil {
+		return "", errors.NewDomainError(
+			errors.ErrCodeInvalidInput,
+			fmt.Sprintf("failed to parse repo URL: %v", err),
+			map[string]any{"repo_url": repoURL},
+		)
+	}
+
+	a.logger.DebugContext(ctx, "creating remote PR via API",
+		"owner", owner, "repo", repo,
+		"head", headBranch, "base", baseBranch,
+	)
+
+	apiPath := fmt.Sprintf("repos/%s/%s/pulls", owner, repo)
+	stdout, err := a.runner.Run(ctx, ".", "gh", "api", apiPath,
+		"-f", fmt.Sprintf("title=%s", title),
+		"-f", fmt.Sprintf("body=%s", body),
+		"-f", fmt.Sprintf("head=%s", headBranch),
+		"-f", fmt.Sprintf("base=%s", baseBranch),
+		"--jq", ".html_url",
+	)
+	if err != nil {
+		return "", errors.NewDomainError(
+			errors.ErrCodeGitOperationFailed,
+			fmt.Sprintf("failed to create remote PR: %v", err),
+			map[string]any{"owner": owner, "repo": repo, "head": headBranch, "base": baseBranch},
+		)
+	}
+
+	prURL := strings.TrimSpace(stdout)
+	if !strings.HasPrefix(prURL, "http") {
+		return "", errors.NewDomainError(
+			errors.ErrCodeGitOperationFailed,
+			"failed to parse PR URL from GitHub API response",
+			map[string]any{"output": stdout},
+		)
+	}
+
+	return prURL, nil
+}
+
+// ghCheckRun represents a single check run from the GitHub API.
+type ghCheckRun struct {
+	Name       string `json:"name"`
+	Status     string `json:"status"`
+	Conclusion string `json:"conclusion"`
+}
+
+// ghCheckRunsResponse is the API response for listing check runs.
+type ghCheckRunsResponse struct {
+	TotalCount int          `json:"total_count"`
+	CheckRuns  []ghCheckRun `json:"check_runs"`
+}
+
+// GetRemoteCIStatus returns CI status for a PR identified by its URL via the GitHub API.
+func (a *GhCliAdapter) GetRemoteCIStatus(ctx context.Context, prURL string) (string, error) {
+	owner, repo, prNumber, err := parseGitHubPR(prURL)
+	if err != nil {
+		return "", errors.NewDomainError(
+			errors.ErrCodeInvalidInput,
+			fmt.Sprintf("failed to parse PR URL: %v", err),
+			map[string]any{"pr_url": prURL},
+		)
+	}
+
+	a.logger.DebugContext(ctx, "getting remote CI status via API",
+		"owner", owner, "repo", repo, "pr_number", prNumber,
+	)
+
+	// Get the PR head SHA
+	prPath := fmt.Sprintf("repos/%s/%s/pulls/%d", owner, repo, prNumber)
+	sha, err := a.runner.Run(ctx, ".", "gh", "api", prPath, "--jq", ".head.sha")
+	if err != nil {
+		return "", errors.NewDomainError(
+			errors.ErrCodeGitOperationFailed,
+			fmt.Sprintf("failed to get PR head SHA: %v", err),
+			map[string]any{"pr_url": prURL},
+		)
+	}
+	sha = strings.TrimSpace(sha)
+
+	// Get check runs for that SHA
+	checksPath := fmt.Sprintf("repos/%s/%s/commits/%s/check-runs", owner, repo, sha)
+	stdout, err := a.runner.Run(ctx, ".", "gh", "api", checksPath)
+	if err != nil {
+		return "", errors.NewDomainError(
+			errors.ErrCodeGitOperationFailed,
+			fmt.Sprintf("failed to get check runs: %v", err),
+			map[string]any{"pr_url": prURL, "sha": sha},
+		)
+	}
+
+	var checksResp ghCheckRunsResponse
+	if err := json.Unmarshal([]byte(stdout), &checksResp); err != nil {
+		return "", errors.NewDomainError(
+			errors.ErrCodeGitOperationFailed,
+			fmt.Sprintf("failed to parse check runs JSON: %v", err),
+			map[string]any{"output": stdout},
+		)
+	}
+
+	if checksResp.TotalCount == 0 {
+		return CIStatusNoChecks, nil
+	}
+
+	hasPending := false
+	for _, check := range checksResp.CheckRuns {
+		if check.Status == "queued" || check.Status == "in_progress" {
+			hasPending = true
+			continue
+		}
+		if check.Conclusion == conclusionFailure || check.Conclusion == "timed_out" || check.Conclusion == "action_required" {
+			return CIStatusFail, nil
+		}
+	}
+
+	if hasPending {
+		return CIStatusPending, nil
+	}
+
+	return CIStatusPass, nil
 }
