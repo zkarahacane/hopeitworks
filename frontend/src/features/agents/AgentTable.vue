@@ -81,6 +81,7 @@ function handleRowClick(event: { data: Agent }) {
           <Tag
             :value="(data as Agent).scope"
             :severity="scopeSeverity((data as Agent).scope)"
+            data-testid="scope-badge"
           />
         </template>
       </Column>
@@ -110,7 +111,7 @@ function handleRowClick(event: { data: Agent }) {
               severity="secondary"
               :disabled="!canEdit(data as Agent)"
               :title="canEdit(data as Agent) ? 'Edit agent' : 'Global agents can only be edited by administrators'"
-              data-testid="edit-agent-btn"
+              data-testid="edit-agent-button"
               @click.stop="emit('rowClick', (data as Agent).id)"
             />
             <Button
@@ -121,7 +122,7 @@ function handleRowClick(event: { data: Agent }) {
               size="small"
               severity="danger"
               title="Delete agent"
-              data-testid="delete-agent-btn"
+              data-testid="delete-agent-button"
               @click.stop="emit('delete', (data as Agent).id)"
             />
           </div>

@@ -58,10 +58,10 @@ test.describe('smoke: navigation', () => {
     await pipelineTab.first().click()
     await expect(page).toHaveURL(new RegExp(`${TODO_APP_ID}/pipeline`))
 
-    // Navigate to templates tab
-    const templatesTab = page.getByRole('menuitem', { name: /templates/i })
-    await templatesTab.first().click()
-    await expect(page).toHaveURL(new RegExp(`${TODO_APP_ID}/templates`))
+    // Navigate to agents tab
+    const agentsTab = page.getByRole('menuitem', { name: /agents/i })
+    await agentsTab.first().click()
+    await expect(page).toHaveURL(new RegExp(`${TODO_APP_ID}/agents`))
   })
 
   test('deep link to project board', async ({ page, context }) => {

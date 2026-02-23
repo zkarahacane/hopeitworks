@@ -75,6 +75,7 @@ function handleDelete(agentId: string) {
         label="New Agent"
         icon="pi pi-plus"
         severity="success"
+        data-testid="create-agent-button"
         @click="handleCreateClick"
       />
     </div>

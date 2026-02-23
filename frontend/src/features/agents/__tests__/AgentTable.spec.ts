@@ -102,7 +102,7 @@ describe('AgentTable', () => {
 
   it('disables edit button for global agents when user is not admin', () => {
     const wrapper = mountComponent({ isAdmin: false })
-    const editButtons = wrapper.findAll('[data-testid="edit-agent-btn"]')
+    const editButtons = wrapper.findAll('[data-testid="edit-agent-button"]')
     expect(editButtons.length).toBe(2)
 
     // First agent is project-scoped - edit should be enabled
@@ -114,7 +114,7 @@ describe('AgentTable', () => {
 
   it('enables edit button for global agents when user is admin', () => {
     const wrapper = mountComponent({ isAdmin: true })
-    const editButtons = wrapper.findAll('[data-testid="edit-agent-btn"]')
+    const editButtons = wrapper.findAll('[data-testid="edit-agent-button"]')
     expect(editButtons.length).toBe(2)
 
     // Both should be enabled for admin
@@ -124,14 +124,14 @@ describe('AgentTable', () => {
 
   it('hides delete button for global agents when user is not admin', () => {
     const wrapper = mountComponent({ isAdmin: false })
-    const deleteButtons = wrapper.findAll('[data-testid="delete-agent-btn"]')
+    const deleteButtons = wrapper.findAll('[data-testid="delete-agent-button"]')
     // Only the project-scoped agent should have a delete button
     expect(deleteButtons.length).toBe(1)
   })
 
   it('shows delete button for all agents when user is admin', () => {
     const wrapper = mountComponent({ isAdmin: true })
-    const deleteButtons = wrapper.findAll('[data-testid="delete-agent-btn"]')
+    const deleteButtons = wrapper.findAll('[data-testid="delete-agent-button"]')
     // Both agents should have delete buttons for admin
     expect(deleteButtons.length).toBe(2)
   })
