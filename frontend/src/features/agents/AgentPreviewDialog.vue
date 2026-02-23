@@ -21,7 +21,7 @@ const emit = defineEmits<{
 <template>
   <Dialog
     :visible="visible"
-    header="Template Preview"
+    header="Agent Preview"
     modal
     :style="{ width: '50rem' }"
     :closable="true"

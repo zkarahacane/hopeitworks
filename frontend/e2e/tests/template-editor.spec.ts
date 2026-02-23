@@ -2,19 +2,21 @@ import { test, expect } from '@playwright/test'
 
 const PROJECT_ID = 'p1'
 
-const mockTemplate = {
-  id: 't1',
+const mockAgent = {
+  id: 'a1',
   project_id: PROJECT_ID,
   name: 'Implement Feature',
+  model: 'claude-opus-4-6',
+  image: 'ghcr.io/org/agent:latest',
   template_content: 'You are working on {{story_key}}: {{story_title}}',
-  type: 'implement',
+  scope: 'project',
   created_at: '2026-02-10T10:00:00Z',
   updated_at: '2026-02-10T10:00:00Z',
 }
 
 function setupProjectRoute(page: import('@playwright/test').Page) {
   return page.route(`**/api/v1/projects/${PROJECT_ID}`, async (route) => {
-    if (route.request().url().includes('/templates')) return route.fallback()
+    if (route.request().url().includes('/agents')) return route.fallback()
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -29,7 +31,7 @@ function setupProjectRoute(page: import('@playwright/test').Page) {
   })
 }
 
-test.describe('Template Editor', () => {
+test.describe('Agent Editor', () => {
   test.describe('as admin', () => {
     test.beforeEach(async ({ page }) => {
       await page.route('**/api/v1/auth/me', async (route) => {
@@ -48,20 +50,20 @@ test.describe('Template Editor', () => {
       await setupProjectRoute(page)
     })
 
-    test('displays editor with template content for existing template', async ({ page }) => {
-      await page.route(`**/api/v1/projects/${PROJECT_ID}/templates/t1`, async (route) => {
+    test('displays editor with agent content for existing agent', async ({ page }) => {
+      await page.route(`**/api/v1/projects/${PROJECT_ID}/agents/t1`, async (route) => {
         if (route.request().method() === 'GET') {
           await route.fulfill({
             status: 200,
             contentType: 'application/json',
-            body: JSON.stringify(mockTemplate),
+            body: JSON.stringify(mockAgent),
           })
         } else {
           await route.fallback()
         }
       })
 
-      await page.goto(`/projects/${PROJECT_ID}/templates/t1`)
+      await page.goto(`/projects/${PROJECT_ID}/agents/t1`)
 
       // Toolbar buttons visible for admin
       await expect(page.getByRole('button', { name: 'Preview' })).toBeVisible()
@@ -74,15 +76,15 @@ test.describe('Template Editor', () => {
     })
 
     test('shows empty editor for create mode', async ({ page }) => {
-      await page.goto(`/projects/${PROJECT_ID}/templates/new`)
+      await page.goto(`/projects/${PROJECT_ID}/agents/new`)
 
       await expect(page.getByRole('button', { name: 'Preview' })).toBeVisible()
       await expect(page.getByRole('button', { name: 'Save' })).toBeVisible()
       await expect(page.getByRole('button', { name: 'Cancel' })).toBeVisible()
     })
 
-    test('cancel navigates back to template list', async ({ page }) => {
-      await page.route(`**/api/v1/projects/${PROJECT_ID}/templates*`, async (route) => {
+    test('cancel navigates back to agent list', async ({ page }) => {
+      await page.route(`**/api/v1/projects/${PROJECT_ID}/agents*`, async (route) => {
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
@@ -93,16 +95,16 @@ test.describe('Template Editor', () => {
         })
       })
 
-      await page.goto(`/projects/${PROJECT_ID}/templates/new`)
+      await page.goto(`/projects/${PROJECT_ID}/agents/new`)
 
       await page.getByRole('button', { name: 'Cancel' }).click()
 
-      await expect(page).toHaveURL(new RegExp(`/projects/${PROJECT_ID}/templates$`))
+      await expect(page).toHaveURL(new RegExp(`/projects/${PROJECT_ID}/agents$`))
     })
 
-    test('displays error state with retry when template fetch fails', async ({ page }) => {
+    test('displays error state with retry when agent fetch fails', async ({ page }) => {
       let callCount = 0
-      await page.route(`**/api/v1/projects/${PROJECT_ID}/templates/t1`, async (route) => {
+      await page.route(`**/api/v1/projects/${PROJECT_ID}/agents/t1`, async (route) => {
         callCount++
         if (callCount === 1) {
           await route.fulfill({
@@ -116,14 +118,14 @@ test.describe('Template Editor', () => {
           await route.fulfill({
             status: 200,
             contentType: 'application/json',
-            body: JSON.stringify(mockTemplate),
+            body: JSON.stringify(mockAgent),
           })
         }
       })
 
-      await page.goto(`/projects/${PROJECT_ID}/templates/t1`)
+      await page.goto(`/projects/${PROJECT_ID}/agents/t1`)
 
-      await expect(page.getByText('Failed to load template')).toBeVisible()
+      await expect(page.getByText('Failed to load agent')).toBeVisible()
       await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible()
 
       await page.getByRole('button', { name: 'Retry' }).click()
@@ -131,41 +133,41 @@ test.describe('Template Editor', () => {
       await expect(page.getByText('Context Variables')).toBeVisible()
     })
 
-    test('preview dialog shows rendered template output', async ({ page }) => {
-      await page.route(`**/api/v1/projects/${PROJECT_ID}/templates/t1`, async (route) => {
+    test('preview dialog shows rendered agent output', async ({ page }) => {
+      await page.route(`**/api/v1/projects/${PROJECT_ID}/agents/t1`, async (route) => {
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
-          body: JSON.stringify(mockTemplate),
+          body: JSON.stringify(mockAgent),
         })
       })
 
-      await page.goto(`/projects/${PROJECT_ID}/templates/t1`)
+      await page.goto(`/projects/${PROJECT_ID}/agents/t1`)
 
       await expect(page.getByText('Context Variables')).toBeVisible()
 
       await page.getByRole('button', { name: 'Preview' }).click()
 
-      await expect(page.getByText('Template Preview')).toBeVisible()
+      await expect(page.getByText('Agent Preview')).toBeVisible()
       await expect(
         page.getByText('You are working on S-14: Add user authentication'),
       ).toBeVisible()
 
       await page.locator('.p-dialog-footer').getByRole('button', { name: 'Close' }).click()
 
-      await expect(page.getByText('Template Preview')).not.toBeVisible()
+      await expect(page.getByText('Agent Preview')).not.toBeVisible()
     })
 
     test('variable sidebar shows all context variables', async ({ page }) => {
-      await page.route(`**/api/v1/projects/${PROJECT_ID}/templates/t1`, async (route) => {
+      await page.route(`**/api/v1/projects/${PROJECT_ID}/agents/t1`, async (route) => {
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
-          body: JSON.stringify(mockTemplate),
+          body: JSON.stringify(mockAgent),
         })
       })
 
-      await page.goto(`/projects/${PROJECT_ID}/templates/t1`)
+      await page.goto(`/projects/${PROJECT_ID}/agents/t1`)
 
       await expect(page.getByText('Context Variables')).toBeVisible()
       // Use button role selectors to target sidebar buttons specifically,
@@ -201,15 +203,15 @@ test.describe('Template Editor', () => {
     })
 
     test('editor is read-only and Save button is hidden for non-admin', async ({ page }) => {
-      await page.route(`**/api/v1/projects/${PROJECT_ID}/templates/t1`, async (route) => {
+      await page.route(`**/api/v1/projects/${PROJECT_ID}/agents/t1`, async (route) => {
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
-          body: JSON.stringify(mockTemplate),
+          body: JSON.stringify(mockAgent),
         })
       })
 
-      await page.goto(`/projects/${PROJECT_ID}/templates/t1`)
+      await page.goto(`/projects/${PROJECT_ID}/agents/t1`)
 
       // Preview and Cancel visible
       await expect(page.getByRole('button', { name: 'Preview' })).toBeVisible()
@@ -220,7 +222,7 @@ test.describe('Template Editor', () => {
     })
 
     test('redirects non-admin from create route', async ({ page }) => {
-      await page.goto(`/projects/${PROJECT_ID}/templates/new`)
+      await page.goto(`/projects/${PROJECT_ID}/agents/new`)
 
       // Admin guard should redirect non-admin to dashboard
       await expect(page).toHaveURL('/')

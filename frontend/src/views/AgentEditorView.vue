@@ -7,63 +7,69 @@ import Skeleton from 'primevue/skeleton'
 import Message from 'primevue/message'
 import Button from 'primevue/button'
 import { useAuth } from '@/composables/useAuth'
-import { useTemplateEditor } from '@/composables/useTemplateEditor'
-import TemplateEditorLayout from '@/features/templates/TemplateEditorLayout.vue'
+import { useAgentEditor } from '@/composables/useAgentEditor'
+import AgentEditorLayout from '@/features/agents/AgentEditorLayout.vue'
 
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
 
 const projectId = computed(() => (route.params.id ?? route.params.projectId) as string)
-const templateId = computed(() => (route.params.templateId as string) ?? 'new')
+const agentId = computed(() => (route.params.agentId as string) ?? 'new')
 
 const { user } = useAuth()
 const isAdmin = computed(() => user.value?.role === 'admin')
 
 const {
+  agent,
   content,
   name,
-  type,
+  model,
+  image,
+  scope,
   loading,
   saving,
   error,
   isDirty,
   canSave,
-  isNewTemplate,
+  isNewAgent,
   previewLoading,
   previewError,
   previewContent,
-  fetchTemplate,
-  saveTemplate,
+  fetchAgent,
+  saveAgent,
   previewTemplate,
-} = useTemplateEditor(projectId.value, templateId.value)
+} = useAgentEditor(projectId.value, agentId.value)
+
+/** Whether the editor should be read-only (global agent + non-admin) */
+const isReadOnly = computed(() => agent.value?.scope === 'global' && !isAdmin.value)
 
 const previewVisible = ref(false)
 
 async function handleSave() {
-  const success = await saveTemplate()
+  const success = await saveAgent()
   if (success) {
     toast.add({
       severity: 'success',
       summary: 'Saved',
-      detail: isNewTemplate.value ? 'Template created successfully' : 'Template saved successfully',
+      detail: isNewAgent.value ? 'Agent created successfully' : 'Agent saved successfully',
       life: 3000,
     })
-    if (isNewTemplate.value) {
-      router.push({ name: 'project-templates', params: { id: projectId.value } })
+    if (isNewAgent.value) {
+      router.push({ name: 'project-agents', params: { id: projectId.value } })
     }
   } else {
     toast.add({
       severity: 'error',
       summary: 'Error',
-      detail: error.value ?? 'Failed to save template',
+      detail: error.value ?? 'Failed to save agent',
       life: 5000,
     })
   }
 }
 
 function handleCancel() {
-  router.push({ name: 'project-templates', params: { id: projectId.value } })
+  router.push({ name: 'project-agents', params: { id: projectId.value } })
 }
 
 async function handlePreview() {
@@ -86,29 +92,34 @@ async function handlePreview() {
     <Message severity="error" :closable="false">
       <div class="flex items-center gap-3">
         <span>{{ error }}</span>
-        <Button label="Retry" severity="secondary" text size="small" @click="fetchTemplate()" />
+        <Button label="Retry" severity="secondary" text size="small" @click="fetchAgent()" />
       </div>
     </Message>
   </div>
 
   <!-- Editor -->
-  <TemplateEditorLayout
+  <AgentEditorLayout
     v-else
     :content="content"
     :is-admin="isAdmin"
     :is-dirty="isDirty"
     :is-saving="saving"
     :can-save="canSave"
-    :is-new-template="isNewTemplate"
-    :template-name="name"
-    :template-type="type"
+    :is-new-agent="isNewAgent"
+    :is-read-only="isReadOnly"
+    :agent-name="name"
+    :agent-model="model"
+    :agent-image="image"
+    :agent-scope="scope"
     :preview-visible="previewVisible"
     :preview-content="previewContent"
     :preview-loading="previewLoading"
     :preview-error="previewError"
     @update:content="content = $event"
-    @update:template-name="name = $event"
-    @update:template-type="type = $event"
+    @update:agent-name="name = $event"
+    @update:agent-model="model = $event"
+    @update:agent-image="image = $event"
+    @update:agent-scope="scope = $event"
     @update:preview-visible="previewVisible = $event"
     @save="handleSave"
     @cancel="handleCancel"

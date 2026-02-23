@@ -29,6 +29,7 @@ type mockCostRepo struct {
 	listDailyCostsByProjectFn          func(ctx context.Context, projectID uuid.UUID, since time.Time) ([]model.CostDataPoint, error)
 	listCostsByProjectByRunPaginatedFn func(ctx context.Context, projectID uuid.UUID, since time.Time, limit, offset int32) ([]model.RunCostRow, error)
 	countCostsByProjectByRunFn         func(ctx context.Context, projectID uuid.UUID, since time.Time) (int64, error)
+	listByProjectByAgentFn             func(ctx context.Context, projectID uuid.UUID) ([]model.AgentCostBreakdown, error)
 
 	insertCalls []model.CostRecord
 }
@@ -119,7 +120,10 @@ func (m *mockCostRepo) CountCostsByProjectByRun(ctx context.Context, projectID u
 	return 0, nil
 }
 
-func (m *mockCostRepo) ListByProjectByAgent(_ context.Context, _ uuid.UUID) ([]model.AgentCostBreakdown, error) {
+func (m *mockCostRepo) ListByProjectByAgent(ctx context.Context, projectID uuid.UUID) ([]model.AgentCostBreakdown, error) {
+	if m.listByProjectByAgentFn != nil {
+		return m.listByProjectByAgentFn(ctx, projectID)
+	}
 	return []model.AgentCostBreakdown{}, nil
 }
 
@@ -263,7 +267,7 @@ func TestRecordStepCost_EmptyEvents_NoOp(t *testing.T) {
 	costRepo := &mockCostRepo{}
 	svc := newTestCostService(costRepo, nil, nil, nil)
 
-	err := svc.RecordStepCost(context.Background(), uuid.New(), uuid.New(), []model.CostEvent{})
+	err := svc.RecordStepCost(context.Background(), uuid.New(), uuid.New(), []model.CostEvent{}, nil)
 	assert.NoError(t, err)
 	assert.Empty(t, costRepo.insertCalls)
 }
@@ -310,7 +314,7 @@ func TestRecordStepCost_KnownModel_CorrectCost(t *testing.T) {
 				{InputTokens: tt.inputTokens, OutputTokens: tt.outputTokens, Model: tt.model},
 			}
 
-			err := svc.RecordStepCost(context.Background(), stepID, projectID, events)
+			err := svc.RecordStepCost(context.Background(), stepID, projectID, events, nil)
 			require.NoError(t, err)
 			require.Len(t, costRepo.insertCalls, 1)
 
@@ -333,13 +337,14 @@ func TestRecordStepCost_UnknownModel_ZeroCost(t *testing.T) {
 		{InputTokens: 1000, OutputTokens: 500, Model: "unknown-model"},
 	}
 
-	err := svc.RecordStepCost(context.Background(), uuid.New(), uuid.New(), events)
+	err := svc.RecordStepCost(context.Background(), uuid.New(), uuid.New(), events, nil)
 	require.NoError(t, err)
 	require.Len(t, costRepo.insertCalls, 1)
 
 	inserted := costRepo.insertCalls[0]
 	assert.Equal(t, float64(0), inserted.CostUSD)
 	assert.Equal(t, "unknown-model", inserted.Model)
+	assert.Nil(t, inserted.AgentID)
 }
 
 func TestRecordStepCost_MultipleEvents_Aggregated(t *testing.T) {
@@ -351,7 +356,7 @@ func TestRecordStepCost_MultipleEvents_Aggregated(t *testing.T) {
 		{InputTokens: 500_000, OutputTokens: 100_000, Model: "claude-opus-4-6"},
 	}
 
-	err := svc.RecordStepCost(context.Background(), uuid.New(), uuid.New(), events)
+	err := svc.RecordStepCost(context.Background(), uuid.New(), uuid.New(), events, nil)
 	require.NoError(t, err)
 	require.Len(t, costRepo.insertCalls, 1) // Single insert, not two
 
@@ -374,8 +379,55 @@ func TestRecordStepCost_RepoError_Propagated(t *testing.T) {
 		{InputTokens: 1000, OutputTokens: 500, Model: "claude-opus-4-6"},
 	}
 
-	err := svc.RecordStepCost(context.Background(), uuid.New(), uuid.New(), events)
+	err := svc.RecordStepCost(context.Background(), uuid.New(), uuid.New(), events, nil)
 	assert.Error(t, err)
+}
+
+func TestRecordStepCost_WithAgentID(t *testing.T) {
+	costRepo := &mockCostRepo{}
+	svc := newTestCostService(costRepo, nil, nil, nil)
+
+	stepID := uuid.New()
+	projectID := uuid.New()
+	agentID := uuid.New()
+	events := []model.CostEvent{
+		{InputTokens: 1_000_000, OutputTokens: 100_000, Model: "claude-opus-4-6"},
+	}
+
+	err := svc.RecordStepCost(context.Background(), stepID, projectID, events, &agentID)
+	require.NoError(t, err)
+	require.Len(t, costRepo.insertCalls, 1)
+
+	inserted := costRepo.insertCalls[0]
+	assert.Equal(t, stepID, inserted.RunStepID)
+	assert.Equal(t, projectID, inserted.ProjectID)
+	require.NotNil(t, inserted.AgentID)
+	assert.Equal(t, agentID, *inserted.AgentID)
+	assert.Equal(t, int64(1_000_000), inserted.TokensInput)
+	assert.Equal(t, int64(100_000), inserted.TokensOutput)
+	// 15*1 + 75*0.1 = 22.5
+	assert.InDelta(t, 22.5, inserted.CostUSD, 0.001)
+}
+
+func TestRecordStepCost_WithoutAgentID(t *testing.T) {
+	costRepo := &mockCostRepo{}
+	svc := newTestCostService(costRepo, nil, nil, nil)
+
+	stepID := uuid.New()
+	projectID := uuid.New()
+	events := []model.CostEvent{
+		{InputTokens: 1_000_000, OutputTokens: 100_000, Model: "claude-opus-4-6"},
+	}
+
+	err := svc.RecordStepCost(context.Background(), stepID, projectID, events, nil)
+	require.NoError(t, err)
+	require.Len(t, costRepo.insertCalls, 1)
+
+	inserted := costRepo.insertCalls[0]
+	assert.Equal(t, stepID, inserted.RunStepID)
+	assert.Equal(t, projectID, inserted.ProjectID)
+	assert.Nil(t, inserted.AgentID)
+	assert.InDelta(t, 22.5, inserted.CostUSD, 0.001)
 }
 
 // --- GetProjectCosts tests ---
@@ -641,6 +693,73 @@ func TestGetProjectCostRuns_PaginationDefaults(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, int64(0), total)
 	assert.Empty(t, rows)
+}
+
+// --- GetProjectCostsByAgent tests ---
+
+func TestGetProjectCostsByAgent_Success(t *testing.T) {
+	projectID := uuid.New()
+	agentID := uuid.New()
+	projectRepo := &mockProjectRepoForCost{
+		project: &model.Project{ID: projectID, Name: "test"},
+	}
+	costRepo := &mockCostRepo{
+		listByProjectByAgentFn: func(_ context.Context, _ uuid.UUID) ([]model.AgentCostBreakdown, error) {
+			return []model.AgentCostBreakdown{
+				{AgentID: agentID, AgentName: "dev-story", TokensInput: 500000, TokensOutput: 100000, CostUSD: 12.50, RunsCount: 3},
+			}, nil
+		},
+	}
+	svc := newTestCostService(costRepo, projectRepo, nil, nil)
+
+	result, err := svc.GetProjectCostsByAgent(context.Background(), projectID)
+	require.NoError(t, err)
+	require.Len(t, result, 1)
+	assert.Equal(t, agentID, result[0].AgentID)
+	assert.Equal(t, "dev-story", result[0].AgentName)
+	assert.Equal(t, int64(500000), result[0].TokensInput)
+	assert.Equal(t, int64(100000), result[0].TokensOutput)
+	assert.InDelta(t, 12.50, result[0].CostUSD, 0.001)
+	assert.Equal(t, int32(3), result[0].RunsCount)
+}
+
+func TestGetProjectCostsByAgent_EmptyResults(t *testing.T) {
+	projectID := uuid.New()
+	projectRepo := &mockProjectRepoForCost{
+		project: &model.Project{ID: projectID, Name: "test"},
+	}
+	svc := newTestCostService(&mockCostRepo{}, projectRepo, nil, nil)
+
+	result, err := svc.GetProjectCostsByAgent(context.Background(), projectID)
+	require.NoError(t, err)
+	assert.Empty(t, result)
+}
+
+func TestGetProjectCostsByAgent_ProjectNotFound(t *testing.T) {
+	projectRepo := &mockProjectRepoForCost{err: errors.NewNotFound("project", uuid.New())}
+	svc := newTestCostService(&mockCostRepo{}, projectRepo, nil, nil)
+
+	_, err := svc.GetProjectCostsByAgent(context.Background(), uuid.New())
+	assert.Error(t, err)
+	domErr, ok := err.(*errors.DomainError)
+	assert.True(t, ok)
+	assert.Equal(t, errors.CategoryNotFound, domErr.Category)
+}
+
+func TestGetProjectCostsByAgent_RepoError(t *testing.T) {
+	projectID := uuid.New()
+	projectRepo := &mockProjectRepoForCost{
+		project: &model.Project{ID: projectID, Name: "test"},
+	}
+	costRepo := &mockCostRepo{
+		listByProjectByAgentFn: func(_ context.Context, _ uuid.UUID) ([]model.AgentCostBreakdown, error) {
+			return nil, errors.NewInternal("db error", nil)
+		},
+	}
+	svc := newTestCostService(costRepo, projectRepo, nil, nil)
+
+	_, err := svc.GetProjectCostsByAgent(context.Background(), projectID)
+	assert.Error(t, err)
 }
 
 // --- parsePeriod tests ---

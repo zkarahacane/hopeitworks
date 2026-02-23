@@ -39,8 +39,9 @@ func NewCostService(
 	}
 }
 
-// RecordStepCost aggregates cost events and inserts a single cost record for a step.
-func (s *CostService) RecordStepCost(ctx context.Context, stepID, projectID uuid.UUID, events []model.CostEvent) error {
+// RecordStepCost aggregates cost events and inserts a single cost record for a step,
+// optionally attributed to an agent.
+func (s *CostService) RecordStepCost(ctx context.Context, stepID, projectID uuid.UUID, events []model.CostEvent, agentID *uuid.UUID) error {
 	if len(events) == 0 {
 		return nil
 	}
@@ -68,6 +69,7 @@ func (s *CostService) RecordStepCost(ctx context.Context, stepID, projectID uuid
 	record := &model.CostRecord{
 		RunStepID:    stepID,
 		ProjectID:    projectID,
+		AgentID:      agentID,
 		TokensInput:  totalInput,
 		TokensOutput: totalOutput,
 		CostUSD:      costUSD,
@@ -245,6 +247,15 @@ func (s *CostService) GetProjectCostRuns(ctx context.Context, projectID uuid.UUI
 		return nil, 0, err
 	}
 	return rows, total, nil
+}
+
+// GetProjectCostsByAgent returns cost aggregations grouped by agent for a project.
+func (s *CostService) GetProjectCostsByAgent(ctx context.Context, projectID uuid.UUID) ([]model.AgentCostBreakdown, error) {
+	if _, err := s.projectRepo.GetByID(ctx, projectID); err != nil {
+		return nil, err
+	}
+
+	return s.costRepo.ListByProjectByAgent(ctx, projectID)
 }
 
 // GetStoryCosts returns aggregated cost data for a story across all runs.

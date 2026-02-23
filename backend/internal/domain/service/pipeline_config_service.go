@@ -17,67 +17,54 @@ const DefaultPipelineConfigYAML = `groups:
   - id: setup
     name: Setup
     steps:
-      - id: 880e8400-e29b-41d4-a716-446655440001
-        name: create-branch
+      - id: git-branch
+        name: Create Branch
         action_type: git_branch
-        description: Create feature branch from base
-        auto_approve: true
         config:
           base_branch: main
-        retry_policy:
-          max_retries: 1
-          retry_type: on-failure
+
   - id: development
     name: Development
     steps:
-      - id: 880e8400-e29b-41d4-a716-446655440002
-        name: dev-agent
+      - id: agent-implement
+        name: Implement Story
         action_type: agent_run
-        description: Run development agent
-        model: claude-opus-4-6
-        auto_approve: false
-        retry_policy:
-          max_retries: 2
-          retry_type: on-failure
+        config:
+          role: dev
+          phase: dev-story
+
   - id: review
     name: Review
     steps:
-      - id: 880e8400-e29b-41d4-a716-446655440003
-        name: review-agent
+      - id: agent-review
+        name: Code Review
         action_type: agent_run
-        description: Run code review agent
-        model: claude-sonnet-4-6
-        auto_approve: false
-        retry_policy:
-          max_retries: 1
-          retry_type: on-failure
+        config:
+          role: review
+          phase: code-review
+
   - id: merge
     name: Merge
     steps:
-      - id: 880e8400-e29b-41d4-a716-446655440004
-        name: create-pr
+      - id: git-pr
+        name: Create & Merge PR
         action_type: git_pr
-        description: Create and merge pull request
-        model: claude-sonnet-4-6
-        auto_approve: true
-        retry_policy:
-          max_retries: 1
-          retry_type: on-failure
+        config:
+          strategy: squash
+
   - id: delivery
     name: Delivery
     steps:
-      - id: 880e8400-e29b-41d4-a716-446655440005
-        name: poll-ci
+      - id: ci-poll
+        name: Wait for CI
         action_type: ci_poll
-        description: Wait for CI to pass
-        auto_approve: true
         config:
           timeout_minutes: "30"
-      - id: 880e8400-e29b-41d4-a716-446655440006
-        name: notify
+      - id: notify
+        name: Notify Completion
         action_type: notification
-        description: Send completion notification
-        auto_approve: true
+        config:
+          channel: default
 `
 
 // PipelineConfigService provides business logic for pipeline config operations.

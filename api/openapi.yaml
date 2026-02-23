@@ -1773,6 +1773,26 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /projects/{projectId}/costs/agents:
+    get:
+      operationId: getProjectCostsByAgent
+      summary: Get cost breakdown aggregated by agent for a project
+      tags: [costs]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+      responses:
+        "200":
+          description: Agent cost breakdown
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AgentCostBreakdown"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
   /hitl-requests/{hitlRequestId}/reject:
     post:
@@ -3658,6 +3678,39 @@ components:
           type: number
           format: double
           example: 0.01234
+
+    AgentCostBreakdown:
+      type: object
+      required:
+        - agent_id
+        - agent_name
+        - tokens_input
+        - tokens_output
+        - cost_usd
+        - runs_count
+      properties:
+        agent_id:
+          type: string
+          format: uuid
+        agent_name:
+          type: string
+          example: dev-story
+        tokens_input:
+          type: integer
+          format: int64
+          example: 500000
+        tokens_output:
+          type: integer
+          format: int64
+          example: 100000
+        cost_usd:
+          type: number
+          format: double
+          example: 12.50
+        runs_count:
+          type: integer
+          format: int32
+          example: 5
 
     # ── Shared ─────────────────────────────────────────────────────────
     Pagination:

@@ -361,6 +361,11 @@ func (s *Server) GetHITLRequestByStep(w http.ResponseWriter, r *http.Request, st
 	s.hitl.GetHITLRequestByStep(w, r, stepID)
 }
 
+// GetProjectCostsByAgent delegates to CostHandler.
+func (s *Server) GetProjectCostsByAgent(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath) {
+	s.costs.GetProjectCostsByAgent(w, r, projectID)
+}
+
 // GetProjectCostChart delegates to CostHandler.
 func (s *Server) GetProjectCostChart(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, params GetProjectCostChartParams) {
 	s.costs.GetProjectCostChart(w, r, projectID, params)
