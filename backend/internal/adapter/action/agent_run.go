@@ -283,7 +283,8 @@ func (a *AgentRunAction) streamAndWait(
 	// Record accumulated cost events, regardless of exit code.
 	// Cost recording failure is non-fatal.
 	if len(costEvents) > 0 {
-		if err := a.costSvc.RecordStepCost(ctx, runCtx.RunStep.ID, runCtx.ProjectID, costEvents); err != nil {
+		agentID := extractAgentID(runCtx)
+		if err := a.costSvc.RecordStepCost(ctx, runCtx.RunStep.ID, runCtx.ProjectID, costEvents, agentID); err != nil {
 			a.logger.Warn("failed to record step cost",
 				"step_id", stepID, "error", err)
 		}
@@ -347,6 +348,31 @@ func (a *AgentRunAction) publishLogEvent(ctx context.Context, runCtx *model.RunC
 	if err := a.eventPub.Publish(ctx, event); err != nil {
 		a.logger.Warn("failed to publish log event", "error", err)
 	}
+}
+
+// extractAgentID extracts the agent ID from the run context.
+// It checks RunStep.Config["agent_id"] and Metadata["agent_id"] for a valid UUID string.
+// Returns nil if no agent ID is available.
+func extractAgentID(runCtx *model.RunContext) *uuid.UUID {
+	// Check step config first
+	if runCtx.RunStep != nil && runCtx.RunStep.Config != nil {
+		if raw, ok := runCtx.RunStep.Config["agent_id"]; ok && raw != "" {
+			if id, err := uuid.Parse(raw); err == nil {
+				return &id
+			}
+		}
+	}
+
+	// Fallback to metadata
+	if runCtx.Metadata != nil {
+		if raw, ok := runCtx.Metadata["agent_id"].(string); ok && raw != "" {
+			if id, err := uuid.Parse(raw); err == nil {
+				return &id
+			}
+		}
+	}
+
+	return nil
 }
 
 // derefString safely dereferences a string pointer, returning empty string if nil.

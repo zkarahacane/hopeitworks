@@ -39,8 +39,9 @@ func NewCostService(
 	}
 }
 
-// RecordStepCost aggregates cost events and inserts a single cost record for a step.
-func (s *CostService) RecordStepCost(ctx context.Context, stepID, projectID uuid.UUID, events []model.CostEvent) error {
+// RecordStepCost aggregates cost events and inserts a single cost record for a step,
+// optionally attributed to an agent.
+func (s *CostService) RecordStepCost(ctx context.Context, stepID, projectID uuid.UUID, events []model.CostEvent, agentID *uuid.UUID) error {
 	if len(events) == 0 {
 		return nil
 	}
@@ -68,6 +69,7 @@ func (s *CostService) RecordStepCost(ctx context.Context, stepID, projectID uuid
 	record := &model.CostRecord{
 		RunStepID:    stepID,
 		ProjectID:    projectID,
+		AgentID:      agentID,
 		TokensInput:  totalInput,
 		TokensOutput: totalOutput,
 		CostUSD:      costUSD,
