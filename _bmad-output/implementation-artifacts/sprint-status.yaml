@@ -211,6 +211,33 @@ development_status:
   fix-13-project-repo-form: done
   fix-14-runs-dashboard-routing: done
 
+  # Post-MVP: Pipeline Refonte — Groups, Agents, Runs UI, Costs
+  post-mvp-pipeline-refonte: backlog
+  R-0-1-rename-users-administration: ready-for-dev
+  R-1-1-pipeline-group-action-types-openapi: ready-for-dev
+  R-1-2-agent-entity-openapi: ready-for-dev
+  R-1-3-pipeline-group-backend-model: ready-for-dev
+  R-1-4-agent-backend-model-migration: ready-for-dev
+  R-2-1-action-git-branch: ready-for-dev
+  R-2-2-action-git-pr: ready-for-dev
+  R-2-3-action-notification: ready-for-dev
+  R-2-4-action-human: ready-for-dev
+  R-2-5-agent-service: ready-for-dev
+  R-3-1-frontend-pipeline-groups-ui: ready-for-dev
+  R-3-2-frontend-step-type-editors: ready-for-dev
+  R-3-3-frontend-agents-ui: ready-for-dev
+  R-4-1-frontend-run-pipeline-horizontal: ready-for-dev
+  R-4-2-frontend-run-step-log-panel: ready-for-dev
+  R-4-3-frontend-run-detail-integration: ready-for-dev
+  R-5-1-cost-agent-id-migration: ready-for-dev
+  R-5-2-cost-agent-aggregation-api: ready-for-dev
+  R-5-3-record-agent-id-cost: ready-for-dev
+  R-5-4-frontend-cost-tokens-display: ready-for-dev
+  R-5-5-frontend-agent-cost-tab: ready-for-dev
+  R-6-1-default-pipeline-config-groups: ready-for-dev
+  R-6-2-e2e-pipeline-groups-steps: ready-for-dev
+  R-6-3-e2e-agents-crud: ready-for-dev
+
 # PARALLEL EXECUTION WAVES
 # =================
 # Stories in the same wave can run simultaneously in separate containers.
@@ -225,6 +252,7 @@ development_status:
 #   Phase 1 (Waves 1-4):  Foundation - Epic 1 only
 #   Phase 2 (Waves 5-9):  Core Platform - Epics 2, 3, 6 in parallel
 #   Phase 3 (Waves 10-12): Extensions - Epics 4, 5, 7, 8, 9
+#   Phase 11 (Waves 31-35): Pipeline Refonte — Groups, Agents, Runs UI, Costs
 #   Phase 4 (Waves 13-15): Validation - Epic 10
 #   Phase 5 (Waves 16-19): Post-MVP Bug Fixes
 #   Phase 6 (Waves 20-21): Auth Enhancements
@@ -916,3 +944,133 @@ parallel_waves:
     container_count: 4
     depends_on: [wave-29]
     notes: "Pipeline UX: live logs fix, cancel run, cost display per step, retry failed step — Phase 10 COMPLETE"
+
+  # =====================================================
+  # PHASE 11: PIPELINE REFONTE — Groups, Agents, Runs UI, Costs
+  # =====================================================
+
+  wave-31:
+    phase: 11-pipeline-refonte
+    stories:
+      - key: R-0-1-rename-users-administration
+        domain: front
+        status: ready-for-dev
+      - key: R-1-1-pipeline-group-action-types-openapi
+        domain: shared
+        status: ready-for-dev
+      - key: R-1-2-agent-entity-openapi
+        domain: shared
+        status: ready-for-dev
+      - key: R-5-4-frontend-cost-tokens-display
+        domain: front
+        status: ready-for-dev
+      - key: R-4-2-frontend-run-step-log-panel
+        domain: front
+        status: ready-for-dev
+    container_count: 5
+    depends_on: [wave-30]
+    notes: "All independent stories: sidebar rename, OpenAPI specs, cost tokens display, log panel — no inter-deps"
+
+  wave-32:
+    phase: 11-pipeline-refonte
+    stories:
+      - key: R-1-3-pipeline-group-backend-model
+        domain: back
+        status: ready-for-dev
+        explicit_deps: [R-1-1-pipeline-group-action-types-openapi]
+      - key: R-1-4-agent-backend-model-migration
+        domain: back
+        status: ready-for-dev
+        explicit_deps: [R-1-2-agent-entity-openapi]
+      - key: R-3-2-frontend-step-type-editors
+        domain: front
+        status: ready-for-dev
+        explicit_deps: [R-1-1-pipeline-group-action-types-openapi]
+      - key: R-4-1-frontend-run-pipeline-horizontal
+        domain: front
+        status: ready-for-dev
+        explicit_deps: [R-1-1-pipeline-group-action-types-openapi]
+    container_count: 4
+    depends_on: [wave-31]
+    notes: "Backend models + frontend views needing only OpenAPI types — parallel"
+
+  wave-33:
+    phase: 11-pipeline-refonte
+    stories:
+      - key: R-2-1-action-git-branch
+        domain: back
+        status: ready-for-dev
+        explicit_deps: [R-1-3-pipeline-group-backend-model]
+      - key: R-2-2-action-git-pr
+        domain: back
+        status: ready-for-dev
+        explicit_deps: [R-1-3-pipeline-group-backend-model]
+      - key: R-2-3-action-notification
+        domain: back
+        status: ready-for-dev
+        explicit_deps: [R-1-3-pipeline-group-backend-model]
+      - key: R-2-4-action-human
+        domain: back
+        status: ready-for-dev
+        explicit_deps: [R-1-3-pipeline-group-backend-model]
+      - key: R-2-5-agent-service
+        domain: back
+        status: ready-for-dev
+        explicit_deps: [R-1-4-agent-backend-model-migration]
+      - key: R-5-1-cost-agent-id-migration
+        domain: back
+        status: ready-for-dev
+        explicit_deps: [R-1-4-agent-backend-model-migration]
+      - key: R-3-1-frontend-pipeline-groups-ui
+        domain: front
+        status: ready-for-dev
+        explicit_deps: [R-1-1-pipeline-group-action-types-openapi, R-1-3-pipeline-group-backend-model]
+      - key: R-4-3-frontend-run-detail-integration
+        domain: front
+        status: ready-for-dev
+        explicit_deps: [R-4-1-frontend-run-pipeline-horizontal, R-4-2-frontend-run-step-log-panel]
+    container_count: 8
+    depends_on: [wave-32]
+    notes: "Backend actions + agent service + cost migration + FE groups UI + run detail integration — 8 stories parallel"
+
+  wave-34:
+    phase: 11-pipeline-refonte
+    stories:
+      - key: R-5-2-cost-agent-aggregation-api
+        domain: back
+        status: ready-for-dev
+        explicit_deps: [R-5-1-cost-agent-id-migration]
+      - key: R-5-3-record-agent-id-cost
+        domain: back
+        status: ready-for-dev
+        explicit_deps: [R-5-1-cost-agent-id-migration, R-2-5-agent-service]
+      - key: R-3-3-frontend-agents-ui
+        domain: front
+        status: ready-for-dev
+        explicit_deps: [R-1-2-agent-entity-openapi, R-2-5-agent-service]
+      - key: R-6-1-default-pipeline-config-groups
+        domain: back
+        status: ready-for-dev
+        explicit_deps: [R-1-3-pipeline-group-backend-model, R-2-1-action-git-branch]
+      - key: R-6-2-e2e-pipeline-groups-steps
+        domain: front
+        status: ready-for-dev
+        explicit_deps: [R-3-1-frontend-pipeline-groups-ui, R-3-2-frontend-step-type-editors]
+    container_count: 5
+    depends_on: [wave-33]
+    notes: "Cost aggregation + agents UI + default config + E2E pipeline groups — parallel"
+
+  wave-35:
+    phase: 11-pipeline-refonte
+    stories:
+      - key: R-5-5-frontend-agent-cost-tab
+        domain: front
+        status: ready-for-dev
+        explicit_deps: [R-5-2-cost-agent-aggregation-api]
+      - key: R-6-3-e2e-agents-crud
+        domain: front
+        status: ready-for-dev
+        explicit_deps: [R-3-3-frontend-agents-ui]
+    container_count: 2
+    depends_on: [wave-34]
+    notes: "Final: agent cost tab + E2E agents CRUD — Phase 11 COMPLETE"
