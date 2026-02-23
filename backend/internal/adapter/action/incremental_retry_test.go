@@ -130,10 +130,10 @@ func makeParentStep(retryCount int, errorMsg, logTail string) *model.RunStep {
 	return step
 }
 
-// buildTemplateService builds a TemplateService backed by a no-op template repo
+// buildTemplateService builds a TemplateService backed by a no-op agent repo
 // so the default templates are used (no DB required).
 func buildTemplateService() *service.TemplateService {
-	return service.NewTemplateService(&mockPromptTemplateRepo{}, &mockTemplateRenderer{}, testLogger())
+	return service.NewTemplateService(&mockAgentRepo{}, &mockTemplateRenderer{}, testLogger())
 }
 
 // --- Tests ---
