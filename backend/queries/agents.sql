@@ -1,6 +1,6 @@
 -- name: CreateAgent :one
-INSERT INTO agents (id, name, model, image, template_content, scope, project_id, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+INSERT INTO agents (id, name, model, image, template_content, type, scope, project_id, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
 RETURNING *;
 
 -- name: GetAgent :one

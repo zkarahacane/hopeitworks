@@ -2,13 +2,18 @@
 # test users and projects. Run `cd backend && make reset-db` to drop, recreate, and seed.
 
 services:
+  # Filtered proxy for the Docker socket — the API service needs to spawn agent
+  # containers but should NOT have unrestricted access to the Docker daemon.
+  # This proxy only allows container and network operations (no volumes, no exec,
+  # no swarm). On Kubernetes this role is replaced by a scoped ServiceAccount + RBAC.
+  # Compatible with any runtime exposing a Docker-compatible socket (Podman, Colima, OrbStack, Rancher Desktop with dockerd).
   socket-proxy:
     image: tecnativa/docker-socket-proxy:0.3.0
     container_name: hopeitworks-socket-proxy
     environment:
-      CONTAINERS: 1
-      NETWORKS: 1
-      POST: 1
+      CONTAINERS: 1   # allow container create/start/stop/inspect
+      NETWORKS: 1     # allow network connect (agent-network)
+      POST: 1         # required for create/start operations
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:

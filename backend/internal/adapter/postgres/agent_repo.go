@@ -27,12 +27,17 @@ func NewAgentRepo(queries *Queries) *AgentRepo {
 
 // CreateAgent inserts a new agent.
 func (r *AgentRepo) CreateAgent(ctx context.Context, agent *model.Agent) (*model.Agent, error) {
+	agentType := agent.Type
+	if agentType == "" {
+		agentType = "custom"
+	}
 	params := CreateAgentParams{
 		ID:              agent.ID,
 		Name:            agent.Name,
 		Model:           textFromString(agent.Model),
 		Image:           textFromString(agent.Image),
 		TemplateContent: agent.TemplateContent,
+		Type:            agentType,
 		Scope:           agent.Scope,
 		ProjectID:       uuidFromPtr(agent.ProjectID),
 	}
@@ -140,6 +145,7 @@ func toDomainAgent(a Agent) *model.Agent {
 		ID:              a.ID,
 		Name:            a.Name,
 		TemplateContent: a.TemplateContent,
+		Type:            a.Type,
 		Scope:           a.Scope,
 		CreatedAt:       a.CreatedAt,
 		UpdatedAt:       a.UpdatedAt,

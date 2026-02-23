@@ -1126,25 +1126,28 @@ func TestExecuteRun_CircuitBreakerRecordsSuccess(t *testing.T) {
 	}
 }
 
-func TestExecuteRun_TemplateNameInjectedPerActionType(t *testing.T) {
+func TestExecuteRun_TemplateContentInjectedPerStep(t *testing.T) {
 	f := newExecutorTestFixture(3)
 
-	// Set step actions to the three known action types
-	f.steps[0].Action = "implement"
-	f.steps[1].Action = "review"
-	f.steps[2].Action = "merge"
+	// Set run metadata with per-step template_content keys (as LaunchRun would)
+	f.run.Metadata = map[string]interface{}{
+		"branch_name":             "feat/test",
+		"step_0_template_content": "Implement {{story_key}}",
+		"step_1_template_content": "Review {{story_key}}",
+		// step_2 has no template_content
+	}
 
-	capturedTemplateNames := make([]string, 3)
+	capturedTemplateContent := make([]string, 3)
+	capturedHasContent := make([]bool, 3)
 	for i, step := range f.steps {
 		idx := i
 		f.actionReg.Register(&mockAction{
 			name: step.Action,
 			executeFn: func(_ context.Context, runCtx *model.RunContext) error {
-				if tmpl, ok := runCtx.Metadata["template_name"].(string); ok {
-					capturedTemplateNames[idx] = tmpl
+				if tc, ok := runCtx.Metadata["template_content"].(string); ok {
+					capturedTemplateContent[idx] = tc
+					capturedHasContent[idx] = true
 				}
-				// Delete template_name to verify it gets re-injected per step
-				delete(runCtx.Metadata, "template_name")
 				return nil
 			},
 		})
@@ -1155,11 +1158,14 @@ func TestExecuteRun_TemplateNameInjectedPerActionType(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	expected := []string{TemplateNameImplement, TemplateNameReview, TemplateNameMerge}
-	for i, exp := range expected {
-		if capturedTemplateNames[i] != exp {
-			t.Errorf("step %d: expected template_name %q, got %q", i, exp, capturedTemplateNames[i])
-		}
+	if capturedTemplateContent[0] != "Implement {{story_key}}" {
+		t.Errorf("step 0: expected template_content %q, got %q", "Implement {{story_key}}", capturedTemplateContent[0])
+	}
+	if capturedTemplateContent[1] != "Review {{story_key}}" {
+		t.Errorf("step 1: expected template_content %q, got %q", "Review {{story_key}}", capturedTemplateContent[1])
+	}
+	if capturedHasContent[2] {
+		t.Errorf("step 2: expected no template_content in metadata, got %q", capturedTemplateContent[2])
 	}
 }
 

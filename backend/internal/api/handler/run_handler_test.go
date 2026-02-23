@@ -192,12 +192,15 @@ func (m *runHandlerJobQueue) EnqueueExecuteRun(ctx context.Context, runID uuid.U
 	return nil
 }
 
+// handlerTestAgentID is the fixed agent UUID used in handlerTestPipelineYAML.
+var handlerTestAgentID = uuid.MustParse("00000000-0000-0000-0000-000000000099")
+
 // handlerTestPipelineYAML is a minimal valid pipeline config for handler tests.
 const handlerTestPipelineYAML = `steps:
   - id: "step-1"
     name: "implement"
     action_type: "implement"
-    model: "claude-opus-4-6"
+    agent_id: "00000000-0000-0000-0000-000000000099"
     auto_approve: false
     retry_policy:
       max_retries: 0
@@ -242,7 +245,15 @@ func TestLaunchRunHandler_Created(t *testing.T) {
 		},
 	}
 
-	h := setupRunHandler(&runHandlerRunRepo{}, storyRepo, pipelineConfigRepo, &runHandlerJobQueue{})
+	agentRepo := newMockAgentRepo()
+	agentRepo.agents[handlerTestAgentID] = &model.Agent{
+		ID:    handlerTestAgentID,
+		Model: "claude-opus-4-6",
+		Image: "hopeitworks/agent:latest",
+	}
+	svc := service.NewRunService(&runHandlerRunRepo{}, &runHandlerProjectRepo{}, storyRepo, pipelineConfigRepo, &runHandlerJobQueue{})
+	svc.SetAgentRepo(agentRepo)
+	h := NewRunHandler(svc)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/projects/"+projectID.String()+"/stories/"+storyID.String()+"/runs", nil)
 	rec := httptest.NewRecorder()

@@ -8,7 +8,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/zakari/hopeitworks/backend/internal/domain/model"
 	"github.com/zakari/hopeitworks/backend/internal/domain/port"
-	"github.com/zakari/hopeitworks/backend/internal/domain/service"
 	"github.com/zakari/hopeitworks/backend/pkg/errors"
 )
 
@@ -20,24 +19,21 @@ type AgentRunExecutor interface {
 // IncrementalRetryAction coordinates retry logic for failed agent steps.
 // It creates a new RunStep record and delegates execution to AgentRunAction.
 type IncrementalRetryAction struct {
-	runRepo     port.RunRepository
-	templateSvc *service.TemplateService
-	agentRun    AgentRunExecutor
-	logger      *slog.Logger
+	runRepo  port.RunRepository
+	agentRun AgentRunExecutor
+	logger   *slog.Logger
 }
 
 // NewIncrementalRetryAction creates a new IncrementalRetryAction.
 func NewIncrementalRetryAction(
 	runRepo port.RunRepository,
-	templateSvc *service.TemplateService,
 	agentRun AgentRunExecutor,
 	logger *slog.Logger,
 ) *IncrementalRetryAction {
 	return &IncrementalRetryAction{
-		runRepo:     runRepo,
-		templateSvc: templateSvc,
-		agentRun:    agentRun,
-		logger:      logger,
+		runRepo:  runRepo,
+		agentRun: agentRun,
+		logger:   logger,
 	}
 }
 
@@ -48,6 +44,7 @@ func (a *IncrementalRetryAction) Name() string {
 
 // Execute coordinates retry logic: fetches the parent step, evaluates the retry
 // policy, creates a new retry RunStep, and delegates execution to AgentRunAction.
+// The template_content is inherited from the parent step's metadata.
 func (a *IncrementalRetryAction) Execute(ctx context.Context, runCtx *model.RunContext) error {
 	// 1. Extract parent step ID from metadata
 	parentStepIDStr, _ := runCtx.Metadata["parent_step_id"].(string)
@@ -75,12 +72,10 @@ func (a *IncrementalRetryAction) Execute(ctx context.Context, runCtx *model.RunC
 			fmt.Sprintf("RETRY_MAX_EXCEEDED: max %d retries reached for step %s", maxRetries, parent.ID))
 	}
 
-	// 5. Determine retry type and template
+	// 5. Determine retry type
 	retryType := "incremental"
-	templateName := service.TemplateNameImplementRetry
 	if parent.RetryCount >= maxIncremental {
 		retryType = "full"
-		templateName = service.TemplateNameImplement
 	}
 
 	// 6. Create new RunStep
@@ -114,9 +109,17 @@ func (a *IncrementalRetryAction) Execute(ctx context.Context, runCtx *model.RunC
 	for k, v := range runCtx.Metadata {
 		newMetadata[k] = v
 	}
-	newMetadata["template_name"] = templateName
-	newMetadata["error_context"] = errorContext
-	newMetadata["log_tail"] = logTail
+
+	// For incremental retries, inject error context so the template can
+	// conditionally include retry information via {{#if error_context}}.
+	// For full retries, clear error context for a fresh start.
+	if retryType == "incremental" {
+		newMetadata["error_context"] = errorContext
+		newMetadata["log_tail"] = logTail
+	} else {
+		delete(newMetadata, "error_context")
+		delete(newMetadata, "log_tail")
+	}
 
 	newRunCtx := &model.RunContext{
 		Run:       runCtx.Run,

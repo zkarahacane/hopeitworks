@@ -333,9 +333,17 @@ func (s *RunService) LaunchRun(ctx context.Context, projectID, storyID uuid.UUID
 	}
 
 	// Build per-step metadata from pipeline config (keyed by step order).
-	// When a step has an agent_id, resolve the agent and store model + image.
-	// When a step has only a model, store it directly for backward compatibility.
+	// For agent_run steps, agent_id is required — resolve the agent and snapshot
+	// model, image, and template_content.
 	for i, stepCfg := range flatSteps {
+		if stepCfg.ActionType == "agent_run" || stepCfg.ActionType == "implement" || stepCfg.ActionType == "review" || stepCfg.ActionType == "merge" {
+			if stepCfg.AgentID == "" {
+				return nil, errors.NewValidation(
+					fmt.Sprintf("step[%d].agent_id", i),
+					"agent_id is required for agent_run steps")
+			}
+		}
+
 		if stepCfg.AgentID != "" {
 			agentUUID, parseErr := uuid.Parse(stepCfg.AgentID)
 			if parseErr != nil {
@@ -352,6 +360,9 @@ func (s *RunService) LaunchRun(ctx context.Context, projectID, storyID uuid.UUID
 			runMetadata[fmt.Sprintf("step_%d_model", i)] = agent.Model
 			if agent.Image != "" {
 				runMetadata[fmt.Sprintf("step_%d_agent_image", i)] = agent.Image
+			}
+			if agent.TemplateContent != "" {
+				runMetadata[fmt.Sprintf("step_%d_template_content", i)] = agent.TemplateContent
 			}
 		} else if stepCfg.Model != "" {
 			runMetadata[fmt.Sprintf("step_%d_model", i)] = stepCfg.Model

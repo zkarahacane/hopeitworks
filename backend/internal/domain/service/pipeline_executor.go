@@ -19,15 +19,6 @@ import (
 // ErrRunPaused is returned when a run is paused mid-execution.
 var ErrRunPaused = fmt.Errorf("run paused")
 
-// actionTypeToTemplateName maps pipeline config action_type values to prompt template names.
-// Includes both new action types and legacy aliases for backward compatibility.
-var actionTypeToTemplateName = map[string]string{
-	"agent_run": TemplateNameImplement,
-	"implement": TemplateNameImplement,
-	"review":    TemplateNameReview,
-	"merge":     TemplateNameMerge,
-}
-
 // errStepSuspended is returned by executeStep when the step transitions
 // to waiting_approval. It is NOT a failure — it signals the executor to
 // stop processing further steps without marking the run as failed.
@@ -232,12 +223,12 @@ func (e *PipelineExecutor) executeStep(ctx context.Context, run *model.Run, step
 		Metadata:  metadata,
 	}
 
-	// Inject template_name based on action_type alias (implement, review, merge).
-	// An explicit template_name already in metadata (e.g. from incremental retry) takes precedence.
-	if _, exists := runCtx.Metadata["template_name"]; !exists {
-		if tmplName, ok := actionTypeToTemplateName[step.Action]; ok {
-			runCtx.Metadata["template_name"] = tmplName
-		}
+	// Inject per-step template_content from run metadata (set by LaunchRun as step_<order>_template_content).
+	templateContentKey := fmt.Sprintf("step_%d_template_content", step.StepOrder)
+	if tc, ok := runCtx.Metadata[templateContentKey].(string); ok && tc != "" {
+		runCtx.Metadata["template_content"] = tc
+	} else {
+		delete(runCtx.Metadata, "template_content")
 	}
 
 	// Inject per-step model from run metadata (set by LaunchRun as step_<order>_model).
