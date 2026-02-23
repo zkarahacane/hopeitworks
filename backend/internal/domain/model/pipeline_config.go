@@ -24,6 +24,7 @@ type PipelineStep struct {
 	Name        string            `yaml:"name"        json:"name"`
 	ActionType  string            `yaml:"action_type" json:"action_type"`
 	Description string            `yaml:"description,omitempty" json:"description,omitempty"`
+	AgentID     string            `yaml:"agent_id,omitempty"    json:"agent_id,omitempty"`
 	Model       string            `yaml:"model,omitempty"       json:"model,omitempty"`
 	AutoApprove bool              `yaml:"auto_approve"          json:"auto_approve"`
 	RetryPolicy RetryPolicy       `yaml:"retry_policy"          json:"retry_policy"`

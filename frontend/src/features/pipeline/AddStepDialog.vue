@@ -10,12 +10,7 @@ import InputNumber from 'primevue/inputnumber'
 import Button from 'primevue/button'
 import Message from 'primevue/message'
 import type { PipelineStep } from '@/stores/pipelineConfig'
-
-const modelOptions = [
-  { label: 'Claude Opus 4.6', value: 'claude-opus-4-6' },
-  { label: 'Claude Sonnet 4.6', value: 'claude-sonnet-4-6' },
-  { label: 'Claude Haiku 4.5', value: 'claude-haiku-4-5' },
-]
+import type { Agent } from '@/stores/agents'
 
 const actionTypeOptions = [
   { label: 'Agent Run', value: 'agent_run' },
@@ -35,6 +30,7 @@ const retryTypeOptions = [
 
 const props = defineProps<{
   visible: boolean
+  agents: Agent[]
 }>()
 
 const emit = defineEmits<{
@@ -45,7 +41,7 @@ const emit = defineEmits<{
 
 const name = ref('')
 const actionType = ref<PipelineStep['action_type']>('agent_run')
-const model = ref<PipelineStep['model']>('claude-sonnet-4-6')
+const agentId = ref<string | undefined>(undefined)
 const autoApprove = ref(false)
 const maxRetries = ref(2)
 const retryType = ref<PipelineStep['retry_policy']['retry_type']>('on-failure')
@@ -56,7 +52,7 @@ const configDraft = ref(false)
 function resetForm() {
   name.value = ''
   actionType.value = 'agent_run'
-  model.value = 'claude-sonnet-4-6'
+  agentId.value = undefined
   autoApprove.value = false
   maxRetries.value = 2
   retryType.value = 'on-failure'
@@ -83,9 +79,7 @@ watch(
   () => {
     resetConfig()
     if (actionType.value !== 'agent_run') {
-      model.value = undefined as unknown as PipelineStep['model']
-    } else {
-      model.value = 'claude-sonnet-4-6'
+      agentId.value = undefined
     }
   },
 )
@@ -100,7 +94,7 @@ function handleAdd() {
     id: crypto.randomUUID(),
     name: name.value.trim(),
     action_type: actionType.value,
-    model: model.value,
+    agent_id: actionType.value === 'agent_run' ? agentId.value : undefined,
     auto_approve: autoApprove.value,
     retry_policy: {
       max_retries: maxRetries.value,
@@ -156,18 +150,26 @@ function close() {
         />
       </div>
 
-      <!-- Model selector: only visible for agent_run -->
+      <!-- Agent selector: only visible for agent_run -->
       <div v-if="actionType === 'agent_run'" class="flex flex-col gap-2">
-        <label for="model-select" class="text-sm font-medium">Model</label>
+        <label for="agent-select" class="text-sm font-medium">Agent</label>
         <Select
-          id="model-select"
-          v-model="model"
-          :options="modelOptions"
-          option-label="label"
-          option-value="value"
+          id="agent-select"
+          v-model="agentId"
+          :options="agents"
+          option-label="name"
+          option-value="id"
+          placeholder="Select an agent"
           class="w-full"
-          data-testid="model-select"
-        />
+          data-testid="agent-select"
+        >
+          <template #option="{ option }">
+            <div class="flex flex-col">
+              <span>{{ option.name }}</span>
+              <span class="text-sm opacity-60">{{ option.model }}</span>
+            </div>
+          </template>
+        </Select>
       </div>
 
       <!-- git_branch config fields -->

@@ -76,7 +76,8 @@ type pipelineStepYAML struct {
 	ID          string            `yaml:"id"`
 	Name        string            `yaml:"name"`
 	ActionType  string            `yaml:"action_type"`
-	Model       string            `yaml:"model"`
+	AgentID     string            `yaml:"agent_id,omitempty"`
+	Model       string            `yaml:"model,omitempty"`
 	AutoApprove bool              `yaml:"auto_approve"`
 	RetryPolicy retryPolicyYAML   `yaml:"retry_policy"`
 	Config      map[string]string `yaml:"config,omitempty"`
@@ -129,12 +130,17 @@ func stepToYAML(s PipelineStep) pipelineStepYAML {
 		ID:          s.Id.String(),
 		Name:        s.Name,
 		ActionType:  string(s.ActionType),
-		Model:       string(s.Model),
 		AutoApprove: s.AutoApprove,
 		RetryPolicy: retryPolicyYAML{
 			MaxRetries: s.RetryPolicy.MaxRetries,
 			RetryType:  string(s.RetryPolicy.RetryType),
 		},
+	}
+	if s.AgentId != nil {
+		y.AgentID = s.AgentId.String()
+	}
+	if s.Model != nil {
+		y.Model = *s.Model
 	}
 	if s.Config != nil {
 		y.Config = *s.Config
@@ -162,12 +168,21 @@ func toAPIPipelineConfig(c *model.PipelineConfig) (PipelineConfig, error) {
 				Id:          stepID,
 				Name:        s.Name,
 				ActionType:  PipelineStepActionType(s.ActionType),
-				Model:       PipelineStepModel(s.Model),
 				AutoApprove: s.AutoApprove,
 				RetryPolicy: RetryPolicy{
 					MaxRetries: s.RetryPolicy.MaxRetries,
 					RetryType:  RetryPolicyRetryType(s.RetryPolicy.RetryType),
 				},
+			}
+			if s.AgentID != "" {
+				agentUUID, err := uuid.Parse(s.AgentID)
+				if err == nil {
+					step.AgentId = &agentUUID
+				}
+			}
+			if s.Model != "" {
+				model := s.Model
+				step.Model = &model
 			}
 			if len(s.Config) > 0 {
 				step.Config = &s.Config

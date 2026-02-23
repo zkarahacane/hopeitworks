@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useToast } from 'primevue/usetoast'
 import Button from 'primevue/button'
@@ -11,6 +11,7 @@ import PipelineStepList from '@/features/pipeline/PipelineStepList.vue'
 import AddStepDialog from '@/features/pipeline/AddStepDialog.vue'
 import { usePipelineConfig } from '@/composables/usePipelineConfig'
 import { useAuth } from '@/composables/useAuth'
+import { useAgents } from '@/composables/useAgents'
 import type { PipelineStep } from '@/stores/pipelineConfig'
 
 const route = useRoute()
@@ -36,6 +37,12 @@ const {
   reorderStepsInGroup,
   reorderGroups,
 } = usePipelineConfig(projectId)
+
+const { agents, fetchAgents } = useAgents(projectId.value)
+
+onMounted(() => {
+  fetchAgents({ per_page: 100 })
+})
 
 const isAdmin = computed(() => user.value?.role === 'admin')
 const showAddDialog = ref(false)
@@ -163,6 +170,7 @@ async function handleSave() {
       v-else
       :groups="groups"
       :is-admin="isAdmin"
+      :agents="agents"
       @rename-group="handleRenameGroup"
       @remove-group="handleRemoveGroup"
       @add-step="handleOpenAddStep"
@@ -176,6 +184,7 @@ async function handleSave() {
     <AddStepDialog
       v-if="isAdmin"
       v-model:visible="showAddDialog"
+      :agents="agents"
       @add="handleAddStep"
     />
 

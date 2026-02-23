@@ -22,6 +22,7 @@ type RunService struct {
 	jobQueue           port.JobQueue
 	eventPub           port.EventPublisher
 	containerMgr       port.ContainerManager
+	agentRepo          port.AgentRepository
 }
 
 // NewRunService creates a new RunService.
@@ -49,6 +50,11 @@ func NewRunService(
 // SetContainerManager configures the container manager for cancellation support.
 func (s *RunService) SetContainerManager(cm port.ContainerManager) {
 	s.containerMgr = cm
+}
+
+// SetAgentRepo configures the agent repository for agent resolution at run launch.
+func (s *RunService) SetAgentRepo(repo port.AgentRepository) {
+	s.agentRepo = repo
 }
 
 // PipelineStepConfig represents a step in a pipeline configuration.
@@ -326,15 +332,30 @@ func (s *RunService) LaunchRun(ctx context.Context, projectID, storyID uuid.UUID
 		"branch_name": branchName,
 	}
 
-	// Build per-step model map from pipeline config (keyed by step order)
-	stepModels := make(map[string]string)
+	// Build per-step metadata from pipeline config (keyed by step order).
+	// When a step has an agent_id, resolve the agent and store model + image.
+	// When a step has only a model, store it directly for backward compatibility.
 	for i, stepCfg := range flatSteps {
-		if stepCfg.Model != "" {
-			stepModels[fmt.Sprintf("step_%d_model", i)] = stepCfg.Model
+		if stepCfg.AgentID != "" {
+			agentUUID, parseErr := uuid.Parse(stepCfg.AgentID)
+			if parseErr != nil {
+				return nil, errors.NewValidation(fmt.Sprintf("step[%d].agent_id", i), "invalid UUID format")
+			}
+			if s.agentRepo == nil {
+				return nil, errors.NewInternal("resolve agent", fmt.Errorf("agent repository not configured"))
+			}
+			agent, fetchErr := s.agentRepo.GetAgent(ctx, agentUUID)
+			if fetchErr != nil {
+				return nil, errors.NewNotFound("agent", stepCfg.AgentID)
+			}
+			runMetadata[fmt.Sprintf("step_%d_agent_id", i)] = agent.ID.String()
+			runMetadata[fmt.Sprintf("step_%d_model", i)] = agent.Model
+			if agent.Image != "" {
+				runMetadata[fmt.Sprintf("step_%d_agent_image", i)] = agent.Image
+			}
+		} else if stepCfg.Model != "" {
+			runMetadata[fmt.Sprintf("step_%d_model", i)] = stepCfg.Model
 		}
-	}
-	for k, v := range stepModels {
-		runMetadata[k] = v
 	}
 
 	// 8. Create Run
