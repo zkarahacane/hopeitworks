@@ -1,7 +1,7 @@
 import { ref, computed, onMounted } from 'vue'
 import Handlebars from 'handlebars'
 import { apiClient } from '@/api/client'
-import type { PromptTemplate, PromptTemplateType } from '@/stores/promptTemplates'
+import type { Agent, AgentScope } from '@/stores/agents'
 
 /** Sample context data used for template preview rendering */
 const sampleContext = {
@@ -22,14 +22,16 @@ const sampleContext = {
 }
 
 /**
- * Composable for template editor state and actions.
- * Handles fetching, saving, and previewing prompt templates.
+ * Composable for agent editor state and actions.
+ * Handles fetching, saving, and previewing agents.
  */
-export function useTemplateEditor(projectId: string, templateId: string) {
-  const template = ref<PromptTemplate | null>(null)
+export function useAgentEditor(projectId: string, agentId: string) {
+  const agent = ref<Agent | null>(null)
   const content = ref('')
   const name = ref('')
-  const type = ref<PromptTemplateType>('custom')
+  const model = ref('claude-sonnet-4-6')
+  const image = ref('')
+  const scope = ref<AgentScope>('project')
   const loading = ref(false)
   const saving = ref(false)
   const error = ref<string | null>(null)
@@ -38,82 +40,96 @@ export function useTemplateEditor(projectId: string, templateId: string) {
   const previewContent = ref('')
   const originalContent = ref('')
 
-  const isNewTemplate = computed(() => templateId === 'new')
+  const isNewAgent = computed(() => agentId === 'new')
   const isDirty = computed(() => content.value !== originalContent.value)
   const canSave = computed(
     () =>
       isDirty.value &&
       content.value.trim() !== '' &&
-      (!isNewTemplate.value || name.value.trim() !== ''),
+      (!isNewAgent.value || name.value.trim() !== ''),
   )
 
-  /** Fetch an existing template from the API */
-  async function fetchTemplate() {
-    if (isNewTemplate.value) return
+  /** Fetch an existing agent from the API */
+  async function fetchAgent() {
+    if (isNewAgent.value) return
     loading.value = true
     error.value = null
     try {
       const { data, error: apiError } = await apiClient.GET(
-        '/projects/{projectId}/templates/{templateId}',
+        '/projects/{projectId}/agents/{agentId}',
         {
-          params: { path: { projectId, templateId } },
+          params: { path: { projectId, agentId } },
         },
       )
       if (apiError) {
-        error.value = 'Failed to load template'
+        error.value = 'Failed to load agent'
         return
       }
-      const t = data as PromptTemplate
-      template.value = t
-      content.value = t.template_content
-      originalContent.value = t.template_content
-      name.value = t.name
-      type.value = t.type
+      const a = data as Agent
+      agent.value = a
+      content.value = a.template_content
+      originalContent.value = a.template_content
+      name.value = a.name
+      model.value = a.model
+      image.value = a.image
+      scope.value = a.scope
     } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to load template'
+      error.value = e instanceof Error ? e.message : 'Failed to load agent'
     } finally {
       loading.value = false
     }
   }
 
-  /** Save or create a template via the API */
-  async function saveTemplate(templateName?: string, templateType?: PromptTemplateType) {
+  /** Save or create an agent via the API */
+  async function saveAgent(
+    agentName?: string,
+    agentModel?: string,
+    agentImage?: string,
+    agentScope?: AgentScope,
+  ) {
     saving.value = true
     error.value = null
     try {
-      if (isNewTemplate.value) {
+      if (isNewAgent.value) {
         const { error: apiError } = await apiClient.POST(
-          '/projects/{projectId}/templates',
+          '/projects/{projectId}/agents',
           {
             params: { path: { projectId } },
             body: {
-              name: templateName ?? name.value,
-              type: templateType ?? type.value,
+              name: agentName ?? name.value,
+              model: agentModel ?? model.value,
+              image: agentImage ?? image.value,
               template_content: content.value,
+              scope: agentScope ?? scope.value,
             },
           },
         )
         if (apiError) {
-          error.value = 'Failed to create template'
+          error.value = 'Failed to create agent'
           return false
         }
       } else {
         const { error: apiError } = await apiClient.PUT(
-          '/projects/{projectId}/templates/{templateId}',
+          '/projects/{projectId}/agents/{agentId}',
           {
-            params: { path: { projectId, templateId } },
-            body: { template_content: content.value },
+            params: { path: { projectId, agentId } },
+            body: {
+              template_content: content.value,
+              name: name.value,
+              model: model.value,
+              image: image.value,
+            },
           },
         )
         if (apiError) {
-          error.value = 'Failed to save template'
+          error.value = 'Failed to save agent'
           return false
         }
       }
       originalContent.value = content.value
       return true
     } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to save template'
+      error.value = e instanceof Error ? e.message : 'Failed to save agent'
       return false
     } finally {
       saving.value = false
@@ -135,27 +151,29 @@ export function useTemplateEditor(projectId: string, templateId: string) {
   }
 
   onMounted(() => {
-    if (!isNewTemplate.value) {
-      fetchTemplate()
+    if (!isNewAgent.value) {
+      fetchAgent()
     }
   })
 
   return {
-    template,
+    agent,
     content,
     name,
-    type,
+    model,
+    image,
+    scope,
     loading,
     saving,
     error,
     isDirty,
     canSave,
-    isNewTemplate,
+    isNewAgent,
     previewLoading,
     previewError,
     previewContent,
-    fetchTemplate,
-    saveTemplate,
+    fetchAgent,
+    saveAgent,
     previewTemplate,
   }
 }

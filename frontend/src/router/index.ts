@@ -10,7 +10,7 @@ import StoryDetailView from '@/views/StoryDetailView.vue'
 import ApprovalsView from '@/views/ApprovalsView.vue'
 import RunsView from '@/views/RunsView.vue'
 import PipelineConfigView from '@/views/PipelineConfigView.vue'
-import PromptTemplatesView from '@/views/PromptTemplatesView.vue'
+import AgentListView from '@/views/AgentListView.vue'
 import BoardView from '@/views/BoardView.vue'
 import NotFoundView from '@/views/NotFoundView.vue'
 import ProjectOverview from '@/features/projects/ProjectOverview.vue'
@@ -90,9 +90,13 @@ const router = createRouter({
           component: PipelineConfigView,
         },
         {
+          path: 'agents',
+          name: 'project-agents',
+          component: AgentListView,
+        },
+        {
           path: 'templates',
-          name: 'project-templates',
-          component: PromptTemplatesView,
+          redirect: { name: 'project-agents' },
         },
         {
           path: 'costs',
@@ -100,15 +104,15 @@ const router = createRouter({
           component: () => import('@/views/CostDashboardView.vue'),
         },
         {
-          path: 'templates/new',
-          name: 'template-create',
-          component: () => import('@/views/TemplateEditorView.vue'),
+          path: 'agents/new',
+          name: 'agent-create',
+          component: () => import('@/views/AgentEditorView.vue'),
           meta: { requiresAdmin: true },
         },
         {
-          path: 'templates/:templateId',
-          name: 'template-editor',
-          component: () => import('@/views/TemplateEditorView.vue'),
+          path: 'agents/:agentId',
+          name: 'agent-editor',
+          component: () => import('@/views/AgentEditorView.vue'),
         },
         {
           path: 'runs/:runId/approve/:stepId',
