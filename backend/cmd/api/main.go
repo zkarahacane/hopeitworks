@@ -140,14 +140,14 @@ func run() error {
 	schedulerService := service.NewSchedulerService()
 	epicHandler := handler.NewEpicHandler(epicService, schedulerService, storyRepo)
 
-	// Prompt template service
-	promptTemplateRepo := pgadapter.NewPromptTemplateRepo(queries)
-	promptTemplateService := service.NewPromptTemplateService(promptTemplateRepo)
-	promptTemplateHandler := handler.NewPromptTemplateHandler(promptTemplateService)
+	// Agent repository and service (first-class Agent entity, replaces prompt_templates)
+	agentRepo := pgadapter.NewAgentRepo(queries)
+	agentService := service.NewAgentService(agentRepo)
+	agentHandler := handler.NewAgentHandler(agentService)
 
 	// Template rendering service (Handlebars engine for prompt templates)
 	handlebarsRenderer := hbadapter.NewRenderer()
-	templateSvc := service.NewTemplateService(promptTemplateRepo, handlebarsRenderer, logger)
+	templateSvc := service.NewTemplateService(agentRepo, handlebarsRenderer, logger)
 
 	// Auth handler
 	authHandler := handler.NewAuthHandler(authService, userRepo, false)
@@ -317,7 +317,7 @@ func run() error {
 	epicRunService := service.NewEpicRunService(epicRunRepo, storyRepo, epicRepo, schedulerService, parallelGroupExecutor, eventRepo, logger)
 	epicRunHandler := handler.NewEpicRunHandler(epicRunService)
 
-	server := handler.NewServer(authHandler, projectHandler, userHandler, profileHandler, epicHandler, storyHandler, promptTemplateHandler, runHandler, pipelineConfigHandler, hitlHandler, costHandler, notificationHandler, epicRunHandler)
+	server := handler.NewServer(authHandler, projectHandler, userHandler, profileHandler, epicHandler, storyHandler, agentHandler, runHandler, pipelineConfigHandler, hitlHandler, costHandler, notificationHandler, epicRunHandler)
 
 	// Project user handler
 	projectUserHandler := handler.NewProjectUserHandler(projectUserService)

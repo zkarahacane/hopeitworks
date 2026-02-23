@@ -22,21 +22,21 @@ const (
 // TemplateService resolves prompt templates from the database (with fallback to defaults)
 // and renders them with story context using a TemplateRenderer.
 type TemplateService struct {
-	templateRepo port.PromptTemplateRepository
-	renderer     port.TemplateRenderer
-	logger       *slog.Logger
+	agentRepo port.AgentRepository
+	renderer  port.TemplateRenderer
+	logger    *slog.Logger
 }
 
 // NewTemplateService creates a new TemplateService.
 func NewTemplateService(
-	templateRepo port.PromptTemplateRepository,
+	agentRepo port.AgentRepository,
 	renderer port.TemplateRenderer,
 	logger *slog.Logger,
 ) *TemplateService {
 	return &TemplateService{
-		templateRepo: templateRepo,
-		renderer:     renderer,
-		logger:       logger,
+		agentRepo: agentRepo,
+		renderer:  renderer,
+		logger:    logger,
 	}
 }
 
@@ -47,33 +47,34 @@ func (s *TemplateService) RenderForStory(
 	templateName string,
 	tmplCtx *model.TemplateContext,
 ) (string, error) {
-	tmpl, err := s.templateRepo.GetByProjectAndName(ctx, projectID, templateName)
+	// Try to find an agent with the matching name in the project (merged with global)
+	agents, err := s.agentRepo.ListAgentsByProjectMerged(ctx, projectID)
 	if err != nil {
-		// Check if the error is a not-found error
-		domainErr, ok := err.(*errors.DomainError)
-		if !ok || domainErr.Category != errors.CategoryNotFound {
-			return "", err
-		}
-
-		// Template not found in DB, try default
-		s.logger.Debug("template not found in DB, trying default",
-			"project_id", projectID,
-			"template_name", templateName,
-		)
-
-		defaultContent := getDefaultTemplate(templateName)
-		if defaultContent == "" {
-			return "", &errors.DomainError{
-				Category: errors.CategoryNotFound,
-				Code:     "TEMPLATE_NOT_FOUND",
-				Message:  "template '" + templateName + "' not found in database and no default exists",
-			}
-		}
-
-		return s.renderer.Render(defaultContent, tmplCtx)
+		return "", err
 	}
 
-	return s.renderer.Render(tmpl.TemplateContent, tmplCtx)
+	for _, agent := range agents {
+		if agent.Name == templateName {
+			return s.renderer.Render(agent.TemplateContent, tmplCtx)
+		}
+	}
+
+	// Template not found in DB, try default
+	s.logger.Debug("template not found in DB, trying default",
+		"project_id", projectID,
+		"template_name", templateName,
+	)
+
+	defaultContent := getDefaultTemplate(templateName)
+	if defaultContent == "" {
+		return "", &errors.DomainError{
+			Category: errors.CategoryNotFound,
+			Code:     "TEMPLATE_NOT_FOUND",
+			Message:  "template '" + templateName + "' not found in database and no default exists",
+		}
+	}
+
+	return s.renderer.Render(defaultContent, tmplCtx)
 }
 
 // getDefaultTemplate returns hardcoded default template content for known template names.
