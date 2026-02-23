@@ -12,10 +12,11 @@ import (
 	"github.com/zakari/hopeitworks/backend/pkg/errors"
 )
 
-// CI check state and conclusion constants used when interpreting gh pr checks output.
+// ciStatusPending and ciStatusFail are package-level aliases kept for readability
+// inside the adapter methods; the canonical values are the exported CIStatus* constants.
 const (
-	ciStatusPending = "pending"
-	ciStatusFail    = "fail"
+	ciStatusPending = CIStatusPending
+	ciStatusFail    = CIStatusFail
 )
 
 // branchNamePattern validates conventional branch naming: feat/{key}-{slug} or fix/{key}-{slug}.
@@ -235,7 +236,7 @@ func (a *GhCliAdapter) GetCIStatus(ctx context.Context, workDir string) (string,
 	}
 
 	if len(checks) == 0 {
-		return "no_checks", nil
+		return CIStatusNoChecks, nil
 	}
 
 	hasPending := false
@@ -254,7 +255,7 @@ func (a *GhCliAdapter) GetCIStatus(ctx context.Context, workDir string) (string,
 		return ciStatusPending, nil
 	}
 
-	return "pass", nil
+	return CIStatusPass, nil
 }
 
 // GetPRDiff returns the diff content for the given pull request URL using gh CLI.

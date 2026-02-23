@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/zakari/hopeitworks/backend/internal/adapter/action"
 	"github.com/zakari/hopeitworks/backend/internal/domain/model"
+	"github.com/zakari/hopeitworks/backend/internal/domain/port"
 	apperrors "github.com/zakari/hopeitworks/backend/pkg/errors"
 )
 
@@ -54,6 +55,15 @@ func (m *gbMockGitProvider) getBranchCalls() []branchCall {
 	result := make([]branchCall, len(m.branchCalls))
 	copy(result, m.branchCalls)
 	return result
+}
+
+type gbMockGitProviderFactory struct {
+	provider port.GitProvider
+	err      error
+}
+
+func (m *gbMockGitProviderFactory) ForProjectID(_ context.Context, _ uuid.UUID) (port.GitProvider, error) {
+	return m.provider, m.err
 }
 
 type gbMockStoryRepo struct {
@@ -123,7 +133,7 @@ func gbRunCtx(cfg map[string]string, metadata map[string]any) *model.RunContext 
 // --- Tests ---
 
 func TestGitBranchAction_Name(t *testing.T) {
-	a := action.NewGitBranchAction(nil, nil, testLogger())
+	a := action.NewGitBranchAction(&gbMockGitProviderFactory{}, nil, testLogger())
 	if a.Name() != "git_branch" {
 		t.Fatalf("expected Name() = %q, got %q", "git_branch", a.Name())
 	}
@@ -132,13 +142,14 @@ func TestGitBranchAction_Name(t *testing.T) {
 func TestGitBranchAction_Execute_HappyPath(t *testing.T) {
 	storyID := uuid.New()
 	gitProvider := &gbMockGitProvider{}
+	factory := &gbMockGitProviderFactory{provider: gitProvider}
 	storyRepo := &gbMockStoryRepo{
 		getByIDFn: func(_ context.Context, id uuid.UUID) (*model.Story, error) {
 			return &model.Story{ID: id, Key: "S-03", Title: "Add login page"}, nil
 		},
 	}
 
-	a := action.NewGitBranchAction(gitProvider, storyRepo, testLogger())
+	a := action.NewGitBranchAction(factory, storyRepo, testLogger())
 
 	cfg := map[string]string{
 		"branch_pattern": "feat/{story_key}-{slug}",
@@ -193,13 +204,14 @@ func TestGitBranchAction_SlugDerivation(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.title, func(t *testing.T) {
 			gitProvider := &gbMockGitProvider{}
+			factory := &gbMockGitProviderFactory{provider: gitProvider}
 			storyRepo := &gbMockStoryRepo{
 				getByIDFn: func(_ context.Context, id uuid.UUID) (*model.Story, error) {
 					return &model.Story{ID: id, Key: "S-01", Title: tc.title}, nil
 				},
 			}
 
-			a := action.NewGitBranchAction(gitProvider, storyRepo, testLogger())
+			a := action.NewGitBranchAction(factory, storyRepo, testLogger())
 
 			cfg := map[string]string{
 				"branch_pattern": "feat/{story_key}-{slug}",
@@ -227,13 +239,14 @@ func TestGitBranchAction_SlugDerivation(t *testing.T) {
 
 func TestGitBranchAction_Execute_DefaultBaseBranch(t *testing.T) {
 	gitProvider := &gbMockGitProvider{}
+	factory := &gbMockGitProviderFactory{provider: gitProvider}
 	storyRepo := &gbMockStoryRepo{
 		getByIDFn: func(_ context.Context, id uuid.UUID) (*model.Story, error) {
 			return &model.Story{ID: id, Key: "S-05", Title: "Some feature"}, nil
 		},
 	}
 
-	a := action.NewGitBranchAction(gitProvider, storyRepo, testLogger())
+	a := action.NewGitBranchAction(factory, storyRepo, testLogger())
 
 	// No base_branch in config — should default to "main"
 	cfg := map[string]string{
@@ -259,13 +272,14 @@ func TestGitBranchAction_Execute_DefaultBaseBranch(t *testing.T) {
 
 func TestGitBranchAction_Execute_CustomFixPattern(t *testing.T) {
 	gitProvider := &gbMockGitProvider{}
+	factory := &gbMockGitProviderFactory{provider: gitProvider}
 	storyRepo := &gbMockStoryRepo{
 		getByIDFn: func(_ context.Context, id uuid.UUID) (*model.Story, error) {
 			return &model.Story{ID: id, Key: "BUG-7", Title: "Fix null pointer"}, nil
 		},
 	}
 
-	a := action.NewGitBranchAction(gitProvider, storyRepo, testLogger())
+	a := action.NewGitBranchAction(factory, storyRepo, testLogger())
 
 	cfg := map[string]string{
 		"branch_pattern": "fix/{story_key}-{slug}",
@@ -296,13 +310,14 @@ func TestGitBranchAction_Execute_GitProviderFailure(t *testing.T) {
 			return fmt.Errorf("git checkout failed: branch already exists")
 		},
 	}
+	factory := &gbMockGitProviderFactory{provider: gitProvider}
 	storyRepo := &gbMockStoryRepo{
 		getByIDFn: func(_ context.Context, id uuid.UUID) (*model.Story, error) {
 			return &model.Story{ID: id, Key: "S-01", Title: "Test"}, nil
 		},
 	}
 
-	a := action.NewGitBranchAction(gitProvider, storyRepo, testLogger())
+	a := action.NewGitBranchAction(factory, storyRepo, testLogger())
 
 	cfg := map[string]string{
 		"work_dir": "/tmp/repo",
@@ -325,13 +340,14 @@ func TestGitBranchAction_Execute_GitProviderFailure(t *testing.T) {
 
 func TestGitBranchAction_Execute_StoryNotFound(t *testing.T) {
 	gitProvider := &gbMockGitProvider{}
+	factory := &gbMockGitProviderFactory{provider: gitProvider}
 	storyRepo := &gbMockStoryRepo{
 		getByIDFn: func(_ context.Context, id uuid.UUID) (*model.Story, error) {
 			return nil, apperrors.NewNotFound("story", id)
 		},
 	}
 
-	a := action.NewGitBranchAction(gitProvider, storyRepo, testLogger())
+	a := action.NewGitBranchAction(factory, storyRepo, testLogger())
 
 	cfg := map[string]string{
 		"work_dir": "/tmp/repo",
@@ -355,13 +371,14 @@ func TestGitBranchAction_Execute_StoryNotFound(t *testing.T) {
 
 func TestGitBranchAction_Execute_MissingWorkDir(t *testing.T) {
 	gitProvider := &gbMockGitProvider{}
+	factory := &gbMockGitProviderFactory{provider: gitProvider}
 	storyRepo := &gbMockStoryRepo{
 		getByIDFn: func(_ context.Context, id uuid.UUID) (*model.Story, error) {
 			return &model.Story{ID: id, Key: "S-01", Title: "Test"}, nil
 		},
 	}
 
-	a := action.NewGitBranchAction(gitProvider, storyRepo, testLogger())
+	a := action.NewGitBranchAction(factory, storyRepo, testLogger())
 
 	// No work_dir in config or metadata
 	cfg := map[string]string{}
@@ -384,13 +401,14 @@ func TestGitBranchAction_Execute_MissingWorkDir(t *testing.T) {
 
 func TestGitBranchAction_Execute_WorkDirFromMetadata(t *testing.T) {
 	gitProvider := &gbMockGitProvider{}
+	factory := &gbMockGitProviderFactory{provider: gitProvider}
 	storyRepo := &gbMockStoryRepo{
 		getByIDFn: func(_ context.Context, id uuid.UUID) (*model.Story, error) {
 			return &model.Story{ID: id, Key: "S-01", Title: "Test"}, nil
 		},
 	}
 
-	a := action.NewGitBranchAction(gitProvider, storyRepo, testLogger())
+	a := action.NewGitBranchAction(factory, storyRepo, testLogger())
 
 	// work_dir only in metadata, not in config
 	cfg := map[string]string{}
@@ -414,13 +432,14 @@ func TestGitBranchAction_Execute_WorkDirFromMetadata(t *testing.T) {
 
 func TestGitBranchAction_Execute_NilConfig(t *testing.T) {
 	gitProvider := &gbMockGitProvider{}
+	factory := &gbMockGitProviderFactory{provider: gitProvider}
 	storyRepo := &gbMockStoryRepo{
 		getByIDFn: func(_ context.Context, id uuid.UUID) (*model.Story, error) {
 			return &model.Story{ID: id, Key: "S-01", Title: "Test"}, nil
 		},
 	}
 
-	a := action.NewGitBranchAction(gitProvider, storyRepo, testLogger())
+	a := action.NewGitBranchAction(factory, storyRepo, testLogger())
 
 	// nil Config on RunStep, work_dir in metadata
 	runCtx := gbRunCtx(nil, map[string]any{

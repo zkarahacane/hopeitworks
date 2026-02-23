@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/zakari/hopeitworks/backend/internal/adapter/action"
 	"github.com/zakari/hopeitworks/backend/internal/domain/model"
+	"github.com/zakari/hopeitworks/backend/internal/domain/port"
 )
 
 const (
@@ -47,6 +48,15 @@ func (m *ciMockGitProvider) getCalls() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.calls
+}
+
+type ciMockGitProviderFactory struct {
+	provider port.GitProvider
+	err      error
+}
+
+func (m *ciMockGitProviderFactory) ForProjectID(_ context.Context, _ uuid.UUID) (port.GitProvider, error) {
+	return m.provider, m.err
 }
 
 type ciMockEventPublisher struct {
@@ -115,9 +125,10 @@ func TestCIPollAction_Name(t *testing.T) {
 
 func TestCIPollAction_Execute_MissingPRURL(t *testing.T) {
 	gitProvider := &ciMockGitProvider{}
+	factory := &ciMockGitProviderFactory{provider: gitProvider}
 	eventPub := &ciMockEventPublisher{}
 
-	a := action.NewCIPollAction(gitProvider, eventPub, fastCIPollConfig(), testLogger())
+	a := action.NewCIPollAction(factory, eventPub, fastCIPollConfig(), testLogger())
 	runCtx := buildCIRunCtx(map[string]any{})
 
 	err := a.Execute(context.Background(), runCtx)
@@ -140,9 +151,10 @@ func TestCIPollAction_Execute_HappyPath_PassOnFirstTick(t *testing.T) {
 			return ciStatusPass, nil
 		},
 	}
+	factory := &ciMockGitProviderFactory{provider: gitProvider}
 	eventPub := &ciMockEventPublisher{}
 
-	a := action.NewCIPollAction(gitProvider, eventPub, fastCIPollConfig(), testLogger())
+	a := action.NewCIPollAction(factory, eventPub, fastCIPollConfig(), testLogger())
 	runCtx := buildCIRunCtx(map[string]any{
 		"pr_url": "https://github.com/owner/repo/pull/1",
 	})
@@ -181,9 +193,10 @@ func TestCIPollAction_Execute_PendingThenPass(t *testing.T) {
 			return ciStatusPass, nil
 		},
 	}
+	factory := &ciMockGitProviderFactory{provider: gitProvider}
 	eventPub := &ciMockEventPublisher{}
 
-	a := action.NewCIPollAction(gitProvider, eventPub, fastCIPollConfig(), testLogger())
+	a := action.NewCIPollAction(factory, eventPub, fastCIPollConfig(), testLogger())
 	runCtx := buildCIRunCtx(map[string]any{
 		"pr_url": "https://github.com/owner/repo/pull/2",
 	})
@@ -217,9 +230,10 @@ func TestCIPollAction_Execute_CIFailure(t *testing.T) {
 			return ciStatusFail, nil
 		},
 	}
+	factory := &ciMockGitProviderFactory{provider: gitProvider}
 	eventPub := &ciMockEventPublisher{}
 
-	a := action.NewCIPollAction(gitProvider, eventPub, fastCIPollConfig(), testLogger())
+	a := action.NewCIPollAction(factory, eventPub, fastCIPollConfig(), testLogger())
 	runCtx := buildCIRunCtx(map[string]any{"pr_url": prURL})
 
 	err := a.Execute(context.Background(), runCtx)
@@ -240,6 +254,7 @@ func TestCIPollAction_Execute_Timeout(t *testing.T) {
 			return ciStatusPending, nil
 		},
 	}
+	factory := &ciMockGitProviderFactory{provider: gitProvider}
 	eventPub := &ciMockEventPublisher{}
 
 	// 1ms timeout — expires almost immediately
@@ -247,7 +262,7 @@ func TestCIPollAction_Execute_Timeout(t *testing.T) {
 		DefaultPollInterval: 1 * time.Millisecond,
 		DefaultTimeout:      1 * time.Millisecond,
 	}
-	a := action.NewCIPollAction(gitProvider, eventPub, cfg, testLogger())
+	a := action.NewCIPollAction(factory, eventPub, cfg, testLogger())
 	runCtx := buildCIRunCtx(map[string]any{
 		"pr_url": "https://github.com/owner/repo/pull/4",
 	})
@@ -275,13 +290,14 @@ func TestCIPollAction_Execute_ContextCancellation(t *testing.T) {
 			return "", ctx.Err()
 		},
 	}
+	factory := &ciMockGitProviderFactory{provider: gitProvider}
 	eventPub := &ciMockEventPublisher{}
 
 	cfg := action.CIPollConfig{
 		DefaultPollInterval: 1 * time.Millisecond,
 		DefaultTimeout:      30 * time.Second,
 	}
-	a := action.NewCIPollAction(gitProvider, eventPub, cfg, testLogger())
+	a := action.NewCIPollAction(factory, eventPub, cfg, testLogger())
 	runCtx := buildCIRunCtx(map[string]any{
 		"pr_url": "https://github.com/owner/repo/pull/5",
 	})

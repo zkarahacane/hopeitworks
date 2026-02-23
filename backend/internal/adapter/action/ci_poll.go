@@ -22,24 +22,24 @@ type CIPollConfig struct {
 
 // CIPollAction implements model.Action for polling CI status via GitProvider.
 type CIPollAction struct {
-	gitProvider port.GitProvider
-	eventPub    port.EventPublisher
-	config      CIPollConfig
-	logger      *slog.Logger
+	gitProviderFactory port.GitProviderFactory
+	eventPub           port.EventPublisher
+	config             CIPollConfig
+	logger             *slog.Logger
 }
 
 // NewCIPollAction creates a new CIPollAction.
 func NewCIPollAction(
-	gitProvider port.GitProvider,
+	gitProviderFactory port.GitProviderFactory,
 	eventPub port.EventPublisher,
 	config CIPollConfig,
 	logger *slog.Logger,
 ) *CIPollAction {
 	return &CIPollAction{
-		gitProvider: gitProvider,
-		eventPub:    eventPub,
-		config:      config,
-		logger:      logger,
+		gitProviderFactory: gitProviderFactory,
+		eventPub:           eventPub,
+		config:             config,
+		logger:             logger,
 	}
 }
 
@@ -52,6 +52,11 @@ func (a *CIPollAction) Execute(ctx context.Context, runCtx *model.RunContext) er
 	prURL, _ := runCtx.Metadata["pr_url"].(string)
 	if prURL == "" {
 		return fmt.Errorf("CI_POLL_MISSING_PR_URL: missing required metadata key pr_url")
+	}
+
+	gitProvider, err := a.gitProviderFactory.ForProjectID(ctx, runCtx.ProjectID)
+	if err != nil {
+		return fmt.Errorf("resolve git provider: %w", err)
 	}
 
 	workDir, _ := runCtx.Metadata["work_dir"].(string)
@@ -80,7 +85,7 @@ func (a *CIPollAction) Execute(ctx context.Context, runCtx *model.RunContext) er
 			}
 			return fmt.Errorf("CI_POLL_TIMEOUT: timed out after %v waiting for CI on %s", timeout, prURL)
 		case <-ticker.C:
-			status, err := a.gitProvider.GetCIStatus(pollCtx, workDir)
+			status, err := gitProvider.GetCIStatus(pollCtx, workDir)
 			if err != nil {
 				a.logger.Warn("ci_poll: GetCIStatus error", "error", err, "pr_url", prURL)
 				a.publishPollingEvent(ctx, runCtx, prURL, "error")

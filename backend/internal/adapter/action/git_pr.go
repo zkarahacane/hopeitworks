@@ -10,19 +10,19 @@ import (
 	"github.com/zakari/hopeitworks/backend/internal/domain/port"
 )
 
-// GitPRAction implements model.Action for creating a GitHub pull request.
+// GitPRAction implements model.Action for creating a pull request.
 // It renders the PR title from a configurable template using story context,
 // uses the branch_name from RunContext.Metadata as the source branch,
 // and stores the resulting PR URL in RunContext.Metadata["pr_url"].
 type GitPRAction struct {
-	gitProvider port.GitProvider
-	storyRepo   port.StoryRepository
-	logger      *slog.Logger
+	gitProviderFactory port.GitProviderFactory
+	storyRepo          port.StoryRepository
+	logger             *slog.Logger
 }
 
 // NewGitPRAction creates a new GitPRAction.
-func NewGitPRAction(gitProvider port.GitProvider, storyRepo port.StoryRepository, logger *slog.Logger) *GitPRAction {
-	return &GitPRAction{gitProvider: gitProvider, storyRepo: storyRepo, logger: logger}
+func NewGitPRAction(gitProviderFactory port.GitProviderFactory, storyRepo port.StoryRepository, logger *slog.Logger) *GitPRAction {
+	return &GitPRAction{gitProviderFactory: gitProviderFactory, storyRepo: storyRepo, logger: logger}
 }
 
 // Name returns the action identifier.
@@ -36,6 +36,11 @@ func (a *GitPRAction) Name() string { return "git_pr" }
 //   - work_dir: working directory for git operations
 //   - branch_name: source branch (required, typically set by git_branch step)
 func (a *GitPRAction) Execute(ctx context.Context, runCtx *model.RunContext) error {
+	gitProvider, err := a.gitProviderFactory.ForProjectID(ctx, runCtx.ProjectID)
+	if err != nil {
+		return fmt.Errorf("resolve git provider: %w", err)
+	}
+
 	// Read config from metadata
 	titleTemplate := metadataString(runCtx.Metadata, "title_template")
 	if titleTemplate == "" {
@@ -83,7 +88,7 @@ func (a *GitPRAction) Execute(ctx context.Context, runCtx *model.RunContext) err
 		"branch", branchName, "target", targetBranch,
 		"story_key", story.Key, "draft", draft)
 
-	prURL, err := a.gitProvider.CreatePR(ctx, workDir, title, body, targetBranch)
+	prURL, err := gitProvider.CreatePR(ctx, workDir, title, body, targetBranch)
 	if err != nil {
 		return fmt.Errorf("create PR: %w", err)
 	}

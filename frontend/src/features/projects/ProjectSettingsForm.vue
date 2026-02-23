@@ -33,7 +33,8 @@ const projectSettingsSchema = toTypedSchema(
       .string()
       .min(1, 'Repository URL is required')
       .url('Must be a valid URL'),
-    git_provider: z.enum(['github']).default('github'),
+    git_provider: z.enum(['github', 'gitea']).default('github'),
+    git_token_env: z.string().optional().or(z.literal('')),
     agent_runtime: z.enum(['docker']).default('docker'),
     default_model: z.string().optional().or(z.literal('')),
   }),
@@ -45,7 +46,8 @@ const { defineField, handleSubmit, errors, resetForm } = useForm({
     name: props.project.name,
     description: props.project.description ?? '',
     repo_url: props.project.repo_url ?? '',
-    git_provider: (props.project.git_provider as 'github') ?? 'github',
+    git_provider: (props.project.git_provider as 'github' | 'gitea') ?? 'github',
+    git_token_env: props.project.git_token_env ?? '',
     agent_runtime: (props.project.agent_runtime as 'docker') ?? 'docker',
     default_model: props.project.default_model ?? '',
   },
@@ -55,6 +57,7 @@ const [name, nameAttrs] = defineField('name')
 const [description, descriptionAttrs] = defineField('description')
 const [repoUrl, repoUrlAttrs] = defineField('repo_url')
 const [gitProvider, gitProviderAttrs] = defineField('git_provider')
+const [gitTokenEnv, gitTokenEnvAttrs] = defineField('git_token_env')
 const [agentRuntime, agentRuntimeAttrs] = defineField('agent_runtime')
 const [defaultModel, defaultModelAttrs] = defineField('default_model')
 
@@ -66,7 +69,8 @@ watch(
         name: proj.name,
         description: proj.description ?? '',
         repo_url: proj.repo_url ?? '',
-        git_provider: (proj.git_provider as 'github') ?? 'github',
+        git_provider: (proj.git_provider as 'github' | 'gitea') ?? 'github',
+        git_token_env: proj.git_token_env ?? '',
         agent_runtime: (proj.agent_runtime as 'docker') ?? 'docker',
         default_model: proj.default_model ?? '',
       },
@@ -80,6 +84,7 @@ const onSubmit = handleSubmit((values) => {
     description: values.description || undefined,
     repo_url: values.repo_url,
     git_provider: values.git_provider,
+    git_token_env: values.git_token_env || undefined,
     agent_runtime: values.agent_runtime,
     default_model: values.default_model || undefined,
   })
@@ -141,13 +146,27 @@ const onSubmit = handleSubmit((values) => {
           id="settings-git-provider"
           v-model="gitProvider"
           v-bind="gitProviderAttrs"
-          :options="['github']"
+          :options="['github', 'gitea']"
           class="w-full"
           :invalid="!!errors.git_provider"
         />
         <label for="settings-git-provider">Git Provider *</label>
       </FloatLabel>
       <small v-if="errors.git_provider" class="text-red-500">{{ errors.git_provider }}</small>
+    </div>
+
+    <div class="flex flex-col gap-2">
+      <FloatLabel>
+        <InputText
+          id="settings-git-token-env"
+          v-model="gitTokenEnv"
+          v-bind="gitTokenEnvAttrs"
+          class="w-full"
+          placeholder="GITEA_TOKEN"
+        />
+        <label for="settings-git-token-env">Git Token Env Var</label>
+      </FloatLabel>
+      <small class="text-surface-500">Name of the environment variable holding the git token (defaults to GITHUB_TOKEN)</small>
     </div>
 
     <div class="flex flex-col gap-2">

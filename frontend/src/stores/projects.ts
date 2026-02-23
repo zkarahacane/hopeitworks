@@ -12,7 +12,8 @@ export interface Project {
   name: string
   description?: string
   repo_url?: string
-  git_provider?: 'github' | 'gitlab' | 'bitbucket'
+  git_provider?: 'github' | 'gitlab' | 'bitbucket' | 'gitea'
+  git_token_env?: string | null
   agent_runtime?: 'docker' | 'kubernetes'
   default_model?: string
   owner_id: string
@@ -26,7 +27,8 @@ export interface CreateProjectPayload {
   name: string
   description?: string
   repo_url?: string | null
-  git_provider?: 'github' | 'gitlab' | 'bitbucket'
+  git_provider?: 'github' | 'gitlab' | 'bitbucket' | 'gitea'
+  git_token_env?: string | null
   agent_runtime?: 'docker' | 'kubernetes'
   default_model?: string | null
 }
@@ -36,7 +38,8 @@ export interface UpdateProjectPayload {
   name?: string
   description?: string
   repo_url?: string | null
-  git_provider?: 'github' | 'gitlab' | 'bitbucket'
+  git_provider?: 'github' | 'gitlab' | 'bitbucket' | 'gitea'
+  git_token_env?: string | null
   agent_runtime?: 'docker' | 'kubernetes'
   default_model?: string | null
 }

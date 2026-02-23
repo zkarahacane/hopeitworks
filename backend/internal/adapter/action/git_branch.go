@@ -17,17 +17,17 @@ var nonAlphanumeric = regexp.MustCompile(`[^a-z0-9]+`)
 // It renders the branch name from a configurable pattern using RunContext variables,
 // delegates creation to GitProvider, and stores the result in RunContext.Metadata.
 type GitBranchAction struct {
-	gitProvider port.GitProvider
-	storyRepo   port.StoryRepository
-	logger      *slog.Logger
+	gitProviderFactory port.GitProviderFactory
+	storyRepo          port.StoryRepository
+	logger             *slog.Logger
 }
 
 // NewGitBranchAction creates a new GitBranchAction.
-func NewGitBranchAction(gitProvider port.GitProvider, storyRepo port.StoryRepository, logger *slog.Logger) *GitBranchAction {
+func NewGitBranchAction(gitProviderFactory port.GitProviderFactory, storyRepo port.StoryRepository, logger *slog.Logger) *GitBranchAction {
 	return &GitBranchAction{
-		gitProvider: gitProvider,
-		storyRepo:   storyRepo,
-		logger:      logger,
+		gitProviderFactory: gitProviderFactory,
+		storyRepo:          storyRepo,
+		logger:             logger,
 	}
 }
 
@@ -39,6 +39,11 @@ func (a *GitBranchAction) Name() string { return "git_branch" }
 // the story title, and calls GitProvider.CreateBranch. On success, the rendered
 // branch name is stored in runCtx.Metadata["branch_name"].
 func (a *GitBranchAction) Execute(ctx context.Context, runCtx *model.RunContext) error {
+	gitProvider, err := a.gitProviderFactory.ForProjectID(ctx, runCtx.ProjectID)
+	if err != nil {
+		return fmt.Errorf("resolve git provider: %w", err)
+	}
+
 	cfg := runCtx.RunStep.Config
 	if cfg == nil {
 		cfg = make(map[string]string)
@@ -78,7 +83,7 @@ func (a *GitBranchAction) Execute(ctx context.Context, runCtx *model.RunContext)
 		"work_dir", workDir,
 	)
 
-	if err := a.gitProvider.CreateBranch(ctx, workDir, branchName); err != nil {
+	if err := gitProvider.CreateBranch(ctx, workDir, branchName); err != nil {
 		return fmt.Errorf("create branch %q: %w", branchName, err)
 	}
 
