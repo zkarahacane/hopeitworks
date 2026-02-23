@@ -29,6 +29,7 @@ type mockCostRepo struct {
 	listDailyCostsByProjectFn          func(ctx context.Context, projectID uuid.UUID, since time.Time) ([]model.CostDataPoint, error)
 	listCostsByProjectByRunPaginatedFn func(ctx context.Context, projectID uuid.UUID, since time.Time, limit, offset int32) ([]model.RunCostRow, error)
 	countCostsByProjectByRunFn         func(ctx context.Context, projectID uuid.UUID, since time.Time) (int64, error)
+	listByProjectByAgentFn             func(ctx context.Context, projectID uuid.UUID) ([]model.AgentCostBreakdown, error)
 
 	insertCalls []model.CostRecord
 }
@@ -119,7 +120,10 @@ func (m *mockCostRepo) CountCostsByProjectByRun(ctx context.Context, projectID u
 	return 0, nil
 }
 
-func (m *mockCostRepo) ListByProjectByAgent(_ context.Context, _ uuid.UUID) ([]model.AgentCostBreakdown, error) {
+func (m *mockCostRepo) ListByProjectByAgent(ctx context.Context, projectID uuid.UUID) ([]model.AgentCostBreakdown, error) {
+	if m.listByProjectByAgentFn != nil {
+		return m.listByProjectByAgentFn(ctx, projectID)
+	}
 	return []model.AgentCostBreakdown{}, nil
 }
 
@@ -641,6 +645,73 @@ func TestGetProjectCostRuns_PaginationDefaults(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, int64(0), total)
 	assert.Empty(t, rows)
+}
+
+// --- GetProjectCostsByAgent tests ---
+
+func TestGetProjectCostsByAgent_Success(t *testing.T) {
+	projectID := uuid.New()
+	agentID := uuid.New()
+	projectRepo := &mockProjectRepoForCost{
+		project: &model.Project{ID: projectID, Name: "test"},
+	}
+	costRepo := &mockCostRepo{
+		listByProjectByAgentFn: func(_ context.Context, _ uuid.UUID) ([]model.AgentCostBreakdown, error) {
+			return []model.AgentCostBreakdown{
+				{AgentID: agentID, AgentName: "dev-story", TokensInput: 500000, TokensOutput: 100000, CostUSD: 12.50, RunsCount: 3},
+			}, nil
+		},
+	}
+	svc := newTestCostService(costRepo, projectRepo, nil, nil)
+
+	result, err := svc.GetProjectCostsByAgent(context.Background(), projectID)
+	require.NoError(t, err)
+	require.Len(t, result, 1)
+	assert.Equal(t, agentID, result[0].AgentID)
+	assert.Equal(t, "dev-story", result[0].AgentName)
+	assert.Equal(t, int64(500000), result[0].TokensInput)
+	assert.Equal(t, int64(100000), result[0].TokensOutput)
+	assert.InDelta(t, 12.50, result[0].CostUSD, 0.001)
+	assert.Equal(t, int32(3), result[0].RunsCount)
+}
+
+func TestGetProjectCostsByAgent_EmptyResults(t *testing.T) {
+	projectID := uuid.New()
+	projectRepo := &mockProjectRepoForCost{
+		project: &model.Project{ID: projectID, Name: "test"},
+	}
+	svc := newTestCostService(&mockCostRepo{}, projectRepo, nil, nil)
+
+	result, err := svc.GetProjectCostsByAgent(context.Background(), projectID)
+	require.NoError(t, err)
+	assert.Empty(t, result)
+}
+
+func TestGetProjectCostsByAgent_ProjectNotFound(t *testing.T) {
+	projectRepo := &mockProjectRepoForCost{err: errors.NewNotFound("project", uuid.New())}
+	svc := newTestCostService(&mockCostRepo{}, projectRepo, nil, nil)
+
+	_, err := svc.GetProjectCostsByAgent(context.Background(), uuid.New())
+	assert.Error(t, err)
+	domErr, ok := err.(*errors.DomainError)
+	assert.True(t, ok)
+	assert.Equal(t, errors.CategoryNotFound, domErr.Category)
+}
+
+func TestGetProjectCostsByAgent_RepoError(t *testing.T) {
+	projectID := uuid.New()
+	projectRepo := &mockProjectRepoForCost{
+		project: &model.Project{ID: projectID, Name: "test"},
+	}
+	costRepo := &mockCostRepo{
+		listByProjectByAgentFn: func(_ context.Context, _ uuid.UUID) ([]model.AgentCostBreakdown, error) {
+			return nil, errors.NewInternal("db error", nil)
+		},
+	}
+	svc := newTestCostService(costRepo, projectRepo, nil, nil)
+
+	_, err := svc.GetProjectCostsByAgent(context.Background(), projectID)
+	assert.Error(t, err)
 }
 
 // --- parsePeriod tests ---

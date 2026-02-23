@@ -247,6 +247,15 @@ func (s *CostService) GetProjectCostRuns(ctx context.Context, projectID uuid.UUI
 	return rows, total, nil
 }
 
+// GetProjectCostsByAgent returns cost aggregations grouped by agent for a project.
+func (s *CostService) GetProjectCostsByAgent(ctx context.Context, projectID uuid.UUID) ([]model.AgentCostBreakdown, error) {
+	if _, err := s.projectRepo.GetByID(ctx, projectID); err != nil {
+		return nil, err
+	}
+
+	return s.costRepo.ListByProjectByAgent(ctx, projectID)
+}
+
 // GetStoryCosts returns aggregated cost data for a story across all runs.
 func (s *CostService) GetStoryCosts(ctx context.Context, projectID, storyID uuid.UUID) (*model.StoryCostSummary, error) {
 	// Verify story exists and belongs to project
