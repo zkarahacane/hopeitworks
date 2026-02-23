@@ -375,3 +375,33 @@ func (s *Server) GetProjectCostRuns(w http.ResponseWriter, r *http.Request, proj
 func (s *Server) TestNotificationConfig(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, notificationID NotificationIdPath) {
 	s.notifications.TestNotificationConfig(w, r, projectID, notificationID)
 }
+
+// ListPromptTemplates delegates to AgentHandler for backward compatibility.
+// Deprecated: use ListProjectAgents instead.
+func (s *Server) ListPromptTemplates(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, params ListPromptTemplatesParams) {
+	s.agents.ListProjectAgents(w, r, projectID, ListProjectAgentsParams(params))
+}
+
+// CreatePromptTemplate delegates to AgentHandler for backward compatibility.
+// Deprecated: use CreateAgent instead.
+func (s *Server) CreatePromptTemplate(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath) {
+	s.agents.CreateAgent(w, r, projectID)
+}
+
+// GetPromptTemplate delegates to AgentHandler for backward compatibility.
+// Deprecated: use GetAgent instead.
+func (s *Server) GetPromptTemplate(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, templateID TemplateIdPath) {
+	s.agents.GetAgent(w, r, projectID, templateID)
+}
+
+// UpdatePromptTemplate delegates to AgentHandler for backward compatibility.
+// Deprecated: use UpdateAgent instead.
+func (s *Server) UpdatePromptTemplate(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, templateID TemplateIdPath) {
+	s.agents.UpdateAgent(w, r, projectID, templateID)
+}
+
+// DeletePromptTemplate delegates to AgentHandler for backward compatibility.
+// Deprecated: use DeleteAgent instead.
+func (s *Server) DeletePromptTemplate(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, templateID TemplateIdPath) {
+	s.agents.DeleteAgent(w, r, projectID, templateID)
+}
