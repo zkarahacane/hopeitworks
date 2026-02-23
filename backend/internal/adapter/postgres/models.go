@@ -80,6 +80,7 @@ type CostRecord struct {
 	CostUsd      pgtype.Numeric `json:"cost_usd"`
 	Model        string         `json:"model"`
 	CreatedAt    time.Time      `json:"created_at"`
+	AgentID      pgtype.UUID    `json:"agent_id"`
 }
 
 type Epic struct {

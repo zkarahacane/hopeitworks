@@ -392,6 +392,9 @@ func (m *mockCostRepo) ListCostsByProjectByRunPaginated(_ context.Context, _ uui
 func (m *mockCostRepo) CountCostsByProjectByRun(_ context.Context, _ uuid.UUID, _ time.Time) (int64, error) {
 	return 0, nil
 }
+func (m *mockCostRepo) ListByProjectByAgent(_ context.Context, _ uuid.UUID) ([]model.AgentCostBreakdown, error) {
+	return nil, nil
+}
 
 type agentRunFixture struct {
 	projectID uuid.UUID

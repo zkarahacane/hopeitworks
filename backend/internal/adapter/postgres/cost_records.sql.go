@@ -33,7 +33,7 @@ func (q *Queries) CountCostsByProjectByRun(ctx context.Context, arg CountCostsBy
 }
 
 const getCostByRunStep = `-- name: GetCostByRunStep :one
-SELECT id, run_step_id, project_id, tokens_input, tokens_output, cost_usd, model, created_at FROM cost_records WHERE run_step_id = $1 LIMIT 1
+SELECT id, run_step_id, project_id, tokens_input, tokens_output, cost_usd, model, created_at, agent_id FROM cost_records WHERE run_step_id = $1 LIMIT 1
 `
 
 func (q *Queries) GetCostByRunStep(ctx context.Context, runStepID uuid.UUID) (CostRecord, error) {
@@ -48,14 +48,15 @@ func (q *Queries) GetCostByRunStep(ctx context.Context, runStepID uuid.UUID) (Co
 		&i.CostUsd,
 		&i.Model,
 		&i.CreatedAt,
+		&i.AgentID,
 	)
 	return i, err
 }
 
 const insertCostRecord = `-- name: InsertCostRecord :one
-INSERT INTO cost_records (run_step_id, project_id, tokens_input, tokens_output, cost_usd, model)
-VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, run_step_id, project_id, tokens_input, tokens_output, cost_usd, model, created_at
+INSERT INTO cost_records (run_step_id, project_id, tokens_input, tokens_output, cost_usd, model, agent_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id, run_step_id, project_id, tokens_input, tokens_output, cost_usd, model, created_at, agent_id
 `
 
 type InsertCostRecordParams struct {
@@ -65,6 +66,7 @@ type InsertCostRecordParams struct {
 	TokensOutput int64          `json:"tokens_output"`
 	CostUsd      pgtype.Numeric `json:"cost_usd"`
 	Model        string         `json:"model"`
+	AgentID      pgtype.UUID    `json:"agent_id"`
 }
 
 func (q *Queries) InsertCostRecord(ctx context.Context, arg InsertCostRecordParams) (CostRecord, error) {
@@ -75,6 +77,7 @@ func (q *Queries) InsertCostRecord(ctx context.Context, arg InsertCostRecordPara
 		arg.TokensOutput,
 		arg.CostUsd,
 		arg.Model,
+		arg.AgentID,
 	)
 	var i CostRecord
 	err := row.Scan(
@@ -86,8 +89,63 @@ func (q *Queries) InsertCostRecord(ctx context.Context, arg InsertCostRecordPara
 		&i.CostUsd,
 		&i.Model,
 		&i.CreatedAt,
+		&i.AgentID,
 	)
 	return i, err
+}
+
+const listCostsByProjectByAgent = `-- name: ListCostsByProjectByAgent :many
+SELECT
+  cr.agent_id,
+  COALESCE(a.name, 'Unknown') AS agent_name,
+  SUM(cr.tokens_input)::bigint AS tokens_input,
+  SUM(cr.tokens_output)::bigint AS tokens_output,
+  SUM(cr.cost_usd)::DECIMAL(10,6) AS cost_usd,
+  COUNT(DISTINCT rs.run_id)::int AS runs_count
+FROM cost_records cr
+LEFT JOIN agents a ON a.id = cr.agent_id
+JOIN run_steps rs ON rs.id = cr.run_step_id
+JOIN runs r ON r.id = rs.run_id
+WHERE r.project_id = $1
+  AND cr.agent_id IS NOT NULL
+GROUP BY cr.agent_id, a.name
+ORDER BY cost_usd DESC
+`
+
+type ListCostsByProjectByAgentRow struct {
+	AgentID      pgtype.UUID    `json:"agent_id"`
+	AgentName    string         `json:"agent_name"`
+	TokensInput  int64          `json:"tokens_input"`
+	TokensOutput int64          `json:"tokens_output"`
+	CostUsd      pgtype.Numeric `json:"cost_usd"`
+	RunsCount    int32          `json:"runs_count"`
+}
+
+func (q *Queries) ListCostsByProjectByAgent(ctx context.Context, projectID uuid.UUID) ([]ListCostsByProjectByAgentRow, error) {
+	rows, err := q.db.Query(ctx, listCostsByProjectByAgent, projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCostsByProjectByAgentRow{}
+	for rows.Next() {
+		var i ListCostsByProjectByAgentRow
+		if err := rows.Scan(
+			&i.AgentID,
+			&i.AgentName,
+			&i.TokensInput,
+			&i.TokensOutput,
+			&i.CostUsd,
+			&i.RunsCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listCostsByProjectByModel = `-- name: ListCostsByProjectByModel :many

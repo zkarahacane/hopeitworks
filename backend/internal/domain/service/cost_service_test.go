@@ -119,6 +119,10 @@ func (m *mockCostRepo) CountCostsByProjectByRun(ctx context.Context, projectID u
 	return 0, nil
 }
 
+func (m *mockCostRepo) ListByProjectByAgent(_ context.Context, _ uuid.UUID) ([]model.AgentCostBreakdown, error) {
+	return []model.AgentCostBreakdown{}, nil
+}
+
 type mockProjectRepoForCost struct {
 	project *model.Project
 	err     error
