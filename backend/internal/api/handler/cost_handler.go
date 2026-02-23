@@ -163,6 +163,29 @@ func (h *CostHandler) GetProjectCostRuns(w http.ResponseWriter, r *http.Request,
 	writeJSON(w, http.StatusOK, resp)
 }
 
+// GetProjectCostsByAgent handles GET /projects/{projectId}/costs/agents.
+func (h *CostHandler) GetProjectCostsByAgent(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath) {
+	breakdowns, err := h.service.GetProjectCostsByAgent(r.Context(), projectID)
+	if err != nil {
+		writeErrorResponse(w, err)
+		return
+	}
+
+	resp := make([]AgentCostBreakdown, len(breakdowns))
+	for i, b := range breakdowns {
+		resp[i] = AgentCostBreakdown{
+			AgentId:      b.AgentID,
+			AgentName:    b.AgentName,
+			TokensInput:  b.TokensInput,
+			TokensOutput: b.TokensOutput,
+			CostUsd:      b.CostUSD,
+			RunsCount:    b.RunsCount,
+		}
+	}
+
+	writeJSON(w, http.StatusOK, resp)
+}
+
 // GetStoryCosts handles GET /projects/{projectId}/stories/{storyId}/costs.
 func (h *CostHandler) GetStoryCosts(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, storyID StoryIdPath) {
 	summary, err := h.service.GetStoryCosts(r.Context(), projectID, storyID)
