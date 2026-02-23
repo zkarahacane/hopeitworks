@@ -6,6 +6,7 @@ import { getApiErrorMessage } from '@/utils/apiError'
 
 export type PipelineConfig = components['schemas']['PipelineConfig']
 export type PipelineStep = components['schemas']['PipelineStep']
+export type PipelineGroup = components['schemas']['PipelineGroup']
 export type RetryPolicy = components['schemas']['RetryPolicy']
 
 /**
@@ -19,7 +20,12 @@ export const usePipelineConfigStore = defineStore('pipelineConfig', () => {
   const isDirty = ref(false)
   const isSaving = ref(false)
 
-  const steps = computed(() => config.value?.steps ?? [])
+  const groups = computed(() => config.value?.groups ?? [])
+
+  /** Flattened steps across all groups for backward-compatible views */
+  const steps = computed(() =>
+    groups.value.flatMap((g) => g.steps),
+  )
 
   /** Fetch pipeline configuration from the API */
   async function fetchConfig(projectId: string) {
@@ -46,49 +52,81 @@ export const usePipelineConfigStore = defineStore('pipelineConfig', () => {
     }
   }
 
-  /** Update the local config steps (marks as dirty) */
-  function updateSteps(newSteps: PipelineStep[]) {
+  /** Update the local config groups (marks as dirty) */
+  function updateGroups(newGroups: PipelineGroup[]) {
     if (config.value) {
-      config.value = { ...config.value, steps: newSteps }
+      config.value = { ...config.value, groups: newGroups }
       isDirty.value = true
     }
   }
 
-  /** Add a step to the local config */
+  /** Add a step to the first group (or creates a default group if none exist) */
   function addStep(step: PipelineStep) {
-    if (config.value) {
-      config.value = { ...config.value, steps: [...config.value.steps, step] }
-      isDirty.value = true
-    }
-  }
-
-  /** Remove a step by index */
-  function removeStep(index: number) {
-    if (config.value) {
-      const newSteps = config.value.steps.filter((_, i) => i !== index)
-      config.value = { ...config.value, steps: newSteps }
-      isDirty.value = true
-    }
-  }
-
-  /** Reorder steps by swapping fromIndex and toIndex */
-  function reorderSteps(fromIndex: number, toIndex: number) {
     if (!config.value) return
-    const newSteps = [...config.value.steps]
-    const removed = newSteps.splice(fromIndex, 1)
-    const movedStep = removed[0]
-    if (!movedStep) return
-    newSteps.splice(toIndex, 0, movedStep)
-    config.value = { ...config.value, steps: newSteps }
+    const currentGroups = [...config.value.groups]
+    if (currentGroups.length === 0) {
+      currentGroups.push({ id: 'default', name: 'Default', steps: [] })
+    }
+    const lastGroup = currentGroups[currentGroups.length - 1]!
+    currentGroups[currentGroups.length - 1] = {
+      ...lastGroup,
+      steps: [...lastGroup.steps, step],
+    }
+    config.value = { ...config.value, groups: currentGroups }
     isDirty.value = true
   }
 
-  /** Update a single step at the given index */
+  /** Remove a step by flat index across all groups */
+  function removeStep(index: number) {
+    if (!config.value) return
+    let remaining = index
+    const newGroups = config.value.groups.map((g) => {
+      if (remaining >= g.steps.length) {
+        remaining -= g.steps.length
+        return g
+      }
+      const newSteps = g.steps.filter((_: PipelineStep, i: number) => i !== remaining)
+      remaining = -1
+      return { ...g, steps: newSteps }
+    })
+    config.value = { ...config.value, groups: newGroups }
+    isDirty.value = true
+  }
+
+  /** Reorder steps within the flat step list */
+  function reorderSteps(fromIndex: number, toIndex: number) {
+    if (!config.value) return
+    const allSteps = groups.value.flatMap((g) => g.steps)
+    const removed = allSteps.splice(fromIndex, 1)
+    const movedStep = removed[0]
+    if (!movedStep) return
+    allSteps.splice(toIndex, 0, movedStep)
+    // Re-distribute steps into existing groups proportionally
+    let offset = 0
+    const newGroups = config.value.groups.map((g) => {
+      const groupSteps = allSteps.slice(offset, offset + g.steps.length)
+      offset += g.steps.length
+      return { ...g, steps: groupSteps }
+    })
+    config.value = { ...config.value, groups: newGroups }
+    isDirty.value = true
+  }
+
+  /** Update a single step at the given flat index */
   function updateStep(index: number, step: PipelineStep) {
     if (!config.value) return
-    const newSteps = [...config.value.steps]
-    newSteps[index] = step
-    config.value = { ...config.value, steps: newSteps }
+    let remaining = index
+    const newGroups = config.value.groups.map((g) => {
+      if (remaining >= g.steps.length) {
+        remaining -= g.steps.length
+        return g
+      }
+      const newSteps = [...g.steps]
+      newSteps[remaining] = step
+      remaining = -1
+      return { ...g, steps: newSteps }
+    })
+    config.value = { ...config.value, groups: newGroups }
     isDirty.value = true
   }
 
@@ -102,7 +140,7 @@ export const usePipelineConfigStore = defineStore('pipelineConfig', () => {
         '/projects/{projectId}/pipeline',
         {
           params: { path: { projectId } },
-          body: { steps: config.value.steps },
+          body: { groups: config.value.groups },
         },
       )
       if (apiError) {
@@ -131,13 +169,14 @@ export const usePipelineConfigStore = defineStore('pipelineConfig', () => {
 
   return {
     config,
+    groups,
     steps,
     isLoading,
     error,
     isDirty,
     isSaving,
     fetchConfig,
-    updateSteps,
+    updateGroups,
     addStep,
     removeStep,
     reorderSteps,

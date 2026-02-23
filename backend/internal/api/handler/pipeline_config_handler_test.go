@@ -57,33 +57,42 @@ func setupPipelineConfigHandler() (*PipelineConfigHandler, *mockPipelineConfigRe
 	return h, repo
 }
 
-// validStepsYAML returns a YAML string using the new step format (action_type).
-func validStepsYAML() string {
-	return "steps:\n" +
-		"  - id: 880e8400-e29b-41d4-a716-446655440001\n" +
-		"    name: implement\n" +
-		"    action_type: implement\n" +
-		"    model: claude-opus-4-6\n" +
-		"    auto_approve: false\n" +
-		"    retry_policy:\n" +
-		"      max_retries: 2\n" +
-		"      retry_type: on-failure\n"
+// validGroupsYAML returns a YAML string using the groups-based config format.
+func validGroupsYAML() string {
+	return "groups:\n" +
+		"  - id: setup\n" +
+		"    name: Setup\n" +
+		"    steps:\n" +
+		"      - id: 880e8400-e29b-41d4-a716-446655440001\n" +
+		"        name: branch\n" +
+		"        action_type: git_branch\n" +
+		"        model: claude-opus-4-6\n" +
+		"        auto_approve: false\n" +
+		"        retry_policy:\n" +
+		"          max_retries: 2\n" +
+		"          retry_type: on-failure\n"
 }
 
-// validStepsRequest returns a valid UpdatePipelineConfigRequest using the new API shape.
-func validStepsRequest() UpdatePipelineConfigRequest {
+// validGroupsRequest returns a valid UpdatePipelineConfigRequest using the groups-based API shape.
+func validGroupsRequest() UpdatePipelineConfigRequest {
 	stepID := uuid.MustParse("880e8400-e29b-41d4-a716-446655440001")
 	return UpdatePipelineConfigRequest{
-		Steps: []PipelineStep{
+		Groups: []PipelineGroup{
 			{
-				Id:          stepID,
-				Name:        "implement",
-				ActionType:  PipelineStepActionTypeImplement,
-				Model:       ClaudeOpus46,
-				AutoApprove: false,
-				RetryPolicy: RetryPolicy{
-					MaxRetries: 2,
-					RetryType:  OnFailure,
+				Id:   "setup",
+				Name: "Setup",
+				Steps: []PipelineStep{
+					{
+						Id:          stepID,
+						Name:        "branch",
+						ActionType:  GitBranch,
+						Model:       ClaudeOpus46,
+						AutoApprove: false,
+						RetryPolicy: RetryPolicy{
+							MaxRetries: 2,
+							RetryType:  OnFailure,
+						},
+					},
 				},
 			},
 		},
@@ -97,7 +106,7 @@ func TestGetPipelineConfig_Found(t *testing.T) {
 	repo.configs[projectID] = &model.PipelineConfig{
 		ID:         uuid.New(),
 		ProjectID:  projectID,
-		ConfigYAML: validStepsYAML(),
+		ConfigYAML: validGroupsYAML(),
 		Version:    1,
 	}
 
@@ -119,8 +128,11 @@ func TestGetPipelineConfig_Found(t *testing.T) {
 	if resp.ProjectId != projectID {
 		t.Errorf("expected project_id %v, got %v", projectID, resp.ProjectId)
 	}
-	if len(resp.Steps) != 1 {
-		t.Errorf("expected 1 step, got %d", len(resp.Steps))
+	if len(resp.Groups) != 1 {
+		t.Errorf("expected 1 group, got %d", len(resp.Groups))
+	}
+	if len(resp.Groups[0].Steps) != 1 {
+		t.Errorf("expected 1 step in group, got %d", len(resp.Groups[0].Steps))
 	}
 }
 
@@ -147,7 +159,7 @@ func TestGetPipelineConfig_NonAdminCanRead(t *testing.T) {
 	repo.configs[projectID] = &model.PipelineConfig{
 		ID:         uuid.New(),
 		ProjectID:  projectID,
-		ConfigYAML: validStepsYAML(),
+		ConfigYAML: validGroupsYAML(),
 		Version:    1,
 	}
 
@@ -167,7 +179,7 @@ func TestUpdatePipelineConfig_AdminOnly(t *testing.T) {
 	h, _ := setupPipelineConfigHandler()
 	projectID := uuid.New()
 
-	validBody, _ := json.Marshal(validStepsRequest())
+	validBody, _ := json.Marshal(validGroupsRequest())
 
 	tests := []struct {
 		name       string
@@ -242,11 +254,11 @@ func TestUpdatePipelineConfig_RoundTrip(t *testing.T) {
 	repo.configs[projectID] = &model.PipelineConfig{
 		ID:         uuid.New(),
 		ProjectID:  projectID,
-		ConfigYAML: validStepsYAML(),
+		ConfigYAML: validGroupsYAML(),
 		Version:    1,
 	}
 
-	body, _ := json.Marshal(validStepsRequest())
+	body, _ := json.Marshal(validGroupsRequest())
 	req := httptest.NewRequest(http.MethodPut, "/api/v1/projects/"+projectID.String()+"/pipeline",
 		bytes.NewBuffer(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -267,10 +279,10 @@ func TestUpdatePipelineConfig_RoundTrip(t *testing.T) {
 	if resp.ProjectId != projectID {
 		t.Errorf("expected project_id %v, got %v", projectID, resp.ProjectId)
 	}
-	if len(resp.Steps) != 1 {
-		t.Errorf("expected 1 step in response, got %d", len(resp.Steps))
+	if len(resp.Groups) != 1 {
+		t.Errorf("expected 1 group in response, got %d", len(resp.Groups))
 	}
-	if resp.Steps[0].ActionType != PipelineStepActionTypeImplement {
-		t.Errorf("expected action_type 'implement', got %s", resp.Steps[0].ActionType)
+	if resp.Groups[0].Steps[0].ActionType != GitBranch {
+		t.Errorf("expected action_type 'git_branch', got %s", resp.Groups[0].Steps[0].ActionType)
 	}
 }

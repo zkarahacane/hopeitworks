@@ -13,32 +13,49 @@ import (
 )
 
 // DefaultPipelineConfigYAML is the default pipeline configuration seeded on project creation.
-// Uses the action_type enum values matching the OpenAPI spec.
-const DefaultPipelineConfigYAML = `steps:
-  - id: 880e8400-e29b-41d4-a716-446655440001
-    name: implement
-    action_type: implement
-    model: claude-opus-4-6
-    auto_approve: false
-    retry_policy:
-      max_retries: 3
-      retry_type: on-failure
-  - id: 880e8400-e29b-41d4-a716-446655440002
-    name: review
-    action_type: review
-    model: claude-sonnet-4-6
-    auto_approve: false
-    retry_policy:
-      max_retries: 2
-      retry_type: on-failure
-  - id: 880e8400-e29b-41d4-a716-446655440003
-    name: merge
-    action_type: merge
-    model: claude-sonnet-4-6
-    auto_approve: true
-    retry_policy:
-      max_retries: 1
-      retry_type: on-failure
+// Uses the groups-based format with action_type enum values matching the OpenAPI spec.
+const DefaultPipelineConfigYAML = `groups:
+  - id: setup
+    name: Setup
+    steps:
+      - id: 880e8400-e29b-41d4-a716-446655440001
+        name: branch
+        action_type: git_branch
+        model: claude-sonnet-4-6
+        auto_approve: true
+        retry_policy:
+          max_retries: 1
+          retry_type: on-failure
+  - id: development
+    name: Development
+    steps:
+      - id: 880e8400-e29b-41d4-a716-446655440002
+        name: implement
+        action_type: agent_run
+        model: claude-opus-4-6
+        auto_approve: false
+        retry_policy:
+          max_retries: 3
+          retry_type: on-failure
+      - id: 880e8400-e29b-41d4-a716-446655440003
+        name: review
+        action_type: agent_run
+        model: claude-sonnet-4-6
+        auto_approve: false
+        retry_policy:
+          max_retries: 2
+          retry_type: on-failure
+  - id: finalize
+    name: Finalize
+    steps:
+      - id: 880e8400-e29b-41d4-a716-446655440004
+        name: merge
+        action_type: git_pr
+        model: claude-sonnet-4-6
+        auto_approve: true
+        retry_policy:
+          max_retries: 1
+          retry_type: on-failure
 `
 
 // PipelineConfigService provides business logic for pipeline config operations.
@@ -93,7 +110,8 @@ func validatePipelineConfigYAML(configYAML string) error {
 		}
 	}
 
-	if len(parsed.Steps) == 0 {
+	steps := parsed.FlatSteps()
+	if len(steps) == 0 {
 		return &errors.DomainError{
 			Category: errors.CategoryValidation,
 			Code:     "INVALID_PIPELINE_CONFIG",
@@ -101,7 +119,7 @@ func validatePipelineConfigYAML(configYAML string) error {
 		}
 	}
 
-	for _, step := range parsed.Steps {
+	for _, step := range steps {
 		if step.Name == "" {
 			return &errors.DomainError{
 				Category: errors.CategoryValidation,

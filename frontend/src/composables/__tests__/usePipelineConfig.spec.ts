@@ -19,7 +19,7 @@ function makeStep(overrides: Partial<PipelineStep> = {}): PipelineStep {
   return {
     id: crypto.randomUUID(),
     name: 'implement',
-    action_type: 'implement',
+    action_type: 'agent_run',
     model: 'claude-opus-4-6',
     auto_approve: false,
     retry_policy: { max_retries: 2, retry_type: 'on-failure' },
@@ -29,9 +29,15 @@ function makeStep(overrides: Partial<PipelineStep> = {}): PipelineStep {
 
 const mockConfig = {
   project_id: 'proj-1',
-  steps: [
-    makeStep({ id: 's1', name: 'implement' }),
-    makeStep({ id: 's2', name: 'review', action_type: 'review' }),
+  groups: [
+    {
+      id: 'dev',
+      name: 'Development',
+      steps: [
+        makeStep({ id: 's1', name: 'implement' }),
+        makeStep({ id: 's2', name: 'review', action_type: 'agent_run' }),
+      ],
+    },
   ],
   updated_at: '2026-02-15T10:30:00Z',
 }
@@ -110,13 +116,13 @@ describe('usePipelineConfig', () => {
     await nextTick()
     await composableResult!.retry()
 
-    composableResult!.addStep(makeStep({ id: 's3', name: 'test' }))
+    composableResult!.addStep(makeStep({ id: 's3', name: 'ci-check' }))
     const result = await composableResult!.saveConfig()
 
     expect(result).toBe(true)
     expect(mockPut).toHaveBeenCalledWith('/projects/{projectId}/pipeline', {
       params: { path: { projectId: 'proj-1' } },
-      body: { steps: expect.any(Array) },
+      body: { groups: expect.any(Array) },
     })
   })
 
@@ -137,7 +143,7 @@ describe('usePipelineConfig', () => {
     await nextTick()
     await composableResult!.retry()
 
-    const newStep = makeStep({ id: 's3', name: 'test' })
+    const newStep = makeStep({ id: 's3', name: 'ci-check' })
     composableResult!.addStep(newStep)
 
     expect(composableResult!.steps.value).toHaveLength(3)

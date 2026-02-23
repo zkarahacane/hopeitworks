@@ -16,7 +16,7 @@ function makeStep(overrides: Partial<PipelineStep> = {}): PipelineStep {
   return {
     id: crypto.randomUUID(),
     name: 'implement',
-    action_type: 'implement',
+    action_type: 'agent_run',
     model: 'claude-opus-4-6',
     auto_approve: false,
     retry_policy: { max_retries: 2, retry_type: 'on-failure' },
@@ -26,10 +26,16 @@ function makeStep(overrides: Partial<PipelineStep> = {}): PipelineStep {
 
 const mockConfig = {
   project_id: 'proj-1',
-  steps: [
-    makeStep({ id: 's1', name: 'implement', action_type: 'implement' }),
-    makeStep({ id: 's2', name: 'review', action_type: 'review' }),
-    makeStep({ id: 's3', name: 'merge', action_type: 'merge' }),
+  groups: [
+    {
+      id: 'dev',
+      name: 'Development',
+      steps: [
+        makeStep({ id: 's1', name: 'implement', action_type: 'agent_run' }),
+        makeStep({ id: 's2', name: 'review', action_type: 'agent_run' }),
+        makeStep({ id: 's3', name: 'merge', action_type: 'git_pr' }),
+      ],
+    },
   ],
   updated_at: '2026-02-15T10:30:00Z',
 }
@@ -45,6 +51,7 @@ describe('usePipelineConfigStore', () => {
     const store = usePipelineConfigStore()
     expect(store.config).toBeNull()
     expect(store.steps).toEqual([])
+    expect(store.groups).toEqual([])
     expect(store.isLoading).toBe(false)
     expect(store.error).toBeNull()
     expect(store.isDirty).toBe(false)
@@ -60,6 +67,7 @@ describe('usePipelineConfigStore', () => {
 
       expect(store.config).toEqual(mockConfig)
       expect(store.steps).toHaveLength(3)
+      expect(store.groups).toHaveLength(1)
       expect(store.isLoading).toBe(false)
       expect(store.error).toBeNull()
       expect(store.isDirty).toBe(false)
@@ -115,7 +123,7 @@ describe('usePipelineConfigStore', () => {
       const store = usePipelineConfigStore()
       await store.fetchConfig('proj-1')
 
-      const newStep = makeStep({ id: 's4', name: 'test', action_type: 'test' })
+      const newStep = makeStep({ id: 's4', name: 'ci-check', action_type: 'ci_poll' })
       store.addStep(newStep)
 
       expect(store.steps).toHaveLength(4)
@@ -159,13 +167,14 @@ describe('usePipelineConfigStore', () => {
       expect(store.isDirty).toBe(true)
     })
 
-    it('updateSteps replaces all steps and marks dirty', async () => {
+    it('updateGroups replaces all groups and marks dirty', async () => {
       const store = usePipelineConfigStore()
       await store.fetchConfig('proj-1')
 
-      const newSteps = [makeStep({ id: 'new1', name: 'only-step' })]
-      store.updateSteps(newSteps)
+      const newGroups = [{ id: 'new', name: 'New Group', steps: [makeStep({ id: 'new1', name: 'only-step' })] }]
+      store.updateGroups(newGroups)
 
+      expect(store.groups).toHaveLength(1)
       expect(store.steps).toHaveLength(1)
       expect(store.steps[0]!.id).toBe('new1')
       expect(store.isDirty).toBe(true)
@@ -177,7 +186,7 @@ describe('usePipelineConfigStore', () => {
       store.removeStep(0)
       store.reorderSteps(0, 1)
       store.updateStep(0, makeStep())
-      store.updateSteps([makeStep()])
+      store.updateGroups([])
       expect(store.config).toBeNull()
       expect(store.isDirty).toBe(false)
     })
@@ -189,10 +198,10 @@ describe('usePipelineConfigStore', () => {
 
       const store = usePipelineConfigStore()
       await store.fetchConfig('proj-1')
-      store.addStep(makeStep({ id: 's4', name: 'test' }))
+      store.addStep(makeStep({ id: 's4', name: 'ci-check' }))
       expect(store.isDirty).toBe(true)
 
-      const updatedConfig = { ...mockConfig, steps: store.steps }
+      const updatedConfig = { ...mockConfig, groups: store.groups }
       mockPut.mockResolvedValue({ data: updatedConfig, error: undefined })
 
       const result = await store.saveConfig('proj-1')
@@ -203,7 +212,7 @@ describe('usePipelineConfigStore', () => {
       expect(store.error).toBeNull()
       expect(mockPut).toHaveBeenCalledWith('/projects/{projectId}/pipeline', {
         params: { path: { projectId: 'proj-1' } },
-        body: { steps: expect.any(Array) },
+        body: { groups: expect.any(Array) },
       })
     })
 
@@ -260,6 +269,7 @@ describe('usePipelineConfigStore', () => {
 
       expect(store.config).toBeNull()
       expect(store.steps).toEqual([])
+      expect(store.groups).toEqual([])
       expect(store.isLoading).toBe(false)
       expect(store.error).toBeNull()
       expect(store.isDirty).toBe(false)
