@@ -14,7 +14,7 @@ import RunLogViewer from '@/features/runs/RunLogViewer.vue'
 import RunTimeline from '@/features/runs/RunTimeline.vue'
 import RunCancelConfirmDialog from '@/features/runs/RunCancelConfirmDialog.vue'
 import { runStatusSeverity } from '@/utils/runStatus'
-import { formatCostUSD } from '@/utils/formatCost'
+import { formatCostUSD, formatTokenCount } from '@/utils/formatCost'
 
 const route = useRoute()
 const runId = computed(() => route.params.id as string)
@@ -140,6 +140,11 @@ const progress = computed(() => {
           data-testid="run-total-cost"
         >
           {{ totalCostDisplay }}
+          <template v-if="costDetail.value?.total_tokens_input !== undefined || costDetail.value?.total_tokens_output !== undefined">
+            <span class="mx-1 text-surface-400">|</span>
+            <span class="text-surface-500">In: {{ formatTokenCount(costDetail.value?.total_tokens_input ?? 0) }}</span>
+            <span class="ml-1 text-surface-500">Out: {{ formatTokenCount(costDetail.value?.total_tokens_output ?? 0) }}</span>
+          </template>
         </span>
         <Button
           v-if="canPause"
@@ -197,6 +202,33 @@ const progress = computed(() => {
           :retry-loading="runsStore.isRetrying"
           @retry-step="handleRetryStep"
         />
+      </div>
+
+      <!-- Step Cost Breakdown -->
+      <div v-if="costDetail.value?.steps && costDetail.value.steps.length > 0">
+        <h2 class="text-lg font-semibold mb-3">Step Costs</h2>
+        <div class="rounded-lg border border-surface-200 bg-surface-0 overflow-hidden">
+          <table class="w-full text-sm">
+            <thead class="bg-surface-50 text-surface-600">
+              <tr>
+                <th class="px-4 py-2 text-left font-medium">Step</th>
+                <th class="px-4 py-2 text-left font-medium">Model</th>
+                <th class="px-4 py-2 text-right font-medium">Tokens In</th>
+                <th class="px-4 py-2 text-right font-medium">Tokens Out</th>
+                <th class="px-4 py-2 text-right font-medium">Cost</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-surface-100">
+              <tr v-for="step in costDetail.value.steps" :key="step.step_id">
+                <td class="px-4 py-2 font-medium">{{ step.step_name }}</td>
+                <td class="px-4 py-2 text-surface-500">{{ step.model }}</td>
+                <td class="px-4 py-2 text-right">{{ formatTokenCount(step.tokens_input) }}</td>
+                <td class="px-4 py-2 text-right">{{ formatTokenCount(step.tokens_output) }}</td>
+                <td class="px-4 py-2 text-right">{{ formatCostUSD(step.cost_usd) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <!-- Live Log Viewer -->

@@ -3169,6 +3169,16 @@ components:
           type: number
           format: double
           example: 3.4567
+        total_tokens_input:
+          type: integer
+          format: int64
+          description: Total input tokens consumed in the period
+          example: 500000
+        total_tokens_output:
+          type: integer
+          format: int64
+          description: Total output tokens consumed in the period
+          example: 80000
         avg_cost_per_story_usd:
           type: number
           format: double
@@ -3227,6 +3237,16 @@ components:
           type: number
           format: double
           example: 0.01234
+        tokens_input:
+          type: integer
+          format: int64
+          description: Total input tokens for this run
+          example: 100000
+        tokens_output:
+          type: integer
+          format: int64
+          description: Total output tokens for this run
+          example: 20000
 
     RunCostBreakdown:
       type: object
@@ -3321,6 +3341,16 @@ components:
           type: number
           format: double
           example: 3.15
+        total_tokens_input:
+          type: integer
+          format: int64
+          description: Total input tokens across all steps
+          example: 300000
+        total_tokens_output:
+          type: integer
+          format: int64
+          description: Total output tokens across all steps
+          example: 50000
         steps:
           type: array
           items:

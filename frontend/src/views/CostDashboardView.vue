@@ -66,6 +66,8 @@ function budgetPercent(total: number, limit: number): number {
         <CostSummaryCard
           label="Total cost this week"
           :value="summary ? formatCostUSD(summary.total_cost_week_usd ?? 0) : '$0.00'"
+          :tokens-input="summary?.total_tokens_input"
+          :tokens-output="summary?.total_tokens_output"
           :is-loading="isLoading"
           data-testid="card-week"
         />
