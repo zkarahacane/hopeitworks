@@ -1,6 +1,7 @@
 package model
 
 import (
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -52,8 +53,21 @@ var modelPricingMap = map[string]Pricing{
 
 // ComputeCostUSD computes the cost in USD for the given model and token counts.
 // Returns (costUSD, known) where known is false for unrecognized models.
+// Performs an exact match first, then falls back to a prefix match so that
+// versioned model IDs (e.g. "claude-opus-4-6-20251101") resolve to their
+// base pricing entry (e.g. "claude-opus-4-6").
 func ComputeCostUSD(model string, inputTokens, outputTokens int64) (float64, bool) {
 	pricing, ok := modelPricingMap[model]
+	if !ok {
+		// Prefix match: find the longest key that is a prefix of model.
+		for key, p := range modelPricingMap {
+			if strings.HasPrefix(model, key) {
+				pricing = p
+				ok = true
+				break
+			}
+		}
+	}
 	if !ok {
 		return 0, false
 	}

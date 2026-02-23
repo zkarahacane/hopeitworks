@@ -5,6 +5,66 @@ import (
 	"time"
 )
 
+func TestParseNDJSONLineResultEvent(t *testing.T) {
+	const testRunID = "run-123"
+	const testStepID = "step-456"
+
+	t.Run("result event with usage and single model", func(t *testing.T) {
+		line := `{"type":"result","subtype":"success","duration_ms":45231,"total_cost_usd":0.0842,"usage":{"input_tokens":12450,"output_tokens":2310,"cache_creation_input_tokens":0,"cache_read_input_tokens":5800},"modelUsage":{"claude-opus-4-6-20251101":{"inputTokens":10200,"outputTokens":1980,"cacheReadInputTokens":5800,"cacheCreationInputTokens":0,"costUSD":0.0842,"contextWindow":200000}}}`
+		event := parseNDJSONLine(line, testRunID, testStepID)
+		if event == nil {
+			t.Fatal("expected non-nil event, got nil")
+		}
+		if event.Type != eventTypeCost {
+			t.Errorf("expected Type=cost, got %q", event.Type)
+		}
+		if event.InputTokens != 12450 {
+			t.Errorf("expected InputTokens=12450, got %d", event.InputTokens)
+		}
+		if event.OutputTokens != 2310 {
+			t.Errorf("expected OutputTokens=2310, got %d", event.OutputTokens)
+		}
+		if event.Model != "claude-opus-4-6-20251101" {
+			t.Errorf("expected Model=claude-opus-4-6-20251101, got %q", event.Model)
+		}
+	})
+
+	t.Run("result event with multiple models picks highest input tokens", func(t *testing.T) {
+		line := `{"type":"result","subtype":"success","usage":{"input_tokens":5000,"output_tokens":1000},"modelUsage":{"claude-haiku-4-5-20241022":{"inputTokens":800,"outputTokens":200,"costUSD":0.001},"claude-opus-4-6-20251101":{"inputTokens":4200,"outputTokens":800,"costUSD":0.07}}}`
+		event := parseNDJSONLine(line, testRunID, testStepID)
+		if event == nil {
+			t.Fatal("expected non-nil event, got nil")
+		}
+		if event.Type != eventTypeCost {
+			t.Errorf("expected Type=cost, got %q", event.Type)
+		}
+		// Should pick opus as primary model (highest inputTokens=4200 vs haiku 800)
+		if event.Model != "claude-opus-4-6-20251101" {
+			t.Errorf("expected Model=claude-opus-4-6-20251101 (highest tokens), got %q", event.Model)
+		}
+		if event.InputTokens != 5000 {
+			t.Errorf("expected InputTokens=5000 from top-level usage, got %d", event.InputTokens)
+		}
+	})
+
+	t.Run("result event without modelUsage still produces cost event", func(t *testing.T) {
+		line := `{"type":"result","subtype":"success","usage":{"input_tokens":100,"output_tokens":50}}`
+		event := parseNDJSONLine(line, testRunID, testStepID)
+		if event == nil {
+			t.Fatal("expected non-nil event, got nil")
+		}
+		if event.Type != eventTypeCost {
+			t.Errorf("expected Type=cost, got %q", event.Type)
+		}
+		if event.InputTokens != 100 {
+			t.Errorf("expected InputTokens=100, got %d", event.InputTokens)
+		}
+		if event.OutputTokens != 50 {
+			t.Errorf("expected OutputTokens=50, got %d", event.OutputTokens)
+		}
+	})
+}
+
 func TestParseNDJSONLine(t *testing.T) {
 	const testRunID = "run-123"
 	const testStepID = "step-456"
