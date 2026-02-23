@@ -19,8 +19,9 @@ const (
 type HITLRequest struct {
 	ID              uuid.UUID
 	RunStepID       uuid.UUID
-	GateType        string  // default "approval"
+	GateType        string  // "approval" or "human"
 	DiffContent     *string // PR diff fetched from GitProvider; nil if unavailable
+	Message         *string // optional human-readable message for the reviewer
 	Status          HITLStatus
 	ResolvedAt      *time.Time
 	ResolvedBy      *uuid.UUID // user ID who resolved

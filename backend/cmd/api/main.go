@@ -212,6 +212,11 @@ func run() error {
 	actionReg.Register(gitPRAction)
 	logger.Info("git_pr action registered")
 
+	// Human action (no Docker required)
+	humanAction := actionadapter.NewHumanAction(hitlRepo, runRepo, storyRepo, eventRepo, logger)
+	actionReg.Register(humanAction)
+	logger.Info("human action registered")
+
 	// Cost tracking (for agent_run action)
 	costSvc := costService
 
