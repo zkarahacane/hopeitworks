@@ -8,6 +8,16 @@ import Checkbox from 'primevue/checkbox'
 import InputNumber from 'primevue/inputnumber'
 import type { PipelineStep } from '@/stores/pipelineConfig'
 
+const ACTION_TYPE_ICONS: Record<string, string> = {
+  agent_run: 'pi pi-android',
+  git_branch: 'pi pi-code-branch',
+  git_pr: 'pi pi-arrow-right-arrow-left',
+  notification: 'pi pi-bell',
+  human: 'pi pi-user',
+  ci_poll: 'pi pi-sync',
+  hitl_gate: 'pi pi-shield',
+}
+
 const modelOptions = [
   { label: 'Claude Opus 4.6', value: 'claude-opus-4-6' },
   { label: 'Claude Sonnet 4.6', value: 'claude-sonnet-4-6' },
@@ -36,6 +46,10 @@ const emit = defineEmits<{
   moveUp: []
   moveDown: []
 }>()
+
+const actionTypeIcon = computed(() => {
+  return ACTION_TYPE_ICONS[props.step.action_type] ?? 'pi pi-cog'
+})
 
 const modelLabel = computed(() => {
   return modelOptions.find((o) => o.value === props.step.model)?.label ?? props.step.model
@@ -76,8 +90,8 @@ function onRetryTypeChange(value: PipelineStep['retry_policy']['retry_type']) {
         <div class="flex items-center gap-3">
           <span class="font-mono text-sm opacity-60">{{ index + 1 }}.</span>
           <span class="font-semibold">{{ step.name }}</span>
-          <Tag :value="step.action_type" severity="info" />
-          <span class="text-sm opacity-70">{{ modelLabel }}</span>
+          <Tag :value="step.action_type" severity="info" :icon="actionTypeIcon" data-testid="action-type-tag" />
+          <span v-if="step.model" class="text-sm opacity-70">{{ modelLabel }}</span>
           <Tag
             :value="step.auto_approve ? 'Auto' : 'Manual'"
             :severity="autoApproveSeverity"
