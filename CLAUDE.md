@@ -233,6 +233,27 @@ npm run test:e2e                     # Playwright (against docker-compose.test.y
 - Config: `config.yaml` + env var override, resolved at startup
 - No hot-reload for MVP — restart to apply config changes
 
+## Local Dev Reset
+
+Use `scripts/reset-dev.sh` to reset the local dev environment to a clean state:
+
+```bash
+./scripts/reset-dev.sh
+```
+
+This script:
+1. Drops and recreates the DB schema
+2. Restarts the API container (triggers migrations)
+3. Creates all test data **via API calls** (no SQL seed)
+
+After reset, the environment contains:
+- 6 users (3 admin, 3 user) — login: `admin@hopeitworks.dev` / `admin1234`
+- 1 project (Todo App) pointing to local Gitea
+- 1 epic (MVP) with 3 stories in backlog
+- 4 agents (2 global, 2 project-scoped)
+- Pipeline config with 4 groups and 7 preconfigured steps
+- Zero runs (clean slate)
+
 ## Story Implementation Pipeline
 
 Stories are implemented via Docker containers running Claude Code agents. **Never implement stories directly in the local repo** — always use the pipeline scripts.
