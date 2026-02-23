@@ -263,7 +263,7 @@ func TestRecordStepCost_EmptyEvents_NoOp(t *testing.T) {
 	costRepo := &mockCostRepo{}
 	svc := newTestCostService(costRepo, nil, nil, nil)
 
-	err := svc.RecordStepCost(context.Background(), uuid.New(), uuid.New(), []model.CostEvent{})
+	err := svc.RecordStepCost(context.Background(), uuid.New(), uuid.New(), []model.CostEvent{}, nil)
 	assert.NoError(t, err)
 	assert.Empty(t, costRepo.insertCalls)
 }
@@ -310,7 +310,7 @@ func TestRecordStepCost_KnownModel_CorrectCost(t *testing.T) {
 				{InputTokens: tt.inputTokens, OutputTokens: tt.outputTokens, Model: tt.model},
 			}
 
-			err := svc.RecordStepCost(context.Background(), stepID, projectID, events)
+			err := svc.RecordStepCost(context.Background(), stepID, projectID, events, nil)
 			require.NoError(t, err)
 			require.Len(t, costRepo.insertCalls, 1)
 
@@ -333,13 +333,14 @@ func TestRecordStepCost_UnknownModel_ZeroCost(t *testing.T) {
 		{InputTokens: 1000, OutputTokens: 500, Model: "unknown-model"},
 	}
 
-	err := svc.RecordStepCost(context.Background(), uuid.New(), uuid.New(), events)
+	err := svc.RecordStepCost(context.Background(), uuid.New(), uuid.New(), events, nil)
 	require.NoError(t, err)
 	require.Len(t, costRepo.insertCalls, 1)
 
 	inserted := costRepo.insertCalls[0]
 	assert.Equal(t, float64(0), inserted.CostUSD)
 	assert.Equal(t, "unknown-model", inserted.Model)
+	assert.Nil(t, inserted.AgentID)
 }
 
 func TestRecordStepCost_MultipleEvents_Aggregated(t *testing.T) {
@@ -351,7 +352,7 @@ func TestRecordStepCost_MultipleEvents_Aggregated(t *testing.T) {
 		{InputTokens: 500_000, OutputTokens: 100_000, Model: "claude-opus-4-6"},
 	}
 
-	err := svc.RecordStepCost(context.Background(), uuid.New(), uuid.New(), events)
+	err := svc.RecordStepCost(context.Background(), uuid.New(), uuid.New(), events, nil)
 	require.NoError(t, err)
 	require.Len(t, costRepo.insertCalls, 1) // Single insert, not two
 
@@ -374,8 +375,55 @@ func TestRecordStepCost_RepoError_Propagated(t *testing.T) {
 		{InputTokens: 1000, OutputTokens: 500, Model: "claude-opus-4-6"},
 	}
 
-	err := svc.RecordStepCost(context.Background(), uuid.New(), uuid.New(), events)
+	err := svc.RecordStepCost(context.Background(), uuid.New(), uuid.New(), events, nil)
 	assert.Error(t, err)
+}
+
+func TestRecordStepCost_WithAgentID(t *testing.T) {
+	costRepo := &mockCostRepo{}
+	svc := newTestCostService(costRepo, nil, nil, nil)
+
+	stepID := uuid.New()
+	projectID := uuid.New()
+	agentID := uuid.New()
+	events := []model.CostEvent{
+		{InputTokens: 1_000_000, OutputTokens: 100_000, Model: "claude-opus-4-6"},
+	}
+
+	err := svc.RecordStepCost(context.Background(), stepID, projectID, events, &agentID)
+	require.NoError(t, err)
+	require.Len(t, costRepo.insertCalls, 1)
+
+	inserted := costRepo.insertCalls[0]
+	assert.Equal(t, stepID, inserted.RunStepID)
+	assert.Equal(t, projectID, inserted.ProjectID)
+	require.NotNil(t, inserted.AgentID)
+	assert.Equal(t, agentID, *inserted.AgentID)
+	assert.Equal(t, int64(1_000_000), inserted.TokensInput)
+	assert.Equal(t, int64(100_000), inserted.TokensOutput)
+	// 15*1 + 75*0.1 = 22.5
+	assert.InDelta(t, 22.5, inserted.CostUSD, 0.001)
+}
+
+func TestRecordStepCost_WithoutAgentID(t *testing.T) {
+	costRepo := &mockCostRepo{}
+	svc := newTestCostService(costRepo, nil, nil, nil)
+
+	stepID := uuid.New()
+	projectID := uuid.New()
+	events := []model.CostEvent{
+		{InputTokens: 1_000_000, OutputTokens: 100_000, Model: "claude-opus-4-6"},
+	}
+
+	err := svc.RecordStepCost(context.Background(), stepID, projectID, events, nil)
+	require.NoError(t, err)
+	require.Len(t, costRepo.insertCalls, 1)
+
+	inserted := costRepo.insertCalls[0]
+	assert.Equal(t, stepID, inserted.RunStepID)
+	assert.Equal(t, projectID, inserted.ProjectID)
+	assert.Nil(t, inserted.AgentID)
+	assert.InDelta(t, 22.5, inserted.CostUSD, 0.001)
 }
 
 // --- GetProjectCosts tests ---
