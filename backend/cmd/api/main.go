@@ -202,6 +202,11 @@ func run() error {
 	actionReg.Register(hitlGateAction)
 	logger.Info("hitl_gate action registered")
 
+	// Git Branch action (no Docker required)
+	gitBranchAction := actionadapter.NewGitBranchAction(gitProvider, storyRepo, logger)
+	actionReg.Register(gitBranchAction)
+	logger.Info("git_branch action registered")
+
 	// Cost tracking (for agent_run action)
 	costSvc := costService
 
