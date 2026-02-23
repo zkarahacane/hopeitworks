@@ -1,56 +1,54 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import PipelineStepCard from './PipelineStepCard.vue'
-import type { PipelineStep } from '@/stores/pipelineConfig'
+import PipelineGroupCard from './PipelineGroupCard.vue'
+import type { PipelineGroup, PipelineStep } from '@/stores/pipelineConfig'
 
 defineProps<{
-  steps: PipelineStep[]
+  groups: PipelineGroup[]
   isAdmin: boolean
 }>()
 
 const emit = defineEmits<{
-  update: [index: number, step: PipelineStep]
-  remove: [index: number]
-  reorder: [fromIndex: number, toIndex: number]
+  'rename-group': [groupId: string, name: string]
+  'remove-group': [groupId: string]
+  'add-step': [groupId: string]
+  'update-step': [groupId: string, stepId: string, step: PipelineStep]
+  'remove-step': [groupId: string, stepId: string]
+  'reorder-groups': [fromIndex: number, toIndex: number]
+  'reorder-step': [groupId: string, fromIndex: number, toIndex: number]
 }>()
 
-const expandedIndex = ref<number | null>(null)
-
-function toggleExpand(index: number) {
-  expandedIndex.value = expandedIndex.value === index ? null : index
-}
-
-function handleMoveUp(index: number) {
+function handleMoveGroupUp(index: number) {
   if (index > 0) {
-    emit('reorder', index, index - 1)
-    expandedIndex.value = index - 1
+    emit('reorder-groups', index, index - 1)
   }
 }
 
-function handleMoveDown(index: number, stepsLength: number) {
-  if (index < stepsLength - 1) {
-    emit('reorder', index, index + 1)
-    expandedIndex.value = index + 1
+function handleMoveGroupDown(index: number, groupCount: number) {
+  if (index < groupCount - 1) {
+    emit('reorder-groups', index, index + 1)
   }
 }
 </script>
 
 <template>
-  <div class="flex flex-col gap-3">
-    <PipelineStepCard
-      v-for="(step, index) in steps"
-      :key="step.id"
-      :step="step"
+  <div class="flex flex-col gap-4">
+    <PipelineGroupCard
+      v-for="(group, index) in groups"
+      :key="group.id"
+      :group="group"
       :index="index"
       :is-admin="isAdmin"
-      :expanded="expandedIndex === index"
       :is-first="index === 0"
-      :is-last="index === steps.length - 1"
-      @toggle="toggleExpand(index)"
-      @update="(updatedStep: PipelineStep) => emit('update', index, updatedStep)"
-      @remove="emit('remove', index)"
-      @move-up="handleMoveUp(index)"
-      @move-down="handleMoveDown(index, steps.length)"
+      :is-last="index === groups.length - 1"
+      :group-count="groups.length"
+      @rename="(gId: string, name: string) => emit('rename-group', gId, name)"
+      @remove="emit('remove-group', $event)"
+      @add-step="emit('add-step', $event)"
+      @update-step="(gId: string, sId: string, step: PipelineStep) => emit('update-step', gId, sId, step)"
+      @remove-step="(gId: string, sId: string) => emit('remove-step', gId, sId)"
+      @move-up="handleMoveGroupUp(index)"
+      @move-down="handleMoveGroupDown(index, groups.length)"
+      @reorder-step="(gId: string, from: number, to: number) => emit('reorder-step', gId, from, to)"
     />
   </div>
 </template>
