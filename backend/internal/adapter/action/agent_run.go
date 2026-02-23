@@ -215,6 +215,11 @@ func (a *AgentRunAction) createContainer(
 		},
 	}
 
+	// Override image when agent specifies a custom Docker image.
+	if agentImage, ok := runCtx.Metadata["agent_image"].(string); ok && agentImage != "" {
+		opts.Image = agentImage
+	}
+
 	return a.containerMgr.Create(ctx, opts)
 }
 

@@ -249,6 +249,21 @@ func (e *PipelineExecutor) executeStep(ctx context.Context, run *model.Run, step
 		delete(runCtx.Metadata, "model")
 	}
 
+	// Inject per-step agent_id and agent_image from run metadata when set by LaunchRun.
+	agentIDKey := fmt.Sprintf("step_%d_agent_id", step.StepOrder)
+	if agentID, ok := runCtx.Metadata[agentIDKey].(string); ok && agentID != "" {
+		runCtx.Metadata["agent_id"] = agentID
+	} else {
+		delete(runCtx.Metadata, "agent_id")
+	}
+
+	agentImageKey := fmt.Sprintf("step_%d_agent_image", step.StepOrder)
+	if agentImage, ok := runCtx.Metadata[agentImageKey].(string); ok && agentImage != "" {
+		runCtx.Metadata["agent_image"] = agentImage
+	} else {
+		delete(runCtx.Metadata, "agent_image")
+	}
+
 	// Execute action
 	if err := action.Execute(ctx, runCtx); err != nil {
 		return err

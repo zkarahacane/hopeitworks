@@ -2885,7 +2885,6 @@ components:
         - id
         - name
         - action_type
-        - model
         - auto_approve
         - retry_policy
       properties:
@@ -2900,9 +2899,15 @@ components:
           type: string
           enum: [agent_run, git_branch, git_pr, notification, human, ci_poll, hitl_gate]
           example: agent_run
+        agent_id:
+          type: string
+          format: uuid
+          description: ID of the agent to use for this step. Resolves model, image, and template at run time.
+          example: 990e8400-e29b-41d4-a716-446655440000
         model:
           type: string
-          enum: [claude-opus-4-6, claude-sonnet-4-6, claude-haiku-4-5]
+          deprecated: true
+          description: "Deprecated: use agent_id instead. Kept for backward compatibility."
           example: claude-opus-4-6
         auto_approve:
           type: boolean

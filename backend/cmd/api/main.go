@@ -287,6 +287,7 @@ func run() error {
 	if containerMgr != nil {
 		runService.SetContainerManager(containerMgr)
 	}
+	runService.SetAgentRepo(agentRepo)
 	runHandler := handler.NewRunHandler(runService)
 
 	// Orphan cleanup and timeout enforcement (requires Docker)

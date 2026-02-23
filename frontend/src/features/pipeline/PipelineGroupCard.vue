@@ -5,6 +5,7 @@ import InputText from 'primevue/inputtext'
 import { useConfirm } from 'primevue/useconfirm'
 import PipelineStepCard from './PipelineStepCard.vue'
 import type { PipelineGroup, PipelineStep } from '@/stores/pipelineConfig'
+import type { Agent } from '@/stores/agents'
 
 const props = defineProps<{
   group: PipelineGroup
@@ -13,6 +14,7 @@ const props = defineProps<{
   isFirst: boolean
   isLast: boolean
   groupCount: number
+  agents: Agent[]
 }>()
 
 const emit = defineEmits<{
@@ -175,6 +177,7 @@ function toggleStepExpand(index: number) {
         :expanded="expandedStepIndex === stepIndex"
         :is-first="stepIndex === 0"
         :is-last="stepIndex === group.steps.length - 1"
+        :agents="agents"
         @toggle="toggleStepExpand(stepIndex)"
         @update="(updatedStep: PipelineStep) => emit('update-step', group.id, step.id, updatedStep)"
         @remove="emit('remove-step', group.id, step.id)"

@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import PipelineGroupCard from './PipelineGroupCard.vue'
 import type { PipelineGroup, PipelineStep } from '@/stores/pipelineConfig'
+import type { Agent } from '@/stores/agents'
 
 defineProps<{
   groups: PipelineGroup[]
   isAdmin: boolean
+  agents: Agent[]
 }>()
 
 const emit = defineEmits<{
@@ -41,6 +43,7 @@ function handleMoveGroupDown(index: number, groupCount: number) {
       :is-first="index === 0"
       :is-last="index === groups.length - 1"
       :group-count="groups.length"
+      :agents="agents"
       @rename="(gId: string, name: string) => emit('rename-group', gId, name)"
       @remove="emit('remove-group', $event)"
       @add-step="emit('add-step', $event)"

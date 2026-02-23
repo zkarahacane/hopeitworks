@@ -76,6 +76,7 @@ func validGroupsYAML() string {
 // validGroupsRequest returns a valid UpdatePipelineConfigRequest using the groups-based API shape.
 func validGroupsRequest() UpdatePipelineConfigRequest {
 	stepID := uuid.MustParse("880e8400-e29b-41d4-a716-446655440001")
+	model := "claude-opus-4-6"
 	return UpdatePipelineConfigRequest{
 		Groups: []PipelineGroup{
 			{
@@ -86,7 +87,7 @@ func validGroupsRequest() UpdatePipelineConfigRequest {
 						Id:          stepID,
 						Name:        "branch",
 						ActionType:  GitBranch,
-						Model:       ClaudeOpus46,
+						Model:       &model,
 						AutoApprove: false,
 						RetryPolicy: RetryPolicy{
 							MaxRetries: 2,

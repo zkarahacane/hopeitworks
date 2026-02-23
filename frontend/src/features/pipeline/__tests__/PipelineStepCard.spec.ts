@@ -3,18 +3,23 @@ import { mount, type VueWrapper } from '@vue/test-utils'
 import PrimeVue from 'primevue/config'
 import PipelineStepCard from '../PipelineStepCard.vue'
 import type { PipelineStep } from '@/stores/pipelineConfig'
+import type { Agent } from '@/stores/agents'
 
 function makeStep(overrides: Partial<PipelineStep> = {}): PipelineStep {
   return {
     id: crypto.randomUUID(),
     name: 'implement',
     action_type: 'agent_run',
-    model: 'claude-opus-4-6',
     auto_approve: false,
     retry_policy: { max_retries: 2, retry_type: 'on-failure' },
     ...overrides,
   }
 }
+
+const mockAgents: Agent[] = [
+  { id: 'agent-1', name: 'Dev Agent', model: 'claude-opus-4-6', image: '', template_content: '', scope: 'project', created_at: '', updated_at: '' },
+  { id: 'agent-2', name: 'Review Agent', model: 'claude-sonnet-4-6', image: '', template_content: '', scope: 'project', created_at: '', updated_at: '' },
+]
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let wrapper: VueWrapper<any>
@@ -28,6 +33,7 @@ function mountComponent(stepOverrides: Partial<PipelineStep> = {}, props: Record
       expanded: false,
       isFirst: true,
       isLast: false,
+      agents: mockAgents,
       ...props,
     },
     global: {
@@ -94,17 +100,20 @@ describe('PipelineStepCard', () => {
     })
   })
 
-  describe('model label visibility', () => {
-    it('shows model label when model is set', () => {
-      mountComponent({ model: 'claude-opus-4-6' })
-      expect(wrapper.text()).toContain('Claude Opus 4.6')
+  describe('agent/model display visibility', () => {
+    it('shows agent name when agent_id matches an agent', () => {
+      mountComponent({ agent_id: 'agent-1' })
+      expect(wrapper.find('[data-testid="agent-display"]').text()).toBe('Dev Agent')
     })
 
-    it('hides model label when model is not set', () => {
-      mountComponent({ model: undefined as unknown as PipelineStep['model'] })
-      expect(wrapper.text()).not.toContain('Claude Opus')
-      expect(wrapper.text()).not.toContain('Claude Sonnet')
-      expect(wrapper.text()).not.toContain('Claude Haiku')
+    it('shows legacy model string when model is set and no agent_id', () => {
+      mountComponent({ model: 'claude-opus-4-6' })
+      expect(wrapper.find('[data-testid="agent-display"]').text()).toBe('claude-opus-4-6')
+    })
+
+    it('hides display when neither agent_id nor model is set', () => {
+      mountComponent({ agent_id: undefined, model: undefined })
+      expect(wrapper.find('[data-testid="agent-display"]').exists()).toBe(false)
     })
   })
 

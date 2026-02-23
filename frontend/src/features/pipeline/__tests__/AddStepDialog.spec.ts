@@ -41,10 +41,16 @@ const DialogStub = defineComponent({
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let wrapper: VueWrapper<any>
 
+const mockAgents = [
+  { id: 'agent-1', name: 'Dev Agent', model: 'claude-sonnet-4-6', image: '', template_content: '', scope: 'project' as const, created_at: '', updated_at: '' },
+  { id: 'agent-2', name: 'Review Agent', model: 'claude-opus-4-6', image: '', template_content: '', scope: 'project' as const, created_at: '', updated_at: '' },
+]
+
 function mountComponent(props: { visible?: boolean } = {}) {
   wrapper = mount(AddStepDialog, {
     props: {
       visible: true,
+      agents: mockAgents,
       ...props,
     },
     global: {
@@ -88,54 +94,54 @@ describe('AddStepDialog', () => {
     })
   })
 
-  describe('model selector visibility', () => {
-    it('shows model selector when action type is agent_run', () => {
+  describe('agent selector visibility', () => {
+    it('shows agent selector when action type is agent_run', () => {
       mountComponent()
-      expect(wrapper.find('[data-testid="model-select"]').exists()).toBe(true)
+      expect(wrapper.find('[data-testid="agent-select"]').exists()).toBe(true)
     })
 
-    it('hides model selector when action type is git_branch', async () => {
+    it('hides agent selector when action type is git_branch', async () => {
       mountComponent()
       await selectActionType('git_branch')
-      expect(wrapper.find('[data-testid="model-select"]').exists()).toBe(false)
+      expect(wrapper.find('[data-testid="agent-select"]').exists()).toBe(false)
     })
 
-    it('hides model selector when action type is git_pr', async () => {
+    it('hides agent selector when action type is git_pr', async () => {
       mountComponent()
       await selectActionType('git_pr')
-      expect(wrapper.find('[data-testid="model-select"]').exists()).toBe(false)
+      expect(wrapper.find('[data-testid="agent-select"]').exists()).toBe(false)
     })
 
-    it('hides model selector when action type is notification', async () => {
+    it('hides agent selector when action type is notification', async () => {
       mountComponent()
       await selectActionType('notification')
-      expect(wrapper.find('[data-testid="model-select"]').exists()).toBe(false)
+      expect(wrapper.find('[data-testid="agent-select"]').exists()).toBe(false)
     })
 
-    it('hides model selector when action type is human', async () => {
+    it('hides agent selector when action type is human', async () => {
       mountComponent()
       await selectActionType('human')
-      expect(wrapper.find('[data-testid="model-select"]').exists()).toBe(false)
+      expect(wrapper.find('[data-testid="agent-select"]').exists()).toBe(false)
     })
 
-    it('hides model selector when action type is ci_poll', async () => {
+    it('hides agent selector when action type is ci_poll', async () => {
       mountComponent()
       await selectActionType('ci_poll')
-      expect(wrapper.find('[data-testid="model-select"]').exists()).toBe(false)
+      expect(wrapper.find('[data-testid="agent-select"]').exists()).toBe(false)
     })
 
-    it('hides model selector when action type is hitl_gate', async () => {
+    it('hides agent selector when action type is hitl_gate', async () => {
       mountComponent()
       await selectActionType('hitl_gate')
-      expect(wrapper.find('[data-testid="model-select"]').exists()).toBe(false)
+      expect(wrapper.find('[data-testid="agent-select"]').exists()).toBe(false)
     })
 
-    it('shows model selector again when switching back to agent_run', async () => {
+    it('shows agent selector again when switching back to agent_run', async () => {
       mountComponent()
       await selectActionType('git_branch')
-      expect(wrapper.find('[data-testid="model-select"]').exists()).toBe(false)
+      expect(wrapper.find('[data-testid="agent-select"]').exists()).toBe(false)
       await selectActionType('agent_run')
-      expect(wrapper.find('[data-testid="model-select"]').exists()).toBe(true)
+      expect(wrapper.find('[data-testid="agent-select"]').exists()).toBe(true)
     })
   })
 
@@ -232,26 +238,26 @@ describe('AddStepDialog', () => {
       expect(vm.config.branch_pattern).toBeUndefined()
     })
 
-    it('clears model when switching away from agent_run', async () => {
+    it('clears agentId when switching away from agent_run', async () => {
       mountComponent()
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const vm = wrapper.vm as any
-      expect(vm.model).toBe('claude-sonnet-4-6')
+      vm.agentId = 'agent-1'
 
       await selectActionType('git_branch')
-      expect(vm.model).toBeUndefined()
+      expect(vm.agentId).toBeUndefined()
     })
 
-    it('restores default model when switching back to agent_run', async () => {
+    it('keeps agentId undefined when switching back to agent_run', async () => {
       mountComponent()
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const vm = wrapper.vm as any
 
       await selectActionType('git_branch')
-      expect(vm.model).toBeUndefined()
+      expect(vm.agentId).toBeUndefined()
 
       await selectActionType('agent_run')
-      expect(vm.model).toBe('claude-sonnet-4-6')
+      expect(vm.agentId).toBeUndefined()
     })
   })
 

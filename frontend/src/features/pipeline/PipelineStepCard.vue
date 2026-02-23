@@ -7,6 +7,7 @@ import Select from 'primevue/select'
 import Checkbox from 'primevue/checkbox'
 import InputNumber from 'primevue/inputnumber'
 import type { PipelineStep } from '@/stores/pipelineConfig'
+import type { Agent } from '@/stores/agents'
 
 const ACTION_TYPE_ICONS: Record<string, string> = {
   agent_run: 'pi pi-android',
@@ -17,12 +18,6 @@ const ACTION_TYPE_ICONS: Record<string, string> = {
   ci_poll: 'pi pi-sync',
   hitl_gate: 'pi pi-shield',
 }
-
-const modelOptions = [
-  { label: 'Claude Opus 4.6', value: 'claude-opus-4-6' },
-  { label: 'Claude Sonnet 4.6', value: 'claude-sonnet-4-6' },
-  { label: 'Claude Haiku 4.5', value: 'claude-haiku-4-5' },
-]
 
 const retryTypeOptions = [
   { label: 'None', value: 'none' },
@@ -37,6 +32,7 @@ const props = defineProps<{
   expanded: boolean
   isFirst: boolean
   isLast: boolean
+  agents: Agent[]
 }>()
 
 const emit = defineEmits<{
@@ -51,16 +47,20 @@ const actionTypeIcon = computed(() => {
   return ACTION_TYPE_ICONS[props.step.action_type] ?? 'pi pi-cog'
 })
 
-const modelLabel = computed(() => {
-  return modelOptions.find((o) => o.value === props.step.model)?.label ?? props.step.model
+/** Display label for the collapsed header: agent name if agent_id present, else legacy model string */
+const agentDisplay = computed(() => {
+  if (props.step.agent_id) {
+    return props.agents.find((a) => a.id === props.step.agent_id)?.name ?? props.step.agent_id
+  }
+  return props.step.model ?? null
 })
 
 const autoApproveSeverity = computed(() => {
   return props.step.auto_approve ? 'success' : 'secondary'
 })
 
-function onModelChange(value: PipelineStep['model']) {
-  emit('update', { ...props.step, model: value })
+function onAgentChange(value: string) {
+  emit('update', { ...props.step, agent_id: value, model: undefined })
 }
 
 function onAutoApproveChange(value: boolean) {
@@ -91,7 +91,7 @@ function onRetryTypeChange(value: PipelineStep['retry_policy']['retry_type']) {
           <span class="font-mono text-sm opacity-60">{{ index + 1 }}.</span>
           <span class="font-semibold">{{ step.name }}</span>
           <Tag :value="step.action_type" severity="info" :icon="actionTypeIcon" data-testid="action-type-tag" />
-          <span v-if="step.model" class="text-sm opacity-70">{{ modelLabel }}</span>
+          <span v-if="agentDisplay" class="text-sm opacity-70" data-testid="agent-display">{{ agentDisplay }}</span>
           <Tag
             :value="step.auto_approve ? 'Auto' : 'Manual'"
             :severity="autoApproveSeverity"
@@ -135,18 +135,26 @@ function onRetryTypeChange(value: PipelineStep['retry_policy']['retry_type']) {
         <!-- Expanded details -->
         <div v-if="expanded" class="flex flex-col gap-4 pt-3" @click.stop>
           <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div class="flex flex-col gap-2">
-              <label class="text-sm font-medium">Model</label>
+            <div v-if="step.action_type === 'agent_run'" class="flex flex-col gap-2">
+              <label class="text-sm font-medium">Agent</label>
               <Select
-                :model-value="step.model"
-                :options="modelOptions"
-                option-label="label"
-                option-value="value"
+                :model-value="step.agent_id"
+                :options="agents"
+                option-label="name"
+                option-value="id"
+                placeholder="Select an agent"
                 :disabled="!isAdmin"
                 class="w-full"
-                data-testid="model-select"
-                @update:model-value="onModelChange"
-              />
+                data-testid="agent-select"
+                @update:model-value="onAgentChange"
+              >
+                <template #option="{ option }">
+                  <div class="flex flex-col">
+                    <span>{{ option.name }}</span>
+                    <span class="text-sm opacity-60">{{ option.model }}</span>
+                  </div>
+                </template>
+              </Select>
             </div>
 
             <div class="flex flex-col gap-2">

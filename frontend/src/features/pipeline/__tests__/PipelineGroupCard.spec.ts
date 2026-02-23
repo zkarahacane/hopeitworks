@@ -4,13 +4,17 @@ import PrimeVue from 'primevue/config'
 import ConfirmationService from 'primevue/confirmationservice'
 import PipelineGroupCard from '../PipelineGroupCard.vue'
 import type { PipelineGroup, PipelineStep } from '@/stores/pipelineConfig'
+import type { Agent } from '@/stores/agents'
+
+const mockAgents: Agent[] = [
+  { id: 'agent-1', name: 'Dev Agent', model: 'claude-opus-4-6', image: '', template_content: '', scope: 'project', created_at: '', updated_at: '' },
+]
 
 function makeStep(overrides: Partial<PipelineStep> = {}): PipelineStep {
   return {
     id: crypto.randomUUID(),
     name: 'implement',
     action_type: 'agent_run',
-    model: 'claude-opus-4-6',
     auto_approve: false,
     retry_policy: { max_retries: 2, retry_type: 'on-failure' },
     ...overrides,
@@ -44,6 +48,7 @@ function mountComponent(
       isFirst: false,
       isLast: false,
       groupCount: 3,
+      agents: mockAgents,
       ...props,
     },
     global: {
@@ -51,7 +56,7 @@ function mountComponent(
       stubs: {
         PipelineStepCard: {
           template: '<div class="step-card-stub" :data-step-id="step.id">{{ step.name }}</div>',
-          props: ['step', 'index', 'isAdmin', 'expanded', 'isFirst', 'isLast'],
+          props: ['step', 'index', 'isAdmin', 'expanded', 'isFirst', 'isLast', 'agents'],
         },
       },
     },
