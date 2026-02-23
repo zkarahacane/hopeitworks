@@ -13,8 +13,12 @@ import { useRunsStore } from '@/stores/runs'
 import RunLogViewer from '@/features/runs/RunLogViewer.vue'
 import RunTimeline from '@/features/runs/RunTimeline.vue'
 import RunCancelConfirmDialog from '@/features/runs/RunCancelConfirmDialog.vue'
+import RunStepLogPanel from '@/features/runs/RunStepLogPanel.vue'
 import { runStatusSeverity } from '@/utils/runStatus'
 import { formatCostUSD, formatTokenCount } from '@/utils/formatCost'
+import type { components } from '@/api/schema'
+
+type RunStep = components['schemas']['RunStep']
 
 const route = useRoute()
 const runId = computed(() => route.params.id as string)
@@ -49,6 +53,17 @@ const canCancel = computed(() => {
 
 const pauseError = ref<string | null>(null)
 const cancelDialogVisible = ref(false)
+const selectedStep = ref<RunStep | null>(null)
+const stepPanelVisible = ref(false)
+
+function handleSelectStep(step: RunStep) {
+  selectedStep.value = step
+  stepPanelVisible.value = true
+}
+
+function handleCloseStepPanel() {
+  stepPanelVisible.value = false
+}
 
 async function handlePause() {
   if (!projectId.value || !runId.value) return
@@ -201,6 +216,7 @@ const progress = computed(() => {
           :steps="run.steps"
           :retry-loading="runsStore.isRetrying"
           @retry-step="handleRetryStep"
+          @select-step="handleSelectStep"
         />
       </div>
 
@@ -245,6 +261,17 @@ const progress = computed(() => {
       @confirm="handleCancelConfirm"
       @cancel="cancelDialogVisible = false"
       @update:visible="cancelDialogVisible = $event"
+    />
+
+    <!-- Step Log Panel -->
+    <RunStepLogPanel
+      v-if="run"
+      :step="selectedStep"
+      :run-id="run.id"
+      :project-id="run.project_id"
+      :visible="stepPanelVisible"
+      @close="handleCloseStepPanel"
+      @update:visible="stepPanelVisible = $event"
     />
   </div>
 </template>
