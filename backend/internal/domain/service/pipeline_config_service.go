@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
-	"gopkg.in/yaml.v3"
 
 	"github.com/zakari/hopeitworks/backend/internal/domain/model"
 	"github.com/zakari/hopeitworks/backend/internal/domain/port"
@@ -19,10 +18,12 @@ const DefaultPipelineConfigYAML = `groups:
     name: Setup
     steps:
       - id: 880e8400-e29b-41d4-a716-446655440001
-        name: branch
+        name: create-branch
         action_type: git_branch
-        model: claude-sonnet-4-6
+        description: Create feature branch from base
         auto_approve: true
+        config:
+          base_branch: main
         retry_policy:
           max_retries: 1
           retry_type: on-failure
@@ -30,32 +31,53 @@ const DefaultPipelineConfigYAML = `groups:
     name: Development
     steps:
       - id: 880e8400-e29b-41d4-a716-446655440002
-        name: implement
+        name: dev-agent
         action_type: agent_run
+        description: Run development agent
         model: claude-opus-4-6
-        auto_approve: false
-        retry_policy:
-          max_retries: 3
-          retry_type: on-failure
-      - id: 880e8400-e29b-41d4-a716-446655440003
-        name: review
-        action_type: agent_run
-        model: claude-sonnet-4-6
         auto_approve: false
         retry_policy:
           max_retries: 2
           retry_type: on-failure
-  - id: finalize
-    name: Finalize
+  - id: review
+    name: Review
+    steps:
+      - id: 880e8400-e29b-41d4-a716-446655440003
+        name: review-agent
+        action_type: agent_run
+        description: Run code review agent
+        model: claude-sonnet-4-6
+        auto_approve: false
+        retry_policy:
+          max_retries: 1
+          retry_type: on-failure
+  - id: merge
+    name: Merge
     steps:
       - id: 880e8400-e29b-41d4-a716-446655440004
-        name: merge
+        name: create-pr
         action_type: git_pr
+        description: Create and merge pull request
         model: claude-sonnet-4-6
         auto_approve: true
         retry_policy:
           max_retries: 1
           retry_type: on-failure
+  - id: delivery
+    name: Delivery
+    steps:
+      - id: 880e8400-e29b-41d4-a716-446655440005
+        name: poll-ci
+        action_type: ci_poll
+        description: Wait for CI to pass
+        auto_approve: true
+        config:
+          timeout_minutes: "30"
+      - id: 880e8400-e29b-41d4-a716-446655440006
+        name: notify
+        action_type: notification
+        description: Send completion notification
+        auto_approve: true
 `
 
 // PipelineConfigService provides business logic for pipeline config operations.
@@ -96,50 +118,67 @@ func (s *PipelineConfigService) SeedDefault(ctx context.Context, projectID uuid.
 }
 
 // validatePipelineConfigYAML parses and validates the pipeline config YAML.
+// Validates group structure (non-empty names, non-empty steps) and step-level
+// fields (name, action_type). Uses ParsePipelineConfigYAML for backward-
+// compatible parsing of both groups and legacy flat-steps formats.
 func validatePipelineConfigYAML(configYAML string) error {
 	if configYAML == "" {
 		return errors.NewValidation("config_yaml", "is required")
 	}
 
-	var parsed model.PipelineConfigYAML
-	if err := yaml.Unmarshal([]byte(configYAML), &parsed); err != nil {
+	parsed, err := model.ParsePipelineConfigYAML([]byte(configYAML))
+	if err != nil {
 		return &errors.DomainError{
 			Category: errors.CategoryValidation,
 			Code:     "INVALID_PIPELINE_CONFIG",
-			Message:  fmt.Sprintf("invalid YAML: %v", err),
+			Message:  err.Error(),
 		}
 	}
 
-	steps := parsed.FlatSteps()
-	if len(steps) == 0 {
+	if len(parsed.Groups) == 0 {
 		return &errors.DomainError{
 			Category: errors.CategoryValidation,
 			Code:     "INVALID_PIPELINE_CONFIG",
-			Message:  "pipeline config must have at least one step",
+			Message:  "pipeline config must have at least one group",
 		}
 	}
 
-	for _, step := range steps {
-		if step.Name == "" {
+	for i, group := range parsed.Groups {
+		if group.Name == "" {
 			return &errors.DomainError{
 				Category: errors.CategoryValidation,
 				Code:     "INVALID_PIPELINE_CONFIG",
-				Message:  "each step must have a name",
+				Message:  fmt.Sprintf("groups[%d].name: group name is required", i),
 			}
 		}
-		if step.ActionType == "" {
+		if len(group.Steps) == 0 {
 			return &errors.DomainError{
 				Category: errors.CategoryValidation,
 				Code:     "INVALID_PIPELINE_CONFIG",
-				Message:  fmt.Sprintf("step '%s' must have an action_type", step.Name),
+				Message:  fmt.Sprintf("groups[%d].steps: group must have at least one step", i),
 			}
 		}
-		// TODO(S-3-3): Replace with ActionRegistry validation once implemented.
-		if !model.ValidActionTypes[step.ActionType] {
-			return &errors.DomainError{
-				Category: errors.CategoryValidation,
-				Code:     "INVALID_PIPELINE_CONFIG",
-				Message:  fmt.Sprintf("invalid action_type: %s", step.ActionType),
+		for j, step := range group.Steps {
+			if step.Name == "" {
+				return &errors.DomainError{
+					Category: errors.CategoryValidation,
+					Code:     "INVALID_PIPELINE_CONFIG",
+					Message:  fmt.Sprintf("groups[%d].steps[%d].name: step name is required", i, j),
+				}
+			}
+			if step.ActionType == "" {
+				return &errors.DomainError{
+					Category: errors.CategoryValidation,
+					Code:     "INVALID_PIPELINE_CONFIG",
+					Message:  fmt.Sprintf("groups[%d].steps[%d].action_type: action type is required for step '%s'", i, j, step.Name),
+				}
+			}
+			if !model.ValidActionTypes[step.ActionType] {
+				return &errors.DomainError{
+					Category: errors.CategoryValidation,
+					Code:     "INVALID_ACTION_TYPE",
+					Message:  fmt.Sprintf("groups[%d].steps[%d].action_type: unknown action type: %s", i, j, step.ActionType),
+				}
 			}
 		}
 	}
