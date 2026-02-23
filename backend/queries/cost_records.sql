@@ -1,6 +1,6 @@
 -- name: InsertCostRecord :one
-INSERT INTO cost_records (run_step_id, project_id, tokens_input, tokens_output, cost_usd, model)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO cost_records (run_step_id, project_id, tokens_input, tokens_output, cost_usd, model, agent_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING *;
 
 -- name: GetCostByRunStep :one
@@ -107,3 +107,20 @@ SELECT COUNT(DISTINCT rs2.run_id)
 FROM cost_records cr
 JOIN run_steps rs2 ON rs2.id = cr.run_step_id
 WHERE cr.project_id = $1 AND cr.created_at >= $2;
+
+-- name: ListCostsByProjectByAgent :many
+SELECT
+  cr.agent_id,
+  COALESCE(a.name, 'Unknown') AS agent_name,
+  SUM(cr.tokens_input)::bigint AS tokens_input,
+  SUM(cr.tokens_output)::bigint AS tokens_output,
+  SUM(cr.cost_usd)::DECIMAL(10,6) AS cost_usd,
+  COUNT(DISTINCT rs.run_id)::int AS runs_count
+FROM cost_records cr
+LEFT JOIN agents a ON a.id = cr.agent_id
+JOIN run_steps rs ON rs.id = cr.run_step_id
+JOIN runs r ON r.id = rs.run_id
+WHERE r.project_id = $1
+  AND cr.agent_id IS NOT NULL
+GROUP BY cr.agent_id, a.name
+ORDER BY cost_usd DESC;
