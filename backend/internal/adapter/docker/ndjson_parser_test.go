@@ -15,7 +15,7 @@ func TestParseNDJSONLineResultEvent(t *testing.T) {
 		if event == nil {
 			t.Fatal("expected non-nil event, got nil")
 		}
-		if event.Type != "cost" {
+		if event.Type != eventTypeCost {
 			t.Errorf("expected Type=cost, got %q", event.Type)
 		}
 		if event.InputTokens != 12450 {
@@ -35,7 +35,7 @@ func TestParseNDJSONLineResultEvent(t *testing.T) {
 		if event == nil {
 			t.Fatal("expected non-nil event, got nil")
 		}
-		if event.Type != "cost" {
+		if event.Type != eventTypeCost {
 			t.Errorf("expected Type=cost, got %q", event.Type)
 		}
 		// Should pick opus as primary model (highest inputTokens=4200 vs haiku 800)
@@ -53,7 +53,7 @@ func TestParseNDJSONLineResultEvent(t *testing.T) {
 		if event == nil {
 			t.Fatal("expected non-nil event, got nil")
 		}
-		if event.Type != "cost" {
+		if event.Type != eventTypeCost {
 			t.Errorf("expected Type=cost, got %q", event.Type)
 		}
 		if event.InputTokens != 100 {

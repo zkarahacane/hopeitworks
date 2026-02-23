@@ -50,18 +50,18 @@ func TestComputeCostUSD(t *testing.T) {
 			wantKnown:     true,
 		},
 		{
-			name:         "unknown model returns not known",
-			model:        "gpt-4-turbo",
-			inputTokens:  1_000,
-			outputTokens: 500,
+			name:          "unknown model returns not known",
+			model:         "gpt-4-turbo",
+			inputTokens:   1_000,
+			outputTokens:  500,
 			wantCostAbove: -1, // irrelevant
 			wantKnown:     false,
 		},
 		{
-			name:         "zero tokens returns zero cost but known",
-			model:        "claude-opus-4-6",
-			inputTokens:  0,
-			outputTokens: 0,
+			name:          "zero tokens returns zero cost but known",
+			model:         "claude-opus-4-6",
+			inputTokens:   0,
+			outputTokens:  0,
 			wantCostAbove: -1, // zero cost is fine
 			wantKnown:     true,
 		},

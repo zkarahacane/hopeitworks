@@ -8,6 +8,9 @@ import (
 	"github.com/zakari/hopeitworks/backend/internal/domain/model"
 )
 
+// eventTypeCost is the log event type used for cost/token tracking.
+const eventTypeCost = "cost"
+
 // parseNDJSONLine parses a single log line as NDJSON.
 // Returns nil if the line is empty (skip).
 // Returns a LogEvent with IsJSON=false if JSON parsing fails.
@@ -55,7 +58,7 @@ func parseNDJSONLine(line string, runID string, stepID string) *model.LogEvent {
 		event.Type = eventType
 	}
 
-	if event.Type == "cost" {
+	if event.Type == eventTypeCost {
 		if v, ok := data["input_tokens"].(float64); ok {
 			event.InputTokens = int64(v)
 		}
@@ -70,7 +73,7 @@ func parseNDJSONLine(line string, runID string, stepID string) *model.LogEvent {
 	// Handle Claude Code stream-json "result" events, which contain authoritative
 	// cumulative token usage for the entire run.
 	if event.Type == "result" {
-		event.Type = "cost"
+		event.Type = eventTypeCost
 		if usageMap, ok := data["usage"].(map[string]any); ok {
 			if v, ok := usageMap["input_tokens"].(float64); ok {
 				event.InputTokens = int64(v)
