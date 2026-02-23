@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/zakari/hopeitworks/backend/internal/adapter/action"
 	"github.com/zakari/hopeitworks/backend/internal/domain/model"
+	"github.com/zakari/hopeitworks/backend/internal/domain/port"
 	apperrors "github.com/zakari/hopeitworks/backend/pkg/errors"
 )
 
@@ -177,6 +178,15 @@ func (m *hitlMockGitProvider) getDiffCalls() []string {
 	return result
 }
 
+type hitlMockGitProviderFactory struct {
+	provider port.GitProvider
+	err      error
+}
+
+func (m *hitlMockGitProviderFactory) ForProjectID(_ context.Context, _ uuid.UUID) (port.GitProvider, error) {
+	return m.provider, m.err
+}
+
 type hitlMockEventPublisher struct {
 	mu     sync.Mutex
 	events []model.Event
@@ -271,7 +281,7 @@ func defaultStory(storyID uuid.UUID) *model.Story {
 // --- Tests ---
 
 func TestHITLGateAction_Name(t *testing.T) {
-	a := action.NewHITLGateAction(nil, nil, nil, nil, nil, testLogger())
+	a := action.NewHITLGateAction(nil, nil, &hitlMockGitProviderFactory{}, nil, nil, testLogger())
 	if a.Name() != "hitl_gate" {
 		t.Fatalf("expected Name() = %q, got %q", "hitl_gate", a.Name())
 	}
@@ -281,6 +291,7 @@ func TestHITLGateAction_Execute_HappyPathWithPRURL(t *testing.T) {
 	hitlRepo := &hitlMockHITLRepo{}
 	runRepo := &hitlMockRunRepo{}
 	gitProvider := &hitlMockGitProvider{}
+	factory := &hitlMockGitProviderFactory{provider: gitProvider}
 	eventPub := &hitlMockEventPublisher{}
 	storyRepo := &hitlMockStoryRepo{
 		getByIDFn: func(_ context.Context, id uuid.UUID) (*model.Story, error) {
@@ -288,7 +299,7 @@ func TestHITLGateAction_Execute_HappyPathWithPRURL(t *testing.T) {
 		},
 	}
 
-	a := action.NewHITLGateAction(hitlRepo, runRepo, gitProvider, eventPub, storyRepo, testLogger())
+	a := action.NewHITLGateAction(hitlRepo, runRepo, factory, eventPub, storyRepo, testLogger())
 
 	prURL := "https://github.com/owner/repo/pull/42"
 	runCtx := buildRunCtx(map[string]any{"pr_url": prURL})
@@ -342,6 +353,7 @@ func TestHITLGateAction_Execute_NoPRURL(t *testing.T) {
 	hitlRepo := &hitlMockHITLRepo{}
 	runRepo := &hitlMockRunRepo{}
 	gitProvider := &hitlMockGitProvider{}
+	factory := &hitlMockGitProviderFactory{provider: gitProvider}
 	eventPub := &hitlMockEventPublisher{}
 	storyRepo := &hitlMockStoryRepo{
 		getByIDFn: func(_ context.Context, id uuid.UUID) (*model.Story, error) {
@@ -349,7 +361,7 @@ func TestHITLGateAction_Execute_NoPRURL(t *testing.T) {
 		},
 	}
 
-	a := action.NewHITLGateAction(hitlRepo, runRepo, gitProvider, eventPub, storyRepo, testLogger())
+	a := action.NewHITLGateAction(hitlRepo, runRepo, factory, eventPub, storyRepo, testLogger())
 
 	runCtx := buildRunCtx(map[string]any{})
 
@@ -382,6 +394,7 @@ func TestHITLGateAction_Execute_GetPRDiffFails(t *testing.T) {
 			return "", fmt.Errorf("gh pr diff failed: network error")
 		},
 	}
+	factory := &hitlMockGitProviderFactory{provider: gitProvider}
 	eventPub := &hitlMockEventPublisher{}
 	storyRepo := &hitlMockStoryRepo{
 		getByIDFn: func(_ context.Context, id uuid.UUID) (*model.Story, error) {
@@ -389,7 +402,7 @@ func TestHITLGateAction_Execute_GetPRDiffFails(t *testing.T) {
 		},
 	}
 
-	a := action.NewHITLGateAction(hitlRepo, runRepo, gitProvider, eventPub, storyRepo, testLogger())
+	a := action.NewHITLGateAction(hitlRepo, runRepo, factory, eventPub, storyRepo, testLogger())
 
 	prURL := "https://github.com/owner/repo/pull/42"
 	runCtx := buildRunCtx(map[string]any{"pr_url": prURL})
@@ -427,6 +440,7 @@ func TestHITLGateAction_Execute_HITLRepoCreateFails(t *testing.T) {
 	}
 	runRepo := &hitlMockRunRepo{}
 	gitProvider := &hitlMockGitProvider{}
+	factory := &hitlMockGitProviderFactory{provider: gitProvider}
 	eventPub := &hitlMockEventPublisher{}
 	storyRepo := &hitlMockStoryRepo{
 		getByIDFn: func(_ context.Context, id uuid.UUID) (*model.Story, error) {
@@ -434,7 +448,7 @@ func TestHITLGateAction_Execute_HITLRepoCreateFails(t *testing.T) {
 		},
 	}
 
-	a := action.NewHITLGateAction(hitlRepo, runRepo, gitProvider, eventPub, storyRepo, testLogger())
+	a := action.NewHITLGateAction(hitlRepo, runRepo, factory, eventPub, storyRepo, testLogger())
 
 	runCtx := buildRunCtx(map[string]any{})
 
@@ -467,6 +481,7 @@ func TestHITLGateAction_Execute_UpdateStepStatusFails(t *testing.T) {
 		},
 	}
 	gitProvider := &hitlMockGitProvider{}
+	factory := &hitlMockGitProviderFactory{provider: gitProvider}
 	eventPub := &hitlMockEventPublisher{}
 	storyRepo := &hitlMockStoryRepo{
 		getByIDFn: func(_ context.Context, id uuid.UUID) (*model.Story, error) {
@@ -474,7 +489,7 @@ func TestHITLGateAction_Execute_UpdateStepStatusFails(t *testing.T) {
 		},
 	}
 
-	a := action.NewHITLGateAction(hitlRepo, runRepo, gitProvider, eventPub, storyRepo, testLogger())
+	a := action.NewHITLGateAction(hitlRepo, runRepo, factory, eventPub, storyRepo, testLogger())
 
 	runCtx := buildRunCtx(map[string]any{})
 
@@ -503,6 +518,7 @@ func TestHITLGateAction_Execute_StoryFetchFails(t *testing.T) {
 	hitlRepo := &hitlMockHITLRepo{}
 	runRepo := &hitlMockRunRepo{}
 	gitProvider := &hitlMockGitProvider{}
+	factory := &hitlMockGitProviderFactory{provider: gitProvider}
 	eventPub := &hitlMockEventPublisher{}
 	storyRepo := &hitlMockStoryRepo{
 		getByIDFn: func(_ context.Context, id uuid.UUID) (*model.Story, error) {
@@ -510,7 +526,7 @@ func TestHITLGateAction_Execute_StoryFetchFails(t *testing.T) {
 		},
 	}
 
-	a := action.NewHITLGateAction(hitlRepo, runRepo, gitProvider, eventPub, storyRepo, testLogger())
+	a := action.NewHITLGateAction(hitlRepo, runRepo, factory, eventPub, storyRepo, testLogger())
 
 	runCtx := buildRunCtx(map[string]any{})
 

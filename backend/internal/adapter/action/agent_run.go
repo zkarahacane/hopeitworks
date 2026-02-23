@@ -177,13 +177,22 @@ func (a *AgentRunAction) createContainer(
 		repoURL = *project.RepoURL
 	}
 
+	// Resolve git token dynamically from project config
+	tokenEnvName := "GITHUB_TOKEN"
+	if project.GitTokenEnv != nil && *project.GitTokenEnv != "" {
+		tokenEnvName = *project.GitTokenEnv
+	}
+	gitToken := os.Getenv(tokenEnvName)
+
 	env := []string{
 		"CLAUDE_MD_CONTENT=" + claudeMD,
 		"REPO_URL=" + repoURL,
 		"BRANCH_NAME=" + branchName,
 		"STORY_KEY=" + story.Key,
 		"PROMPT_CONTENT=" + prompt,
-		"GITHUB_TOKEN=" + os.Getenv("GITHUB_TOKEN"),
+		"GIT_TOKEN=" + gitToken,
+		"GIT_PROVIDER=" + project.GitProvider,
+		"GITHUB_TOKEN=" + gitToken,
 		"CLAUDE_CODE_OAUTH_TOKEN=" + os.Getenv("CLAUDE_CODE_OAUTH_TOKEN"),
 	}
 

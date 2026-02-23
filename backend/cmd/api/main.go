@@ -184,31 +184,31 @@ func run() error {
 	// Action registry
 	actionReg := service.NewActionRegistry()
 
-	// Git provider (needed by ci_poll and hitl_gate actions)
+	// Git provider factory (resolves GitProvider per project: github or gitea)
 	cmdRunner := pkgexec.NewRealCommandRunner()
-	gitProvider := gitadapter.NewGhCliAdapter(cmdRunner, logger)
+	gitProviderFactory := gitadapter.NewGitProviderFactory(projectRepo, cmdRunner, logger)
 
 	// CI Poll action (no Docker required)
 	ciPollCfg := actionadapter.CIPollConfig{
 		DefaultPollInterval: 30 * time.Second,
 		DefaultTimeout:      15 * time.Minute,
 	}
-	ciPollAction := actionadapter.NewCIPollAction(gitProvider, eventRepo, ciPollCfg, logger)
+	ciPollAction := actionadapter.NewCIPollAction(gitProviderFactory, eventRepo, ciPollCfg, logger)
 	actionReg.Register(ciPollAction)
 	logger.Info("ci_poll action registered")
 
 	// HITL Gate action (no Docker required)
-	hitlGateAction := actionadapter.NewHITLGateAction(hitlRepo, runRepo, gitProvider, eventRepo, storyRepo, logger)
+	hitlGateAction := actionadapter.NewHITLGateAction(hitlRepo, runRepo, gitProviderFactory, eventRepo, storyRepo, logger)
 	actionReg.Register(hitlGateAction)
 	logger.Info("hitl_gate action registered")
 
 	// Git Branch action (no Docker required)
-	gitBranchAction := actionadapter.NewGitBranchAction(gitProvider, storyRepo, logger)
+	gitBranchAction := actionadapter.NewGitBranchAction(gitProviderFactory, storyRepo, logger)
 	actionReg.Register(gitBranchAction)
 	logger.Info("git_branch action registered")
 
 	// Git PR action (no Docker required)
-	gitPRAction := actionadapter.NewGitPRAction(gitProvider, storyRepo, logger)
+	gitPRAction := actionadapter.NewGitPRAction(gitProviderFactory, storyRepo, logger)
 	actionReg.Register(gitPRAction)
 	logger.Info("git_pr action registered")
 

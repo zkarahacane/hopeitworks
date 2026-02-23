@@ -16,30 +16,30 @@ import (
 // pending human approval. It creates a HITL request and transitions the
 // step to waiting_approval.
 type HITLGateAction struct {
-	hitlRepo    port.HITLRepository
-	runRepo     port.RunRepository
-	gitProvider port.GitProvider
-	eventPub    port.EventPublisher
-	storyRepo   port.StoryRepository
-	logger      *slog.Logger
+	hitlRepo           port.HITLRepository
+	runRepo            port.RunRepository
+	gitProviderFactory port.GitProviderFactory
+	eventPub           port.EventPublisher
+	storyRepo          port.StoryRepository
+	logger             *slog.Logger
 }
 
 // NewHITLGateAction creates a new HITL gate action.
 func NewHITLGateAction(
 	hitlRepo port.HITLRepository,
 	runRepo port.RunRepository,
-	gitProvider port.GitProvider,
+	gitProviderFactory port.GitProviderFactory,
 	eventPub port.EventPublisher,
 	storyRepo port.StoryRepository,
 	logger *slog.Logger,
 ) *HITLGateAction {
 	return &HITLGateAction{
-		hitlRepo:    hitlRepo,
-		runRepo:     runRepo,
-		gitProvider: gitProvider,
-		eventPub:    eventPub,
-		storyRepo:   storyRepo,
-		logger:      logger,
+		hitlRepo:           hitlRepo,
+		runRepo:            runRepo,
+		gitProviderFactory: gitProviderFactory,
+		eventPub:           eventPub,
+		storyRepo:          storyRepo,
+		logger:             logger,
 	}
 }
 
@@ -61,7 +61,18 @@ func (a *HITLGateAction) Execute(ctx context.Context, runCtx *model.RunContext) 
 	// 2. Attempt to fetch PR diff (non-fatal)
 	var diffContent *string
 	if prURL, ok := runCtx.Metadata["pr_url"].(string); ok && prURL != "" {
-		diff, diffErr := a.gitProvider.GetPRDiff(ctx, prURL)
+		gitProvider, factoryErr := a.gitProviderFactory.ForProjectID(ctx, runCtx.ProjectID)
+		if factoryErr != nil {
+			a.logger.Warn("failed to resolve git provider for PR diff, proceeding without diff",
+				"error", factoryErr)
+		}
+		var diff string
+		var diffErr error
+		if gitProvider != nil {
+			diff, diffErr = gitProvider.GetPRDiff(ctx, prURL)
+		} else {
+			diffErr = factoryErr
+		}
 		if diffErr != nil {
 			a.logger.Warn("failed to fetch PR diff, proceeding without diff",
 				"pr_url", prURL, "error", diffErr)

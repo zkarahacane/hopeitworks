@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/zakari/hopeitworks/backend/internal/adapter/action"
 	"github.com/zakari/hopeitworks/backend/internal/domain/model"
+	"github.com/zakari/hopeitworks/backend/internal/domain/port"
 )
 
 const (
@@ -49,6 +50,15 @@ func (m *prMockGitProvider) Push(_ context.Context, _ string, _ string) error   
 func (m *prMockGitProvider) MergePR(_ context.Context, _ string, _ string) error      { return nil }
 func (m *prMockGitProvider) GetCIStatus(_ context.Context, _ string) (string, error)  { return "", nil }
 func (m *prMockGitProvider) GetPRDiff(_ context.Context, _ string) (string, error)    { return "", nil }
+
+type prMockGitProviderFactory struct {
+	provider port.GitProvider
+	err      error
+}
+
+func (m *prMockGitProviderFactory) ForProjectID(_ context.Context, _ uuid.UUID) (port.GitProvider, error) {
+	return m.provider, m.err
+}
 
 type prMockStoryRepo struct {
 	getByIDFn func(ctx context.Context, id uuid.UUID) (*model.Story, error)
@@ -126,7 +136,7 @@ func newTestStory(storyID uuid.UUID) *model.Story {
 // --- Tests ---
 
 func TestGitPRAction_Name(t *testing.T) {
-	a := action.NewGitPRAction(nil, nil, testLogger())
+	a := action.NewGitPRAction(&prMockGitProviderFactory{}, nil, testLogger())
 	if a.Name() != "git_pr" {
 		t.Fatalf("expected Name() = %q, got %q", "git_pr", a.Name())
 	}
@@ -138,6 +148,7 @@ func TestGitPRAction_Execute_HappyPath(t *testing.T) {
 			return testPRURL, nil
 		},
 	}
+	factory := &prMockGitProviderFactory{provider: gitProvider}
 
 	storyID := uuid.New()
 	storyRepo := &prMockStoryRepo{
@@ -149,7 +160,7 @@ func TestGitPRAction_Execute_HappyPath(t *testing.T) {
 		},
 	}
 
-	a := action.NewGitPRAction(gitProvider, storyRepo, testLogger())
+	a := action.NewGitPRAction(factory, storyRepo, testLogger())
 	runCtx := buildPRRunCtx(map[string]any{
 		"branch_name":    testBranchPR,
 		"work_dir":       testWorkDir,
@@ -201,6 +212,7 @@ func TestGitPRAction_Execute_DefaultTargetBranch(t *testing.T) {
 			return testPRURLAlt, nil
 		},
 	}
+	factory := &prMockGitProviderFactory{provider: gitProvider}
 
 	storyID := uuid.New()
 	storyRepo := &prMockStoryRepo{
@@ -209,7 +221,7 @@ func TestGitPRAction_Execute_DefaultTargetBranch(t *testing.T) {
 		},
 	}
 
-	a := action.NewGitPRAction(gitProvider, storyRepo, testLogger())
+	a := action.NewGitPRAction(factory, storyRepo, testLogger())
 	runCtx := buildPRRunCtx(map[string]any{
 		"branch_name": testBranchPR,
 		"work_dir":    testWorkDir,
@@ -236,6 +248,7 @@ func TestGitPRAction_Execute_DraftFlag(t *testing.T) {
 			return testPRURLAlt, nil
 		},
 	}
+	factory := &prMockGitProviderFactory{provider: gitProvider}
 
 	storyID := uuid.New()
 	storyRepo := &prMockStoryRepo{
@@ -244,7 +257,7 @@ func TestGitPRAction_Execute_DraftFlag(t *testing.T) {
 		},
 	}
 
-	a := action.NewGitPRAction(gitProvider, storyRepo, testLogger())
+	a := action.NewGitPRAction(factory, storyRepo, testLogger())
 	runCtx := buildPRRunCtx(map[string]any{
 		"branch_name": testBranchPR,
 		"work_dir":    testWorkDir,
@@ -271,13 +284,14 @@ func TestGitPRAction_Execute_MissingBranchName(t *testing.T) {
 			return "", nil
 		},
 	}
+	factory := &prMockGitProviderFactory{provider: gitProvider}
 	storyRepo := &prMockStoryRepo{
 		getByIDFn: func(_ context.Context, _ uuid.UUID) (*model.Story, error) {
 			return newTestStory(uuid.New()), nil
 		},
 	}
 
-	a := action.NewGitPRAction(gitProvider, storyRepo, testLogger())
+	a := action.NewGitPRAction(factory, storyRepo, testLogger())
 	runCtx := buildPRRunCtx(map[string]any{
 		"work_dir": testWorkDir,
 		// No branch_name
@@ -303,13 +317,14 @@ func TestGitPRAction_Execute_MissingWorkDir(t *testing.T) {
 			return "", nil
 		},
 	}
+	factory := &prMockGitProviderFactory{provider: gitProvider}
 	storyRepo := &prMockStoryRepo{
 		getByIDFn: func(_ context.Context, _ uuid.UUID) (*model.Story, error) {
 			return newTestStory(uuid.New()), nil
 		},
 	}
 
-	a := action.NewGitPRAction(gitProvider, storyRepo, testLogger())
+	a := action.NewGitPRAction(factory, storyRepo, testLogger())
 	runCtx := buildPRRunCtx(map[string]any{
 		"branch_name": testBranchAlt,
 		// No work_dir
@@ -369,6 +384,7 @@ func TestGitPRAction_Execute_TitleRendering(t *testing.T) {
 					return testPRURLAlt, nil
 				},
 			}
+			factory := &prMockGitProviderFactory{provider: gitProvider}
 
 			storyID := uuid.New()
 			story := newTestStory(storyID)
@@ -379,7 +395,7 @@ func TestGitPRAction_Execute_TitleRendering(t *testing.T) {
 				},
 			}
 
-			a := action.NewGitPRAction(gitProvider, storyRepo, testLogger())
+			a := action.NewGitPRAction(factory, storyRepo, testLogger())
 			meta := map[string]any{
 				"branch_name": testBranchAlt,
 				"work_dir":    testWorkDir,
@@ -412,6 +428,7 @@ func TestGitPRAction_Execute_GitProviderFailure(t *testing.T) {
 			return "", gitError
 		},
 	}
+	factory := &prMockGitProviderFactory{provider: gitProvider}
 
 	storyID := uuid.New()
 	storyRepo := &prMockStoryRepo{
@@ -420,7 +437,7 @@ func TestGitPRAction_Execute_GitProviderFailure(t *testing.T) {
 		},
 	}
 
-	a := action.NewGitPRAction(gitProvider, storyRepo, testLogger())
+	a := action.NewGitPRAction(factory, storyRepo, testLogger())
 	runCtx := buildPRRunCtx(map[string]any{
 		"branch_name": testBranchAlt,
 		"work_dir":    testWorkDir,
@@ -450,6 +467,7 @@ func TestGitPRAction_Execute_StoryNotFound(t *testing.T) {
 			return "", nil
 		},
 	}
+	factory := &prMockGitProviderFactory{provider: gitProvider}
 
 	storyError := fmt.Errorf("story not found")
 	storyRepo := &prMockStoryRepo{
@@ -458,7 +476,7 @@ func TestGitPRAction_Execute_StoryNotFound(t *testing.T) {
 		},
 	}
 
-	a := action.NewGitPRAction(gitProvider, storyRepo, testLogger())
+	a := action.NewGitPRAction(factory, storyRepo, testLogger())
 	runCtx := buildPRRunCtx(map[string]any{
 		"branch_name": testBranchAlt,
 		"work_dir":    testWorkDir,
@@ -485,6 +503,7 @@ func TestGitPRAction_Execute_ObjectiveTruncation(t *testing.T) {
 			return testPRURLAlt, nil
 		},
 	}
+	factory := &prMockGitProviderFactory{provider: gitProvider}
 
 	storyID := uuid.New()
 	story := newTestStory(storyID)
@@ -495,7 +514,7 @@ func TestGitPRAction_Execute_ObjectiveTruncation(t *testing.T) {
 		},
 	}
 
-	a := action.NewGitPRAction(gitProvider, storyRepo, testLogger())
+	a := action.NewGitPRAction(factory, storyRepo, testLogger())
 	runCtx := buildPRRunCtx(map[string]any{
 		"branch_name": testBranchAlt,
 		"work_dir":    testWorkDir,

@@ -36,7 +36,8 @@ const createProjectSchema = toTypedSchema(
       .string()
       .min(1, 'Repository URL is required')
       .url('Must be a valid URL'),
-    git_provider: z.enum(['github']).default('github'),
+    git_provider: z.enum(['github', 'gitea']).default('github'),
+    git_token_env: z.string().optional().or(z.literal('')),
     agent_runtime: z.enum(['docker']).default('docker'),
     default_model: z.string().optional().or(z.literal('')),
   }),
@@ -54,6 +55,7 @@ const [name, nameAttrs] = defineField('name')
 const [description, descriptionAttrs] = defineField('description')
 const [repoUrl, repoUrlAttrs] = defineField('repo_url')
 const [gitProvider, gitProviderAttrs] = defineField('git_provider')
+const [gitTokenEnv, gitTokenEnvAttrs] = defineField('git_token_env')
 const [agentRuntime, agentRuntimeAttrs] = defineField('agent_runtime')
 const [defaultModel, defaultModelAttrs] = defineField('default_model')
 
@@ -65,6 +67,7 @@ const onSubmit = handleSubmit(async (values) => {
     description: values.description || undefined,
     repo_url: values.repo_url,
     git_provider: values.git_provider,
+    git_token_env: values.git_token_env || undefined,
     agent_runtime: values.agent_runtime,
     default_model: values.default_model || undefined,
   })
@@ -143,13 +146,27 @@ function close() {
             id="project-git-provider"
             v-model="gitProvider"
             v-bind="gitProviderAttrs"
-            :options="['github']"
+            :options="['github', 'gitea']"
             class="w-full"
             :invalid="!!errors.git_provider"
           />
           <label for="project-git-provider">Git Provider *</label>
         </FloatLabel>
         <small v-if="errors.git_provider" class="text-red-500">{{ errors.git_provider }}</small>
+      </div>
+
+      <div class="flex flex-col gap-2">
+        <FloatLabel>
+          <InputText
+            id="project-git-token-env"
+            v-model="gitTokenEnv"
+            v-bind="gitTokenEnvAttrs"
+            class="w-full"
+            placeholder="GITEA_TOKEN"
+          />
+          <label for="project-git-token-env">Git Token Env Var</label>
+        </FloatLabel>
+        <small class="text-surface-500">Name of the environment variable holding the git token (defaults to GITHUB_TOKEN)</small>
       </div>
 
       <div class="flex flex-col gap-2">
