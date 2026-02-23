@@ -72,16 +72,25 @@ func TestParallelGroupExecutor_Execute_HappyPath(t *testing.T) {
 	}
 	projectRepo := newMockProjectRepoForService()
 	projectRepo.projects[projectID] = &model.Project{ID: projectID, Name: "Test"}
+	parallelAgentID := uuid.MustParse("00000000-0000-0000-0000-000000000010")
 	mockPCR := &mockPipelineConfigRepoForRun{
 		getByProjectIDFn: func(_ context.Context, _ uuid.UUID) (*model.PipelineConfig, error) {
 			return &model.PipelineConfig{
 				ProjectID:  projectID,
-				ConfigYAML: `steps: [{name: "implement", action_type: "implement", model: "claude-sonnet-4-6", auto_approve: false}]`,
+				ConfigYAML: `steps: [{name: "implement", action_type: "implement", agent_id: "00000000-0000-0000-0000-000000000010", auto_approve: false}]`,
 			}, nil
 		},
 	}
 
+	agentRepo := newMockAgentRepo()
+	agentRepo.agents[parallelAgentID] = &model.Agent{
+		ID:    parallelAgentID,
+		Model: "claude-sonnet-4-6",
+		Image: "hopeitworks/agent:latest",
+	}
+
 	runSvc := NewRunService(runRepo, projectRepo, storyRepo, mockPCR, &mockJobQueue{})
+	runSvc.SetAgentRepo(agentRepo)
 	actionReg := newMockActionRegistry()
 	pipeExec := NewPipelineExecutor(runRepo, storyRepo, actionReg, eventPub, logger)
 	executor := NewParallelGroupExecutor(epicRunRepo, runSvc, pipeExec, eventPub, logger)
@@ -167,16 +176,25 @@ func TestParallelGroupExecutor_Execute_FailFast(t *testing.T) {
 	}
 	projectRepo := newMockProjectRepoForService()
 	projectRepo.projects[projectID] = &model.Project{ID: projectID, Name: "Test"}
+	failFastAgentID := uuid.MustParse("00000000-0000-0000-0000-000000000020")
 	mockPCR := &mockPipelineConfigRepoForRun{
 		getByProjectIDFn: func(_ context.Context, _ uuid.UUID) (*model.PipelineConfig, error) {
 			return &model.PipelineConfig{
 				ProjectID:  projectID,
-				ConfigYAML: `steps: [{name: "implement", action_type: "implement", model: "claude-sonnet-4-6", auto_approve: false}]`,
+				ConfigYAML: `steps: [{name: "implement", action_type: "implement", agent_id: "00000000-0000-0000-0000-000000000020", auto_approve: false}]`,
 			}, nil
 		},
 	}
 
+	failFastAgentRepo := newMockAgentRepo()
+	failFastAgentRepo.agents[failFastAgentID] = &model.Agent{
+		ID:    failFastAgentID,
+		Model: "claude-sonnet-4-6",
+		Image: "hopeitworks/agent:latest",
+	}
+
 	runSvc := NewRunService(runRepo, projectRepo, storyRepo, mockPCR, &mockJobQueue{})
+	runSvc.SetAgentRepo(failFastAgentRepo)
 	actionReg := newMockActionRegistry()
 	pipeExec := NewPipelineExecutor(runRepo, storyRepo, actionReg, eventPub, logger)
 	executor := NewParallelGroupExecutor(epicRunRepo, runSvc, pipeExec, eventPub, logger)

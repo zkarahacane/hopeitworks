@@ -507,11 +507,18 @@ func TestTransitionRunStep_InvalidTransition(t *testing.T) {
 
 // ── LaunchRun Tests ──────────────────────────────────────────────────────────
 
+// testAgentIDs are fixed UUIDs used in testPipelineYAML for deterministic tests.
+var (
+	testAgentIDImplement = uuid.MustParse("00000000-0000-0000-0000-000000000001")
+	testAgentIDReview    = uuid.MustParse("00000000-0000-0000-0000-000000000002")
+	testAgentIDMerge     = uuid.MustParse("00000000-0000-0000-0000-000000000003")
+)
+
 const testPipelineYAML = `steps:
   - id: "step-1"
     name: "implement"
     action_type: "implement"
-    model: "claude-opus-4-6"
+    agent_id: "00000000-0000-0000-0000-000000000001"
     auto_approve: false
     retry_policy:
       max_retries: 0
@@ -519,7 +526,7 @@ const testPipelineYAML = `steps:
   - id: "step-2"
     name: "review"
     action_type: "review"
-    model: "claude-sonnet-4-6"
+    agent_id: "00000000-0000-0000-0000-000000000002"
     auto_approve: true
     retry_policy:
       max_retries: 1
@@ -527,12 +534,33 @@ const testPipelineYAML = `steps:
   - id: "step-3"
     name: "merge"
     action_type: "merge"
-    model: "claude-sonnet-4-6"
+    agent_id: "00000000-0000-0000-0000-000000000003"
     auto_approve: true
     retry_policy:
       max_retries: 0
       retry_type: "none"
 `
+
+// newTestAgentRepo returns a mock agent repo pre-loaded with the agents used in testPipelineYAML.
+func newTestAgentRepo() *mockAgentRepo {
+	repo := newMockAgentRepo()
+	repo.agents[testAgentIDImplement] = &model.Agent{
+		ID:    testAgentIDImplement,
+		Model: "claude-opus-4-6",
+		Image: "hopeitworks/agent:latest",
+	}
+	repo.agents[testAgentIDReview] = &model.Agent{
+		ID:    testAgentIDReview,
+		Model: "claude-sonnet-4-6",
+		Image: "hopeitworks/agent:latest",
+	}
+	repo.agents[testAgentIDMerge] = &model.Agent{
+		ID:    testAgentIDMerge,
+		Model: "claude-sonnet-4-6",
+		Image: "hopeitworks/agent:latest",
+	}
+	return repo
+}
 
 func TestLaunchRun_Success(t *testing.T) {
 	projectID := uuid.New()
@@ -583,6 +611,7 @@ func TestLaunchRun_Success(t *testing.T) {
 	}
 
 	svc := NewRunService(runRepo, newMockProjectRepoForService(), storyRepo, pipelineConfigRepo, jobQueue)
+	svc.SetAgentRepo(newTestAgentRepo())
 	run, err := svc.LaunchRun(context.Background(), projectID, storyID)
 
 	if err != nil {
@@ -664,6 +693,7 @@ func TestLaunchRun_BranchNameInMetadata(t *testing.T) {
 	}
 
 	svc := NewRunService(runRepo, newMockProjectRepoForService(), storyRepo, pipelineConfigRepo, &mockJobQueue{})
+	svc.SetAgentRepo(newTestAgentRepo())
 	run, err := svc.LaunchRun(context.Background(), projectID, storyID)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
@@ -727,12 +757,13 @@ func TestLaunchRun_ModelInMetadata(t *testing.T) {
 	}
 
 	svc := NewRunService(runRepo, newMockProjectRepoForService(), storyRepo, pipelineConfigRepo, &mockJobQueue{})
+	svc.SetAgentRepo(newTestAgentRepo())
 	_, err := svc.LaunchRun(context.Background(), projectID, storyID)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	// Verify per-step model keys in metadata (testPipelineYAML has models on all 3 steps)
+	// Verify per-step model keys in metadata (testPipelineYAML has agents on all 3 steps)
 	if capturedRun.Metadata == nil {
 		t.Fatal("expected run metadata to be set")
 	}
@@ -758,8 +789,8 @@ func TestLaunchRun_NoModelWhenEmpty(t *testing.T) {
 
 	pipelineYAMLNoModel := `steps:
   - id: "step-1"
-    name: "implement"
-    action_type: "implement"
+    name: "git-branch"
+    action_type: "git_branch"
     auto_approve: false
     retry_policy:
       max_retries: 0
@@ -1049,6 +1080,7 @@ func TestLaunchRun_JobEnqueueFails(t *testing.T) {
 	}
 
 	svc := NewRunService(runRepo, newMockProjectRepoForService(), storyRepo, pipelineConfigRepo, jobQueue)
+	svc.SetAgentRepo(newTestAgentRepo())
 	_, err := svc.LaunchRun(context.Background(), projectID, storyID)
 	if err == nil {
 		t.Fatal("expected error, got nil")

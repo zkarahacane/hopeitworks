@@ -9,12 +9,12 @@ set -euo pipefail
 # Required env vars:
 #   REPO_URL             - HTTPS URL of the git repository
 #   BRANCH_NAME          - Branch to checkout (created if absent)
-#   CLAUDE_MD_CONTENT    - Full CLAUDE.md content to inject
 #   PROMPT_CONTENT       - Rendered agent prompt
 #   GIT_TOKEN            - Token for git authentication (or GITHUB_TOKEN for backward compat)
 #   CLAUDE_CODE_OAUTH_TOKEN - OAuth token for Claude Code
 #
 # Optional env vars:
+#   CLAUDE_MD_CONTENT    - Full CLAUDE.md content to inject (skipped if empty)
 #   GIT_PROVIDER         - Git provider (default: github). Set to "gitea" for Gitea.
 #   STORY_KEY            - Story key for git commit context
 #   GIT_AUTHOR_NAME      - Git author name (default: hopeitworks-agent)
@@ -37,7 +37,7 @@ GIT_TOKEN="${GIT_TOKEN:-${GITHUB_TOKEN:-}}"
 GIT_PROVIDER="${GIT_PROVIDER:-github}"
 
 # --- Validate required env vars ---
-for var in REPO_URL BRANCH_NAME CLAUDE_MD_CONTENT PROMPT_CONTENT GIT_TOKEN CLAUDE_CODE_OAUTH_TOKEN; do
+for var in REPO_URL BRANCH_NAME PROMPT_CONTENT GIT_TOKEN CLAUDE_CODE_OAUTH_TOKEN; do
     if [[ -z "${!var:-}" ]]; then
         emit_log "Missing required env var: $var" "error"
         exit 1
@@ -105,9 +105,13 @@ fi
 
 emit_log "Branch ready: $BRANCH_NAME"
 
-# --- Inject CLAUDE.md ---
-echo "$CLAUDE_MD_CONTENT" > /workspace/CLAUDE.md
-emit_log "CLAUDE.md injected"
+# --- Inject CLAUDE.md (optional) ---
+if [[ -n "${CLAUDE_MD_CONTENT:-}" ]]; then
+    echo "$CLAUDE_MD_CONTENT" > /workspace/CLAUDE.md
+    emit_log "CLAUDE.md injected"
+else
+    emit_log "CLAUDE_MD_CONTENT not set, skipping CLAUDE.md injection"
+fi
 
 # --- Write prompt to file ---
 echo "$PROMPT_CONTENT" > /tmp/prompt.md

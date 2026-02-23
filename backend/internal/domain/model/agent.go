@@ -20,6 +20,7 @@ type Agent struct {
 	Model           string     `json:"model"`
 	Image           string     `json:"image"`
 	TemplateContent string     `json:"template_content"`
+	Type            string     `json:"type"`  // "implement", "review", "merge", "retry", "custom"
 	Scope           string     `json:"scope"` // "global" or "project"
 	ProjectID       *uuid.UUID `json:"project_id"`
 	CreatedAt       time.Time  `json:"created_at"`

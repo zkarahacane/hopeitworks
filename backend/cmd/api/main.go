@@ -145,9 +145,8 @@ func run() error {
 	agentService := service.NewAgentService(agentRepo)
 	agentHandler := handler.NewAgentHandler(agentService)
 
-	// Template rendering service (Handlebars engine for prompt templates)
+	// Template renderer (Handlebars engine for prompt templates)
 	handlebarsRenderer := hbadapter.NewRenderer()
-	templateSvc := service.NewTemplateService(agentRepo, handlebarsRenderer, logger)
 
 	// Auth handler
 	authHandler := handler.NewAuthHandler(authService, userRepo, false)
@@ -232,17 +231,15 @@ func run() error {
 			logger.Warn("log streamer unavailable, agent_run action disabled", "error", logErr)
 		} else {
 			agentCfg := actionadapter.AgentConfig{
-				DefaultImage:  getEnvOrDefault("AGENT_IMAGE", "hopeitworks/agent:latest"),
 				DefaultMemory: 4294967296, // 4GB
 				DefaultCPUs:   2.0,
 				NetworkName:   cfg.Docker.AgentNetwork,
 				LogTailLines:  50,
-				ClaudeMDPath:  getEnvOrDefault("CLAUDE_MD_PATH", "agent/claude-md"),
 			}
 			agentRunAction := actionadapter.NewAgentRunAction(
 				containerMgr, logStreamer, eventRepo,
 				storyRepo, projectRepo, runRepo,
-				templateSvc, costSvc, agentCfg, logger,
+				handlebarsRenderer, costSvc, agentCfg, logger,
 			)
 			actionReg.Register(agentRunAction)
 			logger.Info("agent_run action registered")
@@ -256,7 +253,7 @@ func run() error {
 
 			// Incremental retry action (delegates to agent_run)
 			incrementalRetryAction := actionadapter.NewIncrementalRetryAction(
-				runRepo, templateSvc, agentRunAction, logger,
+				runRepo, agentRunAction, logger,
 			)
 			actionReg.Register(incrementalRetryAction)
 			logger.Info("incremental_retry action registered")

@@ -10,7 +10,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/zakari/hopeitworks/backend/internal/adapter/action"
 	"github.com/zakari/hopeitworks/backend/internal/domain/model"
-	"github.com/zakari/hopeitworks/backend/internal/domain/service"
 	apperrors "github.com/zakari/hopeitworks/backend/pkg/errors"
 )
 
@@ -96,7 +95,9 @@ func (m *retryMockAgentRun) Execute(ctx context.Context, runCtx *model.RunContex
 // buildRetryRunCtx creates a minimal RunContext for retry tests.
 func buildRetryRunCtx(parentStepID uuid.UUID, extraMeta map[string]any) *model.RunContext {
 	meta := map[string]any{
-		"parent_step_id": parentStepID.String(),
+		"parent_step_id":   parentStepID.String(),
+		"agent_image":      "test/agent:latest",
+		"template_content": "Implement {{story_key}}",
 	}
 	for k, v := range extraMeta {
 		meta[k] = v
@@ -130,12 +131,6 @@ func makeParentStep(retryCount int, errorMsg, logTail string) *model.RunStep {
 	return step
 }
 
-// buildTemplateService builds a TemplateService backed by a no-op agent repo
-// so the default templates are used (no DB required).
-func buildTemplateService() *service.TemplateService {
-	return service.NewTemplateService(&mockAgentRepo{}, &mockTemplateRenderer{}, testLogger())
-}
-
 // --- Tests ---
 
 // TestIncrementalRetryAction_Name verifies the action identifier.
@@ -143,7 +138,7 @@ func TestIncrementalRetryAction_Name(t *testing.T) {
 	t.Parallel()
 
 	a := action.NewIncrementalRetryAction(
-		&retryMockRunRepo{}, nil, &retryMockAgentRun{}, testLogger(),
+		&retryMockRunRepo{}, &retryMockAgentRun{}, testLogger(),
 	)
 	if got := a.Name(); got != "incremental_retry" {
 		t.Errorf("Name() = %q; want %q", got, "incremental_retry")
@@ -156,7 +151,7 @@ func TestIncrementalRetryAction_MissingParentStepID(t *testing.T) {
 
 	repo := &retryMockRunRepo{}
 	agentRun := &retryMockAgentRun{}
-	a := action.NewIncrementalRetryAction(repo, nil, agentRun, testLogger())
+	a := action.NewIncrementalRetryAction(repo, agentRun, testLogger())
 
 	runCtx := &model.RunContext{
 		Run:      &model.Run{ID: uuid.New()},
@@ -177,7 +172,7 @@ func TestIncrementalRetryAction_MissingParentStepID(t *testing.T) {
 }
 
 // TestIncrementalRetryAction_FirstIncrementalRetry verifies the happy path:
-// parent.retry_count=0 → new step with retry_type="incremental", implement-retry template.
+// parent.retry_count=0 → new step with retry_type="incremental", error_context injected.
 func TestIncrementalRetryAction_FirstIncrementalRetry(t *testing.T) {
 	t.Parallel()
 
@@ -189,8 +184,7 @@ func TestIncrementalRetryAction_FirstIncrementalRetry(t *testing.T) {
 		},
 	}
 
-	templateSvc := buildTemplateService()
-	a := action.NewIncrementalRetryAction(repo, templateSvc, agentRun, testLogger())
+	a := action.NewIncrementalRetryAction(repo, agentRun, testLogger())
 
 	runCtx := buildRetryRunCtx(parent.ID, nil)
 	if err := a.Execute(context.Background(), runCtx); err != nil {
@@ -217,9 +211,6 @@ func TestIncrementalRetryAction_FirstIncrementalRetry(t *testing.T) {
 	if agentRun.lastRunCtx.RunStep.ID != createdStep.ID {
 		t.Errorf("delegated RunStep.ID = %v; want %v", agentRun.lastRunCtx.RunStep.ID, createdStep.ID)
 	}
-	if agentRun.lastRunCtx.Metadata["template_name"] != service.TemplateNameImplementRetry {
-		t.Errorf("template_name = %v; want %q", agentRun.lastRunCtx.Metadata["template_name"], service.TemplateNameImplementRetry)
-	}
 	if agentRun.lastRunCtx.Metadata["error_context"] != "test error" {
 		t.Errorf("error_context = %v; want %q", agentRun.lastRunCtx.Metadata["error_context"], "test error")
 	}
@@ -229,11 +220,12 @@ func TestIncrementalRetryAction_FirstIncrementalRetry(t *testing.T) {
 }
 
 // TestIncrementalRetryAction_SecondFailureFallsToFullRetry verifies that when
-// parent.retry_count >= max_incremental (default 2), retry_type switches to "full".
+// parent.retry_count >= max_incremental (default 2), retry_type switches to "full"
+// and error_context/log_tail are cleared.
 func TestIncrementalRetryAction_SecondFailureFallsToFullRetry(t *testing.T) {
 	t.Parallel()
 
-	parent := makeParentStep(2, "persistent error", "")
+	parent := makeParentStep(2, "persistent error", "some logs")
 	retryType := "incremental"
 	parent.RetryType = &retryType
 
@@ -244,8 +236,7 @@ func TestIncrementalRetryAction_SecondFailureFallsToFullRetry(t *testing.T) {
 		},
 	}
 
-	templateSvc := buildTemplateService()
-	a := action.NewIncrementalRetryAction(repo, templateSvc, agentRun, testLogger())
+	a := action.NewIncrementalRetryAction(repo, agentRun, testLogger())
 
 	runCtx := buildRetryRunCtx(parent.ID, nil)
 	if err := a.Execute(context.Background(), runCtx); err != nil {
@@ -265,8 +256,12 @@ func TestIncrementalRetryAction_SecondFailureFallsToFullRetry(t *testing.T) {
 	if agentRun.lastRunCtx == nil {
 		t.Fatal("expected AgentRun.Execute to be called")
 	}
-	if agentRun.lastRunCtx.Metadata["template_name"] != service.TemplateNameImplement {
-		t.Errorf("template_name = %v; want %q", agentRun.lastRunCtx.Metadata["template_name"], service.TemplateNameImplement)
+	// Full retry should NOT have error_context
+	if _, ok := agentRun.lastRunCtx.Metadata["error_context"]; ok {
+		t.Error("expected error_context to be cleared for full retry")
+	}
+	if _, ok := agentRun.lastRunCtx.Metadata["log_tail"]; ok {
+		t.Error("expected log_tail to be cleared for full retry")
 	}
 }
 
@@ -282,7 +277,7 @@ func TestIncrementalRetryAction_MaxRetriesExceeded(t *testing.T) {
 		},
 	}
 
-	a := action.NewIncrementalRetryAction(repo, nil, agentRun, testLogger())
+	a := action.NewIncrementalRetryAction(repo, agentRun, testLogger())
 
 	runCtx := buildRetryRunCtx(parent.ID, nil)
 	err := a.Execute(context.Background(), runCtx)
@@ -317,8 +312,7 @@ func TestIncrementalRetryAction_CreateRetryStepFailure(t *testing.T) {
 		},
 	}
 
-	templateSvc := buildTemplateService()
-	a := action.NewIncrementalRetryAction(repo, templateSvc, agentRun, testLogger())
+	a := action.NewIncrementalRetryAction(repo, agentRun, testLogger())
 
 	runCtx := buildRetryRunCtx(parent.ID, nil)
 	err := a.Execute(context.Background(), runCtx)
@@ -344,8 +338,7 @@ func TestIncrementalRetryAction_CustomRetryPolicy(t *testing.T) {
 		},
 	}
 
-	templateSvc := buildTemplateService()
-	a := action.NewIncrementalRetryAction(repo, templateSvc, agentRun, testLogger())
+	a := action.NewIncrementalRetryAction(repo, agentRun, testLogger())
 
 	extraMeta := map[string]any{
 		"retry_policy.max_retries":     5,
@@ -363,7 +356,8 @@ func TestIncrementalRetryAction_CustomRetryPolicy(t *testing.T) {
 	if createdStep.RetryType == nil || *createdStep.RetryType != "full" {
 		t.Errorf("RetryType = %v; want %q", createdStep.RetryType, "full")
 	}
-	if agentRun.lastRunCtx.Metadata["template_name"] != service.TemplateNameImplement {
-		t.Errorf("template_name = %v; want %q", agentRun.lastRunCtx.Metadata["template_name"], service.TemplateNameImplement)
+	// Full retry should clear error_context
+	if _, ok := agentRun.lastRunCtx.Metadata["error_context"]; ok {
+		t.Error("expected error_context to be cleared for full retry")
 	}
 }

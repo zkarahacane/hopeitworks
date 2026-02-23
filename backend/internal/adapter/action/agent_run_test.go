@@ -321,34 +321,10 @@ func (m *mockRunRepo) getContainerInfoCalls() []containerInfoCall {
 	return result
 }
 
-// mockAgentRepo implements port.AgentRepository for tests.
-// Returns empty lists so TemplateService falls back to default templates.
-type mockAgentRepo struct{}
-
-func (m *mockAgentRepo) CreateAgent(_ context.Context, a *model.Agent) (*model.Agent, error) {
-	return a, nil
-}
-func (m *mockAgentRepo) GetAgent(_ context.Context, _ uuid.UUID) (*model.Agent, error) {
-	return nil, errors.NewNotFound("agent", "unknown")
-}
-func (m *mockAgentRepo) ListAgentsByProject(_ context.Context, _ uuid.UUID) ([]*model.Agent, error) {
-	return nil, nil
-}
-func (m *mockAgentRepo) ListGlobalAgents(_ context.Context) ([]*model.Agent, error) {
-	return nil, nil
-}
-func (m *mockAgentRepo) ListAgentsByProjectMerged(_ context.Context, _ uuid.UUID) ([]*model.Agent, error) {
-	return nil, nil
-}
-func (m *mockAgentRepo) UpdateAgent(_ context.Context, a *model.Agent) (*model.Agent, error) {
-	return a, nil
-}
-func (m *mockAgentRepo) DeleteAgent(_ context.Context, _ uuid.UUID) error { return nil }
-
 type mockTemplateRenderer struct{}
 
 func (m *mockTemplateRenderer) Render(templateContent string, _ *model.TemplateContext) (string, error) {
-	return "rendered: " + templateContent[:20], nil
+	return "rendered: " + templateContent[:min(20, len(templateContent))], nil
 }
 
 // --- Test fixture ---
@@ -413,7 +389,6 @@ type agentRunFixture struct {
 	storyRepo    *mockStoryRepo
 	projectRepo  *mockProjectRepo
 	runRepo      *mockRunRepo
-	templateSvc  *service.TemplateService
 	costSvc      *service.CostService
 
 	action *action.AgentRunAction
@@ -507,24 +482,17 @@ func newAgentRunFixture(t *testing.T) *agentRunFixture {
 	}
 	f.runRepo = &mockRunRepo{}
 
-	// Set up CLAUDE.md test directory
-	claudeMDDir := setupTestClaudeMDDir(t)
-
-	// Create a real TemplateService with mock dependencies
-	agentRepo := &mockAgentRepo{}
+	// Create a real TemplateRenderer
 	renderer := &mockTemplateRenderer{}
-	f.templateSvc = service.NewTemplateService(agentRepo, renderer, testLogger())
 
 	// Create a CostService with a no-op mock repository
 	f.costSvc = service.NewCostService(&mockCostRepo{}, nil, nil, nil, testLogger())
 
 	agentCfg := action.AgentConfig{
-		DefaultImage:  "hopeitworks/agent:latest",
 		DefaultMemory: 4294967296,
 		DefaultCPUs:   2.0,
 		NetworkName:   "test-network",
 		LogTailLines:  50,
-		ClaudeMDPath:  claudeMDDir,
 	}
 
 	f.action = action.NewAgentRunAction(
@@ -534,7 +502,7 @@ func newAgentRunFixture(t *testing.T) *agentRunFixture {
 		f.storyRepo,
 		f.projectRepo,
 		f.runRepo,
-		f.templateSvc,
+		renderer,
 		f.costSvc,
 		agentCfg,
 		testLogger(),
@@ -550,7 +518,9 @@ func (f *agentRunFixture) newRunContext() *model.RunContext {
 		ProjectID: f.projectID,
 		StoryID:   f.storyID,
 		Metadata: map[string]any{
-			"branch_name": "feat/s-42-test",
+			"branch_name":      "feat/s-42-test",
+			"agent_image":      "hopeitworks/agent:latest",
+			"template_content": "Implement story {{story_key}}: {{story_title}}",
 		},
 	}
 }
@@ -609,7 +579,7 @@ func TestAgentRunAction_HappyPath(t *testing.T) {
 		t.Errorf("expected story_key label S-42, got %s", opts.Labels["story_key"])
 	}
 
-	// Verify env vars contain expected keys
+	// Verify env vars contain expected keys (no CLAUDE_MD_CONTENT)
 	envMap := make(map[string]string)
 	for _, env := range opts.Env {
 		parts := strings.SplitN(env, "=", 2)
@@ -617,8 +587,8 @@ func TestAgentRunAction_HappyPath(t *testing.T) {
 			envMap[parts[0]] = parts[1]
 		}
 	}
-	if _, ok := envMap["CLAUDE_MD_CONTENT"]; !ok {
-		t.Error("expected CLAUDE_MD_CONTENT env var")
+	if _, ok := envMap["CLAUDE_MD_CONTENT"]; ok {
+		t.Error("CLAUDE_MD_CONTENT should not be in env vars")
 	}
 	if envMap["REPO_URL"] != "https://github.com/test/repo" {
 		t.Errorf("expected REPO_URL, got %q", envMap["REPO_URL"])
@@ -677,51 +647,39 @@ func TestAgentRunAction_HappyPath(t *testing.T) {
 	}
 }
 
-func TestAgentRunAction_FrontendScope(t *testing.T) {
+func TestAgentRunAction_MissingAgentImage(t *testing.T) {
 	f := newAgentRunFixture(t)
-	frontendScope := "frontend"
-	f.story.Scope = &frontendScope
 	runCtx := f.newRunContext()
+	delete(runCtx.Metadata, "agent_image")
 
 	err := f.action.Execute(context.Background(), runCtx)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
+	if err == nil {
+		t.Fatal("expected error for missing agent_image, got nil")
+	}
+	if !strings.Contains(err.Error(), "agent_image is required") {
+		t.Errorf("expected error about agent_image, got: %v", err)
 	}
 
-	// Verify CLAUDE.md content includes frontend.md
+	// Verify no container was created
 	f.containerMgr.mu.Lock()
 	createCalls := f.containerMgr.createCalls
 	f.containerMgr.mu.Unlock()
-	if len(createCalls) != 1 {
-		t.Fatalf("expected 1 create call, got %d", len(createCalls))
-	}
-
-	envMap := make(map[string]string)
-	for _, env := range createCalls[0].Env {
-		parts := strings.SplitN(env, "=", 2)
-		if len(parts) == 2 {
-			envMap[parts[0]] = parts[1]
-		}
-	}
-	claudeMD := envMap["CLAUDE_MD_CONTENT"]
-	if !strings.Contains(claudeMD, "Frontend Instructions") {
-		t.Error("expected CLAUDE_MD_CONTENT to contain frontend instructions")
-	}
-	if strings.Contains(claudeMD, "Backend Instructions") {
-		t.Error("CLAUDE_MD_CONTENT should not contain backend instructions for frontend scope")
+	if len(createCalls) > 0 {
+		t.Error("expected no container to be created when agent_image is missing")
 	}
 }
 
-func TestAgentRunAction_SharedScope(t *testing.T) {
+func TestAgentRunAction_EmptyTemplateContent(t *testing.T) {
 	f := newAgentRunFixture(t)
-	f.story.Scope = nil // nil scope
 	runCtx := f.newRunContext()
+	delete(runCtx.Metadata, "template_content")
 
 	err := f.action.Execute(context.Background(), runCtx)
 	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
+		t.Fatalf("expected no error (empty prompt is ok), got %v", err)
 	}
 
+	// Verify PROMPT_CONTENT is empty
 	f.containerMgr.mu.Lock()
 	createCalls := f.containerMgr.createCalls
 	f.containerMgr.mu.Unlock()
@@ -733,15 +691,8 @@ func TestAgentRunAction_SharedScope(t *testing.T) {
 			envMap[parts[0]] = parts[1]
 		}
 	}
-	claudeMD := envMap["CLAUDE_MD_CONTENT"]
-	if !strings.Contains(claudeMD, "Base Instructions") {
-		t.Error("expected CLAUDE_MD_CONTENT to contain base instructions")
-	}
-	if !strings.Contains(claudeMD, "Project Context") {
-		t.Error("expected CLAUDE_MD_CONTENT to contain project context")
-	}
-	if strings.Contains(claudeMD, "Backend Instructions") || strings.Contains(claudeMD, "Frontend Instructions") {
-		t.Error("CLAUDE_MD_CONTENT should not contain scope-specific instructions for nil scope")
+	if envMap["PROMPT_CONTENT"] != "" {
+		t.Errorf("expected empty PROMPT_CONTENT when template_content is absent, got %q", envMap["PROMPT_CONTENT"])
 	}
 }
 
@@ -830,8 +781,6 @@ func TestAgentRunAction_ContextCancellation(t *testing.T) {
 	f := newAgentRunFixture(t)
 
 	// Configure wait to block until context is cancelled.
-	// This simulates the real LogStreamer behavior: when context is cancelled,
-	// the done channel is closed without sending a value (zero value = 0).
 	f.logStreamer.streamLogsFn = func(ctx context.Context, _, _, _ string) (<-chan model.LogEvent, <-chan int, error) {
 		logCh := make(chan model.LogEvent)
 		doneCh := make(chan int, 1)
@@ -870,30 +819,6 @@ func TestAgentRunAction_ContextCancellation(t *testing.T) {
 	}
 	if len(removeCalls) < 1 {
 		t.Error("expected container remove called on cancellation")
-	}
-}
-
-func TestAgentRunAction_TemplateNotFound(t *testing.T) {
-	f := newAgentRunFixture(t)
-
-	// Override metadata to use a non-existent template
-	runCtx := f.newRunContext()
-	runCtx.Metadata["template_name"] = "nonexistent-template"
-
-	err := f.action.Execute(context.Background(), runCtx)
-	if err == nil {
-		t.Fatal("expected error for missing template, got nil")
-	}
-	if !strings.Contains(err.Error(), "render prompt template") {
-		t.Errorf("expected error to wrap 'render prompt template', got: %v", err)
-	}
-
-	// Verify no container was created
-	f.containerMgr.mu.Lock()
-	createCalls := f.containerMgr.createCalls
-	f.containerMgr.mu.Unlock()
-	if len(createCalls) > 0 {
-		t.Error("expected no container to be created when template is not found")
 	}
 }
 
@@ -936,19 +861,6 @@ func TestAgentRunAction_ProjectNotFound(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "fetch project") {
 		t.Errorf("expected error to wrap 'fetch project', got: %v", err)
-	}
-}
-
-func TestAgentRunAction_MetadataTemplateName(t *testing.T) {
-	f := newAgentRunFixture(t)
-
-	// Use the default template name (implement) — should work
-	runCtx := f.newRunContext()
-	delete(runCtx.Metadata, "template_name") // ensure no override
-
-	err := f.action.Execute(context.Background(), runCtx)
-	if err != nil {
-		t.Fatalf("expected no error with default template, got %v", err)
 	}
 }
 

@@ -13,8 +13,8 @@ import (
 )
 
 const createAgent = `-- name: CreateAgent :one
-INSERT INTO agents (id, name, model, image, template_content, scope, project_id, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+INSERT INTO agents (id, name, model, image, template_content, type, scope, project_id, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
 RETURNING id, project_id, name, template_content, type, created_at, updated_at, scope, model, image
 `
 
@@ -24,6 +24,7 @@ type CreateAgentParams struct {
 	Model           pgtype.Text `json:"model"`
 	Image           pgtype.Text `json:"image"`
 	TemplateContent string      `json:"template_content"`
+	Type            string      `json:"type"`
 	Scope           string      `json:"scope"`
 	ProjectID       pgtype.UUID `json:"project_id"`
 }
@@ -35,6 +36,7 @@ func (q *Queries) CreateAgent(ctx context.Context, arg CreateAgentParams) (Agent
 		arg.Model,
 		arg.Image,
 		arg.TemplateContent,
+		arg.Type,
 		arg.Scope,
 		arg.ProjectID,
 	)

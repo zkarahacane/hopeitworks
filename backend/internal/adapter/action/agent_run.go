@@ -18,8 +18,6 @@ import (
 
 // AgentConfig holds configuration for agent container execution.
 type AgentConfig struct {
-	// DefaultImage is the Docker image for agent containers (e.g., "hopeitworks/agent:latest").
-	DefaultImage string
 	// DefaultMemory is the memory limit in bytes (e.g., 4GB = 4294967296).
 	DefaultMemory int64
 	// DefaultCPUs is the CPU limit (e.g., 2.0).
@@ -28,8 +26,6 @@ type AgentConfig struct {
 	NetworkName string
 	// LogTailLines is the number of log lines to keep for error context.
 	LogTailLines int
-	// ClaudeMDPath is the path to the agent/claude-md/ directory.
-	ClaudeMDPath string
 }
 
 // AgentRunAction implements model.Action for running Claude Code agents in containers.
@@ -40,9 +36,8 @@ type AgentRunAction struct {
 	storyRepo    port.StoryRepository
 	projectRepo  port.ProjectRepository
 	runRepo      port.RunRepository
-	templateSvc  *service.TemplateService
+	renderer     port.TemplateRenderer
 	costSvc      *service.CostService
-	composer     *CLAUDEMDComposer
 	config       AgentConfig
 	logger       *slog.Logger
 }
@@ -55,7 +50,7 @@ func NewAgentRunAction(
 	storyRepo port.StoryRepository,
 	projectRepo port.ProjectRepository,
 	runRepo port.RunRepository,
-	templateSvc *service.TemplateService,
+	renderer port.TemplateRenderer,
 	costSvc *service.CostService,
 	config AgentConfig,
 	logger *slog.Logger,
@@ -67,9 +62,8 @@ func NewAgentRunAction(
 		storyRepo:    storyRepo,
 		projectRepo:  projectRepo,
 		runRepo:      runRepo,
-		templateSvc:  templateSvc,
+		renderer:     renderer,
 		costSvc:      costSvc,
-		composer:     NewCLAUDEMDComposer(config.ClaudeMDPath),
 		config:       config,
 		logger:       logger,
 	}
@@ -80,8 +74,9 @@ func (a *AgentRunAction) Name() string {
 	return "agent_run"
 }
 
-// Execute runs the agent in a container: fetches story, composes CLAUDE.md,
-// renders prompt, creates container, streams logs, and waits for exit.
+// Execute runs the agent in a container: fetches story, renders prompt from
+// template_content metadata, creates container with agent_image, streams logs,
+// and waits for exit.
 func (a *AgentRunAction) Execute(ctx context.Context, runCtx *model.RunContext) error {
 	// 1. Fetch story
 	story, err := a.storyRepo.GetByID(ctx, runCtx.StoryID)
@@ -95,40 +90,48 @@ func (a *AgentRunAction) Execute(ctx context.Context, runCtx *model.RunContext) 
 		return fmt.Errorf("fetch project: %w", err)
 	}
 
-	// 3. Compose CLAUDE.md
-	scope := ""
-	if story.Scope != nil {
-		scope = *story.Scope
-	}
-	claudeMD, err := a.composer.Compose(scope)
-	if err != nil {
-		return fmt.Errorf("compose CLAUDE.md: %w", err)
-	}
-
-	// 4. Resolve and render prompt template
-	templateName := a.resolveTemplateName(runCtx)
+	// 3. Resolve and render prompt template from metadata
+	templateContent, _ := runCtx.Metadata["template_content"].(string)
 	branchName, _ := runCtx.Metadata["branch_name"].(string)
 	repoURL := ""
 	if project.RepoURL != nil {
 		repoURL = *project.RepoURL
 	}
 
-	tmplCtx := &model.TemplateContext{
-		StoryKey:           story.Key,
-		StoryTitle:         story.Title,
-		StoryObjective:     derefString(story.Objective),
-		TargetFiles:        story.TargetFiles,
-		AcceptanceCriteria: derefString(story.AcceptanceCriteria),
-		BranchName:         branchName,
-		RepoURL:            repoURL,
+	var prompt string
+	if templateContent != "" {
+		tmplCtx := &model.TemplateContext{
+			StoryKey:           story.Key,
+			StoryTitle:         story.Title,
+			StoryObjective:     derefString(story.Objective),
+			TargetFiles:        story.TargetFiles,
+			AcceptanceCriteria: derefString(story.AcceptanceCriteria),
+			BranchName:         branchName,
+			RepoURL:            repoURL,
+		}
+
+		// Inject retry context if present
+		if ec, ok := runCtx.Metadata["error_context"].(string); ok {
+			tmplCtx.ErrorContext = ec
+		}
+		if lt, ok := runCtx.Metadata["log_tail"].(string); ok {
+			tmplCtx.LogTail = lt
+		}
+
+		prompt, err = a.renderer.Render(templateContent, tmplCtx)
+		if err != nil {
+			return fmt.Errorf("render prompt template: %w", err)
+		}
 	}
-	prompt, err := a.templateSvc.RenderForStory(ctx, runCtx.ProjectID, templateName, tmplCtx)
-	if err != nil {
-		return fmt.Errorf("render prompt template %q: %w", templateName, err)
+
+	// 4. Resolve agent image from metadata (required)
+	agentImage, _ := runCtx.Metadata["agent_image"].(string)
+	if agentImage == "" {
+		return fmt.Errorf("agent_image is required in run metadata but was not set")
 	}
 
 	// 5. Create container
-	containerID, err := a.createContainer(ctx, runCtx, project, story, claudeMD, prompt, branchName)
+	containerID, err := a.createContainer(ctx, runCtx, project, story, agentImage, prompt, branchName)
 	if err != nil {
 		return fmt.Errorf("create container: %w", err)
 	}
@@ -156,21 +159,13 @@ func (a *AgentRunAction) Execute(ctx context.Context, runCtx *model.RunContext) 
 	return nil
 }
 
-// resolveTemplateName determines which prompt template to use.
-func (a *AgentRunAction) resolveTemplateName(runCtx *model.RunContext) string {
-	if name, ok := runCtx.Metadata["template_name"].(string); ok && name != "" {
-		return name
-	}
-	return service.TemplateNameImplement
-}
-
 // createContainer builds ContainerOpts and creates the container.
 func (a *AgentRunAction) createContainer(
 	ctx context.Context,
 	runCtx *model.RunContext,
 	project *model.Project,
 	story *model.Story,
-	claudeMD, prompt, branchName string,
+	agentImage, prompt, branchName string,
 ) (string, error) {
 	repoURL := ""
 	if project.RepoURL != nil {
@@ -185,7 +180,6 @@ func (a *AgentRunAction) createContainer(
 	gitToken := os.Getenv(tokenEnvName)
 
 	env := []string{
-		"CLAUDE_MD_CONTENT=" + claudeMD,
 		"REPO_URL=" + repoURL,
 		"BRANCH_NAME=" + branchName,
 		"STORY_KEY=" + story.Key,
@@ -202,7 +196,7 @@ func (a *AgentRunAction) createContainer(
 	}
 
 	opts := model.ContainerOpts{
-		Image:       a.config.DefaultImage,
+		Image:       agentImage,
 		NetworkName: a.config.NetworkName,
 		Memory:      a.config.DefaultMemory,
 		CPUs:        a.config.DefaultCPUs,
@@ -213,11 +207,6 @@ func (a *AgentRunAction) createContainer(
 			"step_id":    runCtx.RunStep.ID.String(),
 			"story_key":  story.Key,
 		},
-	}
-
-	// Override image when agent specifies a custom Docker image.
-	if agentImage, ok := runCtx.Metadata["agent_image"].(string); ok && agentImage != "" {
-		opts.Image = agentImage
 	}
 
 	return a.containerMgr.Create(ctx, opts)
