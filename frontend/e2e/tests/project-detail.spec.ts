@@ -122,13 +122,13 @@ test.describe('Project Detail — Tabbed Navigation', () => {
     await expect(page.getByRole('heading', { name: 'Pipeline Configuration' })).toBeVisible()
   })
 
-  test('clicking Agents tab navigates to templates sub-page', async ({ page }) => {
+  test('clicking Agents tab navigates to agents sub-page', async ({ page }) => {
     await page.goto('/projects/p1')
 
     await page.getByTestId('project-tabs').getByText('Agents').click()
 
     await expect(page).toHaveURL('/projects/p1/agents')
-    await expect(page.getByRole('heading', { name: 'Prompt Agents', exact: true })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Agents', exact: true })).toBeVisible()
   })
 
   test('back button navigates to projects list', async ({ page }) => {

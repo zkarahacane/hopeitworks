@@ -183,7 +183,7 @@ test.describe('Agent List Page', () => {
 
       await page.getByText('Implement Feature').click()
 
-      await expect(page).toHaveURL(`/projects/${PROJECT_ID}/agents/t1`)
+      await expect(page).toHaveURL(`/projects/${PROJECT_ID}/agents/a1`)
     })
 
     test('filters agents by scope', async ({ page }) => {
