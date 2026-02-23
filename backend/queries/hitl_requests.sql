@@ -1,6 +1,6 @@
 -- name: CreateHITLRequest :one
-INSERT INTO hitl_requests (id, run_step_id, gate_type, diff_content, status, created_at)
-VALUES ($1, $2, $3, $4, $5, now())
+INSERT INTO hitl_requests (id, run_step_id, gate_type, diff_content, message, status, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, now())
 RETURNING *;
 
 -- name: GetHITLRequest :one

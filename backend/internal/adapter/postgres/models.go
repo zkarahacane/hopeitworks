@@ -125,6 +125,7 @@ type HitlRequest struct {
 	RunStepID       uuid.UUID          `json:"run_step_id"`
 	GateType        string             `json:"gate_type"`
 	DiffContent     pgtype.Text        `json:"diff_content"`
+	Message         pgtype.Text        `json:"message"`
 	Status          string             `json:"status"`
 	ResolvedAt      pgtype.Timestamptz `json:"resolved_at"`
 	ResolvedBy      pgtype.UUID        `json:"resolved_by"`
