@@ -39,6 +39,8 @@ tags:
     description: Human-in-the-loop approval endpoints
   - name: notifications
     description: Notification configuration endpoints
+  - name: agents
+    description: Agent management endpoints
   - name: costs
     description: Cost tracking and observability endpoints
 
@@ -1068,6 +1070,7 @@ paths:
     get:
       operationId: listPromptTemplates
       summary: List prompt templates for a project
+      deprecated: true
       tags: [prompt-templates]
       parameters:
         - $ref: "#/components/parameters/ProjectIdPath"
@@ -1086,6 +1089,7 @@ paths:
     post:
       operationId: createPromptTemplate
       summary: Create a new prompt template in a project
+      deprecated: true
       tags: [prompt-templates]
       parameters:
         - $ref: "#/components/parameters/ProjectIdPath"
@@ -1115,6 +1119,7 @@ paths:
     get:
       operationId: getPromptTemplate
       summary: Get a prompt template by ID
+      deprecated: true
       tags: [prompt-templates]
       parameters:
         - $ref: "#/components/parameters/ProjectIdPath"
@@ -1134,6 +1139,7 @@ paths:
     put:
       operationId: updatePromptTemplate
       summary: Update a prompt template
+      deprecated: true
       tags: [prompt-templates]
       parameters:
         - $ref: "#/components/parameters/ProjectIdPath"
@@ -1165,6 +1171,7 @@ paths:
     delete:
       operationId: deletePromptTemplate
       summary: Delete a prompt template
+      deprecated: true
       tags: [prompt-templates]
       parameters:
         - $ref: "#/components/parameters/ProjectIdPath"
@@ -1176,6 +1183,142 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ── Agents ───────────────────────────────────────────────────────────
+  /agents:
+    get:
+      operationId: listGlobalAgents
+      summary: List all global agents (scope = global)
+      tags: [agents]
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/PerPageParam"
+      responses:
+        "200":
+          description: List of global agents
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Agent"
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /projects/{projectId}/agents:
+    get:
+      operationId: listProjectAgents
+      summary: List agents available for a project (project-scoped + global)
+      tags: [agents]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/PerPageParam"
+      responses:
+        "200":
+          description: List of agents
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Agent"
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    post:
+      operationId: createAgent
+      summary: Create a new project-scoped agent
+      tags: [agents]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAgentRequest"
+      responses:
+        "201":
+          description: Agent created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agent"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /projects/{projectId}/agents/{agentId}:
+    get:
+      operationId: getAgent
+      summary: Get a single agent by ID
+      tags: [agents]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/AgentIdPath"
+      responses:
+        "200":
+          description: Agent found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agent"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    put:
+      operationId: updateAgent
+      summary: Update an agent
+      tags: [agents]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/AgentIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAgentRequest"
+      responses:
+        "200":
+          description: Agent updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agent"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    delete:
+      operationId: deleteAgent
+      summary: Delete an agent
+      tags: [agents]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/AgentIdPath"
+      responses:
+        "204":
+          description: Agent deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -1705,6 +1848,15 @@ components:
         type: string
         format: uuid
       description: Prompt template UUID
+
+    AgentIdPath:
+      name: agentId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Agent UUID
 
     RunIdPath:
       name: runId
@@ -2620,6 +2772,92 @@ components:
         pagination:
           $ref: "#/components/schemas/Pagination"
 
+    # ── Agent ────────────────────────────────────────────────────────
+    Agent:
+      type: object
+      required:
+        - id
+        - name
+        - model
+        - image
+        - template_content
+        - scope
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        model:
+          type: string
+          description: LLM model identifier (e.g. "claude-opus-4-6", "claude-sonnet-4-6")
+        image:
+          type: string
+          description: Docker image reference for the agent runtime container
+        template_content:
+          type: string
+          description: Handlebars prompt template content
+        scope:
+          type: string
+          enum:
+            - global
+            - project
+          description: >
+            "global" agents are available across all projects;
+            "project" agents are scoped to a single project.
+        project_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Required when scope is "project"; null for global agents
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateAgentRequest:
+      type: object
+      required:
+        - name
+        - model
+        - image
+        - template_content
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        model:
+          type: string
+        image:
+          type: string
+        template_content:
+          type: string
+        scope:
+          type: string
+          enum: [global, project]
+          default: project
+
+    UpdateAgentRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        model:
+          type: string
+        image:
+          type: string
+        template_content:
+          type: string
+
     # ── Pipeline Config ──────────────────────────────────────────────
     PipelineStep:
       type: object
@@ -2640,8 +2878,8 @@ components:
           example: implement
         action_type:
           type: string
-          enum: [implement, review, merge, test, custom]
-          example: implement
+          enum: [agent_run, git_branch, git_pr, notification, human, ci_poll, hitl_gate]
+          example: agent_run
         model:
           type: string
           enum: [claude-opus-4-6, claude-sonnet-4-6, claude-haiku-4-5]
@@ -2651,6 +2889,29 @@ components:
           example: false
         retry_policy:
           $ref: "#/components/schemas/RetryPolicy"
+        config:
+          type: object
+          additionalProperties:
+            type: string
+          description: Optional per-action-type configuration key-value pairs
+
+    PipelineGroup:
+      type: object
+      required:
+        - id
+        - name
+        - steps
+      properties:
+        id:
+          type: string
+          description: Unique identifier for this group within the pipeline config
+        name:
+          type: string
+          description: Human-readable name for the group (e.g. "Setup", "Development")
+        steps:
+          type: array
+          items:
+            $ref: "#/components/schemas/PipelineStep"
 
     RetryPolicy:
       type: object
@@ -2672,17 +2933,18 @@ components:
       type: object
       required:
         - project_id
-        - steps
+        - groups
         - updated_at
       properties:
         project_id:
           type: string
           format: uuid
           example: 660e8400-e29b-41d4-a716-446655440000
-        steps:
+        groups:
           type: array
           items:
-            $ref: "#/components/schemas/PipelineStep"
+            $ref: "#/components/schemas/PipelineGroup"
+          description: Ordered list of step groups. Groups are executed sequentially; steps within a group are executed sequentially.
         updated_at:
           type: string
           format: date-time
@@ -2691,12 +2953,13 @@ components:
     UpdatePipelineConfigRequest:
       type: object
       required:
-        - steps
+        - groups
       properties:
-        steps:
+        groups:
           type: array
           items:
-            $ref: "#/components/schemas/PipelineStep"
+            $ref: "#/components/schemas/PipelineGroup"
+          description: Ordered list of step groups.
 
     # ── Run ──────────────────────────────────────────────────────────
     Run:
@@ -3169,6 +3432,16 @@ components:
           type: number
           format: double
           example: 3.4567
+        total_tokens_input:
+          type: integer
+          format: int64
+          description: Total input tokens consumed in the period
+          example: 500000
+        total_tokens_output:
+          type: integer
+          format: int64
+          description: Total output tokens consumed in the period
+          example: 80000
         avg_cost_per_story_usd:
           type: number
           format: double
@@ -3227,6 +3500,16 @@ components:
           type: number
           format: double
           example: 0.01234
+        tokens_input:
+          type: integer
+          format: int64
+          description: Total input tokens for this run
+          example: 100000
+        tokens_output:
+          type: integer
+          format: int64
+          description: Total output tokens for this run
+          example: 20000
 
     RunCostBreakdown:
       type: object
@@ -3321,6 +3604,16 @@ components:
           type: number
           format: double
           example: 3.15
+        total_tokens_input:
+          type: integer
+          format: int64
+          description: Total input tokens across all steps
+          example: 300000
+        total_tokens_output:
+          type: integer
+          format: int64
+          description: Total output tokens across all steps
+          example: 50000
         steps:
           type: array
           items:
@@ -3426,6 +3719,12 @@ components:
             $ref: "#/components/schemas/Error"
     Forbidden:
       description: Forbidden - admin access required
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    UnprocessableEntity:
+      description: Validation error
       content:
         application/json:
           schema:

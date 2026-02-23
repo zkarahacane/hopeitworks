@@ -4,7 +4,7 @@ import Column from 'primevue/column'
 import Tag from 'primevue/tag'
 import Skeleton from 'primevue/skeleton'
 import { useRelativeTime } from '@/composables/useRelativeTime'
-import { formatCostUSD } from '@/utils/formatCost'
+import { formatCostUSD, formatTokenCount } from '@/utils/formatCost'
 import { statusSeverity } from '@/utils/runStatus'
 import type { components } from '@/api/schema'
 
@@ -64,6 +64,16 @@ const skeletonRows = [1, 2, 3]
       <Column field="started_at" header="Started">
         <template #body="{ data: row }">
           <RelativeCell :date="row.started_at" />
+        </template>
+      </Column>
+      <Column field="tokens_input" header="Tokens In">
+        <template #body="{ data: row }">
+          {{ formatTokenCount(row.tokens_input ?? 0) }}
+        </template>
+      </Column>
+      <Column field="tokens_output" header="Tokens Out">
+        <template #body="{ data: row }">
+          {{ formatTokenCount(row.tokens_output ?? 0) }}
         </template>
       </Column>
       <Column field="total_cost_usd" header="Cost">

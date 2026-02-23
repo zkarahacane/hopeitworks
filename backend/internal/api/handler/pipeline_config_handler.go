@@ -50,9 +50,9 @@ func (h *PipelineConfigHandler) UpdatePipelineConfig(w http.ResponseWriter, r *h
 		return
 	}
 
-	configYAML, err := stepsToYAML(req.Steps)
+	configYAML, err := groupsToYAML(req.Groups)
 	if err != nil {
-		writeErrorResponse(w, errors.NewValidation("steps", "invalid pipeline steps"))
+		writeErrorResponse(w, errors.NewValidation("groups", "invalid pipeline groups"))
 		return
 	}
 
@@ -73,12 +73,13 @@ func (h *PipelineConfigHandler) UpdatePipelineConfig(w http.ResponseWriter, r *h
 
 // pipelineStepYAML is the intermediate YAML representation for a pipeline step.
 type pipelineStepYAML struct {
-	ID          string          `yaml:"id"`
-	Name        string          `yaml:"name"`
-	ActionType  string          `yaml:"action_type"`
-	Model       string          `yaml:"model"`
-	AutoApprove bool            `yaml:"auto_approve"`
-	RetryPolicy retryPolicyYAML `yaml:"retry_policy"`
+	ID          string            `yaml:"id"`
+	Name        string            `yaml:"name"`
+	ActionType  string            `yaml:"action_type"`
+	Model       string            `yaml:"model"`
+	AutoApprove bool              `yaml:"auto_approve"`
+	RetryPolicy retryPolicyYAML   `yaml:"retry_policy"`
+	Config      map[string]string `yaml:"config,omitempty"`
 }
 
 // retryPolicyYAML is the intermediate YAML representation for a retry policy.
@@ -87,27 +88,32 @@ type retryPolicyYAML struct {
 	RetryType  string `yaml:"retry_type"`
 }
 
-// pipelineConfigYAML is the intermediate YAML representation for the full config.
-type pipelineConfigYAML struct {
+// pipelineGroupYAML is the intermediate YAML representation for a pipeline group.
+type pipelineGroupYAML struct {
+	ID    string             `yaml:"id"`
+	Name  string             `yaml:"name"`
 	Steps []pipelineStepYAML `yaml:"steps"`
 }
 
-// stepsToYAML serialises API pipeline steps to a YAML string for domain storage.
-func stepsToYAML(steps []PipelineStep) (string, error) {
+// pipelineConfigYAML is the intermediate YAML representation for the full config.
+type pipelineConfigYAML struct {
+	Groups []pipelineGroupYAML `yaml:"groups"`
+}
+
+// groupsToYAML serialises API pipeline groups to a YAML string for domain storage.
+func groupsToYAML(groups []PipelineGroup) (string, error) {
 	cfg := pipelineConfigYAML{
-		Steps: make([]pipelineStepYAML, len(steps)),
+		Groups: make([]pipelineGroupYAML, len(groups)),
 	}
-	for i, s := range steps {
-		cfg.Steps[i] = pipelineStepYAML{
-			ID:          s.Id.String(),
-			Name:        s.Name,
-			ActionType:  string(s.ActionType),
-			Model:       string(s.Model),
-			AutoApprove: s.AutoApprove,
-			RetryPolicy: retryPolicyYAML{
-				MaxRetries: s.RetryPolicy.MaxRetries,
-				RetryType:  string(s.RetryPolicy.RetryType),
-			},
+	for i, g := range groups {
+		steps := make([]pipelineStepYAML, len(g.Steps))
+		for j, s := range g.Steps {
+			steps[j] = stepToYAML(s)
+		}
+		cfg.Groups[i] = pipelineGroupYAML{
+			ID:    g.Id,
+			Name:  g.Name,
+			Steps: steps,
 		}
 	}
 	out, err := yaml.Marshal(cfg)
@@ -115,6 +121,25 @@ func stepsToYAML(steps []PipelineStep) (string, error) {
 		return "", err
 	}
 	return string(out), nil
+}
+
+// stepToYAML converts a single API PipelineStep to its YAML representation.
+func stepToYAML(s PipelineStep) pipelineStepYAML {
+	y := pipelineStepYAML{
+		ID:          s.Id.String(),
+		Name:        s.Name,
+		ActionType:  string(s.ActionType),
+		Model:       string(s.Model),
+		AutoApprove: s.AutoApprove,
+		RetryPolicy: retryPolicyYAML{
+			MaxRetries: s.RetryPolicy.MaxRetries,
+			RetryType:  string(s.RetryPolicy.RetryType),
+		},
+	}
+	if s.Config != nil {
+		y.Config = *s.Config
+	}
+	return y
 }
 
 // toAPIPipelineConfig converts a domain PipelineConfig to the API PipelineConfig type.
@@ -128,25 +153,37 @@ func toAPIPipelineConfig(c *model.PipelineConfig) (PipelineConfig, error) {
 		}
 	}
 
-	steps := make([]PipelineStep, len(cfg.Steps))
-	for i, s := range cfg.Steps {
-		stepID, _ := uuid.Parse(s.ID)
-		steps[i] = PipelineStep{
-			Id:          stepID,
-			Name:        s.Name,
-			ActionType:  PipelineStepActionType(s.ActionType),
-			Model:       PipelineStepModel(s.Model),
-			AutoApprove: s.AutoApprove,
-			RetryPolicy: RetryPolicy{
-				MaxRetries: s.RetryPolicy.MaxRetries,
-				RetryType:  RetryPolicyRetryType(s.RetryPolicy.RetryType),
-			},
+	groups := make([]PipelineGroup, len(cfg.Groups))
+	for i, g := range cfg.Groups {
+		steps := make([]PipelineStep, len(g.Steps))
+		for j, s := range g.Steps {
+			stepID, _ := uuid.Parse(s.ID)
+			step := PipelineStep{
+				Id:          stepID,
+				Name:        s.Name,
+				ActionType:  PipelineStepActionType(s.ActionType),
+				Model:       PipelineStepModel(s.Model),
+				AutoApprove: s.AutoApprove,
+				RetryPolicy: RetryPolicy{
+					MaxRetries: s.RetryPolicy.MaxRetries,
+					RetryType:  RetryPolicyRetryType(s.RetryPolicy.RetryType),
+				},
+			}
+			if len(s.Config) > 0 {
+				step.Config = &s.Config
+			}
+			steps[j] = step
+		}
+		groups[i] = PipelineGroup{
+			Id:    g.ID,
+			Name:  g.Name,
+			Steps: steps,
 		}
 	}
 
 	return PipelineConfig{
 		ProjectId: c.ProjectID,
-		Steps:     steps,
+		Groups:    groups,
 		UpdatedAt: c.UpdatedAt,
 	}, nil
 }
