@@ -62,6 +62,7 @@ services:
       # --- agent tokens (required for pipeline execution) ---
       GITHUB_TOKEN: ${GITHUB_TOKEN}
       CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN}
+      GITEA_TOKEN: ${GITEA_TOKEN}
       # --- smtp ---
       SMTP_HOST: mailhog
       SMTP_PORT: 1025
