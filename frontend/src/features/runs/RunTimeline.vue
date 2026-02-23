@@ -16,6 +16,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   retryStep: [stepId: string]
+  selectStep: [step: RunStep]
 }>()
 
 const stepsRef = computed(() => props.steps)
@@ -45,7 +46,11 @@ function canRetry(group: { root: RunStep; retries: RunStep[] }): boolean {
       data-testid="step-group"
     >
       <!-- Root step header -->
-      <div class="flex items-center gap-3" data-testid="root-step">
+      <div
+        class="flex items-center gap-3 cursor-pointer hover:bg-surface-50 dark:hover:bg-surface-800 -mx-2 px-2 py-1 rounded transition-colors"
+        data-testid="root-step"
+        @click="emit('selectStep', lastStep(group))"
+      >
         <span class="font-semibold text-surface-800">{{ group.root.step_name }}</span>
         <Tag
           :severity="statusSeverity(group.root.status)"
