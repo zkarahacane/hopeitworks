@@ -38,7 +38,7 @@ const navItems = [
 ]
 
 const adminNavItems = [
-  { label: 'Users', icon: 'pi pi-users', route: '/admin/users' },
+  { label: 'Administration', icon: 'pi pi-shield', route: '/admin/users' },
 ]
 
 const sidebarWidth = computed(() => (props.collapsed ? 'w-12' : 'w-60'))
