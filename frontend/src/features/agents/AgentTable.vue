@@ -1,0 +1,132 @@
+<script setup lang="ts">
+import { ref, computed } from 'vue'
+import DataTable from 'primevue/datatable'
+import Column from 'primevue/column'
+import Select from 'primevue/select'
+import Tag from 'primevue/tag'
+import Button from 'primevue/button'
+import type { Agent, AgentScope } from '@/stores/agents'
+import { formatRelativeDate } from '@/utils/formatDate'
+
+const props = defineProps<{
+  agents: Agent[]
+  isAdmin: boolean
+}>()
+
+const emit = defineEmits<{
+  rowClick: [agentId: string]
+  delete: [agentId: string]
+}>()
+
+const selectedScope = ref<AgentScope | null>(null)
+
+const scopeFilterOptions = [
+  { label: 'All', value: null },
+  { label: 'Project', value: 'project' },
+  { label: 'Global', value: 'global' },
+]
+
+const filteredAgents = computed(() => {
+  if (!selectedScope.value) return props.agents
+  return props.agents.filter((a) => a.scope === selectedScope.value)
+})
+
+/** Map agent scope to PrimeVue Tag severity */
+function scopeSeverity(scope: AgentScope): string {
+  return scope === 'global' ? 'info' : 'success'
+}
+
+/** Whether the edit action should be enabled for this agent */
+function canEdit(agent: Agent): boolean {
+  return agent.scope !== 'global' || props.isAdmin
+}
+
+function handleRowClick(event: { data: Agent }) {
+  emit('rowClick', event.data.id)
+}
+</script>
+
+<template>
+  <div class="flex flex-col gap-4">
+    <div class="flex items-center gap-2">
+      <label for="scope-filter" class="text-sm font-medium">Filter by scope:</label>
+      <Select
+        id="scope-filter"
+        v-model="selectedScope"
+        :options="scopeFilterOptions"
+        option-label="label"
+        option-value="value"
+        placeholder="All"
+        class="w-48"
+      />
+    </div>
+
+    <DataTable
+      :value="filteredAgents"
+      :paginator="filteredAgents.length > 10"
+      :rows="10"
+      striped-rows
+      row-hover
+      class="cursor-pointer"
+      data-testid="agents-table"
+      @row-click="handleRowClick($event as unknown as { data: Agent })"
+    >
+      <Column field="name" header="Name" sortable>
+        <template #body="{ data }">
+          <span class="font-semibold">{{ (data as Agent).name }}</span>
+        </template>
+      </Column>
+      <Column field="scope" header="Scope" sortable>
+        <template #body="{ data }">
+          <Tag
+            :value="(data as Agent).scope"
+            :severity="scopeSeverity((data as Agent).scope)"
+          />
+        </template>
+      </Column>
+      <Column field="model" header="Model" sortable>
+        <template #body="{ data }">
+          {{ (data as Agent).model }}
+        </template>
+      </Column>
+      <Column field="image" header="Image" sortable>
+        <template #body="{ data }">
+          <code class="text-sm">{{ (data as Agent).image }}</code>
+        </template>
+      </Column>
+      <Column field="updated_at" header="Last Updated" sortable>
+        <template #body="{ data }">
+          {{ formatRelativeDate((data as Agent).updated_at) }}
+        </template>
+      </Column>
+      <Column header="Actions" :style="{ width: '8rem' }">
+        <template #body="{ data }">
+          <div class="flex items-center gap-1">
+            <Button
+              icon="pi pi-pencil"
+              text
+              rounded
+              size="small"
+              severity="secondary"
+              :disabled="!canEdit(data as Agent)"
+              :title="canEdit(data as Agent) ? 'Edit agent' : 'Global agents can only be edited by administrators'"
+              data-testid="edit-agent-btn"
+              @click.stop="emit('rowClick', (data as Agent).id)"
+            />
+            <Button
+              v-if="canEdit(data as Agent)"
+              icon="pi pi-trash"
+              text
+              rounded
+              size="small"
+              severity="danger"
+              title="Delete agent"
+              data-testid="delete-agent-btn"
+              @click.stop="emit('delete', (data as Agent).id)"
+            />
+          </div>
+        </template>
+      </Column>
+    </DataTable>
+  </div>
+</template>
