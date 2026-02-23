@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/zakari/hopeitworks/backend/internal/adapter/markdown"
 	"github.com/zakari/hopeitworks/backend/internal/adapter/postgres"
 	"github.com/zakari/hopeitworks/backend/internal/domain/model"
@@ -32,6 +33,24 @@ const (
 	scopeBackend  = "backend"
 	scopeFrontend = "frontend"
 )
+
+// createTestAgent inserts a minimal agent row in the DB and returns its UUID.
+// The agent is global-scoped so it is visible to any project without additional
+// project filtering.
+func createTestAgent(t *testing.T, pool *pgxpool.Pool, name, agentType, agentModel string) uuid.UUID {
+	t.Helper()
+	ctx := context.Background()
+	id := uuid.New()
+	_, err := pool.Exec(ctx,
+		`INSERT INTO agents (id, name, model, image, template_content, type, scope)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+		id, name, agentModel, "hopeitworks/agent:latest", "# template", agentType, "global",
+	)
+	if err != nil {
+		t.Fatalf("failed to create test agent %q: %v", name, err)
+	}
+	return id
+}
 
 // noopAction implements model.Action for integration tests.
 // It succeeds immediately without performing real work.
@@ -185,31 +204,37 @@ func TestIntegration_PipelineValidation_RunCreation(t *testing.T) {
 
 	projectID := testutil.CreateProject(t, db.Pool)
 
-	// Create pipeline config
-	pipelineYAML := `steps:
-  - id: "step-implement"
-    name: "implement"
-    action_type: "implement"
-    model: "claude-opus-4-6"
-    auto_approve: false
-    retry_policy:
-      max_retries: 0
-      retry_type: "none"
-  - id: "step-review"
-    name: "review"
-    action_type: "review"
-    model: "claude-sonnet-4-20250514"
-    auto_approve: true
-    retry_policy:
-      max_retries: 1
-      retry_type: "on-failure"
-  - id: "step-merge"
-    name: "merge"
-    action_type: "merge"
-    auto_approve: true
-    retry_policy:
-      max_retries: 0
-      retry_type: "none"`
+	// Create agents in DB so LaunchRun can resolve agent_id references.
+	implementAgentID := createTestAgent(t, db.Pool, "implement-agent", "implement", "claude-opus-4-6")
+	reviewAgentID := createTestAgent(t, db.Pool, "review-agent", "review", "claude-sonnet-4-6")
+	mergeAgentID := createTestAgent(t, db.Pool, "merge-agent", "merge", "claude-sonnet-4-6")
+
+	// Create pipeline config with agent_id on every agent_run step.
+	pipelineYAML := "steps:\n" +
+		"  - id: \"step-implement\"\n" +
+		"    name: \"implement\"\n" +
+		"    action_type: \"implement\"\n" +
+		"    agent_id: \"" + implementAgentID.String() + "\"\n" +
+		"    auto_approve: false\n" +
+		"    retry_policy:\n" +
+		"      max_retries: 0\n" +
+		"      retry_type: \"none\"\n" +
+		"  - id: \"step-review\"\n" +
+		"    name: \"review\"\n" +
+		"    action_type: \"review\"\n" +
+		"    agent_id: \"" + reviewAgentID.String() + "\"\n" +
+		"    auto_approve: true\n" +
+		"    retry_policy:\n" +
+		"      max_retries: 1\n" +
+		"      retry_type: \"on-failure\"\n" +
+		"  - id: \"step-merge\"\n" +
+		"    name: \"merge\"\n" +
+		"    action_type: \"merge\"\n" +
+		"    agent_id: \"" + mergeAgentID.String() + "\"\n" +
+		"    auto_approve: true\n" +
+		"    retry_policy:\n" +
+		"      max_retries: 0\n" +
+		"      retry_type: \"none\"\n"
 
 	testutil.UpsertPipelineConfig(t, db.Pool, projectID, pipelineYAML)
 
@@ -232,9 +257,11 @@ func TestIntegration_PipelineValidation_RunCreation(t *testing.T) {
 	runRepo := postgres.NewRunRepo(queries)
 	projectRepo := postgres.NewProjectRepo(queries)
 	pipelineConfigRepo := postgres.NewPipelineConfigRepo(queries)
+	agentRepo := postgres.NewAgentRepo(queries)
 	mockJobQueue := &noopJobQueue{}
 
 	runSvc := service.NewRunService(runRepo, projectRepo, storyRepo, pipelineConfigRepo, mockJobQueue)
+	runSvc.SetAgentRepo(agentRepo)
 
 	// Launch run
 	run, err := runSvc.LaunchRun(ctx, projectID, story.ID)
@@ -337,29 +364,37 @@ func TestIntegration_PipelineValidation_Execution(t *testing.T) {
 
 	projectID := testutil.CreateProject(t, db.Pool)
 
-	// Create pipeline config with 3 steps
-	pipelineYAML := `steps:
-  - id: "step-implement"
-    name: "implement"
-    action_type: "implement"
-    auto_approve: false
-    retry_policy:
-      max_retries: 0
-      retry_type: "none"
-  - id: "step-review"
-    name: "review"
-    action_type: "review"
-    auto_approve: true
-    retry_policy:
-      max_retries: 0
-      retry_type: "none"
-  - id: "step-merge"
-    name: "merge"
-    action_type: "merge"
-    auto_approve: true
-    retry_policy:
-      max_retries: 0
-      retry_type: "none"`
+	// Create agents in DB so LaunchRun can resolve agent_id references.
+	implementAgentID := createTestAgent(t, db.Pool, "implement-agent", "implement", "claude-opus-4-6")
+	reviewAgentID := createTestAgent(t, db.Pool, "review-agent", "review", "claude-sonnet-4-6")
+	mergeAgentID := createTestAgent(t, db.Pool, "merge-agent", "merge", "claude-sonnet-4-6")
+
+	// Create pipeline config with 3 steps, each referencing an agent_id.
+	pipelineYAML := "steps:\n" +
+		"  - id: \"step-implement\"\n" +
+		"    name: \"implement\"\n" +
+		"    action_type: \"implement\"\n" +
+		"    agent_id: \"" + implementAgentID.String() + "\"\n" +
+		"    auto_approve: false\n" +
+		"    retry_policy:\n" +
+		"      max_retries: 0\n" +
+		"      retry_type: \"none\"\n" +
+		"  - id: \"step-review\"\n" +
+		"    name: \"review\"\n" +
+		"    action_type: \"review\"\n" +
+		"    agent_id: \"" + reviewAgentID.String() + "\"\n" +
+		"    auto_approve: true\n" +
+		"    retry_policy:\n" +
+		"      max_retries: 0\n" +
+		"      retry_type: \"none\"\n" +
+		"  - id: \"step-merge\"\n" +
+		"    name: \"merge\"\n" +
+		"    action_type: \"merge\"\n" +
+		"    agent_id: \"" + mergeAgentID.String() + "\"\n" +
+		"    auto_approve: true\n" +
+		"    retry_policy:\n" +
+		"      max_retries: 0\n" +
+		"      retry_type: \"none\"\n"
 
 	testutil.UpsertPipelineConfig(t, db.Pool, projectID, pipelineYAML)
 
@@ -382,8 +417,10 @@ func TestIntegration_PipelineValidation_Execution(t *testing.T) {
 	runRepo := postgres.NewRunRepo(queries)
 	projectRepo := postgres.NewProjectRepo(queries)
 	pipelineConfigRepo := postgres.NewPipelineConfigRepo(queries)
+	agentRepo := postgres.NewAgentRepo(queries)
 	mockQueue := &noopJobQueue{}
 	runSvc := service.NewRunService(runRepo, projectRepo, storyRepo, pipelineConfigRepo, mockQueue)
+	runSvc.SetAgentRepo(agentRepo)
 
 	run, err := runSvc.LaunchRun(ctx, projectID, story.ID)
 	if err != nil {
@@ -513,21 +550,27 @@ func TestIntegration_PipelineValidation_FullFlow(t *testing.T) {
 	// 1. Setup: create project with pipeline config
 	projectID := testutil.CreateProject(t, db.Pool)
 
-	pipelineYAML := `steps:
-  - id: "step-implement"
-    name: "implement"
-    action_type: "implement"
-    auto_approve: false
-    retry_policy:
-      max_retries: 0
-      retry_type: "none"
-  - id: "step-review"
-    name: "review"
-    action_type: "review"
-    auto_approve: true
-    retry_policy:
-      max_retries: 0
-      retry_type: "none"`
+	// Create agents in DB so LaunchRun can resolve agent_id references.
+	implementAgentID := createTestAgent(t, db.Pool, "implement-agent", "implement", "claude-opus-4-6")
+	reviewAgentID := createTestAgent(t, db.Pool, "review-agent", "review", "claude-sonnet-4-6")
+
+	pipelineYAML := "steps:\n" +
+		"  - id: \"step-implement\"\n" +
+		"    name: \"implement\"\n" +
+		"    action_type: \"implement\"\n" +
+		"    agent_id: \"" + implementAgentID.String() + "\"\n" +
+		"    auto_approve: false\n" +
+		"    retry_policy:\n" +
+		"      max_retries: 0\n" +
+		"      retry_type: \"none\"\n" +
+		"  - id: \"step-review\"\n" +
+		"    name: \"review\"\n" +
+		"    action_type: \"review\"\n" +
+		"    agent_id: \"" + reviewAgentID.String() + "\"\n" +
+		"    auto_approve: true\n" +
+		"    retry_policy:\n" +
+		"      max_retries: 0\n" +
+		"      retry_type: \"none\"\n"
 
 	testutil.UpsertPipelineConfig(t, db.Pool, projectID, pipelineYAML)
 
@@ -582,9 +625,11 @@ func TestIntegration_PipelineValidation_FullFlow(t *testing.T) {
 	runRepo := postgres.NewRunRepo(queries)
 	projectRepo := postgres.NewProjectRepo(queries)
 	pipelineConfigRepo := postgres.NewPipelineConfigRepo(queries)
+	agentRepo := postgres.NewAgentRepo(queries)
 	mockQueue := &noopJobQueue{}
 
 	runSvc := service.NewRunService(runRepo, projectRepo, storyRepo, pipelineConfigRepo, mockQueue)
+	runSvc.SetAgentRepo(agentRepo)
 
 	run, err := runSvc.LaunchRun(ctx, projectID, story1.ID)
 	if err != nil {
