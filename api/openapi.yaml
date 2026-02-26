@@ -43,6 +43,8 @@ tags:
     description: Agent management endpoints
   - name: costs
     description: Cost tracking and observability endpoints
+  - name: api-keys
+    description: User API key management endpoints
 
 paths:
   # ── Auth ────────────────────────────────────────────────────────────────
@@ -316,6 +318,63 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+
+  # ── User API Keys ─────────────────────────────────────────────────────
+  /users/me/api-keys:
+    get:
+      operationId: listMyAPIKeys
+      summary: List the current user's API keys (hint only, never decrypted)
+      tags: [api-keys]
+      responses:
+        "200":
+          description: List of API keys for the current user
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/UserAPIKey"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    post:
+      operationId: createMyAPIKey
+      summary: Store an encrypted API key for the current user
+      tags: [api-keys]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAPIKeyRequest"
+      responses:
+        "201":
+          description: API key stored successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserAPIKey"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /users/me/api-keys/{keyId}:
+    delete:
+      operationId: deleteMyAPIKey
+      summary: Delete an API key
+      tags: [api-keys]
+      parameters:
+        - $ref: "#/components/parameters/KeyIdPath"
+      responses:
+        "204":
+          description: API key deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
   # ── Projects ────────────────────────────────────────────────────────────
   /projects:
@@ -1932,6 +1991,15 @@ components:
         format: uuid
       description: Notification config UUID
 
+    KeyIdPath:
+      name: keyId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: API key UUID
+
     PageParam:
       name: page
       in: query
@@ -2118,6 +2186,62 @@ components:
             $ref: "#/components/schemas/User"
         pagination:
           $ref: "#/components/schemas/Pagination"
+
+    # ── User API Key ──────────────────────────────────────────────────
+    UserAPIKey:
+      type: object
+      required:
+        - id
+        - provider
+        - key_name
+        - key_hint
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: aa0e8400-e29b-41d4-a716-446655440000
+        provider:
+          type: string
+          description: LLM provider name (e.g. claude, openai)
+          example: claude
+        key_name:
+          type: string
+          description: User-defined name for the key (e.g. default, work)
+          example: default
+        key_hint:
+          type: string
+          description: Last 4 characters of the key, prefixed with "..."
+          example: "...x789"
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-01-15T10:30:00Z"
+
+    CreateAPIKeyRequest:
+      type: object
+      required:
+        - provider
+        - key_name
+        - api_key
+      properties:
+        provider:
+          type: string
+          minLength: 1
+          maxLength: 50
+          description: LLM provider name
+          example: claude
+        key_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: User-defined name for the key
+          example: default
+        api_key:
+          type: string
+          minLength: 1
+          description: The raw API key (will be encrypted at rest)
+          example: sk-ant-api03-abc123xyz789
 
     # ── Project ────────────────────────────────────────────────────────
     Project:

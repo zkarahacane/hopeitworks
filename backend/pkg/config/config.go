@@ -9,6 +9,7 @@ type Config struct {
 	Docker   DockerConfig   `yaml:"docker"`
 	Log      LogConfig      `yaml:"logging"`
 	SMTP     SMTPConfig     `yaml:"smtp"`
+	Security SecurityConfig `yaml:"security"`
 }
 
 // SMTPConfig holds outbound email relay settings.
@@ -55,4 +56,11 @@ type DockerConfig struct {
 // LogConfig holds logging settings.
 type LogConfig struct {
 	Level string `yaml:"level"`
+}
+
+// SecurityConfig holds security-related settings.
+type SecurityConfig struct {
+	// EncryptionKey is the master key used to derive AES-256 encryption keys
+	// for storing sensitive data (e.g., user API keys). Override via ENCRYPTION_KEY env var.
+	EncryptionKey string `yaml:"encryption_key"`
 }

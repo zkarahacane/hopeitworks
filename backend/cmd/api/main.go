@@ -156,6 +156,12 @@ func run() error {
 	userHandler := handler.NewUserHandler(userService)
 	profileHandler := handler.NewProfileHandler(userService)
 
+	// API Key service (encrypted API key storage for users)
+	encryptionKey := getEnvOrDefault("ENCRYPTION_KEY", cfg.Security.EncryptionKey)
+	apiKeyRepo := pgadapter.NewAPIKeyRepository(queries)
+	apiKeySvc := service.NewAPIKeyService(apiKeyRepo, encryptionKey)
+	apiKeyHandler := handler.NewAPIKeyHandler(apiKeySvc)
+
 	// Application-wide context for background services
 	appCtx, appCancel := context.WithCancel(ctx)
 	defer appCancel()
@@ -366,6 +372,13 @@ func run() error {
 		r.Get("/", projectUserHandler.ListMembers)
 		r.Post("/", projectUserHandler.AddUser)
 		r.Delete("/{user_id}", projectUserHandler.RemoveUser)
+	})
+
+	// Mount user API keys routes (manually registered)
+	r.Route("/api/v1/users/me/api-keys", func(r chi.Router) {
+		r.Get("/", apiKeyHandler.ListMyAPIKeys)
+		r.Post("/", apiKeyHandler.CreateMyAPIKey)
+		r.Delete("/{keyId}", apiKeyHandler.DeleteMyAPIKey)
 	})
 
 	// Create HTTP server
