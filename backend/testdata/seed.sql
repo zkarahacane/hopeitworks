@@ -6,12 +6,12 @@
 -- Reset:   cd backend && make reset-db
 --
 -- Credentials:
---   admin@hopeitworks.dev  / admin123  (admin)
---   sarah@hopeitworks.dev  / sarah123  (admin)
---   marc@hopeitworks.dev   / marc123   (admin)
---   dev@hopeitworks.dev    / dev123    (user)
---   alice@hopeitworks.dev  / alice123  (user)
---   bob@hopeitworks.dev    / bob123    (user)
+--   admin@hopeitworks.dev  / admin1234  (admin)
+--   sarah@hopeitworks.dev  / admin1234  (admin)
+--   marc@hopeitworks.dev   / admin1234  (admin)
+--   dev@hopeitworks.dev    / user1234   (user)
+--   alice@hopeitworks.dev  / user1234   (user)
+--   bob@hopeitworks.dev    / user1234   (user)
 --
 -- Idempotent: safe to run multiple times (uses ON CONFLICT).
 -- =============================================================================
@@ -23,12 +23,12 @@ BEGIN;
 -- ---------------------------------------------------------------------------
 
 INSERT INTO users (id, email, password_hash, name, role) VALUES
-('00000000-0000-0000-0000-000000000001', 'admin@hopeitworks.dev', crypt('admin123', gen_salt('bf', 10)), 'Admin User', 'admin'),
-('00000000-0000-0000-0000-000000000002', 'sarah@hopeitworks.dev', crypt('sarah123', gen_salt('bf', 10)), 'Sarah Chen', 'admin'),
-('00000000-0000-0000-0000-000000000003', 'marc@hopeitworks.dev',  crypt('marc123',  gen_salt('bf', 10)), 'Marc Dupont', 'admin'),
-('00000000-0000-0000-0000-000000000011', 'dev@hopeitworks.dev',   crypt('dev123',   gen_salt('bf', 10)), 'Dev User', 'user'),
-('00000000-0000-0000-0000-000000000012', 'alice@hopeitworks.dev', crypt('alice123', gen_salt('bf', 10)), 'Alice Martin', 'user'),
-('00000000-0000-0000-0000-000000000013', 'bob@hopeitworks.dev',   crypt('bob123',   gen_salt('bf', 10)), 'Bob Nguyen', 'user')
+('00000000-0000-0000-0000-000000000001', 'admin@hopeitworks.dev', '$2a$10$OxGZnxAwWA6XQt45Z5RUxOcKuknitNZFYNTDYGl.52yR35cBPdN/C', 'Admin User', 'admin'),
+('00000000-0000-0000-0000-000000000002', 'sarah@hopeitworks.dev', '$2a$10$OxGZnxAwWA6XQt45Z5RUxOcKuknitNZFYNTDYGl.52yR35cBPdN/C', 'Sarah Chen', 'admin'),
+('00000000-0000-0000-0000-000000000003', 'marc@hopeitworks.dev',  '$2a$10$OxGZnxAwWA6XQt45Z5RUxOcKuknitNZFYNTDYGl.52yR35cBPdN/C', 'Marc Dupont', 'admin'),
+('00000000-0000-0000-0000-000000000011', 'dev@hopeitworks.dev',   '$2a$10$WrlGk50pss6bpaGdnA1HjO1qXqs5/DdbFMX2L9Uq.Z4IXtiaECaou', 'Dev User', 'user'),
+('00000000-0000-0000-0000-000000000012', 'alice@hopeitworks.dev', '$2a$10$WrlGk50pss6bpaGdnA1HjO1qXqs5/DdbFMX2L9Uq.Z4IXtiaECaou', 'Alice Martin', 'user'),
+('00000000-0000-0000-0000-000000000013', 'bob@hopeitworks.dev',   '$2a$10$WrlGk50pss6bpaGdnA1HjO1qXqs5/DdbFMX2L9Uq.Z4IXtiaECaou', 'Bob Nguyen', 'user')
 ON CONFLICT (email) DO UPDATE SET
     password_hash = EXCLUDED.password_hash,
     name = EXCLUDED.name,

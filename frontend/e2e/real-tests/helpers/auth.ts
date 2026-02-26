@@ -10,19 +10,19 @@ export interface SeedUser {
 export const SEED_USERS = {
   admin: {
     email: 'admin@hopeitworks.dev',
-    password: 'admin123',
+    password: 'admin1234',
     name: 'Admin User',
     role: 'admin' as const,
   },
   dev: {
     email: 'dev@hopeitworks.dev',
-    password: 'dev123',
+    password: 'user1234',
     name: 'Dev User',
     role: 'user' as const,
   },
   alice: {
     email: 'alice@hopeitworks.dev',
-    password: 'alice123',
+    password: 'user1234',
     name: 'Alice Developer',
     role: 'user' as const,
   },

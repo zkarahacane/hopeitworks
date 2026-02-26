@@ -70,9 +70,9 @@ seed: ## Seed the local database with dev fixtures
 	@echo "Seeding dev data..."
 	@PGPASSWORD="$(DB_PASS)" psql -h $(DB_HOST) -p $(DB_PORT) -U $(DB_USER) -d $(DB_NAME) -f testdata/seed.sql
 	@echo "Seed complete. Credentials:"
-	@echo "  admin@hopeitworks.dev / admin123 (admin)"
-	@echo "  dev@hopeitworks.dev   / dev123   (user)"
-	@echo "  alice@hopeitworks.dev / alice123  (user)"
+	@echo "  admin@hopeitworks.dev / admin1234 (admin)"
+	@echo "  dev@hopeitworks.dev   / user1234  (user)"
+	@echo "  alice@hopeitworks.dev / user1234  (user)"
 
 reset-db: ## Drop and recreate dev database, run migrations, and seed
 	@echo "Dropping database $(DB_NAME)..."

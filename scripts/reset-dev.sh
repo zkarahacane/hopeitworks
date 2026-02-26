@@ -11,11 +11,11 @@
 #
 # Credentials after reset:
 #   admin@hopeitworks.dev  / admin1234  (admin)
-#   sarah@hopeitworks.dev  / sarah1234  (admin)
-#   marc@hopeitworks.dev   / marc12345  (admin)
-#   dev@hopeitworks.dev    / dev123456  (user)
-#   alice@hopeitworks.dev  / alice1234  (user)
-#   bob@hopeitworks.dev    / bob123456  (user)
+#   sarah@hopeitworks.dev  / admin1234  (admin)
+#   marc@hopeitworks.dev   / admin1234  (admin)
+#   dev@hopeitworks.dev    / user1234   (user)
+#   alice@hopeitworks.dev  / user1234   (user)
+#   bob@hopeitworks.dev    / user1234   (user)
 # =============================================================================
 
 set -euo pipefail
@@ -92,11 +92,11 @@ register_user() {
 }
 
 register_user "admin@hopeitworks.dev" "admin1234" "Admin User"
-register_user "sarah@hopeitworks.dev" "sarah1234" "Sarah Chen"
-register_user "marc@hopeitworks.dev"  "marc12345"  "Marc Dupont"
-register_user "dev@hopeitworks.dev"   "dev123456"   "Dev User"
-register_user "alice@hopeitworks.dev" "alice1234" "Alice Martin"
-register_user "bob@hopeitworks.dev"   "bob123456"   "Bob Nguyen"
+register_user "sarah@hopeitworks.dev" "admin1234" "Sarah Chen"
+register_user "marc@hopeitworks.dev"  "admin1234"  "Marc Dupont"
+register_user "dev@hopeitworks.dev"   "user1234"   "Dev User"
+register_user "alice@hopeitworks.dev" "user1234" "Alice Martin"
+register_user "bob@hopeitworks.dev"   "user1234"   "Bob Nguyen"
 
 log "6 users registered"
 
