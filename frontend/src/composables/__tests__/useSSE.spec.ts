@@ -39,6 +39,12 @@ vi.mock('vue', async () => {
   }
 })
 
+const mockAuthStore = { isAuthenticated: true }
+
+vi.mock('@/stores/auth', () => ({
+  useAuthStore: () => mockAuthStore,
+}))
+
 vi.stubGlobal('EventSource', MockEventSource)
 
 describe('useSSE', () => {
@@ -46,6 +52,7 @@ describe('useSSE', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks()
+    mockAuthStore.isAuthenticated = true
     const mod = await import('../useSSE')
     useSSE = mod.useSSE
   })
@@ -76,13 +83,25 @@ describe('useSSE', () => {
     expect(status.value).toBe('open')
   })
 
-  it('sets status to error when onerror fires', () => {
+  it('sets status to error when onerror fires and user is authenticated', () => {
     const onEvent = vi.fn()
     const { status } = useSSE('proj-123', onEvent)
 
     mockInstance.onerror!(new Event('error'))
 
     expect(status.value).toBe('error')
+    expect(mockInstance.close).not.toHaveBeenCalled()
+  })
+
+  it('closes EventSource on error when user is not authenticated', () => {
+    mockAuthStore.isAuthenticated = false
+    const onEvent = vi.fn()
+    const { status } = useSSE('proj-123', onEvent)
+
+    mockInstance.onerror!(new Event('error'))
+
+    expect(status.value).toBe('closed')
+    expect(mockInstance.close).toHaveBeenCalledTimes(1)
   })
 
   it('dispatches parsed JSON on message event', () => {
