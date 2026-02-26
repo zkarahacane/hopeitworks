@@ -16,6 +16,7 @@ export interface Agent {
   image: string
   template_content: string
   scope: AgentScope
+  provider?: string | null
   project_id?: string | null
   created_at: string
   updated_at: string
@@ -43,6 +44,7 @@ export interface UpdateAgentParams {
   model?: string
   image?: string
   template_content?: string
+  provider?: 'claude' | 'opencode'
 }
 
 /**

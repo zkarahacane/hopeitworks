@@ -27,6 +27,7 @@ const {
   model,
   image,
   scope,
+  provider,
   loading,
   saving,
   error,
@@ -111,6 +112,7 @@ async function handlePreview() {
     :agent-model="model"
     :agent-image="image"
     :agent-scope="scope"
+    :agent-provider="provider"
     :preview-visible="previewVisible"
     :preview-content="previewContent"
     :preview-loading="previewLoading"
@@ -120,6 +122,7 @@ async function handlePreview() {
     @update:agent-model="model = $event"
     @update:agent-image="image = $event"
     @update:agent-scope="scope = $event"
+    @update:agent-provider="provider = $event"
     @update:preview-visible="previewVisible = $event"
     @save="handleSave"
     @cancel="handleCancel"

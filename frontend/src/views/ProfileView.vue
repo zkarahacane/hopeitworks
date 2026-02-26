@@ -8,6 +8,7 @@ import Toast from 'primevue/toast'
 import { useToast } from 'primevue/usetoast'
 import ProfileInfoForm from '@/features/profile/ProfileInfoForm.vue'
 import ChangePasswordForm from '@/features/profile/ChangePasswordForm.vue'
+import APIKeyList from '@/features/profile/APIKeyList.vue'
 import { useProfile } from '@/composables/useProfile'
 
 const toast = useToast()
@@ -76,26 +77,35 @@ async function handlePasswordSave(payload: {
     </div>
 
     <!-- Profile content -->
-    <div v-else-if="user" class="grid grid-cols-1 gap-6 md:grid-cols-2">
-      <Card>
-        <template #title>Profile Information</template>
-        <template #content>
-          <ProfileInfoForm
-            :user="user"
-            :is-saving="updateMe.isLoading.value"
-            @save="handleProfileSave"
-          />
-        </template>
-      </Card>
+    <div v-else-if="user" class="flex flex-col gap-6">
+      <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+        <Card>
+          <template #title>Profile Information</template>
+          <template #content>
+            <ProfileInfoForm
+              :user="user"
+              :is-saving="updateMe.isLoading.value"
+              @save="handleProfileSave"
+            />
+          </template>
+        </Card>
 
-      <Card>
-        <template #title>Change Password</template>
+        <Card>
+          <template #title>Change Password</template>
+          <template #content>
+            <ChangePasswordForm
+              :is-saving="changePassword.isLoading.value"
+              :reset-key="passwordResetKey"
+              @save="handlePasswordSave"
+            />
+          </template>
+        </Card>
+      </div>
+
+      <Card class="col-span-full">
+        <template #title>API Keys</template>
         <template #content>
-          <ChangePasswordForm
-            :is-saving="changePassword.isLoading.value"
-            :reset-key="passwordResetKey"
-            @save="handlePasswordSave"
-          />
+          <APIKeyList />
         </template>
       </Card>
     </div>

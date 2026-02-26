@@ -23,6 +23,7 @@ const sampleAgent = {
   image: 'ghcr.io/org/agent:latest',
   template_content: 'You are a developer...',
   scope: 'project' as const,
+  provider: 'claude',
   project_id: 'p1',
   created_at: '2026-01-15T10:00:00Z',
   updated_at: '2026-01-15T10:00:00Z',

@@ -22,6 +22,7 @@ interface Props {
   agentModel: string
   agentImage: string
   agentScope: AgentScope
+  agentProvider: string
   previewVisible: boolean
   previewContent: string
   previewLoading: boolean
@@ -36,6 +37,7 @@ const emit = defineEmits<{
   'update:agentModel': [model: string]
   'update:agentImage': [image: string]
   'update:agentScope': [scope: AgentScope]
+  'update:agentProvider': [provider: string]
   'update:previewVisible': [visible: boolean]
   save: []
   cancel: []
@@ -45,6 +47,11 @@ const emit = defineEmits<{
 const scopeOptions = [
   { label: 'Project', value: 'project' },
   { label: 'Global', value: 'global' },
+]
+
+const providerOptions = [
+  { label: 'Claude', value: 'claude' },
+  { label: 'OpenCode', value: 'opencode' },
 ]
 
 const editorRef = ref<InstanceType<typeof MonacoEditorWrapper> | null>(null)
@@ -98,6 +105,19 @@ const editorRef = ref<InstanceType<typeof MonacoEditorWrapper> | null>(null)
           class="w-64"
           :disabled="isReadOnly"
           @update:model-value="emit('update:agentModel', $event)"
+        />
+      </div>
+      <div class="flex flex-col gap-1">
+        <label class="text-xs font-medium text-surface-500">Provider</label>
+        <Select
+          :model-value="agentProvider"
+          :options="providerOptions"
+          option-label="label"
+          option-value="value"
+          size="small"
+          class="w-40"
+          :disabled="isReadOnly"
+          @update:model-value="emit('update:agentProvider', $event)"
         />
       </div>
       <div class="flex min-w-[200px] flex-1 flex-col gap-1">
