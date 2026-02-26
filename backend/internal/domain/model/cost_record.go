@@ -49,6 +49,11 @@ var modelPricingMap = map[string]Pricing{
 	"claude-opus-4-6":   {InputPerMTok: 15.0, OutputPerMTok: 75.0},
 	"claude-sonnet-4-6": {InputPerMTok: 3.0, OutputPerMTok: 15.0},
 	"claude-haiku-4-5":  {InputPerMTok: 0.25, OutputPerMTok: 1.25},
+	"gpt-4o":            {InputPerMTok: 2.5, OutputPerMTok: 10.0},
+	"gpt-4o-mini":       {InputPerMTok: 0.15, OutputPerMTok: 0.6},
+	"gemini-2.0-flash":  {InputPerMTok: 0.1, OutputPerMTok: 0.4},
+	"gemini-2.5-pro":    {InputPerMTok: 1.25, OutputPerMTok: 10.0},
+	"deepseek-chat":     {InputPerMTok: 0.14, OutputPerMTok: 0.28},
 }
 
 // ComputeCostUSD computes the cost in USD for the given model and token counts.

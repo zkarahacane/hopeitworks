@@ -90,6 +90,11 @@ func (h *AgentHandler) CreateAgent(w http.ResponseWriter, r *http.Request, proje
 		scope = string(*req.Scope)
 	}
 
+	provider := ""
+	if req.Provider != nil {
+		provider = string(*req.Provider)
+	}
+
 	pid := projectID
 	params := service.CreateAgentParams{
 		ProjectID:       &pid,
@@ -98,6 +103,7 @@ func (h *AgentHandler) CreateAgent(w http.ResponseWriter, r *http.Request, proje
 		Image:           req.Image,
 		TemplateContent: req.TemplateContent,
 		Scope:           scope,
+		Provider:        provider,
 	}
 
 	agent, err := h.service.Create(r.Context(), params)
@@ -132,12 +138,19 @@ func (h *AgentHandler) UpdateAgent(w http.ResponseWriter, r *http.Request, _ Pro
 		return
 	}
 
+	var provider *string
+	if req.Provider != nil {
+		p := string(*req.Provider)
+		provider = &p
+	}
+
 	params := service.UpdateAgentParams{
 		ID:              agentID,
 		Name:            req.Name,
 		Model:           req.Model,
 		Image:           req.Image,
 		TemplateContent: req.TemplateContent,
+		Provider:        provider,
 	}
 
 	agent, err := h.service.Update(r.Context(), params)
@@ -173,6 +186,7 @@ func toAPIAgent(a *model.Agent) Agent {
 		Image:           a.Image,
 		TemplateContent: a.TemplateContent,
 		Scope:           AgentScope(a.Scope),
+		Provider:        AgentProvider(a.Provider),
 		ProjectId:       a.ProjectID,
 		CreatedAt:       a.CreatedAt,
 		UpdatedAt:       a.UpdatedAt,
