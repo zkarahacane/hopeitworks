@@ -147,7 +147,7 @@ cmd_reset() {
     < "${PROJECT_ROOT}/backend/testdata/seed.sql"
 
   log_success "Database reset complete."
-  log_info "Credentials: admin@hopeitworks.dev/admin123, dev@hopeitworks.dev/dev123, alice@hopeitworks.dev/alice123"
+  log_info "Credentials: admin@hopeitworks.dev/admin1234, dev@hopeitworks.dev/user1234, alice@hopeitworks.dev/user1234"
 }
 
 cmd_up() {
