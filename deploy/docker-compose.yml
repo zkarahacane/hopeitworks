@@ -62,11 +62,15 @@ services:
       # --- docker / agent runtime ---
       DOCKER_HOST: tcp://socket-proxy:2375
       DOCKER_AGENT_NETWORK: ${DOCKER_AGENT_NETWORK:-deploy_hopeitworks_agent-network}
-      AGENT_IMAGE: ${AGENT_IMAGE:-hopeitworks/agent:latest}
+      AGENT_IMAGE: ${AGENT_IMAGE:-hopeitworks/agent-go-node:latest}
       CLAUDE_MD_PATH: ${CLAUDE_MD_PATH:-agent/claude-md}
       # --- agent tokens (required for pipeline execution) ---
       GITHUB_TOKEN: ${GITHUB_TOKEN}
       CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN}
+      # --- callback ---
+      CALLBACK_BASE_URL: http://api:8080
+      # --- encryption ---
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-dev-encryption-key-32bytes!!}
       # --- smtp ---
       SMTP_HOST: mailhog
       SMTP_PORT: 1025
@@ -86,6 +90,7 @@ services:
     restart: on-failure
     networks:
       - hopeitworks
+      - agent-network
 
   mailhog:
     image: mailhog/mailhog:v1.0.1
