@@ -101,6 +101,7 @@ export function useAgentEditor(projectId: string, agentId: string) {
               image: agentImage ?? image.value,
               template_content: content.value,
               scope: agentScope ?? scope.value,
+              provider: 'claude',
             },
           },
         )
