@@ -341,13 +341,9 @@ hopeitworks/
 │   └── Dockerfile
 ├── api/
 │   └── openapi.yaml            # Single source of truth — API contract
-├── agent/                      # Agent runtime
-│   ├── Dockerfile              # Project-specific agent image
-│   ├── Dockerfile.base         # Base image: Claude Code + git + gh CLI
-│   ├── entrypoint.sh           # Container entry script
-│   ├── scripts/                # Runtime scripts (clone, inject CLAUDE.md, run agent, extract results)
-│   ├── claude-md/              # CLAUDE.md templates (this directory)
-│   └── prompts/                # Handlebars prompt templates
+├── agent/                      # Agent runtime (reference scripts only — no embedded image)
+│   ├── entrypoint.sh           # Container entry script (CLAUDE_MD_CONTENT optional)
+│   └── scripts/                # Runtime scripts (clone, run agent, extract results)
 ├── deploy/                     # Infrastructure
 │   ├── docker-compose.yml      # Dev local stack
 │   └── postgres/               # DB setup
@@ -380,7 +376,6 @@ hopeitworks/
 | Frontend E2E tests | `frontend/e2e/tests/` |
 | Docker Compose (dev) | `deploy/docker-compose.yml` |
 | Agent scripts | `agent/scripts/` |
-| Agent prompts | `agent/prompts/` |
 | Architecture doc | `_bmad-output/planning-artifacts/architecture.md` |
 
 ## Shared API Contract
@@ -404,7 +399,7 @@ Both sides generate types and clients from the same OpenAPI spec. Never manually
 | Epic 4 | Agent runtime & container management | IN PROGRESS |
 | Epic 5 | DAG scheduler & epic runs | NOT STARTED |
 | Epic 6 | HITL gates & approval workflow | NOT STARTED |
-| Epic 7 | Pipeline configuration & templates | NOT STARTED |
+| Epic 7 | Pipeline configuration & templates | IN PROGRESS |
 | Epic 8 | Real-time monitoring & SSE | IN PROGRESS |
 | Epic 9 | Cost tracking & observability | IN PROGRESS |
 | Epic 10 | Reference project & validation | NOT STARTED |
@@ -427,6 +422,11 @@ Both sides generate types and clients from the same OpenAPI spec. Never manually
 - Admin: User management CRUD
 - Pipeline runtime fixes: River timeout, OAuth auth, healthcheck, template mount
 - Pipeline wiring: story_key in Run API, story status transitions on run complete
+- Agent entity as source of truth: removed embedded Dockerfile/CLAUDE.md templates, TemplateService, CLAUDEMDComposer — Agent.Image/Model/TemplateContent are now authoritative
+- Agent CRUD API: create/update/delete agents with image, model, template_content, scope (global/project)
+- Cost tracking: per-step cost recording from agent container cost events
+- Pipeline config: agent_id required per agent_run step, validated at launch time
+- Git providers: GitHub + Gitea support via configurable git_provider/git_token_env per project
 
 ## Known Constraints
 
