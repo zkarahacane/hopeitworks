@@ -1,4 +1,4 @@
-# generated: 2026-02-22
+# generated: 2026-02-24
 # project: hopeitworks
 # project_key: NOKEY
 # tracking_system: file-system
@@ -33,7 +33,7 @@
 # - SM typically creates next story after previous one is 'done' to incorporate learnings
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
-generated: 2026-02-22
+generated: 2026-02-24
 project: hopeitworks
 project_key: NOKEY
 tracking_system: file-system
@@ -177,6 +177,30 @@ development_status:
   refactor-2-migrate-consumers-to-runner: done
   refactor-3-db-migration-workload-handle-cleanup: done
 
+  # Post-MVP: Agent Entity Source of Truth
+  post-mvp-agent-source-of-truth: done
+  refactor-remove-embedded-agent-env: done
+
+  # Phase 13: Stabilization — Functional Test Audit (2026-02-24)
+  # Epic F-1: Auth & Security Stabilization (P0)
+  epic-F-1-auth-security-stabilization: backlog
+  F-1-1-fix-auth-redirect-cascade: backlog
+  F-1-2-fix-seed-sql-bcrypt-hashes: backlog
+  F-1-3-secure-users-endpoint-admin-only: backlog
+  F-1-4-fix-forgot-reset-password-flow: backlog
+
+  # Epic F-2: Data & Display Fixes (P1-P2)
+  epic-F-2-data-display-fixes: backlog
+  F-2-1-fix-seed-runs-project-uuid: backlog
+  F-2-2-fix-board-epic-story-counts: backlog
+  F-2-3-add-role-selector-edit-user: backlog
+  F-2-4-fix-cost-dashboard-project-id: backlog
+
+  # Epic F-3: Polish & UX (P2)
+  epic-F-3-polish-ux: backlog
+  F-3-1-add-dark-mode-toggle: backlog
+  F-3-2-improve-auth-error-messages: backlog
+
   # Post-MVP: Smoke Tests & Monaco Fix
   post-mvp-smoke-monaco: done
   fix-smoke-tests-green: done
@@ -253,6 +277,7 @@ development_status:
 #   Phase 2 (Waves 5-9):  Core Platform - Epics 2, 3, 6 in parallel
 #   Phase 3 (Waves 10-12): Extensions - Epics 4, 5, 7, 8, 9
 #   Phase 11 (Waves 31-35): Pipeline Refonte — Groups, Agents, Runs UI, Costs
+#   Phase 12 (Wave 36):    Agent Entity Source of Truth
 #   Phase 4 (Waves 13-15): Validation - Epic 10
 #   Phase 5 (Waves 16-19): Post-MVP Bug Fixes
 #   Phase 6 (Waves 20-21): Auth Enhancements
@@ -1074,3 +1099,85 @@ parallel_waves:
     container_count: 2
     depends_on: [wave-34]
     notes: "Final: agent cost tab + E2E agents CRUD — Phase 11 COMPLETE"
+
+  # =====================================================
+  # PHASE 12: AGENT ENTITY SOURCE OF TRUTH
+  # =====================================================
+
+  wave-36:
+    phase: 12-agent-source-of-truth
+    stories:
+      - key: refactor-remove-embedded-agent-env
+        domain: back
+        status: done
+    container_count: 1
+    depends_on: [wave-35]
+    notes: "Remove embedded Dockerfile/CLAUDE.md/TemplateService/CLAUDEMDComposer — Agent.Image/Model/TemplateContent are now authoritative, agent_id required per step — Phase 12 COMPLETE"
+
+  # =====================================================
+  # PHASE 13: STABILIZATION — Functional Test Audit Fixes
+  # Bugs and gaps discovered via Playwright E2E audit (2026-02-24)
+  # =====================================================
+
+  wave-37:
+    phase: 13-stabilization
+    stories:
+      - key: F-1-1-fix-auth-redirect-cascade
+        domain: front
+        status: backlog
+        cross_epic_deps: [1-9-login-page-auth-guard]
+      - key: F-1-2-fix-seed-sql-bcrypt-hashes
+        domain: back
+        status: backlog
+        cross_epic_deps: [1-18-dev-seed-data-fixtures]
+      - key: F-1-3-secure-users-endpoint-admin-only
+        domain: back
+        status: backlog
+        cross_epic_deps: [1-4-user-management-api-admin-crud]
+    container_count: 3
+    depends_on: [wave-36]
+    notes: "P0 fixes: auth redirect cascade (front), seed bcrypt hashes (back), admin-only users endpoint (back) — all parallel, independent"
+
+  wave-38:
+    phase: 13-stabilization
+    stories:
+      - key: F-1-4-fix-forgot-reset-password-flow
+        domain: shared
+        status: backlog
+        explicit_deps: [F-1-1-fix-auth-redirect-cascade]
+    container_count: 1
+    depends_on: [wave-37]
+    notes: "P1: forgot/reset password flow depends on auth redirect fix being in place first"
+
+  wave-39:
+    phase: 13-stabilization
+    stories:
+      - key: F-2-1-fix-seed-runs-project-uuid
+        domain: back
+        status: backlog
+        explicit_deps: [F-1-2-fix-seed-sql-bcrypt-hashes]
+      - key: F-2-2-fix-board-epic-story-counts
+        domain: front
+        status: backlog
+      - key: F-2-3-add-role-selector-edit-user
+        domain: front
+        status: backlog
+      - key: F-2-4-fix-cost-dashboard-project-id
+        domain: front
+        status: backlog
+    container_count: 4
+    depends_on: [wave-38]
+    notes: "P1-P2 data/display fixes: seed runs UUID, board counts, edit user role, cost dashboard — all parallel"
+
+  wave-40:
+    phase: 13-stabilization
+    stories:
+      - key: F-3-1-add-dark-mode-toggle
+        domain: front
+        status: backlog
+      - key: F-3-2-improve-auth-error-messages
+        domain: front
+        status: backlog
+    container_count: 2
+    depends_on: [wave-39]
+    notes: "P2 polish: dark mode toggle, auth error UX — all parallel"
