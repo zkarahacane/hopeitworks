@@ -17,6 +17,10 @@ type RunContext struct {
 	// StoryID is the ID of the story being processed.
 	StoryID uuid.UUID
 
+	// UserID is the ID of the user who launched the run.
+	// Used to resolve user-specific API keys for agent containers.
+	UserID uuid.UUID
+
 	// Metadata holds inter-step data (e.g., branch name, PR URL).
 	// Previous steps can write to this map, later steps can read from it.
 	Metadata map[string]any

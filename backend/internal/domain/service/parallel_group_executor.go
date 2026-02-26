@@ -107,8 +107,9 @@ func (e *ParallelGroupExecutor) Execute(ctx context.Context, epicRun *model.Epic
 func (e *ParallelGroupExecutor) runStory(ctx context.Context, epicRun *model.EpicRun, story model.Story, groupIndex int) error {
 	storyID := story.ID
 
-	// Create a run for this story via LaunchRun (which creates run + steps + enqueues job)
-	run, err := e.runSvc.LaunchRun(ctx, epicRun.ProjectID, storyID)
+	// Create a run for this story via LaunchRun (which creates run + steps + enqueues job).
+	// Epic runs do not yet track a launching user, so uuid.Nil is passed as userID.
+	run, err := e.runSvc.LaunchRun(ctx, epicRun.ProjectID, storyID, uuid.Nil)
 	if err != nil {
 		e.logger.Error("failed to create run for story",
 			"epic_run_id", epicRun.ID,

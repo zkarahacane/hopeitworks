@@ -29,9 +29,12 @@ type AgentConfig struct {
 }
 
 // AgentRunAction implements model.Action for running Claude Code agents in containers.
+// It supports two execution modes:
+//   - Callback mode: for hopeitworks/agent-* images, uses HTTP callbacks for logs/cost/status
+//   - Legacy mode: for other images, uses Docker log streaming and exit code detection
 type AgentRunAction struct {
 	containerMgr port.ContainerManager
-	logStreamer  port.LogStreamer
+	logStreamer   port.LogStreamer
 	eventPub     port.EventPublisher
 	storyRepo    port.StoryRepository
 	projectRepo  port.ProjectRepository
@@ -40,9 +43,15 @@ type AgentRunAction struct {
 	costSvc      *service.CostService
 	config       AgentConfig
 	logger       *slog.Logger
+	apiKeySvc    *service.APIKeyService
+	tokenStore   port.ContainerTokenStore
+	statusStore  port.CallbackStatusStore
+	callbackURL  string
 }
 
 // NewAgentRunAction creates a new agent run action.
+// The apiKeySvc, tokenStore, statusStore, and callbackURL parameters enable callback mode
+// for hopeitworks/agent-* container images. Pass nil/empty to disable callback mode.
 func NewAgentRunAction(
 	containerMgr port.ContainerManager,
 	logStreamer port.LogStreamer,
@@ -54,10 +63,14 @@ func NewAgentRunAction(
 	costSvc *service.CostService,
 	config AgentConfig,
 	logger *slog.Logger,
+	apiKeySvc *service.APIKeyService,
+	tokenStore port.ContainerTokenStore,
+	statusStore port.CallbackStatusStore,
+	callbackURL string,
 ) *AgentRunAction {
 	return &AgentRunAction{
 		containerMgr: containerMgr,
-		logStreamer:  logStreamer,
+		logStreamer:   logStreamer,
 		eventPub:     eventPub,
 		storyRepo:    storyRepo,
 		projectRepo:  projectRepo,
@@ -66,6 +79,10 @@ func NewAgentRunAction(
 		costSvc:      costSvc,
 		config:       config,
 		logger:       logger,
+		apiKeySvc:    apiKeySvc,
+		tokenStore:   tokenStore,
+		statusStore:  statusStore,
+		callbackURL:  callbackURL,
 	}
 }
 
@@ -130,28 +147,36 @@ func (a *AgentRunAction) Execute(ctx context.Context, runCtx *model.RunContext) 
 		return fmt.Errorf("agent_image is required in run metadata but was not set")
 	}
 
-	// 5. Create container
+	// 5. Detect execution mode: callback for hopeitworks/agent-* images, legacy otherwise
+	isCallbackMode := a.isCallbackMode(agentImage)
+
+	// 6. Create container
 	containerID, err := a.createContainer(ctx, runCtx, project, story, agentImage, prompt, branchName)
 	if err != nil {
 		return fmt.Errorf("create container: %w", err)
 	}
 	defer a.cleanupContainer(containerID)
 
-	// 6. Start container
+	// 7. Start container
 	if err := a.containerMgr.Start(ctx, containerID); err != nil {
 		return fmt.Errorf("start container: %w", err)
 	}
 
-	// 7. Persist container ID to run step
+	// 8. Persist container ID to run step
 	a.persistContainerID(ctx, runCtx.RunStep.ID, containerID)
 
-	// 8. Stream logs + wait for exit
-	exitCode, err := a.streamAndWait(ctx, containerID, runCtx)
+	// 9. Wait for completion using the appropriate mode
+	var exitCode int
+	if isCallbackMode {
+		exitCode, err = a.waitForCallback(ctx, runCtx)
+	} else {
+		exitCode, err = a.streamAndWait(ctx, containerID, runCtx)
+	}
 	if err != nil {
 		return fmt.Errorf("stream/wait: %w", err)
 	}
 
-	// 9. Check exit code
+	// 10. Check exit code
 	if exitCode != 0 {
 		return fmt.Errorf("agent exited with code %d", exitCode)
 	}
@@ -160,6 +185,8 @@ func (a *AgentRunAction) Execute(ctx context.Context, runCtx *model.RunContext) 
 }
 
 // createContainer builds ContainerOpts and creates the container.
+// For callback mode (hopeitworks/agent-* images), it injects CALLBACK_URL, AUTH_TOKEN,
+// API_KEY, PROVIDER, MODEL, RUN_ID, and STEP_ID env vars instead of CLAUDE_CODE_OAUTH_TOKEN.
 func (a *AgentRunAction) createContainer(
 	ctx context.Context,
 	runCtx *model.RunContext,
@@ -187,12 +214,53 @@ func (a *AgentRunAction) createContainer(
 		"GIT_TOKEN=" + gitToken,
 		"GIT_PROVIDER=" + project.GitProvider,
 		"GITHUB_TOKEN=" + gitToken,
-		"CLAUDE_CODE_OAUTH_TOKEN=" + os.Getenv("CLAUDE_CODE_OAUTH_TOKEN"),
 	}
 
-	// Inject per-step model when configured in pipeline YAML.
-	if modelVal, ok := runCtx.Metadata["model"].(string); ok && modelVal != "" {
-		env = append(env, "MODEL="+modelVal)
+	isCallback := a.isCallbackMode(agentImage)
+
+	if isCallback {
+		// Callback mode: use per-user API key and container token auth
+		provider := resolveProvider(runCtx)
+
+		// Resolve the user's API key for the provider
+		if a.apiKeySvc != nil && runCtx.UserID != uuid.Nil {
+			apiKey, keyErr := a.apiKeySvc.DecryptKeyForUserProvider(ctx, runCtx.UserID, provider)
+			if keyErr != nil {
+				a.logger.Warn("failed to resolve API key for user/provider, container may fail auth",
+					"user_id", runCtx.UserID, "provider", provider, "error", keyErr)
+			} else {
+				env = append(env, "API_KEY="+apiKey)
+			}
+		}
+
+		// Generate a short-lived container token for callback auth
+		if a.tokenStore != nil {
+			token, tokenErr := a.tokenStore.Create(ctx, runCtx.Run.ID, runCtx.RunStep.ID, 2*time.Hour)
+			if tokenErr != nil {
+				return "", fmt.Errorf("create container token: %w", tokenErr)
+			}
+			env = append(env, "AUTH_TOKEN="+token)
+		}
+
+		env = append(env,
+			"CALLBACK_URL="+a.callbackURL,
+			"PROVIDER="+provider,
+			"RUN_ID="+runCtx.Run.ID.String(),
+			"STEP_ID="+runCtx.RunStep.ID.String(),
+		)
+
+		// Inject model (prefer per-step, then provider-default)
+		if modelVal, ok := runCtx.Metadata["model"].(string); ok && modelVal != "" {
+			env = append(env, "MODEL="+modelVal)
+		}
+	} else {
+		// Legacy mode: use shared OAuth token
+		env = append(env, "CLAUDE_CODE_OAUTH_TOKEN="+os.Getenv("CLAUDE_CODE_OAUTH_TOKEN"))
+
+		// Inject per-step model when configured in pipeline YAML
+		if modelVal, ok := runCtx.Metadata["model"].(string); ok && modelVal != "" {
+			env = append(env, "MODEL="+modelVal)
+		}
 	}
 
 	opts := model.ContainerOpts{
@@ -376,6 +444,61 @@ func extractAgentID(runCtx *model.RunContext) *uuid.UUID {
 	}
 
 	return nil
+}
+
+// isCallbackMode returns true if the agent image is a hopeitworks/agent-* image
+// that supports HTTP callback mode for logs, cost, and status reporting.
+func (a *AgentRunAction) isCallbackMode(agentImage string) bool {
+	return a.statusStore != nil && strings.Contains(agentImage, "hopeitworks/agent-")
+}
+
+// waitForCallback waits for the agent container to report its exit status via
+// the HTTP callback endpoint. Logs and cost events arrive asynchronously via
+// separate callback endpoints and do not flow through this method.
+func (a *AgentRunAction) waitForCallback(ctx context.Context, runCtx *model.RunContext) (int, error) {
+	stepID := runCtx.RunStep.ID
+
+	exitCode, errMsg, err := a.statusStore.WaitForStatus(ctx, stepID, 2*time.Hour)
+	if err != nil {
+		return -1, err
+	}
+
+	// Revoke the container token after completion
+	if a.tokenStore != nil {
+		revokeCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if tokenStr, ok := a.findContainerToken(runCtx); ok {
+			if revokeErr := a.tokenStore.Revoke(revokeCtx, tokenStr); revokeErr != nil {
+				a.logger.Warn("failed to revoke container token",
+					"step_id", stepID, "error", revokeErr)
+			}
+		}
+	}
+
+	if errMsg != "" {
+		a.logger.Warn("agent container reported error",
+			"step_id", stepID, "exit_code", exitCode, "error", errMsg)
+	}
+
+	return exitCode, nil
+}
+
+// findContainerToken looks for the AUTH_TOKEN in the run context metadata.
+// This is a best-effort lookup used to revoke tokens after completion.
+func (a *AgentRunAction) findContainerToken(_ *model.RunContext) (string, bool) {
+	// The token is not stored in metadata; revocation is handled by TTL expiry.
+	// This method exists as a hook for future token tracking if needed.
+	return "", false
+}
+
+// resolveProvider resolves the AI provider for the current step from run context metadata.
+// It checks step-specific provider metadata first, then falls back to "claude".
+func resolveProvider(runCtx *model.RunContext) string {
+	stepOrder := runCtx.RunStep.StepOrder
+	if p, ok := runCtx.Metadata[fmt.Sprintf("step_%d_provider", stepOrder)].(string); ok && p != "" {
+		return p
+	}
+	return "claude"
 }
 
 // derefString safely dereferences a string pointer, returning empty string if nil.

@@ -223,6 +223,14 @@ func (e *PipelineExecutor) executeStep(ctx context.Context, run *model.Run, step
 		Metadata:  metadata,
 	}
 
+	// Extract the launching user ID from run metadata so actions can resolve
+	// user-specific API keys for agent containers.
+	if userIDStr, ok := metadata["launched_by_user_id"].(string); ok && userIDStr != "" {
+		if parsedID, parseErr := uuid.Parse(userIDStr); parseErr == nil {
+			runCtx.UserID = parsedID
+		}
+	}
+
 	// Inject per-step template_content from run metadata (set by LaunchRun as step_<order>_template_content).
 	templateContentKey := fmt.Sprintf("step_%d_template_content", step.StepOrder)
 	if tc, ok := runCtx.Metadata[templateContentKey].(string); ok && tc != "" {

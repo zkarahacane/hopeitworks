@@ -260,8 +260,9 @@ func (s *RunService) TransitionRun(ctx context.Context, runID uuid.UUID, newStat
 }
 
 // LaunchRun validates the story, creates a pending run with steps, and enqueues
-// a River job for async execution.
-func (s *RunService) LaunchRun(ctx context.Context, projectID, storyID uuid.UUID) (*model.Run, error) {
+// a River job for async execution. The userID identifies the launching user so
+// that user-specific API keys can be resolved for agent containers.
+func (s *RunService) LaunchRun(ctx context.Context, projectID, storyID, userID uuid.UUID) (*model.Run, error) {
 	// 1. Verify story exists and belongs to project
 	story, err := s.storyRepo.GetByID(ctx, storyID)
 	if err != nil {
@@ -329,7 +330,8 @@ func (s *RunService) LaunchRun(ctx context.Context, projectID, storyID uuid.UUID
 	// 7. Compute run metadata
 	branchName := "feat/" + story.Key
 	runMetadata := map[string]interface{}{
-		"branch_name": branchName,
+		"branch_name":          branchName,
+		"launched_by_user_id":  userID.String(),
 	}
 
 	// Build per-step metadata from pipeline config (keyed by step order).
@@ -358,6 +360,9 @@ func (s *RunService) LaunchRun(ctx context.Context, projectID, storyID uuid.UUID
 			}
 			runMetadata[fmt.Sprintf("step_%d_agent_id", i)] = agent.ID.String()
 			runMetadata[fmt.Sprintf("step_%d_model", i)] = agent.Model
+			if agent.Provider != "" {
+				runMetadata[fmt.Sprintf("step_%d_provider", i)] = agent.Provider
+			}
 			if agent.Image != "" {
 				runMetadata[fmt.Sprintf("step_%d_agent_image", i)] = agent.Image
 			}
