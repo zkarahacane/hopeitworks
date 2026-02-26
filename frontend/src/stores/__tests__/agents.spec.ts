@@ -124,6 +124,7 @@ describe('useAgentsStore', () => {
         image: 'ghcr.io/org/agent:latest',
         template_content: 'You are a developer...',
         scope: 'project',
+        provider: 'claude',
       },
     })
   })

@@ -31,6 +31,10 @@ func (r *AgentRepo) CreateAgent(ctx context.Context, agent *model.Agent) (*model
 	if agentType == "" {
 		agentType = "custom"
 	}
+	provider := agent.Provider
+	if provider == "" {
+		provider = model.ProviderClaude
+	}
 	params := CreateAgentParams{
 		ID:              agent.ID,
 		Name:            agent.Name,
@@ -39,6 +43,7 @@ func (r *AgentRepo) CreateAgent(ctx context.Context, agent *model.Agent) (*model
 		TemplateContent: agent.TemplateContent,
 		Type:            agentType,
 		Scope:           agent.Scope,
+		Provider:        provider,
 		ProjectID:       uuidFromPtr(agent.ProjectID),
 	}
 
@@ -109,12 +114,17 @@ func (r *AgentRepo) ListAgentsByProjectMerged(ctx context.Context, projectID uui
 
 // UpdateAgent updates an existing agent.
 func (r *AgentRepo) UpdateAgent(ctx context.Context, agent *model.Agent) (*model.Agent, error) {
+	provider := agent.Provider
+	if provider == "" {
+		provider = model.ProviderClaude
+	}
 	params := UpdateAgentParams{
 		ID:              agent.ID,
 		Name:            agent.Name,
 		Model:           textFromString(agent.Model),
 		Image:           textFromString(agent.Image),
 		TemplateContent: agent.TemplateContent,
+		Provider:        provider,
 	}
 
 	row, err := r.queries.UpdateAgent(ctx, params)
@@ -147,6 +157,7 @@ func toDomainAgent(a Agent) *model.Agent {
 		TemplateContent: a.TemplateContent,
 		Type:            a.Type,
 		Scope:           a.Scope,
+		Provider:        a.Provider,
 		CreatedAt:       a.CreatedAt,
 		UpdatedAt:       a.UpdatedAt,
 	}
@@ -162,6 +173,11 @@ func toDomainAgent(a Agent) *model.Agent {
 
 	if a.Image.Valid {
 		agent.Image = a.Image.String
+	}
+
+	// Default provider to "claude" for existing agents migrated without an explicit value.
+	if agent.Provider == "" {
+		agent.Provider = model.ProviderClaude
 	}
 
 	return agent

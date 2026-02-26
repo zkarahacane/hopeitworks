@@ -1,0 +1,1 @@
+ALTER TABLE agents ADD COLUMN provider VARCHAR(50) NOT NULL DEFAULT 'claude';

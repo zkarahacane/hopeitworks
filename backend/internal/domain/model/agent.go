@@ -12,6 +12,12 @@ const (
 	AgentScopeProject = "project"
 )
 
+// Agent provider constants.
+const (
+	ProviderClaude   = "claude"
+	ProviderOpenCode = "opencode"
+)
+
 // Agent represents an AI agent definition with its runtime configuration and prompt template.
 // Agents can be scoped globally (available to all projects) or to a specific project.
 type Agent struct {
@@ -20,8 +26,9 @@ type Agent struct {
 	Model           string     `json:"model"`
 	Image           string     `json:"image"`
 	TemplateContent string     `json:"template_content"`
-	Type            string     `json:"type"`  // "implement", "review", "merge", "retry", "custom"
-	Scope           string     `json:"scope"` // "global" or "project"
+	Type            string     `json:"type"`     // "implement", "review", "merge", "retry", "custom"
+	Scope           string     `json:"scope"`    // "global" or "project"
+	Provider        string     `json:"provider"` // "claude" or "opencode"
 	ProjectID       *uuid.UUID `json:"project_id"`
 	CreatedAt       time.Time  `json:"created_at"`
 	UpdatedAt       time.Time  `json:"updated_at"`

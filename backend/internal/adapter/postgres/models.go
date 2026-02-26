@@ -69,6 +69,7 @@ type Agent struct {
 	Scope           string      `json:"scope"`
 	Model           pgtype.Text `json:"model"`
 	Image           pgtype.Text `json:"image"`
+	Provider        string      `json:"provider"`
 }
 
 type CostRecord struct {
@@ -251,4 +252,15 @@ type User struct {
 	CreatedAt    time.Time          `json:"created_at"`
 	UpdatedAt    time.Time          `json:"updated_at"`
 	DeletedAt    pgtype.Timestamptz `json:"deleted_at"`
+}
+
+type UserApiKey struct {
+	ID           uuid.UUID `json:"id"`
+	UserID       uuid.UUID `json:"user_id"`
+	Provider     string    `json:"provider"`
+	KeyName      string    `json:"key_name"`
+	EncryptedKey []byte    `json:"encrypted_key"`
+	KeyHint      string    `json:"key_hint"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }

@@ -13,9 +13,9 @@ import (
 )
 
 const createAgent = `-- name: CreateAgent :one
-INSERT INTO agents (id, name, model, image, template_content, type, scope, project_id, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
-RETURNING id, project_id, name, template_content, type, created_at, updated_at, scope, model, image
+INSERT INTO agents (id, name, model, image, template_content, type, scope, provider, project_id, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
+RETURNING id, project_id, name, template_content, type, created_at, updated_at, scope, model, image, provider
 `
 
 type CreateAgentParams struct {
@@ -26,6 +26,7 @@ type CreateAgentParams struct {
 	TemplateContent string      `json:"template_content"`
 	Type            string      `json:"type"`
 	Scope           string      `json:"scope"`
+	Provider        string      `json:"provider"`
 	ProjectID       pgtype.UUID `json:"project_id"`
 }
 
@@ -38,6 +39,7 @@ func (q *Queries) CreateAgent(ctx context.Context, arg CreateAgentParams) (Agent
 		arg.TemplateContent,
 		arg.Type,
 		arg.Scope,
+		arg.Provider,
 		arg.ProjectID,
 	)
 	var i Agent
@@ -52,6 +54,7 @@ func (q *Queries) CreateAgent(ctx context.Context, arg CreateAgentParams) (Agent
 		&i.Scope,
 		&i.Model,
 		&i.Image,
+		&i.Provider,
 	)
 	return i, err
 }
@@ -66,7 +69,7 @@ func (q *Queries) DeleteAgent(ctx context.Context, id uuid.UUID) error {
 }
 
 const getAgent = `-- name: GetAgent :one
-SELECT id, project_id, name, template_content, type, created_at, updated_at, scope, model, image FROM agents WHERE id = $1 LIMIT 1
+SELECT id, project_id, name, template_content, type, created_at, updated_at, scope, model, image, provider FROM agents WHERE id = $1 LIMIT 1
 `
 
 func (q *Queries) GetAgent(ctx context.Context, id uuid.UUID) (Agent, error) {
@@ -83,12 +86,13 @@ func (q *Queries) GetAgent(ctx context.Context, id uuid.UUID) (Agent, error) {
 		&i.Scope,
 		&i.Model,
 		&i.Image,
+		&i.Provider,
 	)
 	return i, err
 }
 
 const listAgentsByProject = `-- name: ListAgentsByProject :many
-SELECT id, project_id, name, template_content, type, created_at, updated_at, scope, model, image FROM agents WHERE project_id = $1 ORDER BY name ASC
+SELECT id, project_id, name, template_content, type, created_at, updated_at, scope, model, image, provider FROM agents WHERE project_id = $1 ORDER BY name ASC
 `
 
 func (q *Queries) ListAgentsByProject(ctx context.Context, projectID pgtype.UUID) ([]Agent, error) {
@@ -111,6 +115,7 @@ func (q *Queries) ListAgentsByProject(ctx context.Context, projectID pgtype.UUID
 			&i.Scope,
 			&i.Model,
 			&i.Image,
+			&i.Provider,
 		); err != nil {
 			return nil, err
 		}
@@ -123,7 +128,7 @@ func (q *Queries) ListAgentsByProject(ctx context.Context, projectID pgtype.UUID
 }
 
 const listAgentsByProjectMerged = `-- name: ListAgentsByProjectMerged :many
-SELECT id, project_id, name, template_content, type, created_at, updated_at, scope, model, image FROM agents
+SELECT id, project_id, name, template_content, type, created_at, updated_at, scope, model, image, provider FROM agents
 WHERE project_id = $1 OR scope = 'global'
 ORDER BY scope DESC, name ASC
 `
@@ -148,6 +153,7 @@ func (q *Queries) ListAgentsByProjectMerged(ctx context.Context, projectID pgtyp
 			&i.Scope,
 			&i.Model,
 			&i.Image,
+			&i.Provider,
 		); err != nil {
 			return nil, err
 		}
@@ -160,7 +166,7 @@ func (q *Queries) ListAgentsByProjectMerged(ctx context.Context, projectID pgtyp
 }
 
 const listGlobalAgents = `-- name: ListGlobalAgents :many
-SELECT id, project_id, name, template_content, type, created_at, updated_at, scope, model, image FROM agents WHERE scope = 'global' ORDER BY name ASC
+SELECT id, project_id, name, template_content, type, created_at, updated_at, scope, model, image, provider FROM agents WHERE scope = 'global' ORDER BY name ASC
 `
 
 func (q *Queries) ListGlobalAgents(ctx context.Context) ([]Agent, error) {
@@ -183,6 +189,7 @@ func (q *Queries) ListGlobalAgents(ctx context.Context) ([]Agent, error) {
 			&i.Scope,
 			&i.Model,
 			&i.Image,
+			&i.Provider,
 		); err != nil {
 			return nil, err
 		}
@@ -196,9 +203,9 @@ func (q *Queries) ListGlobalAgents(ctx context.Context) ([]Agent, error) {
 
 const updateAgent = `-- name: UpdateAgent :one
 UPDATE agents
-SET name = $2, model = $3, image = $4, template_content = $5, updated_at = NOW()
+SET name = $2, model = $3, image = $4, template_content = $5, provider = $6, updated_at = NOW()
 WHERE id = $1
-RETURNING id, project_id, name, template_content, type, created_at, updated_at, scope, model, image
+RETURNING id, project_id, name, template_content, type, created_at, updated_at, scope, model, image, provider
 `
 
 type UpdateAgentParams struct {
@@ -207,6 +214,7 @@ type UpdateAgentParams struct {
 	Model           pgtype.Text `json:"model"`
 	Image           pgtype.Text `json:"image"`
 	TemplateContent string      `json:"template_content"`
+	Provider        string      `json:"provider"`
 }
 
 func (q *Queries) UpdateAgent(ctx context.Context, arg UpdateAgentParams) (Agent, error) {
@@ -216,6 +224,7 @@ func (q *Queries) UpdateAgent(ctx context.Context, arg UpdateAgentParams) (Agent
 		arg.Model,
 		arg.Image,
 		arg.TemplateContent,
+		arg.Provider,
 	)
 	var i Agent
 	err := row.Scan(
@@ -229,6 +238,7 @@ func (q *Queries) UpdateAgent(ctx context.Context, arg UpdateAgentParams) (Agent
 		&i.Scope,
 		&i.Model,
 		&i.Image,
+		&i.Provider,
 	)
 	return i, err
 }

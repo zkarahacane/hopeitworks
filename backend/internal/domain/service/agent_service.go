@@ -27,6 +27,7 @@ type CreateAgentParams struct {
 	Image           string
 	TemplateContent string
 	Scope           string
+	Provider        string
 }
 
 // Create validates inputs and creates a new agent.
@@ -53,6 +54,14 @@ func (s *AgentService) Create(ctx context.Context, params CreateAgentParams) (*m
 		return nil, errors.NewValidation("project_id", "is required for project-scoped agents")
 	}
 
+	provider := params.Provider
+	if provider == "" {
+		provider = model.ProviderClaude
+	}
+	if provider != model.ProviderClaude && provider != model.ProviderOpenCode {
+		return nil, errors.NewValidation("provider", "must be 'claude' or 'opencode'")
+	}
+
 	agent := &model.Agent{
 		ID:              uuid.New(),
 		Name:            params.Name,
@@ -60,6 +69,7 @@ func (s *AgentService) Create(ctx context.Context, params CreateAgentParams) (*m
 		Image:           params.Image,
 		TemplateContent: params.TemplateContent,
 		Scope:           scope,
+		Provider:        provider,
 		ProjectID:       params.ProjectID,
 	}
 
@@ -111,6 +121,7 @@ type UpdateAgentParams struct {
 	Model           *string
 	Image           *string
 	TemplateContent *string
+	Provider        *string
 }
 
 // Update validates inputs and updates an existing agent.
@@ -140,6 +151,13 @@ func (s *AgentService) Update(ctx context.Context, params UpdateAgentParams) (*m
 			return nil, errors.NewValidation("template_content", "must not be empty")
 		}
 		existing.TemplateContent = *params.TemplateContent
+	}
+	if params.Provider != nil {
+		p := *params.Provider
+		if p != model.ProviderClaude && p != model.ProviderOpenCode {
+			return nil, errors.NewValidation("provider", "must be 'claude' or 'opencode'")
+		}
+		existing.Provider = p
 	}
 
 	return s.repo.UpdateAgent(ctx, existing)

@@ -34,6 +34,7 @@ export interface CreateAgentParams {
   image: string
   template_content: string
   scope?: AgentScope
+  provider?: 'claude' | 'opencode'
 }
 
 /** Parameters for updating an existing agent */
@@ -98,6 +99,7 @@ export const useAgentsStore = defineStore('agents', () => {
             image: params.image,
             template_content: params.template_content,
             scope: params.scope ?? 'project',
+            provider: params.provider ?? 'claude',
           },
         },
       )
