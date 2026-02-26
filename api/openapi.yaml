@@ -2802,6 +2802,7 @@ components:
         - image
         - template_content
         - scope
+        - provider
         - created_at
         - updated_at
       properties:
@@ -2829,6 +2830,11 @@ components:
           description: >
             "global" agents are available across all projects;
             "project" agents are scoped to a single project.
+        provider:
+          type: string
+          enum: [claude, opencode]
+          default: claude
+          description: AI provider used to run this agent
         project_id:
           type: string
           format: uuid
@@ -2863,6 +2869,11 @@ components:
           type: string
           enum: [global, project]
           default: project
+        provider:
+          type: string
+          enum: [claude, opencode]
+          default: claude
+          description: AI provider used to run this agent
 
     UpdateAgentRequest:
       type: object
@@ -2877,6 +2888,10 @@ components:
           type: string
         template_content:
           type: string
+        provider:
+          type: string
+          enum: [claude, opencode]
+          description: AI provider used to run this agent
 
     # ── Pipeline Config ──────────────────────────────────────────────
     PipelineStep:
