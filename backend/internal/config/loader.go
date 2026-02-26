@@ -98,6 +98,9 @@ func applyEnvOverrides(cfg *pkgconfig.Config) {
 	if v := os.Getenv("FRONTEND_URL"); v != "" {
 		cfg.SMTP.FrontendURL = v
 	}
+	if v := os.Getenv("ENCRYPTION_KEY"); v != "" {
+		cfg.Security.EncryptionKey = v
+	}
 }
 
 func validate(cfg *pkgconfig.Config) error {
