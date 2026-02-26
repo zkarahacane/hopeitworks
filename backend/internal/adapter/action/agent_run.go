@@ -34,7 +34,7 @@ type AgentConfig struct {
 //   - Legacy mode: for other images, uses Docker log streaming and exit code detection
 type AgentRunAction struct {
 	containerMgr port.ContainerManager
-	logStreamer   port.LogStreamer
+	logStreamer  port.LogStreamer
 	eventPub     port.EventPublisher
 	storyRepo    port.StoryRepository
 	projectRepo  port.ProjectRepository
@@ -70,7 +70,7 @@ func NewAgentRunAction(
 ) *AgentRunAction {
 	return &AgentRunAction{
 		containerMgr: containerMgr,
-		logStreamer:   logStreamer,
+		logStreamer:  logStreamer,
 		eventPub:     eventPub,
 		storyRepo:    storyRepo,
 		projectRepo:  projectRepo,

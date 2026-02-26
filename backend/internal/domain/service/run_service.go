@@ -330,8 +330,8 @@ func (s *RunService) LaunchRun(ctx context.Context, projectID, storyID, userID u
 	// 7. Compute run metadata
 	branchName := "feat/" + story.Key
 	runMetadata := map[string]interface{}{
-		"branch_name":          branchName,
-		"launched_by_user_id":  userID.String(),
+		"branch_name":         branchName,
+		"launched_by_user_id": userID.String(),
 	}
 
 	// Build per-step metadata from pipeline config (keyed by step order).

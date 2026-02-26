@@ -28,7 +28,7 @@ function handleDelete(keyId: string, keyName: string) {
     message: `Delete API key "${keyName}"? This cannot be undone.`,
     header: 'Delete API Key',
     icon: 'pi pi-exclamation-triangle',
-    acceptSeverity: 'danger',
+    acceptClass: 'p-button-danger',
     accept: async () => {
       await deleteKey(keyId)
     },
