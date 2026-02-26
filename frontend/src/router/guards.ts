@@ -8,17 +8,17 @@ declare module 'vue-router' {
   }
 }
 
-let authChecked = false
+let authCheckPromise: Promise<void> | null = null
 
 export function setupAuthGuard(router: Router) {
   router.beforeEach(async (to) => {
     const auth = useAuthStore()
 
-    // One-time session restore on first navigation
-    if (!authChecked) {
-      authChecked = true
-      await auth.checkAuth()
+    // One-time session restore on first navigation — concurrent guards share the same promise
+    if (!authCheckPromise) {
+      authCheckPromise = auth.checkAuth()
     }
+    await authCheckPromise
 
     const requiresAuth = to.meta.requiresAuth !== false
 

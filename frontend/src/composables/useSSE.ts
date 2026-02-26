@@ -1,4 +1,5 @@
 import { ref, onBeforeUnmount } from 'vue'
+import { useAuthStore } from '@/stores/auth'
 
 export type SSEStatus = 'connecting' | 'open' | 'closed' | 'error'
 
@@ -18,7 +19,13 @@ export function useSSE(
     status.value = 'open'
   }
   es.onerror = () => {
-    status.value = 'error'
+    const auth = useAuthStore()
+    if (!auth.isAuthenticated) {
+      es.close()
+      status.value = 'closed'
+    } else {
+      status.value = 'error'
+    }
   }
   es.onmessage = (e) => {
     try {
