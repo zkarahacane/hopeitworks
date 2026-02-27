@@ -1,4 +1,4 @@
-.PHONY: build run docker-up docker-down docker-logs clean help generate lint lint-api install-tools seed reset-db
+.PHONY: build run docker-up docker-down docker-logs clean help generate lint lint-api install-tools seed reset-db _check-not-devcontainer
 
 # Database connection defaults (match docker-compose.yml)
 DB_HOST ?= localhost
@@ -49,13 +49,20 @@ build: ## Build the API binary
 run: build ## Run the API binary locally
 	./bin/api
 
-docker-up: ## Start the docker-compose development stack
+_check-not-devcontainer:
+	@if [ "$$HOPEITWORKS_ENV" = "devcontainer" ]; then \
+		echo "\033[0;31m[✗] Docker targets are blocked inside the devcontainer.\033[0m"; \
+		echo "    The devcontainer is code-only — run docker-compose from the host."; \
+		exit 1; \
+	fi
+
+docker-up: _check-not-devcontainer ## Start the docker-compose development stack
 	docker compose -f ../deploy/docker-compose.yml up --build -d
 
-docker-down: ## Stop the docker-compose development stack
+docker-down: _check-not-devcontainer ## Stop the docker-compose development stack
 	docker compose -f ../deploy/docker-compose.yml down
 
-docker-logs: ## Follow docker-compose logs
+docker-logs: _check-not-devcontainer ## Follow docker-compose logs
 	docker compose -f ../deploy/docker-compose.yml logs -f
 
 clean: ## Remove build artifacts and clean cache

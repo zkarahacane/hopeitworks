@@ -233,6 +233,42 @@ npm run test:e2e                     # Playwright (against docker-compose.test.y
 - Config: `config.yaml` + env var override, resolved at startup
 - No hot-reload for MVP — restart to apply config changes
 
+## Development Environments
+
+The devcontainer and local machine share the same Docker engine (the socket is bind-mounted). To prevent conflicts (destroyed data, port collisions, broken stacks), each environment has a distinct role:
+
+| Environment | Role | docker-compose | reset-dev.sh / e2e-stack.sh | lint / test / codegen |
+|-------------|------|:--------------:|:---------------------------:|:---------------------:|
+| **Devcontainer** | Code-only workspace | Blocked | Blocked | Allowed |
+| **Local machine** | Stable stack with persistent data | Allowed | Allowed | Allowed |
+
+### Guard mechanism
+
+- The devcontainer sets `HOPEITWORKS_ENV=devcontainer` via `containerEnv` in `devcontainer.json`
+- Scripts (`reset-dev.sh`, `e2e-stack.sh`) and Makefile docker targets check this variable and refuse to run
+- Override with `FORCE_RESET=1`, `FORCE_E2E=1`, or by unsetting the variable (not recommended)
+
+### Allowed in devcontainer
+
+```bash
+cd backend && make build           # compile
+cd backend && make lint            # golangci-lint
+cd backend && make generate        # oapi-codegen + sqlc
+cd backend && go test ./... -short # unit tests (no containers)
+cd frontend && npm run lint        # eslint
+cd frontend && npm run type-check  # tsc --noEmit
+cd frontend && npm run test:unit   # vitest
+```
+
+### Blocked in devcontainer
+
+```bash
+./scripts/reset-dev.sh             # → use host
+./scripts/e2e-stack.sh up          # → use host
+cd backend && make docker-up       # → use host
+cd backend && make docker-down     # → use host
+```
+
 ## Local Dev Reset
 
 Use `scripts/reset-dev.sh` to reset the local dev environment to a clean state:
@@ -240,6 +276,8 @@ Use `scripts/reset-dev.sh` to reset the local dev environment to a clean state:
 ```bash
 ./scripts/reset-dev.sh
 ```
+
+> **Note:** This script is blocked inside the devcontainer (`HOPEITWORKS_ENV=devcontainer`). Run it from your host machine.
 
 This script:
 1. Drops and recreates the DB schema

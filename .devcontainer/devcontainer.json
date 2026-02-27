@@ -1,0 +1,72 @@
+{
+  "name": "hopeitworks-dev",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+
+  // ─── Tokens from host env ────────────────────────────────────
+  "containerEnv": {
+    "HOPEITWORKS_ENV": "devcontainer",
+    "CLAUDE_CODE_OAUTH_TOKEN": "${localEnv:CLAUDE_CODE_OAUTH_TOKEN_PERSO}",
+    "GITHUB_TOKEN": "${localEnv:GITHUB_TOKEN}",
+    "CLAUDE_MODEL": "${localEnv:CLAUDE_MODEL:opus}"
+  },
+
+  // ─── Docker socket from host ─────────────────────────────────
+  "mounts": [
+    "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind",
+    "source=${localEnv:HOME}/.claude,target=/home/vscode/.claude,type=bind,consistency=cached",
+    "source=${localEnv:HOME}/.claude.json,target=/home/vscode/.claude.json,type=bind,consistency=cached"
+  ],
+
+  // ─── Ports ───────────────────────────────────────────────────
+  // Only forward frontend dev server — docker-compose stack runs on the host
+  "forwardPorts": [
+    5173   // frontend vite dev
+  ],
+
+  // ─── Post-create: install deps ───────────────────────────────
+  "postCreateCommand": "cd frontend && npm install && npx playwright install chromium",
+
+  // ─── VS Code settings ────────────────────────────────────────
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "zsh",
+        "go.toolsManagement.autoUpdate": false,
+        "go.gopath": "/home/vscode/go",
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "[go]": {
+          "editor.defaultFormatter": "golang.go"
+        },
+        "[vue]": {
+          "editor.defaultFormatter": "Vue.volar"
+        }
+      },
+      "extensions": [
+        // Go
+        "golang.go",
+        // Vue / TS
+        "Vue.volar",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        // Tailwind
+        "bradlc.vscode-tailwindcss",
+        // Docker
+        "ms-azuretools.vscode-docker",
+        // DB
+        "ckolkman.vscode-postgres",
+        // Git
+        "eamodio.gitlens",
+        // API
+        "42Crunch.vscode-openapi",
+        // Claude Code
+        "anthropic.claude-code"
+      ]
+    }
+  },
+
+  "remoteUser": "vscode"
+}
