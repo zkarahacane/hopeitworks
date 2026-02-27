@@ -1,6 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# ─── Devcontainer guard ───────────────────────────────────────────────────────
+# The devcontainer shares the host Docker socket. Running e2e-stack.sh from
+# inside the devcontainer would conflict with the local stack. Use FORCE_E2E=1
+# to override if you really know what you're doing.
+if [[ "${HOPEITWORKS_ENV:-}" == "devcontainer" && "${FORCE_E2E:-0}" != "1" ]]; then
+  echo -e "\033[0;31m[✗] e2e-stack.sh is blocked inside the devcontainer.\033[0m"
+  echo "    The devcontainer shares the host Docker socket — running this script"
+  echo "    would conflict with or destroy the local stack."
+  echo ""
+  echo "    Run this script from your host machine instead, or set FORCE_E2E=1"
+  echo "    to override: FORCE_E2E=1 ./scripts/e2e-stack.sh $*"
+  exit 1
+fi
+
 # ─── Colors ────────────────────────────────────────────────────────────────────
 RED='\033[0;31m'
 GREEN='\033[0;32m'

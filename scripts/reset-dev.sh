@@ -20,6 +20,20 @@
 
 set -euo pipefail
 
+# ─── Devcontainer guard ───────────────────────────────────────────────────────
+# The devcontainer shares the host Docker socket. Running reset-dev.sh from
+# inside the devcontainer would destroy the local stack's data. Use FORCE_RESET=1
+# to override if you really know what you're doing.
+if [[ "${HOPEITWORKS_ENV:-}" == "devcontainer" && "${FORCE_RESET:-0}" != "1" ]]; then
+  echo -e "\033[0;31m[✗] reset-dev.sh is blocked inside the devcontainer.\033[0m"
+  echo "    The devcontainer shares the host Docker socket — running this script"
+  echo "    would destroy the local stack's persistent data."
+  echo ""
+  echo "    Run this script from your host machine instead, or set FORCE_RESET=1"
+  echo "    to override: FORCE_RESET=1 ./scripts/reset-dev.sh"
+  exit 1
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 COMPOSE_DIR="$PROJECT_ROOT/deploy"
