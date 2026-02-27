@@ -201,6 +201,16 @@ development_status:
   F-3-1-add-dark-mode-toggle: backlog
   F-3-2-improve-auth-error-messages: backlog
 
+  # Phase 14: Agent Runtime Overhaul (2026-02-26 → 2026-02-27)
+  # Multi-provider support, HTTP callback mode, container images, frontend API keys
+  post-mvp-agent-runtime-overhaul: done
+  RT-1-user-api-keys: done
+  RT-2-agent-provider-field: done
+  RT-3-agent-runtime-go-binary: done
+  RT-4-container-images-multi-stack: done
+  RT-5-backend-callbacks-refactor-agent-run: done
+  RT-6-frontend-api-keys-provider-ui: done
+
   # Post-MVP: Smoke Tests & Monaco Fix
   post-mvp-smoke-monaco: done
   fix-smoke-tests-green: done
@@ -278,6 +288,8 @@ development_status:
 #   Phase 3 (Waves 10-12): Extensions - Epics 4, 5, 7, 8, 9
 #   Phase 11 (Waves 31-35): Pipeline Refonte — Groups, Agents, Runs UI, Costs
 #   Phase 12 (Wave 36):    Agent Entity Source of Truth
+#   Phase 13 (Waves 37-40): Stabilization — Functional Test Audit
+#   Phase 14 (Waves 41-42): Agent Runtime Overhaul — Multi-provider, Callbacks, Images
 #   Phase 4 (Waves 13-15): Validation - Epic 10
 #   Phase 5 (Waves 16-19): Post-MVP Bug Fixes
 #   Phase 6 (Waves 20-21): Auth Enhancements
@@ -1181,3 +1193,55 @@ parallel_waves:
     container_count: 2
     depends_on: [wave-39]
     notes: "P2 polish: dark mode toggle, auth error UX — all parallel"
+
+  # =====================================================
+  # PHASE 14: AGENT RUNTIME OVERHAUL (Multi-provider, Callbacks, Images)
+  # 6 phases in 2 waves — PR #203 (wave 1) + PR #204 (wave 2)
+  # =====================================================
+
+  wave-41:
+    phase: 14-agent-runtime-overhaul
+    stories:
+      - key: RT-1-user-api-keys
+        domain: back
+        status: done
+        cross_epic_deps: [1-3-users-table-jwt-auth-api-register-login-auth-middleware]
+        notes: "AES-256-GCM encrypted API key storage, CRUD endpoints, migration 000030"
+      - key: RT-2-agent-provider-field
+        domain: back
+        status: done
+        cross_epic_deps: [R-1-4-agent-backend-model-migration]
+        notes: "Provider column on agents (claude/opencode), migration 000031, model pricing"
+      - key: RT-3-agent-runtime-go-binary
+        domain: back
+        status: done
+        notes: "New Go module agent-runtime/ — config, git clone, provider abstraction, callback client, runner (890 lines)"
+    container_count: 3
+    depends_on: [wave-36]
+    pr: "#203"
+    merged: 2026-02-26
+    notes: "RT Wave 1: API key management, agent provider field, Go agent-runtime binary — all parallel, squash-merged to develop"
+
+  wave-42:
+    phase: 14-agent-runtime-overhaul
+    stories:
+      - key: RT-4-container-images-multi-stack
+        domain: shared
+        status: done
+        explicit_deps: [RT-3-agent-runtime-go-binary]
+        notes: "agent-images/ — base Dockerfile (multi-stage Go builder + debian-slim + Claude CLI + OpenCode CLI) + 4 stack Dockerfiles (go-node, node, go, python), Makefile, docker-compose dual network"
+      - key: RT-5-backend-callbacks-refactor-agent-run
+        domain: back
+        status: done
+        explicit_deps: [RT-1-user-api-keys, RT-2-agent-provider-field, RT-3-agent-runtime-go-binary, RT-4-container-images-multi-stack]
+        notes: "Major refactor: container token store, callback status store, 3 internal callback endpoints, internal auth middleware, dual-mode agent_run (callback vs legacy), run_context UserID, config CallbackBaseURL"
+      - key: RT-6-frontend-api-keys-provider-ui
+        domain: front
+        status: done
+        explicit_deps: [RT-1-user-api-keys, RT-2-agent-provider-field]
+        notes: "Profile page API key management (DataTable + Dialog + ConfirmDialog), agent editor provider dropdown"
+    container_count: 3
+    depends_on: [wave-41]
+    pr: "#204"
+    merged: 2026-02-27
+    notes: "RT Wave 2: container images (Phase 4) + frontend API keys UI (Phase 6) in parallel, then backend callbacks (Phase 5) — squash-merged to develop"
