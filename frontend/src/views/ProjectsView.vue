@@ -2,12 +2,12 @@
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useToast } from 'primevue/usetoast'
-import type { DataTablePageEvent } from 'primevue/datatable'
+import type { PageState } from 'primevue/paginator'
 import Button from 'primevue/button'
 import Message from 'primevue/message'
 import ProgressSpinner from 'primevue/progressspinner'
 import Toast from 'primevue/toast'
-import ProjectListTable from '@/features/projects/ProjectListTable.vue'
+import ProjectCardGrid from '@/features/projects/ProjectCardGrid.vue'
 import ProjectEmptyState from '@/features/projects/ProjectEmptyState.vue'
 import CreateProjectDialog from '@/features/projects/CreateProjectDialog.vue'
 import { useProjects } from '@/composables/useProjects'
@@ -25,14 +25,14 @@ onMounted(() => {
   fetchProjects({ page: 1, per_page: perPage })
 })
 
-function handlePage(event: DataTablePageEvent) {
+function handlePage(event: PageState) {
   const newPage = Math.floor(event.first / event.rows) + 1
   first.value = event.first
   fetchProjects({ page: newPage, per_page: event.rows })
 }
 
-function handleRowClick(project: Project) {
-  router.push({ name: 'project-overview', params: { id: project.id } })
+function handleCardClick(projectId: string) {
+  router.push({ name: 'project-overview', params: { id: projectId } })
 }
 
 function handleCreated(project: Project) {
@@ -75,7 +75,7 @@ function handleCreated(project: Project) {
       @create="showCreateDialog = true"
     />
 
-    <ProjectListTable
+    <ProjectCardGrid
       v-else
       :projects="projects"
       :total-records="pagination?.total ?? 0"
@@ -83,7 +83,7 @@ function handleCreated(project: Project) {
       :loading="isLoading"
       :first="first"
       @page="handlePage"
-      @row-click="handleRowClick"
+      @project-click="handleCardClick"
     />
 
     <CreateProjectDialog

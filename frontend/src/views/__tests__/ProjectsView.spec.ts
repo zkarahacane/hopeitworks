@@ -41,12 +41,12 @@ vi.mock('@/composables/useProjects', () => ({
 }))
 
 /** Stub child components to keep tests focused */
-const ProjectListTableStub = defineComponent({
-  name: 'ProjectListTable',
+const ProjectCardGridStub = defineComponent({
+  name: 'ProjectCardGrid',
   props: ['projects', 'totalRecords', 'rows', 'loading', 'first'],
-  emits: ['page', 'row-click'],
+  emits: ['page', 'project-click'],
   setup(_, { slots }) {
-    return () => h('div', { 'data-testid': 'project-list-table' }, slots.default?.())
+    return () => h('div', { 'data-testid': 'project-card-grid' }, slots.default?.())
   },
 })
 
@@ -87,7 +87,7 @@ function mountComponent() {
     global: {
       plugins: [PrimeVue, ToastService, createPinia()],
       stubs: {
-        ProjectListTable: ProjectListTableStub,
+        ProjectCardGrid: ProjectCardGridStub,
         ProjectEmptyState: ProjectEmptyStateStub,
         CreateProjectDialog: CreateProjectDialogStub,
         Toast: true,
