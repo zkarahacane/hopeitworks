@@ -3,6 +3,7 @@ package middleware
 import (
 	"context"
 	"net/http"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/zakari/hopeitworks/backend/internal/domain/model"
@@ -53,7 +54,12 @@ var publicPaths = []string{
 }
 
 // isPublicPath checks if the request path is a public route.
+// Internal agent callback paths are also excluded from JWT auth
+// because they use container token auth via InternalAuth middleware.
 func isPublicPath(path string) bool {
+	if strings.HasPrefix(path, "/internal/") {
+		return true
+	}
 	for _, p := range publicPaths {
 		if path == p {
 			return true

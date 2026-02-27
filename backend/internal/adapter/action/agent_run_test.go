@@ -506,6 +506,10 @@ func newAgentRunFixture(t *testing.T) *agentRunFixture {
 		f.costSvc,
 		agentCfg,
 		testLogger(),
+		nil, // apiKeySvc - not needed for legacy mode tests
+		nil, // tokenStore - not needed for legacy mode tests
+		nil, // statusStore - not needed for legacy mode tests
+		"",  // callbackURL - not needed for legacy mode tests
 	)
 
 	return f

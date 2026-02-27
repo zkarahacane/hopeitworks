@@ -264,7 +264,7 @@ func TestIntegration_PipelineValidation_RunCreation(t *testing.T) {
 	runSvc.SetAgentRepo(agentRepo)
 
 	// Launch run
-	run, err := runSvc.LaunchRun(ctx, projectID, story.ID)
+	run, err := runSvc.LaunchRun(ctx, projectID, story.ID, uuid.Nil)
 	if err != nil {
 		t.Fatalf("LaunchRun() error = %v", err)
 	}
@@ -341,7 +341,7 @@ func TestIntegration_PipelineValidation_RunCreation(t *testing.T) {
 	})
 
 	t.Run("duplicate launch blocked for active run", func(t *testing.T) {
-		_, err := runSvc.LaunchRun(ctx, projectID, story.ID)
+		_, err := runSvc.LaunchRun(ctx, projectID, story.ID, uuid.Nil)
 		if err == nil {
 			t.Fatal("expected error for duplicate launch, got nil")
 		}
@@ -422,7 +422,7 @@ func TestIntegration_PipelineValidation_Execution(t *testing.T) {
 	runSvc := service.NewRunService(runRepo, projectRepo, storyRepo, pipelineConfigRepo, mockQueue)
 	runSvc.SetAgentRepo(agentRepo)
 
-	run, err := runSvc.LaunchRun(ctx, projectID, story.ID)
+	run, err := runSvc.LaunchRun(ctx, projectID, story.ID, uuid.Nil)
 	if err != nil {
 		t.Fatalf("LaunchRun() error = %v", err)
 	}
@@ -631,7 +631,7 @@ func TestIntegration_PipelineValidation_FullFlow(t *testing.T) {
 	runSvc := service.NewRunService(runRepo, projectRepo, storyRepo, pipelineConfigRepo, mockQueue)
 	runSvc.SetAgentRepo(agentRepo)
 
-	run, err := runSvc.LaunchRun(ctx, projectID, story1.ID)
+	run, err := runSvc.LaunchRun(ctx, projectID, story1.ID, uuid.Nil)
 	if err != nil {
 		t.Fatalf("LaunchRun() error = %v", err)
 	}

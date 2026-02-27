@@ -32,6 +32,7 @@ export function useAgentEditor(projectId: string, agentId: string) {
   const model = ref('claude-sonnet-4-6')
   const image = ref('')
   const scope = ref<AgentScope>('project')
+  const provider = ref('claude')
   const loading = ref(false)
   const saving = ref(false)
   const error = ref<string | null>(null)
@@ -73,6 +74,7 @@ export function useAgentEditor(projectId: string, agentId: string) {
       model.value = a.model
       image.value = a.image
       scope.value = a.scope
+      provider.value = a.provider ?? 'claude'
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Failed to load agent'
     } finally {
@@ -86,6 +88,7 @@ export function useAgentEditor(projectId: string, agentId: string) {
     agentModel?: string,
     agentImage?: string,
     agentScope?: AgentScope,
+    agentProvider?: string,
   ) {
     saving.value = true
     error.value = null
@@ -101,7 +104,7 @@ export function useAgentEditor(projectId: string, agentId: string) {
               image: agentImage ?? image.value,
               template_content: content.value,
               scope: agentScope ?? scope.value,
-              provider: 'claude',
+              provider: (agentProvider ?? provider.value) as 'claude' | 'opencode',
             },
           },
         )
@@ -119,6 +122,7 @@ export function useAgentEditor(projectId: string, agentId: string) {
               name: name.value,
               model: model.value,
               image: image.value,
+              provider: (agentProvider ?? provider.value) as 'claude' | 'opencode',
             },
           },
         )
@@ -164,6 +168,7 @@ export function useAgentEditor(projectId: string, agentId: string) {
     model,
     image,
     scope,
+    provider,
     loading,
     saving,
     error,

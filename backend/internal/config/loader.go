@@ -78,6 +78,9 @@ func applyEnvOverrides(cfg *pkgconfig.Config) {
 	if v := os.Getenv("DOCKER_AGENT_NETWORK"); v != "" {
 		cfg.Docker.AgentNetwork = v
 	}
+	if v := os.Getenv("CALLBACK_BASE_URL"); v != "" {
+		cfg.Docker.CallbackBaseURL = v
+	}
 	if v := os.Getenv("SMTP_HOST"); v != "" {
 		cfg.SMTP.Host = v
 	}

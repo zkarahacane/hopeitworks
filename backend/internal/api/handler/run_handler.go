@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/zakari/hopeitworks/backend/internal/api/middleware"
 	"github.com/zakari/hopeitworks/backend/internal/domain/model"
 	"github.com/zakari/hopeitworks/backend/internal/domain/service"
 	"github.com/zakari/hopeitworks/backend/pkg/errors"
@@ -99,7 +100,8 @@ func (h *RunHandler) ListRunsByStory(w http.ResponseWriter, r *http.Request, sto
 
 // LaunchRun handles POST /projects/{projectId}/stories/{storyId}/runs.
 func (h *RunHandler) LaunchRun(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, storyID StoryIdPath) {
-	run, err := h.service.LaunchRun(r.Context(), projectID, storyID)
+	userID, _ := middleware.UserIDFromContext(r.Context())
+	run, err := h.service.LaunchRun(r.Context(), projectID, storyID, userID)
 	if err != nil {
 		writeErrorResponse(w, err)
 		return

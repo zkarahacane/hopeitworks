@@ -612,7 +612,7 @@ func TestLaunchRun_Success(t *testing.T) {
 
 	svc := NewRunService(runRepo, newMockProjectRepoForService(), storyRepo, pipelineConfigRepo, jobQueue)
 	svc.SetAgentRepo(newTestAgentRepo())
-	run, err := svc.LaunchRun(context.Background(), projectID, storyID)
+	run, err := svc.LaunchRun(context.Background(), projectID, storyID, uuid.Nil)
 
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
@@ -694,7 +694,7 @@ func TestLaunchRun_BranchNameInMetadata(t *testing.T) {
 
 	svc := NewRunService(runRepo, newMockProjectRepoForService(), storyRepo, pipelineConfigRepo, &mockJobQueue{})
 	svc.SetAgentRepo(newTestAgentRepo())
-	run, err := svc.LaunchRun(context.Background(), projectID, storyID)
+	run, err := svc.LaunchRun(context.Background(), projectID, storyID, uuid.Nil)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -758,7 +758,7 @@ func TestLaunchRun_ModelInMetadata(t *testing.T) {
 
 	svc := NewRunService(runRepo, newMockProjectRepoForService(), storyRepo, pipelineConfigRepo, &mockJobQueue{})
 	svc.SetAgentRepo(newTestAgentRepo())
-	_, err := svc.LaunchRun(context.Background(), projectID, storyID)
+	_, err := svc.LaunchRun(context.Background(), projectID, storyID, uuid.Nil)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -833,7 +833,7 @@ func TestLaunchRun_NoModelWhenEmpty(t *testing.T) {
 	}
 
 	svc := NewRunService(runRepo, newMockProjectRepoForService(), storyRepo, pipelineConfigRepo, &mockJobQueue{})
-	_, err := svc.LaunchRun(context.Background(), projectID, storyID)
+	_, err := svc.LaunchRun(context.Background(), projectID, storyID, uuid.Nil)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -856,7 +856,7 @@ func TestLaunchRun_StoryNotFound(t *testing.T) {
 		&mockJobQueue{},
 	)
 
-	_, err := svc.LaunchRun(context.Background(), projectID, storyID)
+	_, err := svc.LaunchRun(context.Background(), projectID, storyID, uuid.Nil)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -893,7 +893,7 @@ func TestLaunchRun_StoryWrongProject(t *testing.T) {
 		&mockJobQueue{},
 	)
 
-	_, err := svc.LaunchRun(context.Background(), projectID, storyID)
+	_, err := svc.LaunchRun(context.Background(), projectID, storyID, uuid.Nil)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -929,7 +929,7 @@ func TestLaunchRun_StoryAlreadyCompleted(t *testing.T) {
 		&mockJobQueue{},
 	)
 
-	_, err := svc.LaunchRun(context.Background(), projectID, storyID)
+	_, err := svc.LaunchRun(context.Background(), projectID, storyID, uuid.Nil)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -978,7 +978,7 @@ func TestLaunchRun_StoryAlreadyRunning(t *testing.T) {
 		&mockJobQueue{},
 	)
 
-	_, err := svc.LaunchRun(context.Background(), projectID, storyID)
+	_, err := svc.LaunchRun(context.Background(), projectID, storyID, uuid.Nil)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -1017,7 +1017,7 @@ func TestLaunchRun_NoPipelineConfig(t *testing.T) {
 		&mockJobQueue{},
 	)
 
-	_, err := svc.LaunchRun(context.Background(), projectID, storyID)
+	_, err := svc.LaunchRun(context.Background(), projectID, storyID, uuid.Nil)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -1081,7 +1081,7 @@ func TestLaunchRun_JobEnqueueFails(t *testing.T) {
 
 	svc := NewRunService(runRepo, newMockProjectRepoForService(), storyRepo, pipelineConfigRepo, jobQueue)
 	svc.SetAgentRepo(newTestAgentRepo())
-	_, err := svc.LaunchRun(context.Background(), projectID, storyID)
+	_, err := svc.LaunchRun(context.Background(), projectID, storyID, uuid.Nil)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}

@@ -18,6 +18,7 @@ import (
 	dockeradapter "github.com/zakari/hopeitworks/backend/internal/adapter/docker"
 	gitadapter "github.com/zakari/hopeitworks/backend/internal/adapter/git"
 	hbadapter "github.com/zakari/hopeitworks/backend/internal/adapter/handlebars"
+	memoryadapter "github.com/zakari/hopeitworks/backend/internal/adapter/memory"
 	pgadapter "github.com/zakari/hopeitworks/backend/internal/adapter/postgres"
 	riveradapter "github.com/zakari/hopeitworks/backend/internal/adapter/river"
 	smtpadapter "github.com/zakari/hopeitworks/backend/internal/adapter/smtp"
@@ -230,6 +231,10 @@ func run() error {
 	// Cost tracking (for agent_run action)
 	costSvc := costService
 
+	// In-memory stores for agent container callback mode
+	containerTokenStore := memoryadapter.NewContainerTokenStore(appCtx)
+	callbackStatusStore := memoryadapter.NewCallbackStatusStore()
+
 	// Agent run action (requires Docker)
 	if containerMgr != nil {
 		logStreamer, logErr := dockeradapter.NewDockerLogStreamerFromHost(cfg.Docker.Host, logger)
@@ -246,6 +251,8 @@ func run() error {
 				containerMgr, logStreamer, eventRepo,
 				storyRepo, projectRepo, runRepo,
 				handlebarsRenderer, costSvc, agentCfg, logger,
+				apiKeySvc, containerTokenStore, callbackStatusStore,
+				cfg.Docker.CallbackBaseURL,
 			)
 			actionReg.Register(agentRunAction)
 			logger.Info("agent_run action registered")
@@ -379,6 +386,16 @@ func run() error {
 		r.Get("/", apiKeyHandler.ListMyAPIKeys)
 		r.Post("/", apiKeyHandler.CreateMyAPIKey)
 		r.Delete("/{keyId}", apiKeyHandler.DeleteMyAPIKey)
+	})
+
+	// Mount internal callback routes for agent containers (container token auth, NOT JWT).
+	// These routes are excluded from JWT auth via the isPublicPath check in auth middleware.
+	agentCallbackHandler := handler.NewAgentCallbackHandler(eventRepo, costSvc, callbackStatusStore, runRepo)
+	r.Route("/internal/agent/callback", func(r chi.Router) {
+		r.Use(authmw.InternalAuth(containerTokenStore))
+		r.Post("/runs/{runId}/steps/{stepId}/logs", agentCallbackHandler.HandleLogs)
+		r.Post("/runs/{runId}/steps/{stepId}/cost", agentCallbackHandler.HandleCost)
+		r.Post("/runs/{runId}/steps/{stepId}/status", agentCallbackHandler.HandleStatus)
 	})
 
 	// Create HTTP server

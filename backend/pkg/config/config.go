@@ -51,6 +51,9 @@ type DockerConfig struct {
 	Host string `yaml:"host"`
 	// AgentNetwork is the Docker network for agent containers.
 	AgentNetwork string `yaml:"agent_network"`
+	// CallbackBaseURL is the base URL agent containers use to call back to the API
+	// (e.g., "http://api:8080"). Set via CALLBACK_BASE_URL env var.
+	CallbackBaseURL string `yaml:"callback_base_url"`
 }
 
 // LogConfig holds logging settings.
