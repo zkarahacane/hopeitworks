@@ -17,12 +17,14 @@ test.describe('Project List Page', () => {
     })
   })
 
-  test('displays project list in DataTable when API returns projects', async ({ page }) => {
+  test('displays project cards when API returns projects', async ({ page }) => {
     const projects = [
       {
         id: 'p1',
         name: 'Alpha Project',
         description: 'First project',
+        git_provider: 'github',
+        agent_runtime: 'docker',
         owner_id: 'u1',
         created_at: '2026-02-10T10:00:00Z',
         updated_at: '2026-02-10T10:00:00Z',
@@ -31,6 +33,7 @@ test.describe('Project List Page', () => {
         id: 'p2',
         name: 'Beta Project',
         description: 'Second project',
+        git_provider: 'gitea',
         owner_id: 'u1',
         created_at: '2026-02-12T10:00:00Z',
         updated_at: '2026-02-12T10:00:00Z',
@@ -53,14 +56,11 @@ test.describe('Project List Page', () => {
     // Page header is visible
     await expect(page.locator('h1')).toHaveText('Projects')
 
-    // DataTable rows are visible with project names
+    // Project cards are visible with project names and descriptions
     await expect(page.getByText('Alpha Project')).toBeVisible()
     await expect(page.getByText('Beta Project')).toBeVisible()
-
-    // Column headers are visible
-    await expect(page.getByText('Name')).toBeVisible()
-    await expect(page.getByText('Description')).toBeVisible()
-    await expect(page.getByText('Created')).toBeVisible()
+    await expect(page.getByText('First project')).toBeVisible()
+    await expect(page.getByText('Second project')).toBeVisible()
   })
 
   test('displays empty state when API returns no projects', async ({ page }) => {
@@ -82,7 +82,7 @@ test.describe('Project List Page', () => {
     await expect(page.getByText('Create your first project')).toBeVisible()
   })
 
-  test('navigates to project detail when clicking a row', async ({ page }) => {
+  test('navigates to project detail when clicking a card', async ({ page }) => {
     const projects = [
       {
         id: 'p1',
@@ -107,7 +107,7 @@ test.describe('Project List Page', () => {
 
     await page.goto('/projects')
 
-    // Click the project row
+    // Click the project card
     await page.getByText('Alpha Project').click()
 
     // Should navigate to project detail
