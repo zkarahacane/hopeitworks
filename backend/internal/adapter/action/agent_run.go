@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"strings"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -28,13 +26,10 @@ type AgentConfig struct {
 	LogTailLines int
 }
 
-// AgentRunAction implements model.Action for running Claude Code agents in containers.
-// It supports two execution modes:
-//   - Callback mode: for hopeitworks/agent-* images, uses HTTP callbacks for logs/cost/status
-//   - Legacy mode: for other images, uses Docker log streaming and exit code detection
+// AgentRunAction implements model.Action for running agents in containers.
+// All agent images use the agent-runtime Go binary with HTTP callbacks for logs/cost/status.
 type AgentRunAction struct {
 	containerMgr port.ContainerManager
-	logStreamer  port.LogStreamer
 	eventPub     port.EventPublisher
 	storyRepo    port.StoryRepository
 	projectRepo  port.ProjectRepository
@@ -50,11 +45,9 @@ type AgentRunAction struct {
 }
 
 // NewAgentRunAction creates a new agent run action.
-// The apiKeySvc, tokenStore, statusStore, and callbackURL parameters enable callback mode
-// for hopeitworks/agent-* container images. Pass nil/empty to disable callback mode.
+// All parameters are required for the callback-based execution mode.
 func NewAgentRunAction(
 	containerMgr port.ContainerManager,
-	logStreamer port.LogStreamer,
 	eventPub port.EventPublisher,
 	storyRepo port.StoryRepository,
 	projectRepo port.ProjectRepository,
@@ -70,7 +63,6 @@ func NewAgentRunAction(
 ) *AgentRunAction {
 	return &AgentRunAction{
 		containerMgr: containerMgr,
-		logStreamer:  logStreamer,
 		eventPub:     eventPub,
 		storyRepo:    storyRepo,
 		projectRepo:  projectRepo,
@@ -147,36 +139,28 @@ func (a *AgentRunAction) Execute(ctx context.Context, runCtx *model.RunContext) 
 		return fmt.Errorf("agent_image is required in run metadata but was not set")
 	}
 
-	// 5. Detect execution mode: callback for hopeitworks/agent-* images, legacy otherwise
-	isCallbackMode := a.isCallbackMode(agentImage)
-
-	// 6. Create container
+	// 5. Create container
 	containerID, err := a.createContainer(ctx, runCtx, project, story, agentImage, prompt, branchName)
 	if err != nil {
 		return fmt.Errorf("create container: %w", err)
 	}
 	defer a.cleanupContainer(containerID)
 
-	// 7. Start container
+	// 6. Start container
 	if err := a.containerMgr.Start(ctx, containerID); err != nil {
 		return fmt.Errorf("start container: %w", err)
 	}
 
-	// 8. Persist container ID to run step
+	// 7. Persist container ID to run step
 	a.persistContainerID(ctx, runCtx.RunStep.ID, containerID)
 
-	// 9. Wait for completion using the appropriate mode
-	var exitCode int
-	if isCallbackMode {
-		exitCode, err = a.waitForCallback(ctx, runCtx)
-	} else {
-		exitCode, err = a.streamAndWait(ctx, containerID, runCtx)
-	}
+	// 8. Wait for completion via callback
+	exitCode, err := a.waitForCallback(ctx, runCtx)
 	if err != nil {
-		return fmt.Errorf("stream/wait: %w", err)
+		return fmt.Errorf("wait for callback: %w", err)
 	}
 
-	// 10. Check exit code
+	// 9. Check exit code
 	if exitCode != 0 {
 		return fmt.Errorf("agent exited with code %d", exitCode)
 	}
@@ -185,8 +169,8 @@ func (a *AgentRunAction) Execute(ctx context.Context, runCtx *model.RunContext) 
 }
 
 // createContainer builds ContainerOpts and creates the container.
-// For callback mode (hopeitworks/agent-* images), it injects CALLBACK_URL, AUTH_TOKEN,
-// API_KEY, PROVIDER, MODEL, RUN_ID, and STEP_ID env vars instead of CLAUDE_CODE_OAUTH_TOKEN.
+// It injects CALLBACK_URL, AUTH_TOKEN, API_KEY, PROVIDER, MODEL, RUN_ID, and STEP_ID
+// env vars for the agent-runtime binary.
 func (a *AgentRunAction) createContainer(
 	ctx context.Context,
 	runCtx *model.RunContext,
@@ -206,61 +190,49 @@ func (a *AgentRunAction) createContainer(
 	}
 	gitToken := os.Getenv(tokenEnvName)
 
+	provider := resolveProvider(runCtx)
+
 	env := []string{
 		"REPO_URL=" + repoURL,
 		"BRANCH_NAME=" + branchName,
 		"STORY_KEY=" + story.Key,
-		"PROMPT_CONTENT=" + prompt,
+		"PROMPT=" + prompt,
 		"GIT_TOKEN=" + gitToken,
 		"GIT_PROVIDER=" + project.GitProvider,
-		"GITHUB_TOKEN=" + gitToken,
+		"CALLBACK_URL=" + a.callbackURL,
+		"PROVIDER=" + provider,
+		"RUN_ID=" + runCtx.Run.ID.String(),
+		"STEP_ID=" + runCtx.RunStep.ID.String(),
 	}
 
-	isCallback := a.isCallbackMode(agentImage)
-
-	if isCallback {
-		// Callback mode: use per-user API key and container token auth
-		provider := resolveProvider(runCtx)
-
-		// Resolve the user's API key for the provider
-		if a.apiKeySvc != nil && runCtx.UserID != uuid.Nil {
-			apiKey, keyErr := a.apiKeySvc.DecryptKeyForUserProvider(ctx, runCtx.UserID, provider)
-			if keyErr != nil {
-				a.logger.Warn("failed to resolve API key for user/provider, container may fail auth",
-					"user_id", runCtx.UserID, "provider", provider, "error", keyErr)
-			} else {
-				env = append(env, "API_KEY="+apiKey)
-			}
+	// Resolve the user's API key for the provider
+	if a.apiKeySvc != nil && runCtx.UserID != uuid.Nil {
+		apiKey, keyErr := a.apiKeySvc.DecryptKeyForUserProvider(ctx, runCtx.UserID, provider)
+		if keyErr != nil {
+			a.logger.Warn("failed to resolve API key for user/provider, container may fail auth",
+				"user_id", runCtx.UserID, "provider", provider, "error", keyErr)
+		} else {
+			env = append(env, "API_KEY="+apiKey)
 		}
+	}
 
-		// Generate a short-lived container token for callback auth
-		if a.tokenStore != nil {
-			token, tokenErr := a.tokenStore.Create(ctx, runCtx.Run.ID, runCtx.RunStep.ID, 2*time.Hour)
-			if tokenErr != nil {
-				return "", fmt.Errorf("create container token: %w", tokenErr)
-			}
-			env = append(env, "AUTH_TOKEN="+token)
+	// Generate a short-lived container token for callback auth
+	if a.tokenStore != nil {
+		token, tokenErr := a.tokenStore.Create(ctx, runCtx.Run.ID, runCtx.RunStep.ID, 2*time.Hour)
+		if tokenErr != nil {
+			return "", fmt.Errorf("create container token: %w", tokenErr)
 		}
+		env = append(env, "AUTH_TOKEN="+token)
+	}
 
-		env = append(env,
-			"CALLBACK_URL="+a.callbackURL,
-			"PROVIDER="+provider,
-			"RUN_ID="+runCtx.Run.ID.String(),
-			"STEP_ID="+runCtx.RunStep.ID.String(),
-		)
+	// Inject model
+	if modelVal, ok := runCtx.Metadata["model"].(string); ok && modelVal != "" {
+		env = append(env, "MODEL="+modelVal)
+	}
 
-		// Inject model (prefer per-step, then provider-default)
-		if modelVal, ok := runCtx.Metadata["model"].(string); ok && modelVal != "" {
-			env = append(env, "MODEL="+modelVal)
-		}
-	} else {
-		// Legacy mode: use shared OAuth token
-		env = append(env, "CLAUDE_CODE_OAUTH_TOKEN="+os.Getenv("CLAUDE_CODE_OAUTH_TOKEN"))
-
-		// Inject per-step model when configured in pipeline YAML
-		if modelVal, ok := runCtx.Metadata["model"].(string); ok && modelVal != "" {
-			env = append(env, "MODEL="+modelVal)
-		}
+	// Inject CLAUDE_MD_CONTENT if template_content is available
+	if tmplContent, ok := runCtx.Metadata["template_content"].(string); ok && tmplContent != "" {
+		env = append(env, "CLAUDE_MD_CONTENT="+tmplContent)
 	}
 
 	opts := model.ContainerOpts{
@@ -278,90 +250,6 @@ func (a *AgentRunAction) createContainer(
 	}
 
 	return a.containerMgr.Create(ctx, opts)
-}
-
-// streamAndWait starts log streaming, waits for container exit, and handles log tail.
-func (a *AgentRunAction) streamAndWait(
-	ctx context.Context,
-	containerID string,
-	runCtx *model.RunContext,
-) (int, error) {
-	runID := runCtx.Run.ID.String()
-	stepID := runCtx.RunStep.ID.String()
-
-	logCh, doneCh, err := a.logStreamer.StreamLogs(ctx, containerID, runID, stepID)
-	if err != nil {
-		return -1, fmt.Errorf("start log streaming: %w", err)
-	}
-
-	// Ring buffer for log tail
-	tailSize := a.config.LogTailLines
-	if tailSize <= 0 {
-		tailSize = 50
-	}
-	logTail := make([]string, 0, tailSize)
-
-	// Accumulate cost events emitted by the agent container.
-	var costEvents []model.CostEvent
-
-	// Consume logs in goroutine
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for logEvent := range logCh {
-			// Maintain ring buffer
-			if len(logTail) >= tailSize {
-				logTail = logTail[1:]
-			}
-			logTail = append(logTail, logEvent.Message)
-
-			// Accumulate cost events; do not forward cost lines to the event system.
-			if logEvent.Type == "cost" {
-				costEvents = append(costEvents, model.CostEvent{
-					InputTokens:  logEvent.InputTokens,
-					OutputTokens: logEvent.OutputTokens,
-					Model:        logEvent.Model,
-				})
-				continue
-			}
-
-			// Forward to event system
-			a.publishLogEvent(ctx, runCtx, logEvent)
-		}
-	}()
-
-	// Wait for container exit.
-	// When the context is cancelled, the LogStreamer closes doneCh without sending
-	// a value, so exitCode will be 0 (zero value). Check ctx.Err() to distinguish
-	// a clean exit code 0 from a cancellation.
-	exitCode := <-doneCh
-	if err := ctx.Err(); err != nil {
-		// Context was cancelled or deadline exceeded; propagate the context error.
-		wg.Wait()
-		return -1, err
-	}
-
-	// Wait for log goroutine to finish
-	wg.Wait()
-
-	// On failure, persist log tail
-	if exitCode != 0 {
-		tail := strings.Join(logTail, "\n")
-		a.persistLogTail(ctx, runCtx.RunStep.ID, tail)
-	}
-
-	// Record accumulated cost events, regardless of exit code.
-	// Cost recording failure is non-fatal.
-	if len(costEvents) > 0 {
-		agentID := extractAgentID(runCtx)
-		if err := a.costSvc.RecordStepCost(ctx, runCtx.RunStep.ID, runCtx.ProjectID, costEvents, agentID); err != nil {
-			a.logger.Warn("failed to record step cost",
-				"step_id", stepID, "error", err)
-		}
-	}
-
-	return exitCode, nil
 }
 
 // cleanupContainer stops and removes the container, logging errors without failing.
@@ -444,12 +332,6 @@ func extractAgentID(runCtx *model.RunContext) *uuid.UUID {
 	}
 
 	return nil
-}
-
-// isCallbackMode returns true if the agent image is a hopeitworks/agent-* image
-// that supports HTTP callback mode for logs, cost, and status reporting.
-func (a *AgentRunAction) isCallbackMode(agentImage string) bool {
-	return a.statusStore != nil && strings.Contains(agentImage, "hopeitworks/agent-")
 }
 
 // waitForCallback waits for the agent container to report its exit status via

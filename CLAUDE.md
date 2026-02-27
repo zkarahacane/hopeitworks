@@ -254,63 +254,56 @@ After reset, the environment contains:
 - Pipeline config with 4 groups and 7 preconfigured steps
 - Zero runs (clean slate)
 
-## Story Implementation Pipeline
+## Agent Runtime Architecture
 
-Stories are implemented via Docker containers running Claude Code agents. **Never implement stories directly in the local repo** — always use the pipeline scripts.
+Agent containers use the `agent-runtime` Go binary as their entrypoint (not shell scripts). The binary orchestrates: git clone → CLAUDE.md injection → LLM provider execution → HTTP callbacks.
 
-### Scripts
+### Agent Images
 
-| Script | Purpose |
-|--------|---------|
-| `scripts/bmad-dev.sh` | Launch dev agent containers (clone mode or interactive) |
-| `scripts/pipeline.sh` | Runs inside container: dev-story → code-review → merge-story |
-
-### Default models per phase
-
-| Phase | Default model | Override flag |
-|-------|--------------|---------------|
-| `dev-story` | `opus` | `--dev=MODEL` |
-| `code-review` | `sonnet` | `--review=MODEL` |
-| `merge-story` | `opus` | `--merge=MODEL` |
-
-### Usage
+Built from `agent-images/`:
 
 ```bash
-# Full pipeline for a single story (dev → review → merge)
-./scripts/bmad-dev.sh --story <story-key> --pipeline
-
-# Full pipeline for an entire wave (all stories in parallel)
-./scripts/bmad-dev.sh --wave <N> --pipeline
-
-# Setup wave branch first (if using wave-based merging)
-./scripts/bmad-dev.sh --wave <N> --setup
-
-# Single phase on a story
-./scripts/bmad-dev.sh --story <story-key> --phase dev-story
-./scripts/bmad-dev.sh --story <story-key> --phase code-review
-./scripts/bmad-dev.sh --story <story-key> --phase merge-story
-
-# Override models per phase (reduce cost or test with lighter models)
-./scripts/bmad-dev.sh --story <story-key> --pipeline --dev=sonnet
-./scripts/bmad-dev.sh --wave <N> --pipeline --dev=sonnet --review=haiku --merge=sonnet
-
-# Monitor running containers
-./scripts/bmad-dev.sh --status
-docker logs -f bmad-dev-<story-key>-pipeline
+cd agent-images && make all
 ```
 
-### Parallel execution rules
+Produces: `hopeitworks/agent-{base,go-node,node,go,python}:latest`
 
-- Stories in the same wave can run in parallel (each in its own Docker container)
-- Each container clones the repo independently — no git conflicts during dev
-- **Never run parallel local agents on the same working directory** — use `git worktree` if needed
-- Merge conflicts are resolved at merge time (sequential merge order matters)
-- **Verify CI is green on develop before launching pipelines** — agents wait for CI green to merge
+| Image | Stack | Use case |
+|-------|-------|----------|
+| `agent-base` | Minimal (git, curl, Claude Code CLI, OpenCode CLI) | Base for all stacks |
+| `agent-go-node` | Go 1.23 + Node 22 + dev tools | Full-stack stories |
+| `agent-node` | Node 22 + dev tools | Frontend stories |
+| `agent-go` | Go 1.23 + dev tools | Backend stories |
+| `agent-python` | Python + dev tools | Python stories |
+
+### Execution Flow
+
+1. Backend `AgentRunAction` creates container with env vars (`PROMPT`, `API_KEY`, `PROVIDER`, `MODEL`, `CALLBACK_URL`, `AUTH_TOKEN`, etc.)
+2. Container runs `agent-runtime` binary (Go)
+3. Binary reads config from env vars, dispatches to Claude or OpenCode provider
+4. Provider executes LLM CLI (`claude` or `opencode run`)
+5. Events (logs, cost, result) are sent back via HTTP callbacks to `/internal/agent/callback/*`
+6. Backend receives callbacks and unblocks the pipeline step
+
+### Providers
+
+| Provider | CLI | API Key env var | Models |
+|----------|-----|-----------------|--------|
+| `claude` | `claude` | `ANTHROPIC_API_KEY` | claude-opus-4-6, claude-sonnet-4-6 |
+| `opencode` | `opencode run` | Auto-detected from model prefix | gpt-4o, gemini-2.5-pro, deepseek-chat, etc. |
+
+### Per-User API Keys
+
+Users configure their API keys in Profile > API Keys. At pipeline launch time, the backend decrypts the user's key for the agent's provider and injects it into the container as `API_KEY`.
+
+### BMAD Dev Scripts
+
+`scripts/bmad-dev.sh` is the developer tool for launching Claude Code agents in containers (interactive or clone mode). It is separate from the pipeline runtime.
 
 ### Required env vars
 
-- `CLAUDE_CODE_OAUTH_TOKEN` — OAuth token for Claude Code
 - `GITHUB_TOKEN` — GitHub token for gh CLI
+- User API keys configured via the web UI (per provider)
 
 # Project Context — Current State
 
@@ -341,9 +334,13 @@ hopeitworks/
 │   └── Dockerfile
 ├── api/
 │   └── openapi.yaml            # Single source of truth — API contract
-├── agent/                      # Agent runtime (reference scripts only — no embedded image)
-│   ├── entrypoint.sh           # Container entry script (CLAUDE_MD_CONTENT optional)
-│   └── scripts/                # Runtime scripts (clone, run agent, extract results)
+├── agent-runtime/              # Agent runtime Go binary (compiled into agent-base image)
+│   ├── main.go                 # Entry point: config → provider → runner → callbacks
+│   └── internal/               # config, provider (claude/opencode), callback, runner, git
+├── agent-images/               # Docker images for agent containers
+│   ├── base/Dockerfile         # Base image: agent-runtime binary + Claude Code + OpenCode CLIs
+│   ├── stacks/                 # Stack-specific images (go-node, node, go, python)
+│   └── Makefile                # Build: make all → hopeitworks/agent-{base,go-node,node,go,python}
 ├── deploy/                     # Infrastructure
 │   ├── docker-compose.yml      # Dev local stack
 │   └── postgres/               # DB setup
@@ -375,7 +372,8 @@ hopeitworks/
 | Frontend views | `frontend/src/views/` |
 | Frontend E2E tests | `frontend/e2e/tests/` |
 | Docker Compose (dev) | `deploy/docker-compose.yml` |
-| Agent scripts | `agent/scripts/` |
+| Agent runtime (Go) | `agent-runtime/` — compiled into agent-base Docker image |
+| Agent images | `agent-images/` — Dockerfiles for agent container stacks |
 | Architecture doc | `_bmad-output/planning-artifacts/architecture.md` |
 
 ## Shared API Contract
@@ -427,6 +425,8 @@ Both sides generate types and clients from the same OpenAPI spec. Never manually
 - Cost tracking: per-step cost recording from agent container cost events
 - Pipeline config: agent_id required per agent_run step, validated at launch time
 - Git providers: GitHub + Gitea support via configurable git_provider/git_token_env per project
+- Agent runtime overhaul: Go binary with callback mode, Claude + OpenCode providers, per-user API keys
+- Legacy cleanup: removed shell entrypoint, legacy Docker image, CLAUDE_CODE_OAUTH_TOKEN fallback
 
 ## Known Constraints
 

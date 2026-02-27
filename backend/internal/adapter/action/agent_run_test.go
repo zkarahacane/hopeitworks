@@ -98,21 +98,6 @@ func (m *mockContainerManager) ListContainers(ctx context.Context, labels map[st
 	return nil, nil
 }
 
-type mockLogStreamer struct {
-	streamLogsFn func(ctx context.Context, containerID, runID, stepID string) (<-chan model.LogEvent, <-chan int, error)
-}
-
-func (m *mockLogStreamer) StreamLogs(ctx context.Context, containerID, runID, stepID string) (<-chan model.LogEvent, <-chan int, error) {
-	if m.streamLogsFn != nil {
-		return m.streamLogsFn(ctx, containerID, runID, stepID)
-	}
-	logCh := make(chan model.LogEvent)
-	doneCh := make(chan int, 1)
-	close(logCh)
-	doneCh <- 0
-	return logCh, doneCh, nil
-}
-
 type mockEventPublisher struct {
 	mu     sync.Mutex
 	events []model.Event
@@ -327,6 +312,54 @@ func (m *mockTemplateRenderer) Render(templateContent string, _ *model.TemplateC
 	return "rendered: " + templateContent[:min(20, len(templateContent))], nil
 }
 
+// --- Callback mode mocks ---
+
+type mockContainerTokenStore struct {
+	createFn  func(ctx context.Context, runID, stepID uuid.UUID, ttl time.Duration) (string, error)
+	validateFn func(ctx context.Context, token string) (*model.ContainerToken, error)
+	revokeFn   func(ctx context.Context, token string) error
+}
+
+func (m *mockContainerTokenStore) Create(ctx context.Context, runID, stepID uuid.UUID, ttl time.Duration) (string, error) {
+	if m.createFn != nil {
+		return m.createFn(ctx, runID, stepID, ttl)
+	}
+	return "test-token-123", nil
+}
+
+func (m *mockContainerTokenStore) Validate(ctx context.Context, token string) (*model.ContainerToken, error) {
+	if m.validateFn != nil {
+		return m.validateFn(ctx, token)
+	}
+	return &model.ContainerToken{}, nil
+}
+
+func (m *mockContainerTokenStore) Revoke(ctx context.Context, token string) error {
+	if m.revokeFn != nil {
+		return m.revokeFn(ctx, token)
+	}
+	return nil
+}
+
+type mockCallbackStatusStore struct {
+	waitFn  func(ctx context.Context, stepID uuid.UUID, timeout time.Duration) (int, string, error)
+	setFn   func(ctx context.Context, stepID uuid.UUID, exitCode int, errMsg string) error
+}
+
+func (m *mockCallbackStatusStore) WaitForStatus(ctx context.Context, stepID uuid.UUID, timeout time.Duration) (int, string, error) {
+	if m.waitFn != nil {
+		return m.waitFn(ctx, stepID, timeout)
+	}
+	return 0, "", nil
+}
+
+func (m *mockCallbackStatusStore) SetStatus(ctx context.Context, stepID uuid.UUID, exitCode int, errMsg string) error {
+	if m.setFn != nil {
+		return m.setFn(ctx, stepID, exitCode, errMsg)
+	}
+	return nil
+}
+
 // --- Test fixture ---
 
 // mockCostRepo is a no-op CostRepository for use in AgentRunAction tests.
@@ -384,12 +417,13 @@ type agentRunFixture struct {
 	runStep *model.RunStep
 
 	containerMgr *mockContainerManager
-	logStreamer  *mockLogStreamer
 	eventPub     *mockEventPublisher
 	storyRepo    *mockStoryRepo
 	projectRepo  *mockProjectRepo
 	runRepo      *mockRunRepo
 	costSvc      *service.CostService
+	tokenStore   *mockContainerTokenStore
+	statusStore  *mockCallbackStatusStore
 
 	action *action.AgentRunAction
 }
@@ -448,21 +482,6 @@ func newAgentRunFixture(t *testing.T) *agentRunFixture {
 		},
 	}
 
-	f.logStreamer = &mockLogStreamer{
-		streamLogsFn: func(_ context.Context, _, _, _ string) (<-chan model.LogEvent, <-chan int, error) {
-			logCh := make(chan model.LogEvent, 3)
-			doneCh := make(chan int, 1)
-			go func() {
-				logCh <- model.LogEvent{Message: "line 1", Level: "info", Timestamp: time.Now()}
-				logCh <- model.LogEvent{Message: "line 2", Level: "info", Timestamp: time.Now()}
-				logCh <- model.LogEvent{Message: "line 3", Level: "info", Timestamp: time.Now()}
-				close(logCh)
-				doneCh <- 0
-			}()
-			return logCh, doneCh, nil
-		},
-	}
-
 	f.eventPub = &mockEventPublisher{}
 	f.storyRepo = &mockStoryRepo{
 		getByIDFn: func(_ context.Context, id uuid.UUID) (*model.Story, error) {
@@ -482,11 +501,16 @@ func newAgentRunFixture(t *testing.T) *agentRunFixture {
 	}
 	f.runRepo = &mockRunRepo{}
 
-	// Create a real TemplateRenderer
 	renderer := &mockTemplateRenderer{}
-
-	// Create a CostService with a no-op mock repository
 	f.costSvc = service.NewCostService(&mockCostRepo{}, nil, nil, nil, testLogger())
+
+	// Callback mode mocks: default to success (exit code 0)
+	f.tokenStore = &mockContainerTokenStore{}
+	f.statusStore = &mockCallbackStatusStore{
+		waitFn: func(_ context.Context, _ uuid.UUID, _ time.Duration) (int, string, error) {
+			return 0, "", nil
+		},
+	}
 
 	agentCfg := action.AgentConfig{
 		DefaultMemory: 4294967296,
@@ -497,7 +521,6 @@ func newAgentRunFixture(t *testing.T) *agentRunFixture {
 
 	f.action = action.NewAgentRunAction(
 		f.containerMgr,
-		f.logStreamer,
 		f.eventPub,
 		f.storyRepo,
 		f.projectRepo,
@@ -506,10 +529,10 @@ func newAgentRunFixture(t *testing.T) *agentRunFixture {
 		f.costSvc,
 		agentCfg,
 		testLogger(),
-		nil, // apiKeySvc - not needed for legacy mode tests
-		nil, // tokenStore - not needed for legacy mode tests
-		nil, // statusStore - not needed for legacy mode tests
-		"",  // callbackURL - not needed for legacy mode tests
+		nil, // apiKeySvc
+		f.tokenStore,
+		f.statusStore,
+		"http://api:8080",
 	)
 
 	return f
@@ -523,7 +546,7 @@ func (f *agentRunFixture) newRunContext() *model.RunContext {
 		StoryID:   f.storyID,
 		Metadata: map[string]any{
 			"branch_name":      "feat/s-42-test",
-			"agent_image":      "hopeitworks/agent:latest",
+			"agent_image":      "hopeitworks/agent-go-node:latest",
 			"template_content": "Implement story {{story_key}}: {{story_title}}",
 		},
 	}
@@ -556,8 +579,8 @@ func TestAgentRunAction_HappyPath(t *testing.T) {
 	}
 
 	opts := createCalls[0]
-	if opts.Image != "hopeitworks/agent:latest" {
-		t.Errorf("expected image %q, got %q", "hopeitworks/agent:latest", opts.Image)
+	if opts.Image != "hopeitworks/agent-go-node:latest" {
+		t.Errorf("expected image %q, got %q", "hopeitworks/agent-go-node:latest", opts.Image)
 	}
 	if opts.NetworkName != "test-network" {
 		t.Errorf("expected network %q, got %q", "test-network", opts.NetworkName)
@@ -583,16 +606,13 @@ func TestAgentRunAction_HappyPath(t *testing.T) {
 		t.Errorf("expected story_key label S-42, got %s", opts.Labels["story_key"])
 	}
 
-	// Verify env vars contain expected keys (no CLAUDE_MD_CONTENT)
+	// Verify env vars contain callback mode keys
 	envMap := make(map[string]string)
 	for _, env := range opts.Env {
 		parts := strings.SplitN(env, "=", 2)
 		if len(parts) == 2 {
 			envMap[parts[0]] = parts[1]
 		}
-	}
-	if _, ok := envMap["CLAUDE_MD_CONTENT"]; ok {
-		t.Error("CLAUDE_MD_CONTENT should not be in env vars")
 	}
 	if envMap["REPO_URL"] != "https://github.com/test/repo" {
 		t.Errorf("expected REPO_URL, got %q", envMap["REPO_URL"])
@@ -603,8 +623,27 @@ func TestAgentRunAction_HappyPath(t *testing.T) {
 	if envMap["STORY_KEY"] != "S-42" {
 		t.Errorf("expected STORY_KEY S-42, got %q", envMap["STORY_KEY"])
 	}
-	if _, ok := envMap["PROMPT_CONTENT"]; !ok {
-		t.Error("expected PROMPT_CONTENT env var")
+	if _, ok := envMap["PROMPT"]; !ok {
+		t.Error("expected PROMPT env var")
+	}
+	if envMap["CALLBACK_URL"] != "http://api:8080" {
+		t.Errorf("expected CALLBACK_URL http://api:8080, got %q", envMap["CALLBACK_URL"])
+	}
+	if envMap["PROVIDER"] != "claude" {
+		t.Errorf("expected PROVIDER claude, got %q", envMap["PROVIDER"])
+	}
+	if envMap["RUN_ID"] != f.runID.String() {
+		t.Errorf("expected RUN_ID %s, got %q", f.runID, envMap["RUN_ID"])
+	}
+	if envMap["STEP_ID"] != f.stepID.String() {
+		t.Errorf("expected STEP_ID %s, got %q", f.stepID, envMap["STEP_ID"])
+	}
+	if envMap["AUTH_TOKEN"] != "test-token-123" {
+		t.Errorf("expected AUTH_TOKEN test-token-123, got %q", envMap["AUTH_TOKEN"])
+	}
+	// CLAUDE_MD_CONTENT should be injected from template_content
+	if _, ok := envMap["CLAUDE_MD_CONTENT"]; !ok {
+		t.Error("expected CLAUDE_MD_CONTENT env var from template_content metadata")
 	}
 
 	// Verify container was started
@@ -625,17 +664,6 @@ func TestAgentRunAction_HappyPath(t *testing.T) {
 	}
 	if !foundContainerIDPersist {
 		t.Error("expected container ID to be persisted")
-	}
-
-	// Verify log events were published
-	events := f.eventPub.getEvents()
-	if len(events) < 3 {
-		t.Errorf("expected at least 3 log events published, got %d", len(events))
-	}
-	for _, e := range events {
-		if e.EntityType != "log" || e.Action != "emitted" {
-			t.Errorf("expected log.emitted event, got %s.%s", e.EntityType, e.Action)
-		}
 	}
 
 	// Verify container was cleaned up (stop + remove)
@@ -683,7 +711,7 @@ func TestAgentRunAction_EmptyTemplateContent(t *testing.T) {
 		t.Fatalf("expected no error (empty prompt is ok), got %v", err)
 	}
 
-	// Verify PROMPT_CONTENT is empty
+	// Verify PROMPT is empty
 	f.containerMgr.mu.Lock()
 	createCalls := f.containerMgr.createCalls
 	f.containerMgr.mu.Unlock()
@@ -695,30 +723,17 @@ func TestAgentRunAction_EmptyTemplateContent(t *testing.T) {
 			envMap[parts[0]] = parts[1]
 		}
 	}
-	if envMap["PROMPT_CONTENT"] != "" {
-		t.Errorf("expected empty PROMPT_CONTENT when template_content is absent, got %q", envMap["PROMPT_CONTENT"])
+	if envMap["PROMPT"] != "" {
+		t.Errorf("expected empty PROMPT when template_content is absent, got %q", envMap["PROMPT"])
 	}
 }
 
 func TestAgentRunAction_AgentFailure(t *testing.T) {
 	f := newAgentRunFixture(t)
 
-	// Configure log streamer to send 10 events then exit with code 1
-	f.logStreamer.streamLogsFn = func(_ context.Context, _, _, _ string) (<-chan model.LogEvent, <-chan int, error) {
-		logCh := make(chan model.LogEvent, 10)
-		doneCh := make(chan int, 1)
-		go func() {
-			for i := 0; i < 10; i++ {
-				logCh <- model.LogEvent{
-					Message:   fmt.Sprintf("log line %d", i),
-					Level:     "info",
-					Timestamp: time.Now(),
-				}
-			}
-			close(logCh)
-			doneCh <- 1 // non-zero exit code
-		}()
-		return logCh, doneCh, nil
+	// Configure callback to return non-zero exit code
+	f.statusStore.waitFn = func(_ context.Context, _ uuid.UUID, _ time.Duration) (int, string, error) {
+		return 1, "agent crashed", nil
 	}
 
 	runCtx := f.newRunContext()
@@ -728,23 +743,6 @@ func TestAgentRunAction_AgentFailure(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "exited with code 1") {
 		t.Errorf("expected error to contain 'exited with code 1', got: %v", err)
-	}
-
-	// Verify log tail was persisted
-	infoCalls := f.runRepo.getContainerInfoCalls()
-	var foundLogTail bool
-	for _, call := range infoCalls {
-		if call.LogTail != nil {
-			foundLogTail = true
-			tail := *call.LogTail
-			// Should contain the last log lines
-			if !strings.Contains(tail, "log line") {
-				t.Errorf("expected log tail to contain log lines, got: %s", tail)
-			}
-		}
-	}
-	if !foundLogTail {
-		t.Error("expected log tail to be persisted on failure")
 	}
 
 	// Verify container was cleaned up
@@ -772,7 +770,7 @@ func TestAgentRunAction_ContainerCreateFailure(t *testing.T) {
 		t.Errorf("expected error to wrap 'create container', got: %v", err)
 	}
 
-	// Verify Start and Wait were NOT called
+	// Verify Start was NOT called
 	f.containerMgr.mu.Lock()
 	startCalls := f.containerMgr.startCalls
 	f.containerMgr.mu.Unlock()
@@ -784,16 +782,10 @@ func TestAgentRunAction_ContainerCreateFailure(t *testing.T) {
 func TestAgentRunAction_ContextCancellation(t *testing.T) {
 	f := newAgentRunFixture(t)
 
-	// Configure wait to block until context is cancelled.
-	f.logStreamer.streamLogsFn = func(ctx context.Context, _, _, _ string) (<-chan model.LogEvent, <-chan int, error) {
-		logCh := make(chan model.LogEvent)
-		doneCh := make(chan int, 1)
-		go func() {
-			<-ctx.Done()
-			close(logCh)
-			close(doneCh) // no value — mimics real LogStreamer on cancellation
-		}()
-		return logCh, doneCh, nil
+	// Configure callback to block until context is cancelled
+	f.statusStore.waitFn = func(ctx context.Context, _ uuid.UUID, _ time.Duration) (int, string, error) {
+		<-ctx.Done()
+		return -1, "", ctx.Err()
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -973,5 +965,32 @@ func TestAgentRunAction_ModelFallback(t *testing.T) {
 		if strings.HasPrefix(env, "MODEL=") {
 			t.Errorf("expected no MODEL env var when model is not in metadata, got %q", env)
 		}
+	}
+}
+
+func TestAgentRunAction_ProviderFromMetadata(t *testing.T) {
+	f := newAgentRunFixture(t)
+	runCtx := f.newRunContext()
+	runCtx.Metadata["step_1_provider"] = "opencode"
+
+	err := f.action.Execute(context.Background(), runCtx)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	f.containerMgr.mu.Lock()
+	createCalls := f.containerMgr.createCalls
+	f.containerMgr.mu.Unlock()
+
+	envMap := make(map[string]string)
+	for _, env := range createCalls[0].Env {
+		parts := strings.SplitN(env, "=", 2)
+		if len(parts) == 2 {
+			envMap[parts[0]] = parts[1]
+		}
+	}
+
+	if envMap["PROVIDER"] != "opencode" {
+		t.Errorf("expected PROVIDER=opencode, got %q", envMap["PROVIDER"])
 	}
 }

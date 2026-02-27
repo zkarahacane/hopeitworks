@@ -237,40 +237,35 @@ func run() error {
 
 	// Agent run action (requires Docker)
 	if containerMgr != nil {
-		logStreamer, logErr := dockeradapter.NewDockerLogStreamerFromHost(cfg.Docker.Host, logger)
-		if logErr != nil {
-			logger.Warn("log streamer unavailable, agent_run action disabled", "error", logErr)
-		} else {
-			agentCfg := actionadapter.AgentConfig{
-				DefaultMemory: 4294967296, // 4GB
-				DefaultCPUs:   2.0,
-				NetworkName:   cfg.Docker.AgentNetwork,
-				LogTailLines:  50,
-			}
-			agentRunAction := actionadapter.NewAgentRunAction(
-				containerMgr, logStreamer, eventRepo,
-				storyRepo, projectRepo, runRepo,
-				handlebarsRenderer, costSvc, agentCfg, logger,
-				apiKeySvc, containerTokenStore, callbackStatusStore,
-				cfg.Docker.CallbackBaseURL,
-			)
-			actionReg.Register(agentRunAction)
-			logger.Info("agent_run action registered")
-
-			// Register action_type aliases so pipeline configs using
-			// implement/review/merge resolve to AgentRunAction
-			for _, alias := range []string{"implement", "review", "merge"} {
-				actionReg.RegisterAlias(alias, agentRunAction)
-			}
-			logger.Info("action aliases registered", "aliases", []string{"implement", "review", "merge"})
-
-			// Incremental retry action (delegates to agent_run)
-			incrementalRetryAction := actionadapter.NewIncrementalRetryAction(
-				runRepo, agentRunAction, logger,
-			)
-			actionReg.Register(incrementalRetryAction)
-			logger.Info("incremental_retry action registered")
+		agentCfg := actionadapter.AgentConfig{
+			DefaultMemory: 4294967296, // 4GB
+			DefaultCPUs:   2.0,
+			NetworkName:   cfg.Docker.AgentNetwork,
+			LogTailLines:  50,
 		}
+		agentRunAction := actionadapter.NewAgentRunAction(
+			containerMgr, eventRepo,
+			storyRepo, projectRepo, runRepo,
+			handlebarsRenderer, costSvc, agentCfg, logger,
+			apiKeySvc, containerTokenStore, callbackStatusStore,
+			cfg.Docker.CallbackBaseURL,
+		)
+		actionReg.Register(agentRunAction)
+		logger.Info("agent_run action registered")
+
+		// Register action_type aliases so pipeline configs using
+		// implement/review/merge resolve to AgentRunAction
+		for _, alias := range []string{"implement", "review", "merge"} {
+			actionReg.RegisterAlias(alias, agentRunAction)
+		}
+		logger.Info("action aliases registered", "aliases", []string{"implement", "review", "merge"})
+
+		// Incremental retry action (delegates to agent_run)
+		incrementalRetryAction := actionadapter.NewIncrementalRetryAction(
+			runRepo, agentRunAction, logger,
+		)
+		actionReg.Register(incrementalRetryAction)
+		logger.Info("incremental_retry action registered")
 	}
 
 	// Pipeline executor: wired with the real action registry and event publisher
