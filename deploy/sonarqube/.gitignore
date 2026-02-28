@@ -1,0 +1,9 @@
+# SonarQube persistent data (docker volumes)
+data/
+logs/
+extensions/
+
+# Credentials and tokens — do NOT commit
+.sonar-token
+.sonar-credentials
+.env
