@@ -496,7 +496,30 @@ func (h *StoryHandler) GetStory(w http.ResponseWriter, r *http.Request, id strin
 }
 ```
 
-## Go Naming Conventions
+## Naming Conventions
+
+### Database
+
+- Tables: `snake_case`, plural (`stories`, `run_steps`, `pipeline_configs`)
+- Columns: `snake_case` (`created_at`, `project_id`, `retry_count`)
+- Foreign keys: `{referenced_table_singular}_id` (`project_id`, `story_id`)
+- Indexes: `idx_{table}_{columns}` (`idx_stories_project_id`, `idx_runs_status`)
+- Constraints: `{table}_{type}_{columns}` (`runs_fk_story_id`, `stories_uq_key_project`)
+
+### API
+
+- Endpoints: plural nouns, kebab-case for multi-word (`/pipeline-configs`, `/run-steps`)
+- Route params: `{id}` format (OpenAPI standard)
+- Query params: `snake_case` (`project_id`, `per_page`, `sort_by`)
+- JSON fields: `snake_case` (matches Go JSON tags and Postgres columns)
+- Dates: ISO 8601 strings (`"2026-02-15T10:30:00Z"`)
+
+### Events (SSE / Postgres NOTIFY)
+
+- Format: `{entity}.{action}` dot-notation (`run.started`, `step.completed`, `hitl.pending`)
+- Payload: JSON with `snake_case` fields
+
+### Go Naming Conventions
 
 - Files: `snake_case.go` (`pipeline_service.go`, `run_step.go`)
 - Packages: single lowercase word where possible (`model`, `port`, `service`)
@@ -531,6 +554,57 @@ cd deploy && docker compose logs -f api
 # Stop
 cd deploy && docker compose down
 ```
+
+## API Response Format
+
+### Success (single resource)
+
+Direct object, HTTP 200/201:
+
+```json
+{ "id": "...", "summary": "...", "status": "..." }
+```
+
+### Success (list)
+
+Array with pagination metadata, HTTP 200:
+
+```json
+{
+  "data": [...],
+  "pagination": { "total": 42, "page": 1, "per_page": 20 }
+}
+```
+
+### Error
+
+Consistent error envelope:
+
+```json
+{
+  "error": {
+    "code": "STORY_NOT_FOUND",
+    "message": "Story S-03 not found in project X",
+    "details": {}
+  }
+}
+```
+
+### Async Operations
+
+Async operations return 202 Accepted:
+
+```json
+{ "epic_run_id": "...", "status": "scheduling", "stories_count": 5 }
+```
+
+## Error Handling Philosophy
+
+- Errors are values — handle them explicitly, never ignore
+- Wrap errors with context as they propagate up the call stack
+- Error codes are `UPPER_SNAKE_CASE`
+- Error messages are human-readable and actionable
+- See "API Response Format > Error" above for the standard error envelope
 
 ## Config Management
 
