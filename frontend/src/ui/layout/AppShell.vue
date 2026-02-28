@@ -20,6 +20,9 @@ const toast = useToast()
 const { isMobile } = useBreakpoint()
 const { isAuthenticated, loading: authLoading } = useAuth()
 const route = useRoute()
+// NOTE: With router.isReady() in main.ts, routeResolved is always true at mount time.
+// This computed is kept as a safety net for future programmatic navigations where
+// matched routes could momentarily be empty (e.g. dynamic route additions).
 const routeResolved = computed(() => route.matched.length > 0)
 const mobileSidebarOpen = ref(false)
 const router = useRouter()

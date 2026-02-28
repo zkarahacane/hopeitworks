@@ -32,4 +32,8 @@ app.use(PrimeVue, {
 
 router.isReady().then(() => {
   app.mount('#app')
+}).catch((err) => {
+  console.error('[router] Initial navigation failed:', err)
+  // Mount anyway — the app can handle its own error states
+  app.mount('#app')
 })
