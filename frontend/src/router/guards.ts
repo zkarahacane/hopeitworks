@@ -10,6 +10,12 @@ declare module 'vue-router' {
 
 let authCheckPromise: Promise<void> | null = null
 
+/** Resets the cached auth check promise — must be called on logout or session expiry
+ *  so the next navigation triggers a fresh checkAuth() instead of reusing a stale result. */
+export function resetAuthCheck() {
+  authCheckPromise = null
+}
+
 export function setupAuthGuard(router: Router) {
   router.beforeEach(async (to) => {
     const auth = useAuthStore()
