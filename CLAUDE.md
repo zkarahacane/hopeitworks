@@ -96,16 +96,28 @@ Specified   Architected    In Progress  Review      Testing       → Done
 
 ## Development Environment
 
-Devcontainer = code-only. Docker stack runs on host.
+Devcontainer = code-only. Deux Docker stacks sur le même daemon :
 
+### Stack stable (host, branch develop)
 ```bash
-# Safe in devcontainer
 ./scripts/update-stack.sh              # rebuild + restart
 ./scripts/update-stack.sh --reset      # rebuild + reseed
+# Ports : API 8080, Postgres 5432, MailHog 8025
+```
 
-# Blocked in devcontainer (use host)
-./scripts/reset-dev.sh
-./scripts/e2e-stack.sh up
+### Stack de test agents (safe depuis devcontainer)
+```bash
+./scripts/agent-stack.sh up            # start stack test isolé
+./scripts/agent-stack.sh down          # stop
+./scripts/agent-stack.sh reset         # reset DB test uniquement
+./scripts/agent-stack.sh status        # health check
+# Ports : API 8081, Postgres 5433, MailHog 8026
+```
+
+### Bloqué en devcontainer (protège le stack stable)
+```bash
+./scripts/reset-dev.sh                 # → utiliser le host
+./scripts/e2e-stack.sh up              # → utiliser le host
 ```
 
 Seed credentials: `admin@hopeitworks.dev` / `admin1234`

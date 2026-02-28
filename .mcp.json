@@ -2,7 +2,11 @@
   "mcpServers": {
     "playwright": {
       "command": "npx",
-      "args": ["@playwright/mcp@latest"]
+      "args": ["@playwright/mcp@latest", "--headless", "--browser", "chromium"]
+    },
+    "playwright-chrome-local": {
+      "command": "npx",
+      "args": ["@playwright/mcp@latest", "--cdp-endpoint", "http://host.docker.internal:9222"]
     }
   }
 }
