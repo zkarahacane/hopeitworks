@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { apiClient } from '@/api/client'
 import { getApiErrorMessage } from '@/utils/apiError'
+import { resetAuthCheck } from '@/router/guards'
 
 export interface User {
   id: string
@@ -52,6 +53,7 @@ export const useAuthStore = defineStore('auth', {
       await apiClient.POST('/auth/logout', {}).catch(() => {})
       this.user = null
       this.error = null
+      resetAuthCheck()
     },
 
     async forgotPassword(email: string): Promise<boolean> {

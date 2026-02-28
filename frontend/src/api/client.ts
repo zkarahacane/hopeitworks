@@ -18,6 +18,11 @@ const authMiddleware: Middleware = {
         const isPublic = currentRoute.meta.requiresAuth === false
         if (!isPublic && !redirecting) {
           redirecting = true
+          // Clear auth state BEFORE redirect — prevents guard bounce loop:
+          // without this, guard sees isAuthenticated=true on /login and redirects back
+          const { useAuthStore } = await import('@/stores/auth')
+          const auth = useAuthStore()
+          auth.user = null
           await router.push({ name: 'login' })
         }
       }
