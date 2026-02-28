@@ -301,64 +301,6 @@ After reset, the environment contains:
 - Pipeline config with 4 groups and 7 preconfigured steps
 - Zero runs (clean slate)
 
-## Story Implementation Pipeline
-
-Stories are implemented via Docker containers running Claude Code agents. **Never implement stories directly in the local repo** — always use the pipeline scripts.
-
-### Scripts
-
-| Script | Purpose |
-|--------|---------|
-| `scripts/bmad-dev.sh` | Launch dev agent containers (clone mode or interactive) |
-| `scripts/pipeline.sh` | Runs inside container: dev-story → code-review → merge-story |
-
-### Default models per phase
-
-| Phase | Default model | Override flag |
-|-------|--------------|---------------|
-| `dev-story` | `opus` | `--dev=MODEL` |
-| `code-review` | `sonnet` | `--review=MODEL` |
-| `merge-story` | `opus` | `--merge=MODEL` |
-
-### Usage
-
-```bash
-# Full pipeline for a single story (dev → review → merge)
-./scripts/bmad-dev.sh --story <story-key> --pipeline
-
-# Full pipeline for an entire wave (all stories in parallel)
-./scripts/bmad-dev.sh --wave <N> --pipeline
-
-# Setup wave branch first (if using wave-based merging)
-./scripts/bmad-dev.sh --wave <N> --setup
-
-# Single phase on a story
-./scripts/bmad-dev.sh --story <story-key> --phase dev-story
-./scripts/bmad-dev.sh --story <story-key> --phase code-review
-./scripts/bmad-dev.sh --story <story-key> --phase merge-story
-
-# Override models per phase (reduce cost or test with lighter models)
-./scripts/bmad-dev.sh --story <story-key> --pipeline --dev=sonnet
-./scripts/bmad-dev.sh --wave <N> --pipeline --dev=sonnet --review=haiku --merge=sonnet
-
-# Monitor running containers
-./scripts/bmad-dev.sh --status
-docker logs -f bmad-dev-<story-key>-pipeline
-```
-
-### Parallel execution rules
-
-- Stories in the same wave can run in parallel (each in its own Docker container)
-- Each container clones the repo independently — no git conflicts during dev
-- **Never run parallel local agents on the same working directory** — use `git worktree` if needed
-- Merge conflicts are resolved at merge time (sequential merge order matters)
-- **Verify CI is green on develop before launching pipelines** — agents wait for CI green to merge
-
-### Required env vars
-
-- `CLAUDE_CODE_OAUTH_TOKEN` — OAuth token for Claude Code
-- `GITHUB_TOKEN` — GitHub token for gh CLI
-
 # Project Context — Current State
 
 ## Project Overview
@@ -368,7 +310,7 @@ docker logs -f bmad-dev-<story-key>-pipeline
 - **Current phase:** MVP implementation (Epics 1-4: Foundation, Story Board, Pipeline Execution, Agent Runtime)
 - **Tech stack:** Go backend, Vue 3 frontend, Postgres, Docker
 - **Architecture:** Hexagonal (backend), feature-based + atomic shared (frontend)
-- **Development model:** Solo developer + AI agents with strict domain boundaries
+- **Development model:** Solo developer + Claude Code (vibe coding with Task agents)
 
 ## Project Structure
 
@@ -423,7 +365,7 @@ hopeitworks/
 | Frontend E2E tests | `frontend/e2e/tests/` |
 | Docker Compose (dev) | `deploy/docker-compose.yml` |
 | Agent scripts | `agent/scripts/` |
-| Architecture doc | `_bmad-output/planning-artifacts/architecture.md` |
+| Planning artifacts | `_bmad-output/planning-artifacts/` (PRD, architecture, epics) |
 
 ## Shared API Contract
 
@@ -477,9 +419,7 @@ Both sides generate types and clients from the same OpenAPI spec. Never manually
 
 ## Known Constraints
 
-- **Backend agents** work ONLY in the `backend/` directory
-- **Frontend agents** work ONLY in the `frontend/` directory
-- API contract changes require coordination between both sides
+- API contract changes require coordination between backend and frontend
 - MVP = measurement, not enforcement (cost tracking tracks but does not halt)
 - Docker mode for MVP (Kubernetes deferred to Phase 2)
 - No caching layer for MVP (no Redis) — Postgres is single source of truth
