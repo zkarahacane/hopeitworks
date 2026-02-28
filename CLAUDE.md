@@ -50,8 +50,8 @@ Commits: `type(scope): message` — imperative, lowercase, no period. Types: fea
 Each story flows through this chain. Board Status reflects the current stage:
 
 ```
-François → Architect(s) → Dev(s) → Code Review → Test/Demo
-Specified   Architected    In Progress  Review      Testing    → Done
+François → Architect(s) → Dev(s) → Code Review → Architect Test
+Specified   Architected    In Progress  Review      Testing       → Done
 ```
 
 ### Agents
@@ -61,10 +61,10 @@ Specified   Architected    In Progress  Review      Testing    → Done
 | François | `docs/agents/francois/CLAUDE.md` | US fonctionnelles, priorités, board management |
 | Architect backend | `docs/agents/architect-backend/CLAUDE.md` | US → specs techniques backend (interfaces, migrations, queries) |
 | Architect frontend | `docs/agents/architect-frontend/CLAUDE.md` | US → specs techniques frontend (composants, composables, stores) |
-| Dev backend | `docs/agents/dev-backend.md` | Implémente les specs backend (worktree isolé) |
-| Dev frontend | `docs/agents/dev-frontend.md` | Implémente les specs frontend (worktree isolé) |
+| Dev backend | `docs/agents/dev-backend/CLAUDE.md` | Implémente les specs backend (worktree isolé) |
+| Dev frontend | `docs/agents/dev-frontend/CLAUDE.md` | Implémente les specs frontend (worktree isolé) |
 | Code review | `docs/agents/code-review/CLAUDE.md` | Review adversarial — doit trouver des problèmes |
-| Test/Demo | `docs/agents/test-demo.md` | E2E Playwright + démo visuelle |
+| Architect test | `docs/agents/architect-test/CLAUDE.md` | Audit couverture tests, préparation demo sprint, vérification PRs |
 
 ### Routing
 
@@ -75,8 +75,10 @@ Specified   Architected    In Progress  Review      Testing    → Done
 | "découpe cette US pour le frontend" | → Architect frontend |
 | "implémente [issue backend]" | → Dev backend (worktree) |
 | "implémente [issue frontend]" | → Dev frontend (worktree) |
-| "review cette branche / PR" | → Code review |
-| "teste l'app / fais une démo" | → Test/Demo |
+| "review cette branche / PR" | → Code review (Task agent) |
+| "audite la couverture de tests" | → Architect test |
+| "prépare la demo du sprint" | → Architect test |
+| "vérifie les tests sur cette PR" | → Architect test |
 | "crée une issue" / "met à jour le board" | Direct (board ops) |
 | "commit / push / crée une PR" | Direct (git ops) |
 | "status du projet ?" | Direct (`gh project`, `gh issue list`) |
@@ -90,7 +92,7 @@ Specified   Architected    In Progress  Review      Testing    → Done
 - Each agent updates the board Status when transitioning
 - Dev agents work in **worktrees** (isolated branches)
 - Code review agent MUST find issues — no "looks good" allowed
-- Test agent reports bugs as new issues with `P0`
+- Architect test reports bugs as new issues with `P0`
 
 ## Development Environment
 
