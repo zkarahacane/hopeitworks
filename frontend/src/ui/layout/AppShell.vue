@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import Button from 'primevue/button'
+import ProgressSpinner from 'primevue/progressspinner'
 import Toast from 'primevue/toast'
 import { useToast } from 'primevue/usetoast'
 import AppHeader from './AppHeader.vue'
@@ -17,7 +18,9 @@ const layoutStore = useLayoutStore()
 const hitlStore = useHITLStore()
 const toast = useToast()
 const { isMobile } = useBreakpoint()
-const { isAuthenticated } = useAuth()
+const { isAuthenticated, loading: authLoading } = useAuth()
+const route = useRoute()
+const routeResolved = computed(() => route.matched.length > 0)
 const mobileSidebarOpen = ref(false)
 const router = useRouter()
 
@@ -92,7 +95,12 @@ function toggleMobileSidebar() {
 
 <template>
   <div class="flex h-screen flex-col overflow-hidden">
-    <template v-if="isAuthenticated">
+    <!-- Loading initial (premier check auth) -->
+    <div v-if="authLoading && !routeResolved" class="flex h-full items-center justify-center">
+      <ProgressSpinner />
+    </div>
+
+    <template v-else-if="isAuthenticated">
       <!-- Skip navigation link -->
       <a
         href="#main-content"
