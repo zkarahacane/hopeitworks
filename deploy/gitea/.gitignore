@@ -1,0 +1,9 @@
+# Gitea persistent data (docker volumes)
+data/
+runner-data/
+
+# Credentials and tokens written by gitea.sh — do NOT commit
+.gitea-token
+.gitea-credentials
+.env
+.runner-token

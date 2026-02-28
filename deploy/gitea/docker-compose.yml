@@ -1,0 +1,67 @@
+# Gitea self-hosted git server + act_runner (CI runner)
+# Usage:
+#   docker compose -f deploy/gitea/docker-compose.yml up -d     # Start
+#   docker compose -f deploy/gitea/docker-compose.yml down       # Stop (keep volumes)
+#   docker compose -f deploy/gitea/docker-compose.yml down -v    # Full teardown
+#
+# Gitea UI:  http://localhost:3030
+# SSH:       localhost:2222
+# Default credentials: devops / admin123 (created by gitea.sh)
+#
+# NOTE: act_runner requires GITEA_RUNNER_REGISTRATION_TOKEN in .env
+#       Run ./deploy/gitea/gitea.sh to auto-provision everything.
+
+services:
+  gitea:
+    image: gitea/gitea:1.23
+    container_name: gitea_server
+    restart: unless-stopped
+    environment:
+      # Server
+      GITEA__server__ROOT_URL: http://localhost:3030
+      GITEA__server__HTTP_PORT: "3000"
+      GITEA__server__SSH_PORT: "22"
+      GITEA__server__SSH_LISTEN_PORT: "22"
+      # Skip install wizard (use built-in SQLite)
+      GITEA__database__DB_TYPE: sqlite3
+      GITEA__security__INSTALL_LOCK: "true"
+    ports:
+      - "3030:3000"
+      - "2222:22"
+    volumes:
+      - gitea_data:/data
+    networks:
+      - gitea
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:3000/api/v1/version"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+  act_runner:
+    image: gitea/act_runner:latest
+    container_name: gitea_runner
+    restart: unless-stopped
+    depends_on:
+      gitea:
+        condition: service_healthy
+    environment:
+      GITEA_INSTANCE_URL: http://gitea:3000
+      GITEA_RUNNER_REGISTRATION_TOKEN: ${GITEA_RUNNER_REGISTRATION_TOKEN}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - runner_data:/data
+    networks:
+      - gitea
+
+volumes:
+  gitea_data:
+    driver: local
+  runner_data:
+    driver: local
+
+networks:
+  gitea:
+    name: gitea
+    driver: bridge
