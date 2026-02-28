@@ -260,12 +260,21 @@ cd frontend && npm run type-check  # tsc --noEmit
 cd frontend && npm run test:unit   # vitest
 ```
 
+### Updating the stack from devcontainer
+
+`update-stack.sh` is safe to run from the devcontainer — it rebuilds images and restarts containers without touching the database volume:
+
+```bash
+./scripts/update-stack.sh           # rebuild + restart (no data loss)
+./scripts/update-stack.sh --reset   # rebuild + restart + reseed database
+```
+
 ### Blocked in devcontainer
 
 ```bash
-./scripts/reset-dev.sh             # → use host
+./scripts/reset-dev.sh             # → use host or update-stack.sh --reset
 ./scripts/e2e-stack.sh up          # → use host
-cd backend && make docker-up       # → use host
+cd backend && make docker-up       # → use update-stack.sh
 cd backend && make docker-down     # → use host
 ```
 
