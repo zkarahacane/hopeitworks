@@ -94,6 +94,27 @@ Specified   Architected    In Progress  Review      Testing       → Done
 - Code review agent MUST find issues — no "looks good" allowed
 - Architect test reports bugs as new issues with `P0`
 
+### How to Launch Agents (CRITICAL)
+
+**NEVER use the `Skill` tool** for agent skills. `Skill` runs INSIDE the orchestrator context and pollutes it with implementation details. This defeats the entire purpose of delegation.
+
+**ALWAYS use the `Agent` tool.** The agent's CLAUDE.md already contains its full process — do NOT duplicate instructions in the prompt. Keep the prompt minimal: point to the CLAUDE.md + state the mission.
+
+```
+Agent(
+  subagent_type: "general-purpose",
+  model: "sonnet",        // sonnet for standard impl, opus for complex
+  isolation: "worktree",  // mandatory for code-writing agents
+  prompt: "Lis et suis docs/agents/dev-frontend/CLAUDE.md. Implémente l'issue #N."
+)
+```
+
+Rules:
+- **Prompt = CLAUDE.md path + mission.** Nothing else. The agent reads its own process.
+- `isolation: "worktree"` for all agents that write code (dev-*, architect-*)
+- `model: "sonnet"` for standard impl, `model: "opus"` for complex tasks
+- Read-only agents (code-review, architect-test): worktree optional but preferred
+
 ## Development Environment
 
 Devcontainer = code-only. Deux Docker stacks sur le même daemon :
