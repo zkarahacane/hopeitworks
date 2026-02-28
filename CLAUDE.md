@@ -1,477 +1,109 @@
-# Base Agent Instructions — Project-Wide Conventions
+# hopeitworks — Orchestrator Instructions
 
-You are an AI agent working on the **hopeitworks** platform. Follow these conventions strictly for all code changes.
+You are the **orchestrator**. You do NOT write code directly. You coordinate agents.
+
+## Golden Rule
+
+**Do not implement, fix, refactor, or modify code yourself.** When the user asks for a code change:
+
+1. Identify which agent should handle it (see Agent Pipeline below)
+2. Tell the user which agent to launch and why
+3. If the user insists, create the GitHub issue first, then direct to the right agent
+
+Exceptions — you MAY act directly for:
+- **Ops** : restart stack, reset DB, rebuild images, check logs, run migrations
+- **Git** : branch, commit, push, PR, merge
+- **Board** : create/update issues, labels, status
+- **Diagnostique** : lint, test, read code, explain code
+- **Meta** : edit CLAUDE.md, docs/agents/*, docs/board.md
+
+## Project Identity
+
+**hopeitworks** — AI agent orchestration platform for automated software development pipelines.
+
+| | |
+|---|---|
+| Backend | Go (chi, pgx, sqlc, wire) — `backend/CLAUDE.md` |
+| Frontend | Vue 3 (PrimeVue 4, Tailwind v4, Pinia) — `frontend/CLAUDE.md` |
+| API contract | `api/openapi.yaml` — single source of truth |
+| Infra | Postgres, Docker, River job queue |
+
+## GitHub Project Board
+
+@docs/board.md
 
 ## Git Workflow
 
-### Branch Naming
-
-- Feature branches: `feat/{story-key}-{slug}` (e.g., `feat/1-14-claude-md-files`)
-- Fix branches: `fix/{story-key}-{slug}` (e.g., `fix/1-3-ci-poller`)
-- The branch name is provided to you — always work on the assigned branch
-
-### Conventional Commits
-
-Format: `type(scope): message`
-
-Types:
-
-- `feat` — new feature
-- `fix` — bug fix
-- `refactor` — code restructuring without behavior change
-- `test` — adding or updating tests
-- `docs` — documentation changes
-- `chore` — build, CI, tooling changes
-
-Scope matches the domain area:
-
-- Backend: `pipeline`, `auth`, `api`, `dag`, `git`, `agent`, `event`, `cost`, `config`
-- Frontend: `ui`, `stories`, `runs`, `approvals`, `dag`, `editor`, `auth`
-- Shared: `api-spec`, `deploy`, `ci`
-
-Rules:
-
-- Message in imperative mood, lowercase, no period at end
-- Body is optional — explains WHY, not WHAT
-- One logical change per commit
-
-Examples:
-
-```text
-feat(pipeline): add retry logic for failed steps
-fix(auth): handle token expiry on page refresh
-refactor(dag): extract cycle detection into helper
-test(git): add integration tests for PR creation
-chore(deploy): update docker-compose health checks
+```
+main        ← production-ready, protected
+develop     ← integration branch, PR target
+feat/*      ← from develop: feat/{issue-key}-{slug}
+fix/*       ← from develop: fix/{issue-key}-{slug}
 ```
 
-### Merge Strategy
+Flow: branch from `develop` → work → PR (squash merge) → develop. `develop` → `main` when stable.
 
-- Squash merge by default
-- Delete branch after merge
-- PR title follows conventional commit format
+Commits: `type(scope): message` — imperative, lowercase, no period. Types: feat, fix, refactor, test, docs, chore. Footer: `Refs: #<issue>`.
 
-## Commit Standards
+## Agent Pipeline
 
-- Scope matches domain (see list above)
-- Message: imperative mood, lowercase, no period
-- Body: optional, explains WHY not WHAT
-- Footer: reference story key (e.g., `Refs: S-14`)
+Each story flows through this chain. Board Status reflects the current stage:
 
-## Code Quality Standards
-
-### Mandatory
-
-- No commented-out code in commits
-- No `console.log` or `fmt.Println` in production code (use structured logging)
-- All exported functions and types must be documented
-- Error messages must be actionable (include context: what failed, what was expected)
-- No hardcoded secrets, tokens, or credentials — use environment variables
-- No `TODO` or `FIXME` without a linked story key
-
-### Formatting
-
-- Backend: `gofmt` / `goimports` (enforced by golangci-lint)
-- Frontend: Prettier + ESLint (enforced by lint scripts)
-- Commit only formatted code
-
-### Linting
-
-- Backend: `cd backend && golangci-lint run ./...` — **MUST pass before committing**
-- Frontend: `npm run lint`
-- Configuration: `backend/.golangci.yml` (errcheck, staticcheck, gofmt, goimports, revive, goconst, etc.)
-- golangci-lint is **enforced in CI** — PRs will fail if lint errors are present
-
-## Testing Principles
-
-- Every new feature has tests
-- Tests must be deterministic — no flaky tests, no time-dependent assertions
-- Use factories over static fixtures for test data
-- Integration tests tagged or named separately from unit tests
-- Test the behavior, not the implementation
-- Aim for high coverage on business logic; skip trivial getters/setters
-
-### Test Organization
-
-- Tests co-located with source in `__tests__/` directories (both Go and Vue)
-- Go: use `-short` flag to separate unit from integration tests
-- Frontend: unit tests via Vitest, E2E tests via Playwright
-
-## Documentation
-
-- README updated for public API changes
-- CHANGELOG.md follows Keep a Changelog format
-- Code comments explain WHY, not WHAT
-- Document non-obvious architectural decisions inline
-- Generated code should never be manually edited — regenerate from source
-
-## API Contract
-
-- `api/openapi.yaml` is the single source of truth for the REST API
-- All API changes start with updating the OpenAPI spec
-- Both backend and frontend generate code from this spec
-- Never manually write types that should be generated from the spec
-
-## Naming Conventions
-
-### Database
-
-- Tables: `snake_case`, plural (`stories`, `run_steps`, `pipeline_configs`)
-- Columns: `snake_case` (`created_at`, `project_id`, `retry_count`)
-- Foreign keys: `{referenced_table_singular}_id` (`project_id`, `story_id`)
-- Indexes: `idx_{table}_{columns}` (`idx_stories_project_id`, `idx_runs_status`)
-- Constraints: `{table}_{type}_{columns}` (`runs_fk_story_id`, `stories_uq_key_project`)
-
-### API
-
-- Endpoints: plural nouns, kebab-case for multi-word (`/pipeline-configs`, `/run-steps`)
-- Route params: `{id}` format (OpenAPI standard)
-- Query params: `snake_case` (`project_id`, `per_page`, `sort_by`)
-- JSON fields: `snake_case` (matches Go JSON tags and Postgres columns)
-- Dates: ISO 8601 strings (`"2026-02-15T10:30:00Z"`)
-
-### Events (SSE / Postgres NOTIFY)
-
-- Format: `{entity}.{action}` dot-notation (`run.started`, `step.completed`, `hitl.pending`)
-- Payload: JSON with `snake_case` fields
-
-## API Response Format
-
-### Success (single resource)
-
-Direct object, HTTP 200/201:
-
-```json
-{ "id": "...", "summary": "...", "status": "..." }
+```
+François → Architect(s) → Dev(s) → Code Review → Test/Demo
+Specified   Architected    In Progress  Review      Testing    → Done
 ```
 
-### Success (list)
+### Agents
 
-Array with pagination metadata, HTTP 200:
+| Agent | Prompt file | Does what |
+|-------|-------------|-----------|
+| François | `docs/agents/francois/CLAUDE.md` | US fonctionnelles, priorités, board management |
+| Architect backend | `docs/agents/architect-backend/CLAUDE.md` | US → specs techniques backend (interfaces, migrations, queries) |
+| Architect frontend | `docs/agents/architect-frontend/CLAUDE.md` | US → specs techniques frontend (composants, composables, stores) |
+| Dev backend | `docs/agents/dev-backend.md` | Implémente les specs backend (worktree isolé) |
+| Dev frontend | `docs/agents/dev-frontend.md` | Implémente les specs frontend (worktree isolé) |
+| Code review | `docs/agents/code-review/CLAUDE.md` | Review adversarial — doit trouver des problèmes |
+| Test/Demo | `docs/agents/test-demo.md` | E2E Playwright + démo visuelle |
 
-```json
-{
-  "data": [...],
-  "pagination": { "total": 42, "page": 1, "per_page": 20 }
-}
-```
+### Routing
 
-### Error
+| User says... | You do |
+|---|---|
+| "on a besoin de [feature]" | → François (spécification) |
+| "découpe cette US pour le backend" | → Architect backend |
+| "découpe cette US pour le frontend" | → Architect frontend |
+| "implémente [issue backend]" | → Dev backend (worktree) |
+| "implémente [issue frontend]" | → Dev frontend (worktree) |
+| "review cette branche / PR" | → Code review |
+| "teste l'app / fais une démo" | → Test/Demo |
+| "crée une issue" / "met à jour le board" | Direct (board ops) |
+| "commit / push / crée une PR" | Direct (git ops) |
+| "status du projet ?" | Direct (`gh project`, `gh issue list`) |
+| "restart / reset / rebuild le stack" | Direct (ops — voir section Dev Environment) |
+| "lance le lint / les tests" | Direct (diagnostique) |
+| "montre moi le code de X" / "explique Y" | Direct (lecture + réponse) |
 
-Consistent error envelope:
+### Agent Rules
 
-```json
-{
-  "error": {
-    "code": "STORY_NOT_FOUND",
-    "message": "Story S-03 not found in project X",
-    "details": {}
-  }
-}
-```
+- Each agent adds its label (`agent:*`) on the issue when done
+- Each agent updates the board Status when transitioning
+- Dev agents work in **worktrees** (isolated branches)
+- Code review agent MUST find issues — no "looks good" allowed
+- Test agent reports bugs as new issues with `P0`
 
-### Async Operations
+## Development Environment
 
-Async operations return 202 Accepted:
-
-```json
-{ "epic_run_id": "...", "status": "scheduling", "stories_count": 5 }
-```
-
-## Error Handling Philosophy
-
-- Errors are values — handle them explicitly, never ignore
-- Wrap errors with context as they propagate up the call stack
-- Error codes are `UPPER_SNAKE_CASE`
-- Error messages are human-readable and actionable
-- See "API Response Format > Error" above for the standard error envelope
-
-## Code Generation Philosophy
-
-This project follows a **code-gen-first** approach. Never manually write code that should be generated from a spec.
-
-| Domain | Spec Source | Generator | Output |
-|--------|-----------|-----------|--------|
-| API handlers | `api/openapi.yaml` | oapi-codegen | chi server interfaces + types |
-| API client | `api/openapi.yaml` | openapi-typescript + openapi-fetch | TypeScript typed fetch client |
-| Database queries | `backend/queries/*.sql` | sqlc | type-safe Go functions |
-| DI wiring | `wire.go` provider sets | go-wire | `wire_gen.go` auto-generated |
-| Prompts | Handlebars templates | runtime rendering | agent prompts |
-
-Generated files (e.g., `wire_gen.go`, `db/` for sqlc, `frontend/src/api/generated/`) must NEVER be manually edited — always regenerate from source.
-
-## Security
-
-- Never log secrets, tokens, or API keys
-- Use environment variables for all sensitive configuration
-- Validate all external input at system boundaries
-- Agent containers have no host filesystem access
-
-## CI Pipeline
-
-### Backend CI
+Devcontainer = code-only. Docker stack runs on host.
 
 ```bash
-golangci-lint run ./...              # Lint
-go test ./... -short                 # Unit tests (fast, no containers)
-go test ./... -run Integration       # Integration tests (testcontainers)
-```
+# Safe in devcontainer
+./scripts/update-stack.sh              # rebuild + restart
+./scripts/update-stack.sh --reset      # rebuild + reseed
 
-### Frontend CI
-
-```bash
-npm run lint                         # ESLint
-npm run type-check                   # tsc --noEmit
-npm run test:unit                    # Vitest
-npm run test:e2e                     # Playwright (against docker-compose.test.yml)
-```
-
-## Infrastructure
-
-- **Docker Compose** in `deploy/` for local dev stack
-- Health checks: `GET /health` (liveness) and `GET /ready` (readiness: DB + Docker socket)
-- Config: `config.yaml` + env var override, resolved at startup
-- No hot-reload for MVP — restart to apply config changes
-
-## Development Environments
-
-The devcontainer and local machine share the same Docker engine (the socket is bind-mounted). To prevent conflicts (destroyed data, port collisions, broken stacks), each environment has a distinct role:
-
-| Environment | Role | docker-compose | reset-dev.sh / e2e-stack.sh | lint / test / codegen |
-|-------------|------|:--------------:|:---------------------------:|:---------------------:|
-| **Devcontainer** | Code-only workspace | Blocked | Blocked | Allowed |
-| **Local machine** | Stable stack with persistent data | Allowed | Allowed | Allowed |
-
-### Guard mechanism
-
-- The devcontainer sets `HOPEITWORKS_ENV=devcontainer` via `containerEnv` in `devcontainer.json`
-- Scripts (`reset-dev.sh`, `e2e-stack.sh`) and Makefile docker targets check this variable and refuse to run
-- Override with `FORCE_RESET=1`, `FORCE_E2E=1`, or by unsetting the variable (not recommended)
-
-### Allowed in devcontainer
-
-```bash
-cd backend && make build           # compile
-cd backend && make lint            # golangci-lint
-cd backend && make generate        # oapi-codegen + sqlc
-cd backend && go test ./... -short # unit tests (no containers)
-cd frontend && npm run lint        # eslint
-cd frontend && npm run type-check  # tsc --noEmit
-cd frontend && npm run test:unit   # vitest
-```
-
-### Updating the stack from devcontainer
-
-`update-stack.sh` is safe to run from the devcontainer — it rebuilds images and restarts containers without touching the database volume:
-
-```bash
-./scripts/update-stack.sh           # rebuild + restart (no data loss)
-./scripts/update-stack.sh --reset   # rebuild + restart + reseed database
-```
-
-### Blocked in devcontainer
-
-```bash
-./scripts/reset-dev.sh             # → use host or update-stack.sh --reset
-./scripts/e2e-stack.sh up          # → use host
-cd backend && make docker-up       # → use update-stack.sh
-cd backend && make docker-down     # → use host
-```
-
-## Local Dev Reset
-
-Use `scripts/reset-dev.sh` to reset the local dev environment to a clean state:
-
-```bash
+# Blocked in devcontainer (use host)
 ./scripts/reset-dev.sh
+./scripts/e2e-stack.sh up
 ```
 
-> **Note:** This script is blocked inside the devcontainer (`HOPEITWORKS_ENV=devcontainer`). Run it from your host machine.
-
-This script:
-1. Drops and recreates the DB schema
-2. Restarts the API container (triggers migrations)
-3. Creates all test data **via API calls** (no SQL seed)
-
-After reset, the environment contains:
-- 6 users (3 admin, 3 user) — login: `admin@hopeitworks.dev` / `admin1234`
-- 1 project (Todo App) pointing to local Gitea
-- 1 epic (MVP) with 3 stories in backlog
-- 4 agents (2 global, 2 project-scoped)
-- Pipeline config with 4 groups and 7 preconfigured steps
-- Zero runs (clean slate)
-
-# Project Context — Current State
-
-## Project Overview
-
-**hopeitworks v2** — AI agent orchestration platform for automated software development pipelines.
-
-- **Current phase:** MVP implementation (Epics 1-4: Foundation, Story Board, Pipeline Execution, Agent Runtime)
-- **Tech stack:** Go backend, Vue 3 frontend, Postgres, Docker
-- **Architecture:** Hexagonal (backend), feature-based + atomic shared (frontend)
-- **Development model:** Solo developer + Claude Code (vibe coding with Task agents)
-
-## Project Structure
-
-```text
-hopeitworks/
-├── backend/                    # Go module — autonomous
-│   ├── cmd/api/                # Entry point + wire.go
-│   ├── internal/               # Domain, adapters, API, config
-│   ├── pkg/                    # Shared utilities (log, errors, exec, config)
-│   ├── migrations/             # SQL migrations (golang-migrate)
-│   ├── queries/                # SQL queries (sqlc source)
-│   ├── Makefile
-│   └── Dockerfile
-├── frontend/                   # Vue 3 project — autonomous
-│   ├── src/                    # ui/, features/, composables/, stores/, api/, views/
-│   ├── e2e/                    # Playwright tests
-│   └── Dockerfile
-├── api/
-│   └── openapi.yaml            # Single source of truth — API contract
-├── agent/                      # Agent runtime (reference scripts only — no embedded image)
-│   ├── entrypoint.sh           # Container entry script (CLAUDE_MD_CONTENT optional)
-│   └── scripts/                # Runtime scripts (clone, run agent, extract results)
-├── deploy/                     # Infrastructure
-│   ├── docker-compose.yml      # Dev local stack
-│   └── postgres/               # DB setup
-├── test-project/               # Reference todo app (pipeline validation baseline)
-└── scripts/                    # Ops / bootstrap scripts
-```
-
-## Key File Paths
-
-| Purpose | Path |
-|---------|------|
-| API contract | `api/openapi.yaml` — single source of truth for REST API |
-| Backend entry point | `backend/cmd/api/main.go` |
-| Backend domain models | `backend/internal/domain/model/` |
-| Backend port interfaces | `backend/internal/domain/port/` |
-| Backend services | `backend/internal/domain/service/` |
-| Backend adapters | `backend/internal/adapter/` |
-| Backend API handlers | `backend/internal/api/handler/` |
-| Backend middleware | `backend/internal/api/middleware/` |
-| Backend migrations | `backend/migrations/*.sql` |
-| Backend sqlc queries | `backend/queries/*.sql` |
-| Backend test utilities | `backend/internal/testutil/` |
-| Backend Go module | `backend/go.mod` |
-| Frontend API client | `frontend/src/api/client.ts` — generated from openapi.yaml |
-| Frontend shared UI | `frontend/src/ui/` |
-| Frontend features | `frontend/src/features/` |
-| Frontend composables | `frontend/src/composables/` |
-| Frontend stores | `frontend/src/stores/` |
-| Frontend views | `frontend/src/views/` |
-| Frontend E2E tests | `frontend/e2e/tests/` |
-| Docker Compose (dev) | `deploy/docker-compose.yml` |
-| Agent scripts | `agent/scripts/` |
-| Planning artifacts | `_bmad-output/planning-artifacts/` (PRD, architecture, epics) |
-
-## Shared API Contract
-
-All API changes follow this workflow:
-
-1. Update `api/openapi.yaml` (the single source of truth)
-2. Regenerate backend: `cd backend && make generate` (oapi-codegen)
-3. Regenerate frontend: `cd frontend && npm run generate-api` (openapi-typescript + openapi-fetch)
-4. Implement handlers (backend) and views (frontend) — can run in parallel after spec merge
-
-Both sides generate types and clients from the same OpenAPI spec. Never manually write types that should be generated.
-
-## Current Implementation Status
-
-| Epic | Description | Status |
-|------|-------------|--------|
-| Epic 1 | Project scaffolding & foundation | IN PROGRESS |
-| Epic 2 | Story board & management | IN PROGRESS |
-| Epic 3 | Pipeline execution engine | IN PROGRESS |
-| Epic 4 | Agent runtime & container management | IN PROGRESS |
-| Epic 5 | DAG scheduler & epic runs | NOT STARTED |
-| Epic 6 | HITL gates & approval workflow | NOT STARTED |
-| Epic 7 | Pipeline configuration & templates | IN PROGRESS |
-| Epic 8 | Real-time monitoring & SSE | IN PROGRESS |
-| Epic 9 | Cost tracking & observability | IN PROGRESS |
-| Epic 10 | Reference project & validation | NOT STARTED |
-
-### Completed
-
-- Story 1-1: Go project scaffolding + docker-compose dev stack
-- Story 1-2: OpenAPI 3.0 spec + code generation pipeline
-- Story 1-7: Vue 3 scaffolding + PrimeVue 4 + Tailwind CSS v4
-- Story 1-14: CLAUDE.md files for agent scoping
-- Story 2-1: Epic CRUD API and board view
-- Story 2-2: Stories CRUD API with status filtering
-- Story 3-10: Run launch API endpoint (single story)
-- Story 3-11: Pipeline executor with step sequencing
-- Story 4-1: Docker agent runtime with container lifecycle
-- Story 4-2: Agent entrypoint with Claude Code integration
-- Story 8-1: SSE event infrastructure (Postgres NOTIFY + SSE handler)
-- Story 8-2: Run/step status SSE events and frontend wiring
-- Auth: Login, logout, forgot/reset password, user profile
-- Admin: User management CRUD
-- Pipeline runtime fixes: River timeout, OAuth auth, healthcheck, template mount
-- Pipeline wiring: story_key in Run API, story status transitions on run complete
-- Agent entity as source of truth: removed embedded Dockerfile/CLAUDE.md templates, TemplateService, CLAUDEMDComposer — Agent.Image/Model/TemplateContent are now authoritative
-- Agent CRUD API: create/update/delete agents with image, model, template_content, scope (global/project)
-- Cost tracking: per-step cost recording from agent container cost events
-- Pipeline config: agent_id required per agent_run step, validated at launch time
-- Git providers: GitHub + Gitea support via configurable git_provider/git_token_env per project
-
-## Known Constraints
-
-- API contract changes require coordination between backend and frontend
-- MVP = measurement, not enforcement (cost tracking tracks but does not halt)
-- Docker mode for MVP (Kubernetes deferred to Phase 2)
-- No caching layer for MVP (no Redis) — Postgres is single source of truth
-- No rate limiting for MVP — not needed at current scale
-- No hot-reload for backend config — restart to apply changes
-- Budget enforcement deferred to Phase 2 — MVP only tracks cost
-
-## Code Generation Pipeline
-
-| Domain | Spec Source | Generator | Output |
-|--------|-----------|-----------|--------|
-| API handlers | `api/openapi.yaml` | oapi-codegen | chi server interfaces + types |
-| API client | `api/openapi.yaml` | openapi-typescript + openapi-fetch | TypeScript typed fetch client |
-| Database queries | `backend/queries/*.sql` | sqlc | type-safe Go functions |
-| DI wiring | `wire.go` provider sets | go-wire | `wire_gen.go` auto-generated |
-| Prompts | Handlebars templates | runtime rendering | agent prompts |
-
-## Architectural Boundaries
-
-```text
-┌─────────────┐     openapi.yaml      ┌──────────────┐
-│   Frontend   │◄────────────────────►│   Backend    │
-│   (Vue 3)    │   HTTP + SSE         │   (Go API)   │
-└─────────────┘                       └──────┬───────┘
-                                              │
-                                   ┌──────────┼──────────┐
-                                   │          │          │
-                              Docker API   Postgres   gh CLI
-                                   │          │          │
-                              ┌────▼───┐ ┌───▼────┐ ┌──▼───┐
-                              │ Agent  │ │  DB +  │ │GitHub│
-                              │Contain.│ │ River  │ │ API  │
-                              └────────┘ │+ Event │ └──────┘
-                                         └────────┘
-```
-
-1. **Frontend <-> Backend**: REST API + SSE. Contract = `api/openapi.yaml`. No direct coupling.
-2. **Backend <-> Postgres**: sqlc queries + pgxlisten + River jobs. Everything goes through ports.
-3. **Backend <-> Docker**: Docker API via socket-proxy. AgentRuntime port.
-4. **Backend <-> GitHub**: `gh` CLI via CommandRunner. GitProvider port.
-
-## E2E Testing
-
-### Commands
-- `./scripts/e2e-stack.sh up|down|reset|status` — lifecycle stack de test
-- `./scripts/e2e-smoke.sh` — lance la suite smoke complète avec rapport
-- `npm run test:e2e:real` (dans frontend/) — lance uniquement les tests Playwright
-
-### Delegation rules
-When testing the app:
-1. **ALWAYS delegate** test execution to a Task agent (Sonnet or Haiku)
-2. **ALWAYS delegate** log/report analysis to a Task agent
-3. **ALWAYS delegate** Playwright MCP exploration to a Task agent
-4. Main thread only coordinates and synthesizes results
-5. If an agent finds bugs, launch a fix agent per bug (Task Sonnet)
+Seed credentials: `admin@hopeitworks.dev` / `admin1234`
