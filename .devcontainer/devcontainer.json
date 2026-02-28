@@ -10,7 +10,10 @@
     "HOPEITWORKS_ENV": "devcontainer",
     "CLAUDE_CODE_OAUTH_TOKEN": "${localEnv:CLAUDE_CODE_OAUTH_TOKEN_PERSO}",
     "GITHUB_TOKEN": "${localEnv:GITHUB_TOKEN}",
-    "CLAUDE_MODEL": "${localEnv:CLAUDE_MODEL:opus}"
+    "CLAUDE_MODEL": "${localEnv:CLAUDE_MODEL:opus}",
+    "TEST_API_PORT": "8081",
+    "TEST_POSTGRES_PORT": "5433",
+    "TEST_MAILHOG_PORT": "8026"
   },
 
   // ─── Docker socket from host ─────────────────────────────────
@@ -23,11 +26,13 @@
   // ─── Ports ───────────────────────────────────────────────────
   // Only forward frontend dev server — docker-compose stack runs on the host
   "forwardPorts": [
-    5173   // frontend vite dev
+    5173,  // frontend vite dev
+    8081,  // API test stack
+    8026   // MailHog test stack
   ],
 
   // ─── Post-create: install deps ───────────────────────────────
-  "postCreateCommand": "cd frontend && npm install && npx playwright install chromium",
+  "postCreateCommand": "cd frontend && pnpm install && npx playwright install chromium",
 
   // ─── VS Code settings ────────────────────────────────────────
   "customizations": {
@@ -54,16 +59,8 @@
         "esbenp.prettier-vscode",
         // Tailwind
         "bradlc.vscode-tailwindcss",
-        // Docker
-        "ms-azuretools.vscode-docker",
-        // DB
-        "ckolkman.vscode-postgres",
-        // Git
-        "eamodio.gitlens",
         // API
-        "42Crunch.vscode-openapi",
-        // Claude Code
-        "anthropic.claude-code"
+        "42Crunch.vscode-openapi"
       ]
     }
   },

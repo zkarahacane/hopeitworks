@@ -1,0 +1,85 @@
+# ─── Agent Test Stack ─────────────────────────────────────────────────────────
+# Isolated stack for agent-driven tests. Runs in parallel with the main dev
+# stack on different ports. No socket-proxy, no agent-network — agents do NOT
+# spawn sub-containers from inside this stack.
+#
+# Ports:
+#   Postgres  → 5433 (host)
+#   API       → 8081 (host)
+#   MailHog   → 1026 SMTP / 8026 UI (host)
+# ──────────────────────────────────────────────────────────────────────────────
+
+services:
+  test-postgres:
+    image: postgres:16-alpine
+    container_name: hopeitworks-test-postgres
+    environment:
+      POSTGRES_DB: hopeitworks_test
+      POSTGRES_USER: ${POSTGRES_USER:-hopeitworks}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hopeitworks_dev_password}
+    ports:
+      - "5433:5432"
+    volumes:
+      - test_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hopeitworks} -d hopeitworks_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - hopeitworks-test
+
+  test-mailhog:
+    image: mailhog/mailhog:v1.0.1
+    container_name: hopeitworks-test-mailhog
+    ports:
+      - "1026:1025"
+      - "8026:8025"
+    networks:
+      - hopeitworks-test
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: hopeitworks-test-api
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      LOG_LEVEL: ${LOG_LEVEL:-debug}
+      SERVER_PORT: 8081
+      DB_HOST: test-postgres
+      DB_PORT: 5432
+      DB_NAME: hopeitworks_test
+      DB_USER: ${POSTGRES_USER:-hopeitworks}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-hopeitworks_dev_password}
+      DB_SSLMODE: disable
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-key-change-in-production}
+      AGENT_IMAGE: ${AGENT_IMAGE:-hopeitworks/agent-go-node:latest}
+      CLAUDE_MD_PATH: ${CLAUDE_MD_PATH:-agent/claude-md}
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+      CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN}
+      CALLBACK_BASE_URL: http://api:8081
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-dev-encryption-key-32bytes!!}
+      SMTP_HOST: test-mailhog
+      SMTP_PORT: 1025
+      SMTP_FROM: ${SMTP_FROM:-noreply@hopeitworks.local}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+    ports:
+      - "8081:8081"
+    depends_on:
+      test-postgres:
+        condition: service_healthy
+      test-mailhog:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - hopeitworks-test
+
+volumes:
+  test_postgres_data:
+
+networks:
+  hopeitworks-test:
+    driver: bridge
