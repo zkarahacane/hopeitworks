@@ -17,20 +17,25 @@ import (
 type HITLService struct {
 	hitlRepo port.HITLRepository
 	runRepo  port.RunRepository
+	jobQueue port.JobQueue
 	eventPub port.EventPublisher
 	logger   *slog.Logger
 }
 
 // NewHITLService creates a new HITLService.
+// jobQueue is used to re-enqueue run execution after an approval so the
+// paused run resumes from the gate step. It may be nil (resume is then a no-op).
 func NewHITLService(
 	hitlRepo port.HITLRepository,
 	runRepo port.RunRepository,
+	jobQueue port.JobQueue,
 	eventPub port.EventPublisher,
 	logger *slog.Logger,
 ) *HITLService {
 	return &HITLService{
 		hitlRepo: hitlRepo,
 		runRepo:  runRepo,
+		jobQueue: jobQueue,
 		eventPub: eventPub,
 		logger:   logger,
 	}
@@ -108,16 +113,61 @@ func (s *HITLService) Approve(ctx context.Context, hitlRequestID uuid.UUID, user
 		return nil, fmt.Errorf("update HITL status to approved: %w", err)
 	}
 
-	// Transition step back to running so the pipeline executor can resume
-	if _, err := s.runRepo.UpdateRunStepStatus(ctx, req.RunStepID, model.StepStatusRunning, nil, nil, nil); err != nil {
-		s.logger.Warn("failed to transition step back to running after approval",
+	// Mark the gate step completed so the resumed executor skips it and
+	// continues with the next step. Leaving it "running" would cause the gate
+	// action to re-execute on resume and suspend the run again (infinite loop).
+	if _, err := s.runRepo.UpdateRunStepStatus(ctx, req.RunStepID, model.StepStatusCompleted, nil, &now, nil); err != nil {
+		s.logger.Warn("failed to mark gate step completed after approval",
 			"hitl_request_id", hitlRequestID, "step_id", req.RunStepID, "error", err)
 	}
+
+	// Resume the paused run and re-enqueue execution so the pipeline continues.
+	// The gate action paused the run on suspension; without re-enqueuing here the
+	// run would never resume on its own.
+	s.resumeRun(ctx, req.RunStepID)
 
 	// Publish approval event
 	s.publishEvent(ctx, req, "approved", userID)
 
 	return updated, nil
+}
+
+// resumeRun transitions the run owning the given step back to running and
+// re-enqueues it for execution. Failures are logged but do not fail the
+// approval — the run can still be resumed manually via the run API.
+func (s *HITLService) resumeRun(ctx context.Context, stepID uuid.UUID) {
+	step, err := s.runRepo.GetRunStep(ctx, stepID)
+	if err != nil {
+		s.logger.Warn("failed to fetch step for run resume after approval",
+			"step_id", stepID, "error", err)
+		return
+	}
+
+	run, err := s.runRepo.GetRun(ctx, step.RunID)
+	if err != nil {
+		s.logger.Warn("failed to fetch run for resume after approval",
+			"step_id", stepID, "run_id", step.RunID, "error", err)
+		return
+	}
+
+	// Only transition paused runs back to running. If the run is already running
+	// (e.g. resumed concurrently), just re-enqueue execution.
+	if run.Status == model.RunStatusPaused {
+		if _, err := s.runRepo.UpdateRunStatus(ctx, run.ID, model.RunStatusRunning, nil, nil, nil, nil); err != nil {
+			s.logger.Warn("failed to transition run to running after approval",
+				"run_id", run.ID, "error", err)
+		}
+	}
+
+	if s.jobQueue == nil {
+		s.logger.Warn("job queue unavailable, run will not resume automatically after approval",
+			"run_id", run.ID)
+		return
+	}
+	if err := s.jobQueue.EnqueueExecuteRun(ctx, run.ID); err != nil {
+		s.logger.Warn("failed to re-enqueue run execution after approval",
+			"run_id", run.ID, "error", err)
+	}
 }
 
 // Reject resolves a HITL request as rejected.

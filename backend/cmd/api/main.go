@@ -320,7 +320,7 @@ func run() error {
 	}
 
 	// HITL service and handler
-	hitlService := service.NewHITLService(hitlRepo, runRepo, eventRepo, logger)
+	hitlService := service.NewHITLService(hitlRepo, runRepo, jobQueue, eventRepo, logger)
 	hitlHandler := handler.NewHITLHandler(hitlService)
 
 	// Notifier adapters
