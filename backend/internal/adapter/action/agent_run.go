@@ -210,7 +210,11 @@ func (a *AgentRunAction) createContainer(
 		"REPO_URL=" + repoURL,
 		"BRANCH_NAME=" + branchName,
 		"STORY_KEY=" + story.Key,
+		// PROMPT_CONTENT is consumed by the legacy shell entrypoint (agent/entrypoint.sh).
+		// PROMPT is consumed by the agent-runtime Go binary in callback mode (config.Load).
+		// Inject both so either image variant receives the rendered prompt under the name it reads.
 		"PROMPT_CONTENT=" + prompt,
+		"PROMPT=" + prompt,
 		"GIT_TOKEN=" + gitToken,
 		"GIT_PROVIDER=" + project.GitProvider,
 		"GITHUB_TOKEN=" + gitToken,
