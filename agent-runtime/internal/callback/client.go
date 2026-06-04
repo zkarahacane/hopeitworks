@@ -38,8 +38,10 @@ func New(baseURL, authToken, runID, stepID string) *Client {
 }
 
 // logPayload is the request body for log callbacks.
+// The API log callback handler (LogCallbackRequest) expects a "lines" array,
+// so a single message is wrapped as a one-element slice.
 type logPayload struct {
-	Message string `json:"message"`
+	Lines []string `json:"lines"`
 }
 
 // costPayload is the request body for cost callbacks.
@@ -59,7 +61,7 @@ type statusPayload struct {
 // SendLog posts a log event to the API server.
 func (c *Client) SendLog(ctx context.Context, message string) error {
 	url := fmt.Sprintf("%s/internal/agent/callback/runs/%s/steps/%s/logs", c.baseURL, c.runID, c.stepID)
-	return c.postJSON(ctx, url, logPayload{Message: message})
+	return c.postJSON(ctx, url, logPayload{Lines: []string{message}})
 }
 
 // SendCost posts a cost event to the API server.
