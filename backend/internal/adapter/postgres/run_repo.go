@@ -79,6 +79,70 @@ func (r *RunRepo) GetActiveRunByStory(ctx context.Context, storyID uuid.UUID) (*
 	return toDomainRun(row), nil
 }
 
+func (r *RunRepo) GetLatestRunByStory(ctx context.Context, storyID uuid.UUID) (*model.LatestRun, error) {
+	row, err := r.queries.GetLatestRunByStory(ctx, storyID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, apperrors.NewInternal("failed to get latest run by story", err)
+	}
+	return toDomainLatestRun(row.RunID, row.RunStatus, row.CurrentStep, row.TotalSteps)
+}
+
+func (r *RunRepo) GetLatestRunsByStories(ctx context.Context, storyIDs []uuid.UUID) (map[uuid.UUID]*model.LatestRun, error) {
+	result := make(map[uuid.UUID]*model.LatestRun, len(storyIDs))
+	if len(storyIDs) == 0 {
+		return result, nil
+	}
+	rows, err := r.queries.GetLatestRunsByStories(ctx, storyIDs)
+	if err != nil {
+		return nil, apperrors.NewInternal("failed to get latest runs by stories", err)
+	}
+	for _, row := range rows {
+		latest, err := toDomainLatestRun(row.RunID, row.RunStatus, row.CurrentStep, row.TotalSteps)
+		if err != nil {
+			return nil, err
+		}
+		result[row.StoryID] = latest
+	}
+	return result, nil
+}
+
+// currentStepJSON mirrors the JSON object produced by to_jsonb in the
+// GetLatestRun* queries.
+type currentStepJSON struct {
+	ID         uuid.UUID `json:"id"`
+	Name       string    `json:"name"`
+	ActionType string    `json:"action_type"`
+	Status     string    `json:"status"`
+	Index      int       `json:"index"`
+}
+
+// toDomainLatestRun maps the latest-run query columns into a domain LatestRun,
+// decoding the optional current-step JSON blob (NULL when no step is in progress).
+func toDomainLatestRun(runID uuid.UUID, runStatus string, currentStep []byte, totalSteps int32) (*model.LatestRun, error) {
+	latest := &model.LatestRun{
+		ID:     runID,
+		Status: runStatus,
+	}
+	if len(currentStep) > 0 {
+		var cs currentStepJSON
+		if err := json.Unmarshal(currentStep, &cs); err != nil {
+			return nil, apperrors.NewInternal("failed to unmarshal current step", err)
+		}
+		latest.CurrentStep = &model.LatestRunStep{
+			ID:         cs.ID,
+			Name:       cs.Name,
+			ActionType: cs.ActionType,
+			Status:     cs.Status,
+			Index:      cs.Index,
+			Total:      int(totalSteps),
+		}
+	}
+	return latest, nil
+}
+
 func (r *RunRepo) ListRunsByProject(ctx context.Context, projectID uuid.UUID, limit, offset int32) ([]*model.Run, error) {
 	rows, err := r.queries.ListRunsByProjectWithStoryKey(ctx, ListRunsByProjectWithStoryKeyParams{
 		ProjectID: projectID,

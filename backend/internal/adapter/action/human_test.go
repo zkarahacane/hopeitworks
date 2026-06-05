@@ -494,3 +494,15 @@ func TestHumanAction_Execute_StoryFetchFails(t *testing.T) {
 		t.Fatalf("expected no status updates when story fetch fails, got %d", len(runRepo.statusCalls))
 	}
 }
+
+func (m *humanMockStoryRepo) CountByEpicGroupedByStatus(_ context.Context, _ uuid.UUID) (model.StoryCounts, error) {
+	return model.StoryCounts{}, nil
+}
+
+func (m *humanMockRunRepo) GetLatestRunByStory(_ context.Context, _ uuid.UUID) (*model.LatestRun, error) {
+	return nil, nil
+}
+
+func (m *humanMockRunRepo) GetLatestRunsByStories(_ context.Context, _ []uuid.UUID) (map[uuid.UUID]*model.LatestRun, error) {
+	return map[uuid.UUID]*model.LatestRun{}, nil
+}

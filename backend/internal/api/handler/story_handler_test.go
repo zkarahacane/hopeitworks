@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/zakari/hopeitworks/backend/internal/api/middleware"
@@ -138,10 +139,16 @@ func (m *mockStoryRepo) Delete(_ context.Context, id uuid.UUID) error {
 }
 
 func setupStoryHandler() (*StoryHandler, *mockStoryRepo) {
-	repo := newMockStoryRepo()
-	svc := service.NewStoryService(repo)
-	h := NewStoryHandler(svc)
+	h, repo, _ := setupStoryHandlerWithRuns()
 	return h, repo
+}
+
+func setupStoryHandlerWithRuns() (*StoryHandler, *mockStoryRepo, *storyHandlerRunRepo) {
+	repo := newMockStoryRepo()
+	runRepo := &storyHandlerRunRepo{latestByStory: make(map[uuid.UUID]*model.LatestRun)}
+	svc := service.NewStoryService(repo)
+	h := NewStoryHandler(svc, runRepo)
+	return h, repo, runRepo
 }
 
 func TestCreateStory_AdminOnly(t *testing.T) {
@@ -633,5 +640,209 @@ func TestCreateStory_WithJSONBFields(t *testing.T) {
 	}
 	if resp.DependsOn == nil || len(*resp.DependsOn) != 1 {
 		t.Errorf("expected 1 depends_on, got %v", resp.DependsOn)
+	}
+}
+
+func (m *mockStoryRepo) CountByEpicGroupedByStatus(_ context.Context, _ uuid.UUID) (model.StoryCounts, error) {
+	return model.StoryCounts{}, nil
+}
+
+// storyHandlerRunRepo is a minimal mock of port.RunRepository for story handler
+// tests, supporting only the latest-run lookups used to populate latest_run.
+type storyHandlerRunRepo struct {
+	latestByStory map[uuid.UUID]*model.LatestRun
+}
+
+var _ port.RunRepository = (*storyHandlerRunRepo)(nil)
+
+func (m *storyHandlerRunRepo) GetLatestRunByStory(_ context.Context, storyID uuid.UUID) (*model.LatestRun, error) {
+	return m.latestByStory[storyID], nil
+}
+func (m *storyHandlerRunRepo) GetLatestRunsByStories(_ context.Context, storyIDs []uuid.UUID) (map[uuid.UUID]*model.LatestRun, error) {
+	out := make(map[uuid.UUID]*model.LatestRun)
+	for _, id := range storyIDs {
+		if lr, ok := m.latestByStory[id]; ok {
+			out[id] = lr
+		}
+	}
+	return out, nil
+}
+func (m *storyHandlerRunRepo) CreateRun(_ context.Context, run *model.Run) (*model.Run, error) {
+	return run, nil
+}
+func (m *storyHandlerRunRepo) GetRun(_ context.Context, id uuid.UUID) (*model.Run, error) {
+	return nil, errors.NewNotFound("run", id)
+}
+func (m *storyHandlerRunRepo) GetActiveRunByStory(_ context.Context, _ uuid.UUID) (*model.Run, error) {
+	return nil, nil
+}
+func (m *storyHandlerRunRepo) ListRunsByProject(_ context.Context, _ uuid.UUID, _, _ int32) ([]*model.Run, error) {
+	return nil, nil
+}
+func (m *storyHandlerRunRepo) ListRunsByStory(_ context.Context, _ uuid.UUID, _, _ int32) ([]*model.Run, error) {
+	return nil, nil
+}
+func (m *storyHandlerRunRepo) UpdateRunStatus(_ context.Context, _ uuid.UUID, _ model.RunStatus, _, _, _ *time.Time, _ *string) (*model.Run, error) {
+	return nil, nil
+}
+func (m *storyHandlerRunRepo) CountRunsByProject(_ context.Context, _ uuid.UUID) (int64, error) {
+	return 0, nil
+}
+func (m *storyHandlerRunRepo) CountRunsByStory(_ context.Context, _ uuid.UUID) (int64, error) {
+	return 0, nil
+}
+func (m *storyHandlerRunRepo) CreateRunStep(_ context.Context, step *model.RunStep) (*model.RunStep, error) {
+	return step, nil
+}
+func (m *storyHandlerRunRepo) GetRunStep(_ context.Context, id uuid.UUID) (*model.RunStep, error) {
+	return nil, errors.NewNotFound("run_step", id)
+}
+func (m *storyHandlerRunRepo) ListRunStepsByRun(_ context.Context, _ uuid.UUID) ([]*model.RunStep, error) {
+	return nil, nil
+}
+func (m *storyHandlerRunRepo) UpdateRunStepStatus(_ context.Context, _ uuid.UUID, _ model.StepStatus, _, _ *time.Time, _ *string) (*model.RunStep, error) {
+	return nil, nil
+}
+func (m *storyHandlerRunRepo) UpdateRunStepContainerInfo(_ context.Context, _ uuid.UUID, _ *string, _ *string) (*model.RunStep, error) {
+	return nil, nil
+}
+func (m *storyHandlerRunRepo) CreateRetryRunStep(_ context.Context, step *model.RunStep) (*model.RunStep, error) {
+	return step, nil
+}
+func (m *storyHandlerRunRepo) ListRetryStepsByParent(_ context.Context, _ uuid.UUID) ([]*model.RunStep, error) {
+	return nil, nil
+}
+
+func TestGetStory_PopulatesLatestRun(t *testing.T) {
+	h, repo, runRepo := setupStoryHandlerWithRuns()
+	projectID := uuid.New()
+	storyID := uuid.New()
+	repo.stories[storyID] = &model.Story{
+		ID:        storyID,
+		ProjectID: projectID,
+		Key:       "S-01",
+		Title:     "running story",
+		Status:    "running",
+	}
+	runID := uuid.New()
+	stepID := uuid.New()
+	runRepo.latestByStory[storyID] = &model.LatestRun{
+		ID:     runID,
+		Status: "running",
+		CurrentStep: &model.LatestRunStep{
+			ID:         stepID,
+			Name:       "implement",
+			ActionType: "agent_run",
+			Status:     "running",
+			Index:      1,
+			Total:      4,
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects/"+projectID.String()+"/stories/"+storyID.String(), nil)
+	ctx := middleware.SetUserContext(req.Context(), uuid.New(), model.RoleUser)
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.GetStory(rec, req, projectID, storyID)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+	var resp Story
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if resp.LatestRun == nil {
+		t.Fatalf("expected latest_run to be populated, got nil")
+	}
+	if resp.LatestRun.Id != runID {
+		t.Errorf("expected latest_run.id %s, got %s", runID, resp.LatestRun.Id)
+	}
+	if resp.LatestRun.Status != "running" {
+		t.Errorf("expected latest_run.status running, got %q", resp.LatestRun.Status)
+	}
+	if resp.LatestRun.CurrentStep == nil {
+		t.Fatalf("expected current_step to be populated, got nil")
+	}
+	cs := resp.LatestRun.CurrentStep
+	if cs.Id != stepID || cs.Name != "implement" || cs.ActionType != "agent_run" {
+		t.Errorf("unexpected current_step: %+v", cs)
+	}
+	if cs.Index != 1 || cs.Total != 4 {
+		t.Errorf("expected index 1/total 4, got %d/%d", cs.Index, cs.Total)
+	}
+}
+
+func TestGetStory_NilLatestRun(t *testing.T) {
+	h, repo, _ := setupStoryHandlerWithRuns()
+	projectID := uuid.New()
+	storyID := uuid.New()
+	repo.stories[storyID] = &model.Story{
+		ID:        storyID,
+		ProjectID: projectID,
+		Key:       "S-02",
+		Title:     "never run",
+		Status:    "backlog",
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects/"+projectID.String()+"/stories/"+storyID.String(), nil)
+	ctx := middleware.SetUserContext(req.Context(), uuid.New(), model.RoleUser)
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.GetStory(rec, req, projectID, storyID)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	var resp Story
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if resp.LatestRun != nil {
+		t.Errorf("expected latest_run nil for never-run story, got %+v", resp.LatestRun)
+	}
+}
+
+func TestListStories_PopulatesLatestRunBatch(t *testing.T) {
+	h, repo, runRepo := setupStoryHandlerWithRuns()
+	projectID := uuid.New()
+
+	withRun := uuid.New()
+	repo.stories[withRun] = &model.Story{ID: withRun, ProjectID: projectID, Key: "S-01", Title: "a", Status: "running"}
+	runRepo.latestByStory[withRun] = &model.LatestRun{ID: uuid.New(), Status: "running"}
+
+	withoutRun := uuid.New()
+	repo.stories[withoutRun] = &model.Story{ID: withoutRun, ProjectID: projectID, Key: "S-02", Title: "b", Status: "backlog"}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects/"+projectID.String()+"/stories", nil)
+	ctx := middleware.SetUserContext(req.Context(), uuid.New(), model.RoleUser)
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.ListStories(rec, req, projectID, ListStoriesParams{})
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	var resp StoryList
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode: %v", err)
+	}
+	if len(resp.Data) != 2 {
+		t.Fatalf("expected 2 stories, got %d", len(resp.Data))
+	}
+	for _, s := range resp.Data {
+		switch s.Key {
+		case "S-01":
+			if s.LatestRun == nil {
+				t.Errorf("S-01 should have latest_run")
+			}
+		case "S-02":
+			if s.LatestRun != nil {
+				t.Errorf("S-02 should have nil latest_run, got %+v", s.LatestRun)
+			}
+		}
 	}
 }

@@ -12,6 +12,38 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countStoriesByEpicGroupedByStatus = `-- name: CountStoriesByEpicGroupedByStatus :many
+SELECT status, COUNT(*) AS count
+FROM stories
+WHERE epic_id = $1
+GROUP BY status
+`
+
+type CountStoriesByEpicGroupedByStatusRow struct {
+	Status string `json:"status"`
+	Count  int64  `json:"count"`
+}
+
+func (q *Queries) CountStoriesByEpicGroupedByStatus(ctx context.Context, epicID pgtype.UUID) ([]CountStoriesByEpicGroupedByStatusRow, error) {
+	rows, err := q.db.Query(ctx, countStoriesByEpicGroupedByStatus, epicID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CountStoriesByEpicGroupedByStatusRow{}
+	for rows.Next() {
+		var i CountStoriesByEpicGroupedByStatusRow
+		if err := rows.Scan(&i.Status, &i.Count); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const countStoriesByProject = `-- name: CountStoriesByProject :one
 SELECT COUNT(*) FROM stories WHERE project_id = $1
 `

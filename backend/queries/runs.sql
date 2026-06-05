@@ -63,3 +63,50 @@ RETURNING *;
 SELECT * FROM runs
 WHERE project_id = $1 AND pipeline_config_snapshot @> sqlc.arg('parent_filter')::jsonb
 ORDER BY created_at ASC;
+
+-- name: GetLatestRunByStory :one
+-- Returns the most recent run for a story along with its current in-progress step
+-- (running or waiting_approval, lowest step_order) and the total step count.
+-- current_step is a JSON object (NULL when no step is in progress) carrying
+-- id, name, action_type, status and index (step_order).
+SELECT
+    r.id AS run_id,
+    r.status AS run_status,
+    (
+        SELECT to_jsonb(cs)
+        FROM (
+            SELECT s.id, s.step_name AS name, s.action AS action_type, s.status, s.step_order AS index
+            FROM run_steps s
+            WHERE s.run_id = r.id AND s.status IN ('running', 'waiting_approval')
+            ORDER BY s.step_order ASC
+            LIMIT 1
+        ) cs
+    ) AS current_step,
+    (SELECT COUNT(*) FROM run_steps s WHERE s.run_id = r.id)::int AS total_steps
+FROM runs r
+WHERE r.story_id = $1
+ORDER BY r.created_at DESC
+LIMIT 1;
+
+-- name: GetLatestRunsByStories :many
+-- Batch version of GetLatestRunByStory: returns the most recent run per story
+-- for the given story IDs, with current step (JSON) and total step count.
+-- Avoids N+1 when listing stories of an epic.
+SELECT DISTINCT ON (r.story_id)
+    r.story_id AS story_id,
+    r.id AS run_id,
+    r.status AS run_status,
+    (
+        SELECT to_jsonb(cs)
+        FROM (
+            SELECT s.id, s.step_name AS name, s.action AS action_type, s.status, s.step_order AS index
+            FROM run_steps s
+            WHERE s.run_id = r.id AND s.status IN ('running', 'waiting_approval')
+            ORDER BY s.step_order ASC
+            LIMIT 1
+        ) cs
+    ) AS current_step,
+    (SELECT COUNT(*) FROM run_steps s WHERE s.run_id = r.id)::int AS total_steps
+FROM runs r
+WHERE r.story_id = ANY($1::uuid[])
+ORDER BY r.story_id, r.created_at DESC;

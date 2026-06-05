@@ -15,6 +15,9 @@ import (
 	"github.com/zakari/hopeitworks/backend/pkg/errors"
 )
 
+// eventRunCancelled is the event name asserted across cancellation tests.
+const eventRunCancelled = "run.cancelled"
+
 // testLogger creates a logger for tests using slog directly to avoid stdout noise.
 func testLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -580,7 +583,7 @@ func TestExecuteRun_Cancellation(t *testing.T) {
 		if eventName == "step.cancelled" {
 			foundStepCancelledEvent = true
 		}
-		if eventName == "run.cancelled" {
+		if eventName == eventRunCancelled {
 			foundRunCancelledEvent = true
 		}
 	}
@@ -589,6 +592,89 @@ func TestExecuteRun_Cancellation(t *testing.T) {
 	}
 	if !foundRunCancelledEvent {
 		t.Error("expected run.cancelled event to be published")
+	}
+}
+
+// TestExecuteRun_EventsIncludeStoryID verifies every run.* and step.* event
+// payload carries story_id so the live board can target the right card.
+func TestExecuteRun_EventsIncludeStoryID(t *testing.T) {
+	f := newExecutorTestFixture(2)
+	f.registerSuccessActions()
+
+	if err := f.executor.ExecuteRun(context.Background(), f.runID); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	for _, e := range f.eventPub.getEvents() {
+		name := e.Event.EventName()
+		if e.Event.EntityType != "run" && e.Event.EntityType != "step" {
+			continue
+		}
+		var payload map[string]any
+		if err := json.Unmarshal(e.Event.Payload, &payload); err != nil {
+			t.Fatalf("failed to unmarshal %s payload: %v", name, err)
+		}
+		got, ok := payload["story_id"]
+		if !ok {
+			t.Errorf("%s payload: missing story_id", name)
+			continue
+		}
+		if got != f.storyID.String() {
+			t.Errorf("%s payload: expected story_id %s, got %v", name, f.storyID, got)
+		}
+	}
+}
+
+// TestExecuteRun_CancellationResetsStoryToBacklog verifies a cancelled run resets
+// its story back to backlog (relaunchable) and publishes story.status_updated and
+// run.cancelled with story_id.
+func TestExecuteRun_CancellationResetsStoryToBacklog(t *testing.T) {
+	f := newExecutorTestFixture(2)
+
+	var updatedStatus string
+	f.storyRepo.updateFn = func(_ context.Context, story *model.Story) (*model.Story, error) {
+		updatedStatus = story.Status
+		return story, nil
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	f.actionReg.Register(&mockAction{
+		name: f.steps[0].Action,
+		executeFn: func(_ context.Context, _ *model.RunContext) error {
+			cancel()
+			return nil
+		},
+	})
+	f.actionReg.Register(&mockAction{name: f.steps[1].Action})
+
+	_ = f.executor.ExecuteRun(ctx, f.runID)
+
+	if updatedStatus != model.StoryStatusBacklog {
+		t.Errorf("expected story reset to backlog, last update was %q", updatedStatus)
+	}
+
+	// Find the run.cancelled event and assert it carries story_id, and that a
+	// story.status_updated(backlog) event was published.
+	var foundRunCancelledWithStory, foundStoryBacklog bool
+	for _, e := range f.eventPub.getEvents() {
+		var payload map[string]any
+		_ = json.Unmarshal(e.Event.Payload, &payload)
+		switch e.Event.EventName() {
+		case eventRunCancelled:
+			if payload["story_id"] == f.storyID.String() {
+				foundRunCancelledWithStory = true
+			}
+		case "story.status_updated":
+			if payload["status"] == model.StoryStatusBacklog {
+				foundStoryBacklog = true
+			}
+		}
+	}
+	if !foundRunCancelledWithStory {
+		t.Error("expected run.cancelled event with story_id")
+	}
+	if !foundStoryBacklog {
+		t.Error("expected story.status_updated event with status backlog")
 	}
 }
 
@@ -1239,4 +1325,8 @@ func TestExecuteRun_ModelInjectedPerStep(t *testing.T) {
 	if capturedHasModel[2] {
 		t.Errorf("step 2: expected no model in metadata, got %q", capturedModels[2])
 	}
+}
+
+func (m *mockStoryRepoForExecutor) CountByEpicGroupedByStatus(_ context.Context, _ uuid.UUID) (model.StoryCounts, error) {
+	return model.StoryCounts{}, nil
 }

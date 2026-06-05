@@ -975,3 +975,15 @@ func TestAgentRunAction_ModelFallback(t *testing.T) {
 		}
 	}
 }
+
+func (m *mockStoryRepo) CountByEpicGroupedByStatus(_ context.Context, _ uuid.UUID) (model.StoryCounts, error) {
+	return model.StoryCounts{}, nil
+}
+
+func (m *mockRunRepo) GetLatestRunByStory(_ context.Context, _ uuid.UUID) (*model.LatestRun, error) {
+	return nil, nil
+}
+
+func (m *mockRunRepo) GetLatestRunsByStories(_ context.Context, _ []uuid.UUID) (map[uuid.UUID]*model.LatestRun, error) {
+	return map[uuid.UUID]*model.LatestRun{}, nil
+}

@@ -361,3 +361,11 @@ func TestIncrementalRetryAction_CustomRetryPolicy(t *testing.T) {
 		t.Error("expected error_context to be cleared for full retry")
 	}
 }
+
+func (m *retryMockRunRepo) GetLatestRunByStory(_ context.Context, _ uuid.UUID) (*model.LatestRun, error) {
+	return nil, nil
+}
+
+func (m *retryMockRunRepo) GetLatestRunsByStories(_ context.Context, _ []uuid.UUID) (map[uuid.UUID]*model.LatestRun, error) {
+	return map[uuid.UUID]*model.LatestRun{}, nil
+}

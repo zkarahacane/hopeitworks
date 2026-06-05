@@ -21,6 +21,15 @@ const (
 	StoryScopeShared   = "shared"
 )
 
+// StoryCounts holds the number of stories per lifecycle status. Used to populate
+// an epic's aggregate progress on the board without N per-status queries.
+type StoryCounts struct {
+	Backlog int
+	Running int
+	Done    int
+	Failed  int
+}
+
 // Story represents a user story within a project.
 type Story struct {
 	ID                 uuid.UUID

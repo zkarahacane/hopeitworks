@@ -427,3 +427,7 @@ func TestGetEpicRun_NotFound(t *testing.T) {
 		t.Fatal("expected error for non-existent epic run")
 	}
 }
+
+func (m *mockStoryRepoForEpicRun) CountByEpicGroupedByStatus(_ context.Context, _ uuid.UUID) (model.StoryCounts, error) {
+	return model.StoryCounts{}, nil
+}

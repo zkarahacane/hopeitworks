@@ -504,3 +504,7 @@ func TestGitBranchAction_Execute_NilConfig(t *testing.T) {
 		t.Fatalf("expected branch to use default pattern, got %q", calls[0].BranchName)
 	}
 }
+
+func (m *gbMockStoryRepo) CountByEpicGroupedByStatus(_ context.Context, _ uuid.UUID) (model.StoryCounts, error) {
+	return model.StoryCounts{}, nil
+}

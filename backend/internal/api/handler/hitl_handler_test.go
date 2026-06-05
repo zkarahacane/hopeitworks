@@ -455,3 +455,11 @@ func TestHITLHandler_RejectHITLRequest(t *testing.T) {
 		})
 	}
 }
+
+func (m *mockRunRepoForHITLHandler) GetLatestRunByStory(_ context.Context, _ uuid.UUID) (*model.LatestRun, error) {
+	return nil, nil
+}
+
+func (m *mockRunRepoForHITLHandler) GetLatestRunsByStories(_ context.Context, _ []uuid.UUID) (map[uuid.UUID]*model.LatestRun, error) {
+	return map[uuid.UUID]*model.LatestRun{}, nil
+}

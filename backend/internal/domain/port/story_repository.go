@@ -17,6 +17,9 @@ type StoryRepository interface {
 	ListByEpic(ctx context.Context, epicID uuid.UUID, limit, offset int32) ([]*model.Story, error)
 	CountByProject(ctx context.Context, projectID uuid.UUID) (int64, error)
 	CountByStatus(ctx context.Context, projectID uuid.UUID, statuses []string) (int64, error)
+	// CountByEpicGroupedByStatus returns story counts per lifecycle status for an epic
+	// in a single GROUP BY query.
+	CountByEpicGroupedByStatus(ctx context.Context, epicID uuid.UUID) (model.StoryCounts, error)
 	Update(ctx context.Context, story *model.Story) (*model.Story, error)
 	Delete(ctx context.Context, id uuid.UUID) error
 }

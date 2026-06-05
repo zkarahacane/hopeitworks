@@ -791,3 +791,15 @@ func TestParsePeriod(t *testing.T) {
 		})
 	}
 }
+
+func (m *mockStoryRepoForCost) CountByEpicGroupedByStatus(_ context.Context, _ uuid.UUID) (model.StoryCounts, error) {
+	return model.StoryCounts{}, nil
+}
+
+func (m *mockRunRepoForCost) GetLatestRunByStory(_ context.Context, _ uuid.UUID) (*model.LatestRun, error) {
+	return nil, nil
+}
+
+func (m *mockRunRepoForCost) GetLatestRunsByStories(_ context.Context, _ []uuid.UUID) (map[uuid.UUID]*model.LatestRun, error) {
+	return map[uuid.UUID]*model.LatestRun{}, nil
+}

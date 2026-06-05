@@ -128,6 +128,10 @@ func run() error {
 
 	projectHandler := handler.NewProjectHandler(projectService, projectUserService, circuitBreakerService)
 
+	// Run repository (shared by run service, pipeline executor, story/epic handlers,
+	// and other components).
+	runRepo := pgadapter.NewRunRepo(queries)
+
 	// Epic service
 	epicRepo := pgadapter.NewEpicRepo(queries)
 	epicService := service.NewEpicService(epicRepo)
@@ -135,7 +139,7 @@ func run() error {
 	// Story service
 	storyRepo := pgadapter.NewStoryRepo(queries)
 	storyService := service.NewStoryService(storyRepo)
-	storyHandler := handler.NewStoryHandler(storyService)
+	storyHandler := handler.NewStoryHandler(storyService, runRepo)
 
 	// Scheduler service (DAG computation, pure domain service)
 	schedulerService := service.NewSchedulerService()
@@ -169,9 +173,6 @@ func run() error {
 
 	// Background cleanup of expired revoked tokens
 	startTokenCleanup(appCtx, authService, logger)
-
-	// Run repository (shared by run service, pipeline executor, and other components)
-	runRepo := pgadapter.NewRunRepo(queries)
 
 	// Cost service
 	costRepo := pgadapter.NewCostRepo(queries)

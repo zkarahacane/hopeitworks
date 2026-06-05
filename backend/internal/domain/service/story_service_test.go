@@ -779,3 +779,7 @@ func TestStoryService_Import_CreateFailure(t *testing.T) {
 func storyStrPtr(s string) *string {
 	return &s
 }
+
+func (m *mockStoryRepo) CountByEpicGroupedByStatus(_ context.Context, _ uuid.UUID) (model.StoryCounts, error) {
+	return model.StoryCounts{}, nil
+}

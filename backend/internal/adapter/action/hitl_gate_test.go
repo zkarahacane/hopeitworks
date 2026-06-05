@@ -547,3 +547,15 @@ func TestHITLGateAction_Execute_StoryFetchFails(t *testing.T) {
 		t.Fatalf("expected error containing %q, got %q", "fetch story", err.Error())
 	}
 }
+
+func (m *hitlMockStoryRepo) CountByEpicGroupedByStatus(_ context.Context, _ uuid.UUID) (model.StoryCounts, error) {
+	return model.StoryCounts{}, nil
+}
+
+func (m *hitlMockRunRepo) GetLatestRunByStory(_ context.Context, _ uuid.UUID) (*model.LatestRun, error) {
+	return nil, nil
+}
+
+func (m *hitlMockRunRepo) GetLatestRunsByStories(_ context.Context, _ []uuid.UUID) (map[uuid.UUID]*model.LatestRun, error) {
+	return map[uuid.UUID]*model.LatestRun{}, nil
+}

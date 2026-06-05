@@ -101,6 +101,7 @@ func (e *PipelineExecutor) ExecuteRun(ctx context.Context, runID uuid.UUID) erro
 
 	e.publishEvent(ctx, run.ProjectID, "run", run.ID, "started", map[string]any{
 		"run_id":     runID.String(),
+		"story_id":   run.StoryID.String(),
 		"status":     string(model.RunStatusRunning),
 		"started_at": now.Format(time.RFC3339),
 	})
@@ -165,6 +166,7 @@ func (e *PipelineExecutor) ExecuteRun(ctx context.Context, runID uuid.UUID) erro
 
 	e.publishEvent(ctx, run.ProjectID, "run", run.ID, "completed", map[string]any{
 		"run_id":       runID.String(),
+		"story_id":     run.StoryID.String(),
 		"status":       string(model.RunStatusCompleted),
 		"completed_at": completedAt.Format(time.RFC3339),
 	})
@@ -194,6 +196,7 @@ func (e *PipelineExecutor) executeStep(ctx context.Context, run *model.Run, step
 
 	e.publishEvent(ctx, run.ProjectID, "step", step.ID, "started", map[string]any{
 		"run_id":     run.ID.String(),
+		"story_id":   run.StoryID.String(),
 		"step_id":    step.ID.String(),
 		"step_name":  step.StepName,
 		"action":     step.Action,
@@ -286,6 +289,7 @@ func (e *PipelineExecutor) executeStep(ctx context.Context, run *model.Run, step
 
 	e.publishEvent(ctx, run.ProjectID, "step", step.ID, "completed", map[string]any{
 		"run_id":       run.ID.String(),
+		"story_id":     run.StoryID.String(),
 		"step_id":      step.ID.String(),
 		"step_name":    step.StepName,
 		"status":       string(model.StepStatusCompleted),
@@ -307,6 +311,7 @@ func (e *PipelineExecutor) handleStepFailure(ctx context.Context, run *model.Run
 
 	e.publishEvent(ctx, run.ProjectID, "step", step.ID, "failed", map[string]any{
 		"run_id":        run.ID.String(),
+		"story_id":      run.StoryID.String(),
 		"step_id":       step.ID.String(),
 		"step_name":     step.StepName,
 		"status":        string(model.StepStatusFailed),
@@ -320,6 +325,7 @@ func (e *PipelineExecutor) handleStepFailure(ctx context.Context, run *model.Run
 
 	e.publishEvent(ctx, run.ProjectID, "run", run.ID, "failed", map[string]any{
 		"run_id":        run.ID.String(),
+		"story_id":      run.StoryID.String(),
 		"status":        string(model.RunStatusFailed),
 		"error_message": errMsg,
 	})
@@ -344,6 +350,7 @@ func (e *PipelineExecutor) handleCancellation(run *model.Run, step *model.RunSte
 
 	e.publishEvent(bgCtx, run.ProjectID, "step", step.ID, "cancelled", map[string]any{
 		"run_id":    run.ID.String(),
+		"story_id":  run.StoryID.String(),
 		"step_id":   step.ID.String(),
 		"step_name": step.StepName,
 		"status":    string(model.StepStatusCancelled),
@@ -355,9 +362,14 @@ func (e *PipelineExecutor) handleCancellation(run *model.Run, step *model.RunSte
 	}
 
 	e.publishEvent(bgCtx, run.ProjectID, "run", run.ID, "cancelled", map[string]any{
-		"run_id": run.ID.String(),
-		"status": string(model.RunStatusCancelled),
+		"run_id":   run.ID.String(),
+		"story_id": run.StoryID.String(),
+		"status":   string(model.RunStatusCancelled),
 	})
+
+	// Transition story back to "backlog" so it can be relaunched (a cancelled run
+	// must not leave the story stuck in "running" forever).
+	e.updateStoryStatus(bgCtx, run, model.StoryStatusBacklog)
 }
 
 // updateStoryStatus fetches the story linked to the run and updates its status.

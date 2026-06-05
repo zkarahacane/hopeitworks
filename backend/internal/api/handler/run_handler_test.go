@@ -524,7 +524,7 @@ func TestResumeRunHandler_Success(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&result); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
-	if result["status"] != "running" {
+	if result["status"] != string(model.RunStatusRunning) {
 		t.Errorf("expected run status 'running', got %v", result["status"])
 	}
 }
@@ -600,4 +600,16 @@ func TestResumeRunHandler_WrongProject(t *testing.T) {
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("expected status 404, got %d. Body: %s", rec.Code, rec.Body.String())
 	}
+}
+
+func (m *runHandlerStoryRepo) CountByEpicGroupedByStatus(_ context.Context, _ uuid.UUID) (model.StoryCounts, error) {
+	return model.StoryCounts{}, nil
+}
+
+func (m *runHandlerRunRepo) GetLatestRunByStory(_ context.Context, _ uuid.UUID) (*model.LatestRun, error) {
+	return nil, nil
+}
+
+func (m *runHandlerRunRepo) GetLatestRunsByStories(_ context.Context, _ []uuid.UUID) (map[uuid.UUID]*model.LatestRun, error) {
+	return map[uuid.UUID]*model.LatestRun{}, nil
 }

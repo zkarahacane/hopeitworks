@@ -592,3 +592,7 @@ func TestGitPRAction_Execute_ObjectiveTruncation(t *testing.T) {
 		t.Error("expected truncated objective to end with ellipsis")
 	}
 }
+
+func (m *prMockStoryRepo) CountByEpicGroupedByStatus(_ context.Context, _ uuid.UUID) (model.StoryCounts, error) {
+	return model.StoryCounts{}, nil
+}

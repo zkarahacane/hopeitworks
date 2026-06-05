@@ -384,3 +384,7 @@ func TestNotificationAction_Execute_StoryLookupFailure(t *testing.T) {
 		t.Errorf("payload[message] = %q, want %q", payload["message"], expectedMessage)
 	}
 }
+
+func (m *notificationMockStoryRepo) CountByEpicGroupedByStatus(_ context.Context, _ uuid.UUID) (model.StoryCounts, error) {
+	return model.StoryCounts{}, nil
+}
