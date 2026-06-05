@@ -164,7 +164,7 @@ func setupHITLHandler() (*HITLHandler, *mockHITLRepoForHandler, *mockRunRepoForH
 	runRepo := newMockRunRepoForHITLHandler()
 	eventPub := &mockEventPubForHITLHandler{}
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	svc := service.NewHITLService(hitlRepo, runRepo, eventPub, logger)
+	svc := service.NewHITLService(hitlRepo, runRepo, nil, eventPub, logger)
 	handler := NewHITLHandler(svc)
 	return handler, hitlRepo, runRepo
 }

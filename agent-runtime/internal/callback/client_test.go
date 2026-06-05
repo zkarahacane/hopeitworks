@@ -31,8 +31,8 @@ func TestSendLog(t *testing.T) {
 	if authHeader != "Bearer test-token" {
 		t.Errorf("expected auth header %q, got %q", "Bearer test-token", authHeader)
 	}
-	if received.Message != "hello world" {
-		t.Errorf("expected message %q, got %q", "hello world", received.Message)
+	if len(received.Lines) != 1 || received.Lines[0] != "hello world" {
+		t.Errorf("expected lines %v, got %v", []string{"hello world"}, received.Lines)
 	}
 }
 

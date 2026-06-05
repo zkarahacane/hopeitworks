@@ -102,7 +102,15 @@ func (a *HITLGateAction) Execute(ctx context.Context, runCtx *model.RunContext) 
 		return fmt.Errorf("update step to waiting_approval: %w", err)
 	}
 
-	// 5. Publish hitl_gate.pending event
+	// 5. Transition run to paused so that ResumeRun (triggered on approval)
+	// accepts the run and re-enqueues execution. Without this the run stays
+	// "running" and resume is rejected ("cannot resume run from status running").
+	if _, err := a.runRepo.UpdateRunStatus(ctx, runCtx.Run.ID,
+		model.RunStatusPaused, nil, nil, &now, nil); err != nil {
+		return fmt.Errorf("update run to paused: %w", err)
+	}
+
+	// 6. Publish hitl_gate.pending event
 	a.publishPendingEvent(ctx, runCtx, story.Key, created.ID)
 
 	return nil

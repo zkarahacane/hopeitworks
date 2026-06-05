@@ -140,8 +140,13 @@ func (m *mockRunRepoForHITL) ListRunsByProject(_ context.Context, _ uuid.UUID, _
 func (m *mockRunRepoForHITL) ListRunsByStory(_ context.Context, _ uuid.UUID, _, _ int32) ([]*model.Run, error) {
 	return nil, nil
 }
-func (m *mockRunRepoForHITL) UpdateRunStatus(_ context.Context, _ uuid.UUID, _ model.RunStatus, _, _, _ *time.Time, _ *string) (*model.Run, error) {
-	return nil, nil
+func (m *mockRunRepoForHITL) UpdateRunStatus(_ context.Context, id uuid.UUID, status model.RunStatus, _, _, _ *time.Time, _ *string) (*model.Run, error) {
+	run, ok := m.runs[id]
+	if !ok {
+		return nil, apperrors.NewNotFound("run", id)
+	}
+	run.Status = status
+	return run, nil
 }
 func (m *mockRunRepoForHITL) CountRunsByProject(_ context.Context, _ uuid.UUID) (int64, error) {
 	return 0, nil
@@ -192,6 +197,17 @@ type mockEventPubForHITL struct {
 
 func (m *mockEventPubForHITL) Publish(_ context.Context, event model.Event) error {
 	m.events = append(m.events, event)
+	return nil
+}
+
+// mockJobQueueForHITL implements port.JobQueue for HITL tests, recording
+// the run IDs that were enqueued for execution.
+type mockJobQueueForHITL struct {
+	enqueued []uuid.UUID
+}
+
+func (m *mockJobQueueForHITL) EnqueueExecuteRun(_ context.Context, runID uuid.UUID) error {
+	m.enqueued = append(m.enqueued, runID)
 	return nil
 }
 
@@ -251,10 +267,12 @@ func TestHITLService_Approve(t *testing.T) {
 			runRepo.runs[runID] = &model.Run{
 				ID:        runID,
 				ProjectID: projectID,
+				Status:    model.RunStatusPaused,
 			}
 
 			eventPub := &mockEventPubForHITL{}
-			svc := NewHITLService(hitlRepo, runRepo, eventPub, hitlTestLogger())
+			jobQueue := &mockJobQueueForHITL{}
+			svc := NewHITLService(hitlRepo, runRepo, jobQueue, eventPub, hitlTestLogger())
 
 			result, err := svc.Approve(context.Background(), hitlID, userID)
 
@@ -283,10 +301,20 @@ func TestHITLService_Approve(t *testing.T) {
 			if result.ResolvedAt == nil {
 				t.Error("expected resolved_at to be set")
 			}
-			// Verify step was transitioned back to running
+			// Verify the gate step was marked completed so the executor
+			// advances to the next step on resume (rather than re-suspending).
 			step := runRepo.steps[stepID]
-			if step.Status != model.StepStatusRunning {
-				t.Errorf("expected step status running, got %s", step.Status)
+			if step.Status != model.StepStatusCompleted {
+				t.Errorf("expected step status completed, got %s", step.Status)
+			}
+			// Verify the run was resumed to running.
+			run := runRepo.runs[runID]
+			if run.Status != model.RunStatusRunning {
+				t.Errorf("expected run status running, got %s", run.Status)
+			}
+			// Verify the run was re-enqueued for execution exactly once.
+			if len(jobQueue.enqueued) != 1 || jobQueue.enqueued[0] != runID {
+				t.Errorf("expected run %s enqueued once, got %v", runID, jobQueue.enqueued)
 			}
 			// Verify event was published
 			if len(eventPub.events) != 1 {
@@ -358,7 +386,7 @@ func TestHITLService_Reject(t *testing.T) {
 			}
 
 			eventPub := &mockEventPubForHITL{}
-			svc := NewHITLService(hitlRepo, runRepo, eventPub, hitlTestLogger())
+			svc := NewHITLService(hitlRepo, runRepo, nil, eventPub, hitlTestLogger())
 
 			result, err := svc.Reject(context.Background(), hitlID, userID, tt.reason)
 
@@ -399,7 +427,7 @@ func TestHITLService_Reject(t *testing.T) {
 func TestHITLService_Approve_NotFound(t *testing.T) {
 	hitlRepo := newMockHITLRepo()
 	runRepo := newMockRunRepoForHITL()
-	svc := NewHITLService(hitlRepo, runRepo, nil, hitlTestLogger())
+	svc := NewHITLService(hitlRepo, runRepo, nil, nil, hitlTestLogger())
 
 	_, err := svc.Approve(context.Background(), uuid.New(), uuid.New())
 	if err == nil {
@@ -442,7 +470,7 @@ func TestHITLService_ListPendingByProject(t *testing.T) {
 			hitlRepo := newMockHITLRepo()
 			hitlRepo.pending = tt.pending
 			runRepo := newMockRunRepoForHITL()
-			svc := NewHITLService(hitlRepo, runRepo, nil, hitlTestLogger())
+			svc := NewHITLService(hitlRepo, runRepo, nil, nil, hitlTestLogger())
 
 			pending, count, err := svc.ListPendingByProject(context.Background(), projectID)
 			if err != nil {
@@ -476,7 +504,7 @@ func TestHITLService_Reject_RepoUpdateFails(t *testing.T) {
 	}
 
 	runRepo := newMockRunRepoForHITL()
-	svc := NewHITLService(hitlRepo, runRepo, nil, hitlTestLogger())
+	svc := NewHITLService(hitlRepo, runRepo, nil, nil, hitlTestLogger())
 
 	_, err := svc.Reject(context.Background(), hitlID, userID, nil)
 	if err == nil {
@@ -507,7 +535,7 @@ func TestHITLService_ListAll(t *testing.T) {
 		CreatedAt: time.Now(),
 	}
 
-	svc := NewHITLService(hitlRepo, newMockRunRepoForHITL(), nil, hitlTestLogger())
+	svc := NewHITLService(hitlRepo, newMockRunRepoForHITL(), nil, nil, hitlTestLogger())
 
 	t.Run("no filter returns all", func(t *testing.T) {
 		items, total, err := svc.ListAll(context.Background(), nil, 1, 20)
@@ -576,7 +604,7 @@ func TestHITLService_GetByStepID(t *testing.T) {
 		CreatedAt: time.Now(),
 	}
 
-	svc := NewHITLService(hitlRepo, newMockRunRepoForHITL(), nil, hitlTestLogger())
+	svc := NewHITLService(hitlRepo, newMockRunRepoForHITL(), nil, nil, hitlTestLogger())
 
 	t.Run("existing step returns request", func(t *testing.T) {
 		req, err := svc.GetByStepID(context.Background(), stepID)
