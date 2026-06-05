@@ -3,18 +3,29 @@ import { defineStore } from 'pinia'
 import { apiClient } from '@/api/client'
 import { getApiErrorMessage } from '@/utils/apiError'
 
-/** Latest run summary attached to a story */
+/** The currently active step of a run, for the live kanban. */
+export interface LatestRunStep {
+  id: string
+  name: string
+  action_type: string
+  status: string
+  index: number
+  total: number
+}
+
+/** Latest run summary attached to a story — lightweight projection for the kanban. */
 export interface LatestRun {
   id: string
-  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
-  started_at?: string
+  status: string
+  current_step?: LatestRunStep | null
+  /** Optional fields retained for backwards compat with existing card components */
   completed_at?: string
   error_message?: string
 }
 
 /**
  * Story entity type.
- * TODO(2-2): Replace with generated type from OpenAPI schema once Stories CRUD API lands.
+ * Aligned with the OpenAPI schema (LatestRun/LatestRunStep for live kanban).
  */
 export interface Story {
   id: string
@@ -28,9 +39,30 @@ export interface Story {
   target_files?: string[]
   depends_on?: string[]
   scope?: 'backend' | 'frontend' | 'shared'
-  latest_run?: LatestRun
+  latest_run?: LatestRun | null
   created_at: string
   updated_at: string
+}
+
+/** Kanban column a story belongs to, derived from its live state. */
+export type KanbanColumn = 'backlog' | 'in_progress' | 'blocked' | 'done' | 'failed'
+
+/**
+ * Pure function — derives the kanban column for a story.
+ * - done  → "done"
+ * - failed → "failed"
+ * - running + current_step.status === "waiting_approval" → "blocked"
+ * - running → "in_progress"
+ * - everything else → "backlog"
+ */
+export function boardColumn(story: Story): KanbanColumn {
+  if (story.status === 'done') return 'done'
+  if (story.status === 'failed') return 'failed'
+  if (story.status === 'running') {
+    if (story.latest_run?.current_step?.status === 'waiting_approval') return 'blocked'
+    return 'in_progress'
+  }
+  return 'backlog'
 }
 
 /** Fields for updating an existing story */
@@ -60,6 +92,36 @@ export interface CreateStoryFields {
 export interface StoryFilters {
   status: string | null
   search: string
+}
+
+// ── SSE payload shapes ─────────────────────────────────────────────────────
+
+interface StoryStatusUpdatedPayload {
+  story_id: string
+  run_id?: string
+  status: 'backlog' | 'running' | 'done' | 'failed'
+}
+
+interface RunEventPayload {
+  story_id?: string
+  run_id?: string
+  status?: string
+}
+
+interface StepEventPayload {
+  story_id?: string
+  run_id?: string
+  step_id?: string
+  name?: string
+  action_type?: string
+  status?: string
+  index?: number
+  total?: number
+}
+
+interface HitlGatePayload {
+  story_id?: string
+  run_id?: string
 }
 
 /**
@@ -205,6 +267,103 @@ export const useStoriesStore = defineStore('stories', () => {
     isLoading.value = false
   }
 
+  /**
+   * Handles incoming SSE events and mutates the items array reactively.
+   * Silently ignores events for stories not currently in the store.
+   */
+  function handleSSEEvent(name: string, data: unknown): void {
+    switch (name) {
+      case 'story.status_updated': {
+        const payload = data as StoryStatusUpdatedPayload
+        const idx = items.value.findIndex((s) => s.id === payload.story_id)
+        if (idx === -1) return
+        items.value[idx] = { ...items.value[idx]!, status: payload.status }
+        break
+      }
+
+      case 'run.started':
+      case 'run.completed':
+      case 'run.failed':
+      case 'run.paused':
+      case 'run.resumed':
+      case 'run.cancelled': {
+        const payload = data as RunEventPayload
+        if (!payload.story_id) return
+        const idx = items.value.findIndex((s) => s.id === payload.story_id)
+        if (idx === -1) return
+        const story = items.value[idx]!
+        const runStatus = name.split('.')[1]! // e.g. "started", "completed"
+        const currentRun = story.latest_run
+        items.value[idx] = {
+          ...story,
+          latest_run: {
+            id: payload.run_id ?? currentRun?.id ?? '',
+            status: runStatus,
+            current_step: name === 'run.started' ? null : currentRun?.current_step,
+          },
+        }
+        break
+      }
+
+      case 'step.started':
+      case 'step.completed':
+      case 'step.failed':
+      case 'step.cancelled': {
+        const payload = data as StepEventPayload
+        if (!payload.story_id) return
+        const idx = items.value.findIndex((s) => s.id === payload.story_id)
+        if (idx === -1) return
+        const story = items.value[idx]!
+        const existingStep = story.latest_run?.current_step
+        const stepStatus = name.split('.')[1]! // "started", "completed", etc.
+
+        const updatedStep: LatestRunStep | null =
+          name === 'step.started' || name === 'step.completed' || name === 'step.failed'
+            ? {
+                id: payload.step_id ?? existingStep?.id ?? '',
+                name: payload.name ?? existingStep?.name ?? '',
+                action_type: payload.action_type ?? existingStep?.action_type ?? '',
+                status: payload.status ?? stepStatus,
+                index: payload.index ?? existingStep?.index ?? 0,
+                total: payload.total ?? existingStep?.total ?? 0,
+              }
+            : null // step.cancelled → clear current step
+
+        items.value[idx] = {
+          ...story,
+          latest_run: story.latest_run
+            ? { ...story.latest_run, current_step: updatedStep }
+            : { id: payload.run_id ?? '', status: 'running', current_step: updatedStep },
+        }
+        break
+      }
+
+      case 'hitl_gate.pending': {
+        // Mark the current step as waiting_approval so boardColumn() routes to "blocked"
+        const payload = data as HitlGatePayload
+        if (!payload.story_id) return
+        const idx = items.value.findIndex((s) => s.id === payload.story_id)
+        if (idx === -1) return
+        const story = items.value[idx]!
+        if (!story.latest_run) return
+        items.value[idx] = {
+          ...story,
+          latest_run: {
+            ...story.latest_run,
+            current_step: story.latest_run.current_step
+              ? { ...story.latest_run.current_step, status: 'waiting_approval' }
+              : null,
+          },
+        }
+        break
+      }
+
+      default:
+        // Unrecognised event — ignore
+        break
+    }
+  }
+
   return {
     items,
     selectedStoryId,
@@ -220,5 +379,6 @@ export const useStoriesStore = defineStore('stories', () => {
     setFilters,
     clearError,
     reset,
+    handleSSEEvent,
   }
 })
