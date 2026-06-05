@@ -6,11 +6,15 @@ import Button from 'primevue/button'
 import Message from 'primevue/message'
 import Skeleton from 'primevue/skeleton'
 import Toast from 'primevue/toast'
+import SelectButton from 'primevue/selectbutton'
 import EpicDetailLayout from '@/features/board/EpicDetailLayout.vue'
+import KanbanBoard from '@/features/board/KanbanBoard.vue'
 import RunLaunchConfirmDialog from '@/features/runs/RunLaunchConfirmDialog.vue'
 import CreateStoryDialog from '@/features/board/CreateStoryDialog.vue'
 import { useStories } from '@/composables/useStories'
 import { useRunLauncher, ALREADY_RUNNING_ERROR } from '@/composables/useRunLauncher'
+import { useSSE } from '@/composables/useSSE'
+import { useStoriesStore } from '@/stores/stories'
 
 const route = useRoute()
 const router = useRouter()
@@ -19,6 +23,7 @@ const projectId = route.params.id as string
 const epicId = route.params.epicId as string
 
 const toast = useToast()
+const storiesStore = useStoriesStore()
 
 const {
   stories,
@@ -32,6 +37,16 @@ const {
   setFilters,
   selectStory,
 } = useStories(projectId, epicId)
+
+// ── SSE: wire events to the store so the board updates live ─────────────────
+useSSE(projectId, (name, data) => storiesStore.handleSSEEvent(name, data))
+
+// ── View toggle: list vs kanban ─────────────────────────────────────────────
+const VIEW_OPTIONS = [
+  { label: 'List', value: 'list' },
+  { label: 'Kanban', value: 'kanban' },
+]
+const activeView = ref<'list' | 'kanban'>('list')
 
 const dialogVisible = ref(false)
 const createDialogVisible = ref(false)
@@ -124,7 +139,6 @@ watch(
   },
   { deep: true },
 )
-
 </script>
 
 <template>
@@ -146,6 +160,17 @@ watch(
         severity="secondary"
         @click="router.push({ name: 'epic-dag', params: { id: projectId, epicId } })"
       />
+
+      <!-- List / Kanban toggle -->
+      <div class="ml-auto">
+        <SelectButton
+          v-model="activeView"
+          :options="VIEW_OPTIONS"
+          option-label="label"
+          option-value="value"
+          aria-label="Switch view"
+        />
+      </div>
     </div>
 
     <div v-if="isLoading && stories.length === 0" class="flex gap-4 flex-1">
@@ -175,21 +200,33 @@ watch(
       </div>
     </Message>
 
-    <EpicDetailLayout
-      v-else
-      class="flex-1 min-h-0"
-      :stories="stories"
-      :all-stories="allStories"
-      :selected-story="selectedStory"
-      :selected-story-id="selectedStoryId"
-      :filters="filters"
-      :project-id="projectId"
-      @select="selectStory"
-      @update:filters="setFilters"
-      @launch-click="handleLaunchClick"
-      @create-story="handleCreateStory"
-      @story-updated="handleStoryUpdated"
-    />
+    <template v-else>
+      <!-- List view (default) -->
+      <EpicDetailLayout
+        v-if="activeView === 'list'"
+        class="flex-1 min-h-0"
+        :stories="stories"
+        :all-stories="allStories"
+        :selected-story="selectedStory"
+        :selected-story-id="selectedStoryId"
+        :filters="filters"
+        :project-id="projectId"
+        @select="selectStory"
+        @update:filters="setFilters"
+        @launch-click="handleLaunchClick"
+        @create-story="handleCreateStory"
+        @story-updated="handleStoryUpdated"
+      />
+
+      <!-- Kanban view: uses storiesStore.items directly for live reactivity -->
+      <KanbanBoard
+        v-else
+        class="flex-1 min-h-0"
+        :stories="storiesStore.items"
+        :selected-id="selectedStoryId"
+        @select="selectStory"
+      />
+    </template>
 
     <RunLaunchConfirmDialog
       v-if="selectedStory"
