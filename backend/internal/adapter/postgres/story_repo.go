@@ -163,6 +163,27 @@ func (r *StoryRepo) CountByStatus(ctx context.Context, projectID uuid.UUID, stat
 	return count, nil
 }
 
+func (r *StoryRepo) CountByEpicGroupedByStatus(ctx context.Context, epicID uuid.UUID) (model.StoryCounts, error) {
+	rows, err := r.queries.CountStoriesByEpicGroupedByStatus(ctx, pgtype.UUID{Bytes: epicID, Valid: true})
+	if err != nil {
+		return model.StoryCounts{}, apperrors.NewInternal("failed to count stories by epic grouped by status", err)
+	}
+	var counts model.StoryCounts
+	for _, row := range rows {
+		switch row.Status {
+		case model.StoryStatusBacklog:
+			counts.Backlog = int(row.Count)
+		case model.StoryStatusRunning:
+			counts.Running = int(row.Count)
+		case model.StoryStatusDone:
+			counts.Done = int(row.Count)
+		case model.StoryStatusFailed:
+			counts.Failed = int(row.Count)
+		}
+	}
+	return counts, nil
+}
+
 func (r *StoryRepo) Update(ctx context.Context, story *model.Story) (*model.Story, error) {
 	targetFiles, err := marshalJSONB(story.TargetFiles)
 	if err != nil {

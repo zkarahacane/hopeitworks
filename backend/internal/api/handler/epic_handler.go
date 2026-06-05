@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/zakari/hopeitworks/backend/internal/domain/model"
@@ -39,7 +40,7 @@ func (h *EpicHandler) ListEpics(w http.ResponseWriter, r *http.Request, projectI
 		},
 	}
 	for i, e := range result.Epics {
-		resp.Data[i] = toAPIEpic(e)
+		resp.Data[i] = h.toAPIEpic(r.Context(), e)
 	}
 
 	writeJSON(w, http.StatusOK, resp)
@@ -72,7 +73,7 @@ func (h *EpicHandler) CreateEpic(w http.ResponseWriter, r *http.Request, project
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, toAPIEpic(epic))
+	writeJSON(w, http.StatusCreated, h.toAPIEpic(r.Context(), epic))
 }
 
 // GetEpic handles GET /projects/{projectId}/epics/{epicId}.
@@ -83,7 +84,7 @@ func (h *EpicHandler) GetEpic(w http.ResponseWriter, r *http.Request, _ ProjectI
 		return
 	}
 
-	writeJSON(w, http.StatusOK, toAPIEpic(epic))
+	writeJSON(w, http.StatusOK, h.toAPIEpic(r.Context(), epic))
 }
 
 // UpdateEpic handles PUT /projects/{projectId}/epics/{epicId}.
@@ -114,7 +115,7 @@ func (h *EpicHandler) UpdateEpic(w http.ResponseWriter, r *http.Request, _ Proje
 		return
 	}
 
-	writeJSON(w, http.StatusOK, toAPIEpic(epic))
+	writeJSON(w, http.StatusOK, h.toAPIEpic(r.Context(), epic))
 }
 
 // DeleteEpic handles DELETE /projects/{projectId}/epics/{epicId}.
@@ -177,8 +178,19 @@ func toEpicDAGResponse(dag model.DAGResult) EpicDAGResponse {
 	return EpicDAGResponse{Nodes: nodes, Edges: edges}
 }
 
-// toAPIEpic converts a domain Epic to the API Epic type.
-func toAPIEpic(e *model.Epic) Epic {
+// toAPIEpic converts a domain Epic to the API Epic type, populating story_counts
+// (per story.status) via a single grouped query. Count errors are non-fatal:
+// the epic is still returned with zeroed counts.
+func (h *EpicHandler) toAPIEpic(ctx context.Context, e *model.Epic) Epic {
+	counts, err := h.storyRepo.CountByEpicGroupedByStatus(ctx, e.ID)
+	if err != nil {
+		counts = model.StoryCounts{}
+	}
+	return buildAPIEpic(e, counts)
+}
+
+// buildAPIEpic converts a domain Epic plus its story counts to the API Epic type.
+func buildAPIEpic(e *model.Epic, counts model.StoryCounts) Epic {
 	epic := Epic{
 		Id:        e.ID,
 		ProjectId: e.ProjectID,
@@ -186,6 +198,12 @@ func toAPIEpic(e *model.Epic) Epic {
 		Status:    EpicStatus(e.Status),
 		CreatedAt: e.CreatedAt,
 		UpdatedAt: e.UpdatedAt,
+		StoryCounts: StoryCounts{
+			Backlog: counts.Backlog,
+			Running: counts.Running,
+			Done:    counts.Done,
+			Failed:  counts.Failed,
+		},
 	}
 	if e.Description != nil {
 		epic.Description = e.Description

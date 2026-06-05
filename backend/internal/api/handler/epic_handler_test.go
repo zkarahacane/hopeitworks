@@ -615,3 +615,86 @@ func TestGetEpicDAG_StoryRepoError(t *testing.T) {
 		t.Errorf("expected 404, got %d. Body: %s", rec.Code, rec.Body.String())
 	}
 }
+
+// countsStoryRepo is a story repo mock returning configurable per-epic counts.
+type countsStoryRepo struct {
+	mockStoryRepo
+	counts model.StoryCounts
+}
+
+func (m *countsStoryRepo) CountByEpicGroupedByStatus(_ context.Context, _ uuid.UUID) (model.StoryCounts, error) {
+	return m.counts, nil
+}
+
+func TestGetEpic_PopulatesStoryCounts(t *testing.T) {
+	storyRepo := &countsStoryRepo{
+		mockStoryRepo: *newMockStoryRepo(),
+		counts:        model.StoryCounts{Backlog: 3, Running: 1, Done: 5, Failed: 2},
+	}
+	h, epicRepo := setupEpicHandlerWithStoryRepo(storyRepo)
+
+	projectID := uuid.New()
+	epicID := uuid.New()
+	epicRepo.epics[epicID] = &model.Epic{
+		ID:        epicID,
+		ProjectID: projectID,
+		Name:      "Auth",
+		Status:    model.EpicStatusBacklog,
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects/"+projectID.String()+"/epics/"+epicID.String(), nil)
+	ctx := middleware.SetUserContext(req.Context(), uuid.New(), model.RoleUser)
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.GetEpic(rec, req, projectID, epicID)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+	var resp Epic
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode: %v", err)
+	}
+	if resp.StoryCounts.Backlog != 3 || resp.StoryCounts.Running != 1 ||
+		resp.StoryCounts.Done != 5 || resp.StoryCounts.Failed != 2 {
+		t.Errorf("unexpected story_counts: %+v", resp.StoryCounts)
+	}
+}
+
+func TestListEpics_PopulatesStoryCounts(t *testing.T) {
+	storyRepo := &countsStoryRepo{
+		mockStoryRepo: *newMockStoryRepo(),
+		counts:        model.StoryCounts{Backlog: 1, Running: 2, Done: 0, Failed: 0},
+	}
+	h, epicRepo := setupEpicHandlerWithStoryRepo(storyRepo)
+
+	projectID := uuid.New()
+	for i := 0; i < 2; i++ {
+		id := uuid.New()
+		epicRepo.epics[id] = &model.Epic{ID: id, ProjectID: projectID, Name: "E", Status: model.EpicStatusBacklog}
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects/"+projectID.String()+"/epics", nil)
+	ctx := middleware.SetUserContext(req.Context(), uuid.New(), model.RoleUser)
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.ListEpics(rec, req, projectID, ListEpicsParams{})
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	var resp EpicList
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode: %v", err)
+	}
+	if len(resp.Data) != 2 {
+		t.Fatalf("expected 2 epics, got %d", len(resp.Data))
+	}
+	for _, e := range resp.Data {
+		if e.StoryCounts.Running != 2 || e.StoryCounts.Backlog != 1 {
+			t.Errorf("unexpected story_counts: %+v", e.StoryCounts)
+		}
+	}
+}
