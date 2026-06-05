@@ -446,6 +446,7 @@ func (s *RunService) PauseRun(ctx context.Context, projectID, runID uuid.UUID) (
 
 	s.publishRunEvent(ctx, updated.ProjectID, updated.ID, "paused", map[string]any{
 		"run_id":    runID.String(),
+		"story_id":  updated.StoryID.String(),
 		"status":    string(model.RunStatusPaused),
 		"paused_at": now.Format(time.RFC3339),
 	})
@@ -476,8 +477,9 @@ func (s *RunService) ResumeRun(ctx context.Context, projectID, runID uuid.UUID) 
 	}
 
 	s.publishRunEvent(ctx, updated.ProjectID, updated.ID, "resumed", map[string]any{
-		"run_id": runID.String(),
-		"status": string(model.RunStatusRunning),
+		"run_id":   runID.String(),
+		"story_id": updated.StoryID.String(),
+		"status":   string(model.RunStatusRunning),
 	})
 
 	// Re-enqueue the run for continued execution
@@ -555,11 +557,62 @@ func (s *RunService) CancelRun(ctx context.Context, projectID, runID uuid.UUID) 
 
 	s.publishRunEvent(ctx, updated.ProjectID, updated.ID, "cancelled", map[string]any{
 		"run_id":       runID.String(),
+		"story_id":     updated.StoryID.String(),
 		"status":       string(model.RunStatusCancelled),
 		"cancelled_at": now.Format(time.RFC3339),
 	})
 
+	// Transition the story back to "backlog" so it can be relaunched. A cancelled
+	// run must not leave the story stuck in "running" forever.
+	s.transitionStoryToBacklog(ctx, updated)
+
 	return updated, nil
+}
+
+// transitionStoryToBacklog resets the run's story to backlog and publishes a
+// story.status_updated event. Best-effort: errors are swallowed so cancellation
+// still succeeds. Mirrors PipelineExecutor.updateStoryStatus.
+func (s *RunService) transitionStoryToBacklog(ctx context.Context, run *model.Run) {
+	if run.StoryID == uuid.Nil {
+		return
+	}
+	story, err := s.storyRepo.GetByID(ctx, run.StoryID)
+	if err != nil {
+		return
+	}
+	if story.Status == model.StoryStatusBacklog {
+		return
+	}
+	story.Status = model.StoryStatusBacklog
+	if _, err := s.storyRepo.Update(ctx, story); err != nil {
+		return
+	}
+	s.publishStoryEvent(ctx, run.ProjectID, run.StoryID, run.ID, model.StoryStatusBacklog)
+}
+
+// publishStoryEvent publishes a story.status_updated event.
+func (s *RunService) publishStoryEvent(ctx context.Context, projectID, storyID, runID uuid.UUID, status string) {
+	if s.eventPub == nil {
+		return
+	}
+	payload := map[string]any{
+		"story_id": storyID.String(),
+		"run_id":   runID.String(),
+		"status":   status,
+	}
+	payloadJSON, err := json.Marshal(payload)
+	if err != nil {
+		return
+	}
+	event := model.Event{
+		ID:         uuid.New(),
+		ProjectID:  projectID,
+		EntityType: "story",
+		EntityID:   storyID,
+		Action:     "status_updated",
+		Payload:    payloadJSON,
+	}
+	_ = s.eventPub.Publish(ctx, event)
 }
 
 // CancelEpicRun cancels an epic run. This is a placeholder that operates on the run

@@ -122,6 +122,7 @@ func (m *mockRunRepo) ListRetryStepsByParent(ctx context.Context, parentStepID u
 // mockStoryRepoForRun implements port.StoryRepository for testing.
 type mockStoryRepoForRun struct {
 	getByIDFn func(ctx context.Context, id uuid.UUID) (*model.Story, error)
+	updateFn  func(ctx context.Context, story *model.Story) (*model.Story, error)
 }
 
 func (m *mockStoryRepoForRun) Create(_ context.Context, _ *model.Story) (*model.Story, error) {
@@ -151,8 +152,11 @@ func (m *mockStoryRepoForRun) CountByProject(_ context.Context, _ uuid.UUID) (in
 func (m *mockStoryRepoForRun) CountByStatus(_ context.Context, _ uuid.UUID, _ []string) (int64, error) {
 	return 0, nil
 }
-func (m *mockStoryRepoForRun) Update(_ context.Context, _ *model.Story) (*model.Story, error) {
-	return nil, nil
+func (m *mockStoryRepoForRun) Update(ctx context.Context, story *model.Story) (*model.Story, error) {
+	if m.updateFn != nil {
+		return m.updateFn(ctx, story)
+	}
+	return story, nil
 }
 func (m *mockStoryRepoForRun) Delete(_ context.Context, _ uuid.UUID) error {
 	return nil
@@ -1956,4 +1960,81 @@ func TestCancelRun_PublishesEvent(t *testing.T) {
 	if events[0].Event.Action != "cancelled" {
 		t.Errorf("expected event action 'cancelled', got %s", events[0].Event.Action)
 	}
+}
+
+// TestCancelRun_ResetsStoryToBacklog verifies cancelling a run resets its story
+// to backlog (relaunchable) and emits the corresponding events with story_id.
+func TestCancelRun_ResetsStoryToBacklog(t *testing.T) {
+	projectID := uuid.New()
+	runID := uuid.New()
+	storyID := uuid.New()
+
+	runRepo := &mockRunRepo{
+		getRunFn: func(_ context.Context, id uuid.UUID) (*model.Run, error) {
+			return &model.Run{ID: id, ProjectID: projectID, StoryID: storyID, Status: model.RunStatusRunning}, nil
+		},
+		listRunStepsByRunFn: func(_ context.Context, _ uuid.UUID) ([]*model.RunStep, error) {
+			return nil, nil
+		},
+		updateRunStatusFn: func(_ context.Context, id uuid.UUID, status model.RunStatus, _, _, _ *time.Time, _ *string) (*model.Run, error) {
+			return &model.Run{ID: id, ProjectID: projectID, StoryID: storyID, Status: status}, nil
+		},
+	}
+
+	var updatedStatus string
+	storyRepo := &mockStoryRepoForRun{
+		getByIDFn: func(_ context.Context, id uuid.UUID) (*model.Story, error) {
+			return &model.Story{ID: id, ProjectID: projectID, Status: model.StoryStatusRunning}, nil
+		},
+		updateFn: func(_ context.Context, s *model.Story) (*model.Story, error) {
+			updatedStatus = s.Status
+			return s, nil
+		},
+	}
+
+	eventPub := newMockEventPublisher()
+	svc := NewRunService(runRepo, newMockProjectRepoForService(), storyRepo, nil, nil, eventPub)
+
+	_, err := svc.CancelRun(context.Background(), projectID, runID)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if updatedStatus != model.StoryStatusBacklog {
+		t.Errorf("expected story reset to backlog, got %q", updatedStatus)
+	}
+
+	var foundCancelledWithStory, foundStoryBacklog bool
+	for _, e := range eventPub.getEvents() {
+		var payload map[string]any
+		_ = json.Unmarshal(e.Event.Payload, &payload)
+		switch e.Event.EventName() {
+		case eventRunCancelled:
+			if payload["story_id"] == storyID.String() {
+				foundCancelledWithStory = true
+			}
+		case "story.status_updated":
+			if payload["status"] == model.StoryStatusBacklog && payload["story_id"] == storyID.String() {
+				foundStoryBacklog = true
+			}
+		}
+	}
+	if !foundCancelledWithStory {
+		t.Error("expected run.cancelled event with story_id")
+	}
+	if !foundStoryBacklog {
+		t.Error("expected story.status_updated event with status backlog")
+	}
+}
+
+func (m *mockStoryRepoForRun) CountByEpicGroupedByStatus(_ context.Context, _ uuid.UUID) (model.StoryCounts, error) {
+	return model.StoryCounts{}, nil
+}
+
+func (m *mockRunRepo) GetLatestRunByStory(_ context.Context, _ uuid.UUID) (*model.LatestRun, error) {
+	return nil, nil
+}
+
+func (m *mockRunRepo) GetLatestRunsByStories(_ context.Context, _ []uuid.UUID) (map[uuid.UUID]*model.LatestRun, error) {
+	return map[uuid.UUID]*model.LatestRun{}, nil
 }
