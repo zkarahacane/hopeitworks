@@ -2693,6 +2693,10 @@ components:
           $ref: "#/components/schemas/StoryStatus"
         acceptance_criteria:
           type: string
+        latest_run:
+          $ref: "#/components/schemas/LatestRun"
+          nullable: true
+          description: Most recent run for the story with its current pipeline step, for the live board. Null when the story has never been run.
         created_at:
           type: string
           format: date-time
@@ -2704,6 +2708,57 @@ components:
       type: string
       enum: [backlog, running, done, failed]
       default: backlog
+
+    LatestRun:
+      type: object
+      description: Lightweight projection of a story's most recent run for the live kanban.
+      required:
+        - id
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          description: Run status (pending, running, paused, completed, failed, cancelled)
+          example: running
+        current_step:
+          $ref: "#/components/schemas/LatestRunStep"
+          nullable: true
+          description: Step currently running or waiting for approval. Null when no step is in progress.
+
+    LatestRunStep:
+      type: object
+      description: The currently active step of a run and its position in the pipeline.
+      required:
+        - id
+        - name
+        - action_type
+        - status
+        - index
+        - total
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: implement
+        action_type:
+          type: string
+          example: agent_run
+        status:
+          type: string
+          example: running
+        index:
+          type: integer
+          description: Zero-based position (step_order) of the current step
+          example: 1
+        total:
+          type: integer
+          description: Total number of steps in the run
+          example: 4
 
     StoryList:
       type: object
