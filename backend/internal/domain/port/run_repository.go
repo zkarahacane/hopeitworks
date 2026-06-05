@@ -14,6 +14,13 @@ type RunRepository interface {
 	GetRun(ctx context.Context, id uuid.UUID) (*model.Run, error)
 	// GetActiveRunByStory returns the most recent pending or running run for a story, or nil if none.
 	GetActiveRunByStory(ctx context.Context, storyID uuid.UUID) (*model.Run, error)
+	// GetLatestRunByStory returns the most recent run for a story (any status) as a
+	// lightweight projection with its current in-progress step, or nil if the story
+	// has no runs.
+	GetLatestRunByStory(ctx context.Context, storyID uuid.UUID) (*model.LatestRun, error)
+	// GetLatestRunsByStories batch-fetches the most recent run per story for the given
+	// story IDs. Returns a map keyed by story ID; stories with no run are absent.
+	GetLatestRunsByStories(ctx context.Context, storyIDs []uuid.UUID) (map[uuid.UUID]*model.LatestRun, error)
 	ListRunsByProject(ctx context.Context, projectID uuid.UUID, limit, offset int32) ([]*model.Run, error)
 	ListRunsByStory(ctx context.Context, storyID uuid.UUID, limit, offset int32) ([]*model.Run, error)
 	UpdateRunStatus(ctx context.Context, id uuid.UUID, status model.RunStatus, startedAt, completedAt, pausedAt *time.Time, errorMsg *string) (*model.Run, error)

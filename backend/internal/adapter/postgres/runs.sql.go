@@ -102,6 +102,108 @@ func (q *Queries) GetActiveRunByStory(ctx context.Context, storyID uuid.UUID) (R
 	return i, err
 }
 
+const getLatestRunByStory = `-- name: GetLatestRunByStory :one
+SELECT
+    r.id AS run_id,
+    r.status AS run_status,
+    (
+        SELECT to_jsonb(cs)
+        FROM (
+            SELECT s.id, s.step_name AS name, s.action AS action_type, s.status, s.step_order AS index
+            FROM run_steps s
+            WHERE s.run_id = r.id AND s.status IN ('running', 'waiting_approval')
+            ORDER BY s.step_order ASC
+            LIMIT 1
+        ) cs
+    ) AS current_step,
+    (SELECT COUNT(*) FROM run_steps s WHERE s.run_id = r.id)::int AS total_steps
+FROM runs r
+WHERE r.story_id = $1
+ORDER BY r.created_at DESC
+LIMIT 1
+`
+
+type GetLatestRunByStoryRow struct {
+	RunID       uuid.UUID `json:"run_id"`
+	RunStatus   string    `json:"run_status"`
+	CurrentStep []byte    `json:"current_step"`
+	TotalSteps  int32     `json:"total_steps"`
+}
+
+// Returns the most recent run for a story along with its current in-progress step
+// (running or waiting_approval, lowest step_order) and the total step count.
+// current_step is a JSON object (NULL when no step is in progress) carrying
+// id, name, action_type, status and index (step_order).
+func (q *Queries) GetLatestRunByStory(ctx context.Context, storyID uuid.UUID) (GetLatestRunByStoryRow, error) {
+	row := q.db.QueryRow(ctx, getLatestRunByStory, storyID)
+	var i GetLatestRunByStoryRow
+	err := row.Scan(
+		&i.RunID,
+		&i.RunStatus,
+		&i.CurrentStep,
+		&i.TotalSteps,
+	)
+	return i, err
+}
+
+const getLatestRunsByStories = `-- name: GetLatestRunsByStories :many
+SELECT DISTINCT ON (r.story_id)
+    r.story_id AS story_id,
+    r.id AS run_id,
+    r.status AS run_status,
+    (
+        SELECT to_jsonb(cs)
+        FROM (
+            SELECT s.id, s.step_name AS name, s.action AS action_type, s.status, s.step_order AS index
+            FROM run_steps s
+            WHERE s.run_id = r.id AND s.status IN ('running', 'waiting_approval')
+            ORDER BY s.step_order ASC
+            LIMIT 1
+        ) cs
+    ) AS current_step,
+    (SELECT COUNT(*) FROM run_steps s WHERE s.run_id = r.id)::int AS total_steps
+FROM runs r
+WHERE r.story_id = ANY($1::uuid[])
+ORDER BY r.story_id, r.created_at DESC
+`
+
+type GetLatestRunsByStoriesRow struct {
+	StoryID     uuid.UUID `json:"story_id"`
+	RunID       uuid.UUID `json:"run_id"`
+	RunStatus   string    `json:"run_status"`
+	CurrentStep []byte    `json:"current_step"`
+	TotalSteps  int32     `json:"total_steps"`
+}
+
+// Batch version of GetLatestRunByStory: returns the most recent run per story
+// for the given story IDs, with current step (JSON) and total step count.
+// Avoids N+1 when listing stories of an epic.
+func (q *Queries) GetLatestRunsByStories(ctx context.Context, dollar_1 []uuid.UUID) ([]GetLatestRunsByStoriesRow, error) {
+	rows, err := q.db.Query(ctx, getLatestRunsByStories, dollar_1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetLatestRunsByStoriesRow{}
+	for rows.Next() {
+		var i GetLatestRunsByStoriesRow
+		if err := rows.Scan(
+			&i.StoryID,
+			&i.RunID,
+			&i.RunStatus,
+			&i.CurrentStep,
+			&i.TotalSteps,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getRun = `-- name: GetRun :one
 SELECT id, project_id, story_id, status, pipeline_config_snapshot, started_at, completed_at, error_message, created_at, updated_at, paused_at, metadata FROM runs WHERE id = $1
 `

@@ -1,12 +1,14 @@
 package handler
 
 import (
+	"context"
 	"net/http"
 	"strings"
 
 	"github.com/google/uuid"
 	"github.com/zakari/hopeitworks/backend/internal/adapter/markdown"
 	"github.com/zakari/hopeitworks/backend/internal/domain/model"
+	"github.com/zakari/hopeitworks/backend/internal/domain/port"
 	"github.com/zakari/hopeitworks/backend/internal/domain/service"
 	"github.com/zakari/hopeitworks/backend/pkg/errors"
 )
@@ -14,11 +16,14 @@ import (
 // StoryHandler implements story-related HTTP handlers.
 type StoryHandler struct {
 	service *service.StoryService
+	runRepo port.RunRepository
 }
 
-// NewStoryHandler creates a new StoryHandler.
-func NewStoryHandler(svc *service.StoryService) *StoryHandler {
-	return &StoryHandler{service: svc}
+// NewStoryHandler creates a new StoryHandler. runRepo is used to populate each
+// story's latest_run for the live board; it may be nil in tests that don't
+// exercise that field.
+func NewStoryHandler(svc *service.StoryService, runRepo port.RunRepository) *StoryHandler {
+	return &StoryHandler{service: svc, runRepo: runRepo}
 }
 
 // ListStories handles GET /projects/{projectId}/stories.
@@ -31,7 +36,7 @@ func (h *StoryHandler) ListStories(w http.ResponseWriter, r *http.Request, proje
 			writeErrorResponse(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, toAPIStory(story))
+		writeJSON(w, http.StatusOK, toAPIStory(story, h.latestRunFor(r.Context(), story.ID)))
 		return
 	}
 
@@ -45,7 +50,7 @@ func (h *StoryHandler) ListStories(w http.ResponseWriter, r *http.Request, proje
 			writeErrorResponse(w, err)
 			return
 		}
-		writeStoryListResponse(w, result, page, perPage)
+		h.writeStoryListResponse(r.Context(), w, result, page, perPage)
 		return
 	}
 
@@ -55,7 +60,7 @@ func (h *StoryHandler) ListStories(w http.ResponseWriter, r *http.Request, proje
 		writeErrorResponse(w, err)
 		return
 	}
-	writeStoryListResponse(w, result, page, perPage)
+	h.writeStoryListResponse(r.Context(), w, result, page, perPage)
 }
 
 // CreateStory handles POST /projects/{projectId}/stories.
@@ -101,7 +106,8 @@ func (h *StoryHandler) CreateStory(w http.ResponseWriter, r *http.Request, proje
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, toAPIStory(story))
+	// A freshly created story has no run yet, so latest_run is nil.
+	writeJSON(w, http.StatusCreated, toAPIStory(story, nil))
 }
 
 // GetStory handles GET /projects/{projectId}/stories/{storyId}.
@@ -112,7 +118,7 @@ func (h *StoryHandler) GetStory(w http.ResponseWriter, r *http.Request, _ Projec
 		return
 	}
 
-	writeJSON(w, http.StatusOK, toAPIStory(story))
+	writeJSON(w, http.StatusOK, toAPIStory(story, h.latestRunFor(r.Context(), story.ID)))
 }
 
 // UpdateStory handles PUT /projects/{projectId}/stories/{storyId}.
@@ -158,7 +164,7 @@ func (h *StoryHandler) UpdateStory(w http.ResponseWriter, r *http.Request, _ Pro
 		return
 	}
 
-	writeJSON(w, http.StatusOK, toAPIStory(story))
+	writeJSON(w, http.StatusOK, toAPIStory(story, h.latestRunFor(r.Context(), story.ID)))
 }
 
 // DeleteStory handles DELETE /projects/{projectId}/stories/{storyId}.
@@ -233,8 +239,9 @@ func (h *StoryHandler) ImportStories(w http.ResponseWriter, r *http.Request, pro
 	writeJSON(w, http.StatusOK, resp)
 }
 
-// toAPIStory converts a domain Story to the API Story type.
-func toAPIStory(s *model.Story) Story {
+// toAPIStory converts a domain Story to the API Story type. latest may be nil
+// when the story has no run.
+func toAPIStory(s *model.Story, latest *model.LatestRun) Story {
 	story := Story{
 		Id:        s.ID,
 		ProjectId: s.ProjectID,
@@ -263,11 +270,67 @@ func toAPIStory(s *model.Story) Story {
 	if s.DependsOn != nil {
 		story.DependsOn = &s.DependsOn
 	}
+	story.LatestRun = toAPILatestRun(latest)
 	return story
 }
 
-// writeStoryListResponse writes a paginated story list response.
-func writeStoryListResponse(w http.ResponseWriter, result *service.StoryListResult, page, perPage int) {
+// toAPILatestRun maps a domain LatestRun (and its optional current step) to the
+// API type. Returns nil when latest is nil.
+func toAPILatestRun(latest *model.LatestRun) *LatestRun {
+	if latest == nil {
+		return nil
+	}
+	lr := &LatestRun{
+		Id:     latest.ID,
+		Status: latest.Status,
+	}
+	if cs := latest.CurrentStep; cs != nil {
+		lr.CurrentStep = &LatestRunStep{
+			Id:         cs.ID,
+			Name:       cs.Name,
+			ActionType: cs.ActionType,
+			Status:     cs.Status,
+			Index:      cs.Index,
+			Total:      cs.Total,
+		}
+	}
+	return lr
+}
+
+// latestRunFor fetches a single story's latest run, swallowing errors (the field
+// is best-effort enrichment and must not fail the request).
+func (h *StoryHandler) latestRunFor(ctx context.Context, storyID uuid.UUID) *model.LatestRun {
+	if h.runRepo == nil {
+		return nil
+	}
+	latest, err := h.runRepo.GetLatestRunByStory(ctx, storyID)
+	if err != nil {
+		return nil
+	}
+	return latest
+}
+
+// latestRunsFor batch-fetches latest runs for many stories, avoiding N+1.
+// Returns an empty map on error or when no run repo is configured.
+func (h *StoryHandler) latestRunsFor(ctx context.Context, stories []*model.Story) map[uuid.UUID]*model.LatestRun {
+	if h.runRepo == nil || len(stories) == 0 {
+		return map[uuid.UUID]*model.LatestRun{}
+	}
+	ids := make([]uuid.UUID, len(stories))
+	for i, s := range stories {
+		ids[i] = s.ID
+	}
+	runs, err := h.runRepo.GetLatestRunsByStories(ctx, ids)
+	if err != nil {
+		return map[uuid.UUID]*model.LatestRun{}
+	}
+	return runs
+}
+
+// writeStoryListResponse writes a paginated story list response, populating each
+// story's latest_run via a single batch query.
+func (h *StoryHandler) writeStoryListResponse(ctx context.Context, w http.ResponseWriter, result *service.StoryListResult, page, perPage int) {
+	latestRuns := h.latestRunsFor(ctx, result.Stories)
 	resp := StoryList{
 		Data: make([]Story, len(result.Stories)),
 		Pagination: Pagination{
@@ -277,7 +340,7 @@ func writeStoryListResponse(w http.ResponseWriter, result *service.StoryListResu
 		},
 	}
 	for i, s := range result.Stories {
-		resp.Data[i] = toAPIStory(s)
+		resp.Data[i] = toAPIStory(s, latestRuns[s.ID])
 	}
 	writeJSON(w, http.StatusOK, resp)
 }
