@@ -79,7 +79,9 @@ services:
     #volumes:
     #  - ../agent/claude-md:/app/agent/claude-md:ro
     ports:
-      - "${SERVER_PORT:-8080}:8080"
+      # Host port decoupled from the app port (SERVER_PORT) so the stack can run
+      # alongside other local stacks without port collisions. App still listens on 8080.
+      - "${API_HOST_PORT:-8080}:8080"
     depends_on:
       postgres:
         condition: service_healthy
