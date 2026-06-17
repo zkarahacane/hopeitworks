@@ -294,6 +294,34 @@ func (r *CostRepo) ListByProjectByAgent(ctx context.Context, projectID uuid.UUID
 	return results, nil
 }
 
+// ListCostsByRunByRole returns per-role cost breakdown for a run.
+func (r *CostRepo) ListCostsByRunByRole(ctx context.Context, runID uuid.UUID) ([]model.RoleCostBreakdown, error) {
+	rows, err := r.queries.ListCostsByRunByRole(ctx, runID)
+	if err != nil {
+		return nil, apperrors.NewInternal("failed to list costs by run by role", err)
+	}
+
+	results := make([]model.RoleCostBreakdown, len(rows))
+	for i, row := range rows {
+		results[i] = model.RoleCostBreakdown{
+			Role:         row.Role,
+			TokensInput:  row.TokensInput,
+			TokensOutput: row.TokensOutput,
+			CostUSD:      numericToFloat64(row.CostUsd),
+		}
+	}
+	return results, nil
+}
+
+// SumTokensByRun returns total input/output tokens for a run across all steps.
+func (r *CostRepo) SumTokensByRun(ctx context.Context, runID uuid.UUID) (int64, int64, error) {
+	row, err := r.queries.SumTokensByRun(ctx, runID)
+	if err != nil {
+		return 0, 0, apperrors.NewInternal("failed to sum tokens by run", err)
+	}
+	return row.TokensInput, row.TokensOutput, nil
+}
+
 // pgtypeToUUIDPtr converts a pgtype.UUID to a *uuid.UUID.
 func pgtypeToUUIDPtr(u pgtype.UUID) *uuid.UUID {
 	if !u.Valid {
