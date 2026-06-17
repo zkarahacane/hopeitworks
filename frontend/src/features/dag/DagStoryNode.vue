@@ -46,7 +46,7 @@ const elapsedLabel = computed(() =>
 
 /** Left status stripe + selected ring read from the status token color. */
 const cardStyle = computed(() => ({
-  borderColor: props.selected ? `var(${token.value.colorToken})` : 'var(--p-surface-700)',
+  borderColor: props.selected ? `var(${token.value.colorToken})` : 'var(--surface-border)',
   boxShadow: props.selected ? `0 0 0 1px var(${token.value.colorToken})` : 'none',
 }))
 </script>
@@ -142,8 +142,8 @@ const cardStyle = computed(() => ({
   position: relative;
   min-width: 220px;
   max-width: 260px;
-  background: var(--p-surface-900);
-  border: 1px solid var(--p-surface-700);
+  background: var(--surface-raised);
+  border: 1px solid var(--surface-border);
   border-radius: 12px;
   overflow: hidden;
   transition:

@@ -28,7 +28,7 @@ const hasRoles = computed(() => props.breakdown.roles.length > 0)
 <template>
   <section
     class="flex flex-col gap-3 p-4 rounded-lg"
-    :style="{ border: '1px solid var(--p-surface-200)', backgroundColor: 'var(--p-surface-0)' }"
+    :style="{ border: '1px solid var(--surface-border)', backgroundColor: 'var(--surface-raised)' }"
     data-testid="run-cost-by-role"
   >
     <header class="flex items-center justify-between">
@@ -70,7 +70,7 @@ const hasRoles = computed(() => props.breakdown.roles.length > 0)
         <!-- Bar track + fill (fill width = fraction of largest role). -->
         <div
           class="rounded-full overflow-hidden"
-          :style="{ height: '0.4rem', backgroundColor: 'var(--p-surface-200)' }"
+          :style="{ height: '0.4rem', backgroundColor: 'var(--surface-border)' }"
         >
           <div
             class="rounded-full h-full"
@@ -96,7 +96,7 @@ const hasRoles = computed(() => props.breakdown.roles.length > 0)
     <!-- Total this run (real rollup — fix #3). -->
     <div
       class="flex items-center justify-between pt-2"
-      :style="{ borderTop: '1px solid var(--p-surface-200)' }"
+      :style="{ borderTop: '1px solid var(--surface-border)' }"
     >
       <span :style="{ fontSize: '0.82rem', fontWeight: 600 }">Total this run</span>
       <CostTicker :value="breakdown.total" data-testid="cost-by-role-total" />

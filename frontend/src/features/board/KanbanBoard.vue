@@ -24,6 +24,29 @@ const emit = defineEmits<{
 const router = useRouter()
 const stream = useRuntimeStream()
 
+// ── Card style helpers ───────────────────────────────────────────────────────
+
+function cardStyle(variant: 'default' | 'running' | 'gate', isSelected: boolean): Record<string, string> {
+  if (isSelected) {
+    return {
+      border: '2px solid var(--p-primary-color)',
+      background: 'var(--p-primary-50)',
+      borderRadius: 'var(--p-border-radius)',
+    }
+  }
+  const base = {
+    borderRadius: 'var(--p-border-radius)',
+    background: 'var(--surface-raised)',
+  }
+  if (variant === 'running') {
+    return { ...base, border: '1px solid var(--surface-border)', borderLeft: '3px solid var(--status-running-color)' }
+  }
+  if (variant === 'gate') {
+    return { ...base, border: '1px solid var(--surface-border)', borderLeft: '3px solid var(--status-gate-color)' }
+  }
+  return { ...base, border: '1px solid var(--surface-border)' }
+}
+
 // ── Column definitions ──────────────────────────────────────────────────────
 
 interface ColumnDef {
@@ -108,7 +131,7 @@ function navigateToApproval(story: Story) {
       class="flex flex-col gap-2 min-w-[240px] w-[240px] shrink-0"
     >
       <!-- Column header -->
-      <div class="flex items-center gap-2 px-1 pb-2" style="border-bottom: 1px solid var(--p-surface-200)">
+      <div class="flex items-center gap-2 px-1 pb-2" style="border-bottom: 1px solid var(--surface-border)">
         <span style="font-weight: 600; font-size: 0.85rem; font-family: var(--font-sans)">{{ col.label }}</span>
         <Tag
           :value="String(grouped[col.key].length)"
@@ -126,7 +149,7 @@ function navigateToApproval(story: Story) {
             v-for="story in grouped['backlog']"
             :key="story.id"
             class="kanban-card flex flex-col gap-2 p-3 cursor-pointer"
-            :class="story.id === selectedId ? 'kanban-card--selected' : 'kanban-card--default'"
+            :style="cardStyle('default', story.id === selectedId)"
             role="button"
             tabindex="0"
             :aria-label="`Story: ${story.key} - ${story.title}`"
@@ -159,8 +182,8 @@ function navigateToApproval(story: Story) {
           <div
             v-for="story in grouped['in_progress']"
             :key="story.id"
-            class="kanban-card kanban-card--running flex flex-col gap-2 p-3 cursor-pointer"
-            :class="story.id === selectedId ? 'kanban-card--selected' : ''"
+            class="kanban-card flex flex-col gap-2 p-3 cursor-pointer"
+            :style="cardStyle('running', story.id === selectedId)"
             role="button"
             tabindex="0"
             :aria-label="`Story: ${story.key} - ${story.title}`"
@@ -196,8 +219,8 @@ function navigateToApproval(story: Story) {
           <div
             v-for="story in grouped['blocked']"
             :key="story.id"
-            class="kanban-card kanban-card--gate amber-breathe flex flex-col gap-2 p-3 cursor-pointer"
-            :class="story.id === selectedId ? 'kanban-card--selected' : ''"
+            class="kanban-card amber-breathe flex flex-col gap-2 p-3 cursor-pointer"
+            :style="cardStyle('gate', story.id === selectedId)"
             role="button"
             tabindex="0"
             :aria-label="`Story: ${story.key} - ${story.title}`"
@@ -231,7 +254,7 @@ function navigateToApproval(story: Story) {
             v-for="story in grouped['done']"
             :key="story.id"
             class="kanban-card flex flex-col gap-2 p-3 cursor-pointer"
-            :class="story.id === selectedId ? 'kanban-card--selected' : 'kanban-card--default'"
+            :style="cardStyle('default', story.id === selectedId)"
             role="button"
             tabindex="0"
             :aria-label="`Story: ${story.key} - ${story.title}`"
@@ -264,7 +287,7 @@ function navigateToApproval(story: Story) {
             v-for="story in grouped['failed']"
             :key="story.id"
             class="kanban-card flex flex-col gap-2 p-3 cursor-pointer"
-            :class="story.id === selectedId ? 'kanban-card--selected' : 'kanban-card--default'"
+            :style="cardStyle('default', story.id === selectedId)"
             role="button"
             tabindex="0"
             :aria-label="`Story: ${story.key} - ${story.title}`"
@@ -309,42 +332,6 @@ function navigateToApproval(story: Story) {
 }
 
 .kanban-card {
-  border-radius: var(--p-border-radius);
   transition: border-color 0.2s, background-color 0.2s;
-}
-
-/* Default neutral card */
-.kanban-card--default {
-  border: 1px solid var(--p-surface-200);
-  background: var(--p-surface-0);
-}
-.kanban-card--default:hover {
-  background: var(--p-surface-50);
-}
-
-/* Running card — left accent */
-.kanban-card--running {
-  border: 1px solid var(--p-surface-200);
-  border-left: 3px solid var(--status-running-color);
-  background: var(--p-surface-0);
-}
-.kanban-card--running:hover {
-  background: var(--p-surface-50);
-}
-
-/* Gate/in-review card — amber left accent */
-.kanban-card--gate {
-  border: 1px solid var(--p-surface-200);
-  border-left: 3px solid var(--status-gate-color);
-  background: var(--p-surface-0);
-}
-.kanban-card--gate:hover {
-  background: var(--p-surface-50);
-}
-
-/* Selected state overrides all variants */
-.kanban-card--selected {
-  border: 2px solid var(--p-primary-color) !important;
-  background: var(--p-primary-50) !important;
 }
 </style>
