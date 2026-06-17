@@ -31,6 +31,7 @@ const retryTypeOptions = [
 const props = defineProps<{
   visible: boolean
   agents: Agent[]
+  initialActionType?: string
 }>()
 
 const emit = defineEmits<{
@@ -51,7 +52,7 @@ const configDraft = ref(false)
 
 function resetForm() {
   name.value = ''
-  actionType.value = 'agent_run'
+  actionType.value = (props.initialActionType as PipelineStep['action_type']) ?? 'agent_run'
   agentId.value = undefined
   autoApprove.value = false
   maxRetries.value = 2
