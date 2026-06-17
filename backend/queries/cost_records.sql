@@ -108,6 +108,32 @@ FROM cost_records cr
 JOIN run_steps rs2 ON rs2.id = cr.run_step_id
 WHERE cr.project_id = $1 AND cr.created_at >= $2;
 
+-- name: ListCostsByRunByRole :many
+-- Per-role cost aggregation for a single run. Role is derived from the agent
+-- type attributed to each cost record (agents.type); cost records with no agent
+-- attribution are bucketed under the 'unknown' role. No run/step status filter is
+-- applied, so a failed run still reports the real cost incurred by every step.
+SELECT
+  COALESCE(a.type, 'unknown')      AS role,
+  SUM(cr.tokens_input)::bigint     AS tokens_input,
+  SUM(cr.tokens_output)::bigint    AS tokens_output,
+  SUM(cr.cost_usd)::DECIMAL(10,6)  AS cost_usd
+FROM cost_records cr
+JOIN run_steps rs ON rs.id = cr.run_step_id
+LEFT JOIN agents a ON a.id = cr.agent_id
+WHERE rs.run_id = $1
+GROUP BY COALESCE(a.type, 'unknown')
+ORDER BY cost_usd DESC;
+
+-- name: SumTokensByRun :one
+-- Total input/output tokens for a run across all steps, regardless of status.
+SELECT
+  COALESCE(SUM(cr.tokens_input), 0)::bigint  AS tokens_input,
+  COALESCE(SUM(cr.tokens_output), 0)::bigint AS tokens_output
+FROM cost_records cr
+JOIN run_steps rs ON rs.id = cr.run_step_id
+WHERE rs.run_id = $1;
+
 -- name: ListCostsByProjectByAgent :many
 SELECT
   cr.agent_id,

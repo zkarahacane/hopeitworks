@@ -286,12 +286,13 @@ func toAPILatestRun(latest *model.LatestRun) *LatestRun {
 	}
 	if cs := latest.CurrentStep; cs != nil {
 		lr.CurrentStep = &LatestRunStep{
-			Id:         cs.ID,
-			Name:       cs.Name,
-			ActionType: cs.ActionType,
-			Status:     cs.Status,
-			Index:      cs.Index,
-			Total:      cs.Total,
+			Id:          cs.ID,
+			Name:        cs.Name,
+			ActionType:  cs.ActionType,
+			Status:      cs.Status,
+			Index:       cs.Index,
+			Total:       cs.Total,
+			ContainerId: cs.ContainerID,
 		}
 	}
 	return lr

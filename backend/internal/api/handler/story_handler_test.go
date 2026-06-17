@@ -667,6 +667,10 @@ func (m *storyHandlerRunRepo) GetLatestRunsByStories(_ context.Context, storyIDs
 	}
 	return out, nil
 }
+
+func (m *storyHandlerRunRepo) GetDAGNodeRunInfoByStories(_ context.Context, _ []uuid.UUID) (map[uuid.UUID]model.DAGNodeRunInfo, error) {
+	return map[uuid.UUID]model.DAGNodeRunInfo{}, nil
+}
 func (m *storyHandlerRunRepo) CreateRun(_ context.Context, run *model.Run) (*model.Run, error) {
 	return run, nil
 }
@@ -734,16 +738,18 @@ func TestGetStory_PopulatesLatestRun(t *testing.T) {
 	}
 	runID := uuid.New()
 	stepID := uuid.New()
+	containerID := "container-xyz789"
 	runRepo.latestByStory[storyID] = &model.LatestRun{
 		ID:     runID,
 		Status: "running",
 		CurrentStep: &model.LatestRunStep{
-			ID:         stepID,
-			Name:       "implement",
-			ActionType: "agent_run",
-			Status:     "running",
-			Index:      1,
-			Total:      4,
+			ID:          stepID,
+			Name:        "implement",
+			ActionType:  "agent_run",
+			Status:      "running",
+			Index:       1,
+			Total:       4,
+			ContainerID: &containerID,
 		},
 	}
 
@@ -779,6 +785,9 @@ func TestGetStory_PopulatesLatestRun(t *testing.T) {
 	}
 	if cs.Index != 1 || cs.Total != 4 {
 		t.Errorf("expected index 1/total 4, got %d/%d", cs.Index, cs.Total)
+	}
+	if cs.ContainerId == nil || *cs.ContainerId != containerID {
+		t.Errorf("expected current_step.container_id %s, got %v", containerID, cs.ContainerId)
 	}
 }
 

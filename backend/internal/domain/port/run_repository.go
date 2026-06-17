@@ -21,6 +21,10 @@ type RunRepository interface {
 	// GetLatestRunsByStories batch-fetches the most recent run per story for the given
 	// story IDs. Returns a map keyed by story ID; stories with no run are absent.
 	GetLatestRunsByStories(ctx context.Context, storyIDs []uuid.UUID) (map[uuid.UUID]*model.LatestRun, error)
+	// GetDAGNodeRunInfoByStories batch-fetches latest-run enrichment (run id/status,
+	// container id, total cost) per story for the given story IDs. Returns a map keyed
+	// by story ID; stories with no run are absent.
+	GetDAGNodeRunInfoByStories(ctx context.Context, storyIDs []uuid.UUID) (map[uuid.UUID]model.DAGNodeRunInfo, error)
 	ListRunsByProject(ctx context.Context, projectID uuid.UUID, limit, offset int32) ([]*model.Run, error)
 	ListRunsByStory(ctx context.Context, storyID uuid.UUID, limit, offset int32) ([]*model.Run, error)
 	UpdateRunStatus(ctx context.Context, id uuid.UUID, status model.RunStatus, startedAt, completedAt, pausedAt *time.Time, errorMsg *string) (*model.Run, error)

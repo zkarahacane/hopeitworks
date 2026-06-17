@@ -326,6 +326,11 @@ func (s *Server) GetRunCosts(w http.ResponseWriter, r *http.Request, projectID P
 	s.costs.GetRunCosts(w, r, projectID, runID)
 }
 
+// GetRunCostsByRole delegates to CostHandler.
+func (s *Server) GetRunCostsByRole(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, runID RunIdPath) {
+	s.costs.GetRunCostsByRole(w, r, projectID, runID)
+}
+
 // ListNotificationConfigs delegates to NotificationHandler.
 func (s *Server) ListNotificationConfigs(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath) {
 	s.notifications.ListNotificationConfigs(w, r, projectID)

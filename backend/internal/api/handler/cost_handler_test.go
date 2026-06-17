@@ -22,6 +22,9 @@ import (
 
 type mockCostRepoForHandler struct {
 	listByProjectByAgentFn func(ctx context.Context, projectID uuid.UUID) ([]model.AgentCostBreakdown, error)
+	listCostsByRunByRoleFn func(ctx context.Context, runID uuid.UUID) ([]model.RoleCostBreakdown, error)
+	sumCostByRunFn         func(ctx context.Context, runID uuid.UUID) (float64, error)
+	sumTokensByRunFn       func(ctx context.Context, runID uuid.UUID) (int64, int64, error)
 }
 
 func (m *mockCostRepoForHandler) InsertCostRecord(_ context.Context, r *model.CostRecord) (*model.CostRecord, error) {
@@ -34,7 +37,10 @@ func (m *mockCostRepoForHandler) GetCostByRunStep(_ context.Context, _ uuid.UUID
 func (m *mockCostRepoForHandler) SumCostByProject(_ context.Context, _ uuid.UUID, _ time.Time) (float64, int64, int64, error) {
 	return 0, 0, 0, nil
 }
-func (m *mockCostRepoForHandler) SumCostByRun(_ context.Context, _ uuid.UUID) (float64, error) {
+func (m *mockCostRepoForHandler) SumCostByRun(ctx context.Context, runID uuid.UUID) (float64, error) {
+	if m.sumCostByRunFn != nil {
+		return m.sumCostByRunFn(ctx, runID)
+	}
 	return 0, nil
 }
 func (m *mockCostRepoForHandler) SumCostByStory(_ context.Context, _ uuid.UUID) (float64, int64, int64, int, error) {
@@ -66,6 +72,20 @@ func (m *mockCostRepoForHandler) ListByProjectByAgent(ctx context.Context, proje
 		return m.listByProjectByAgentFn(ctx, projectID)
 	}
 	return []model.AgentCostBreakdown{}, nil
+}
+
+func (m *mockCostRepoForHandler) ListCostsByRunByRole(ctx context.Context, runID uuid.UUID) ([]model.RoleCostBreakdown, error) {
+	if m.listCostsByRunByRoleFn != nil {
+		return m.listCostsByRunByRoleFn(ctx, runID)
+	}
+	return []model.RoleCostBreakdown{}, nil
+}
+
+func (m *mockCostRepoForHandler) SumTokensByRun(ctx context.Context, runID uuid.UUID) (int64, int64, error) {
+	if m.sumTokensByRunFn != nil {
+		return m.sumTokensByRunFn(ctx, runID)
+	}
+	return 0, 0, nil
 }
 
 type mockProjectRepoForCostHandler struct {
@@ -103,6 +123,12 @@ func (m *mockProjectRepoForCostHandler) ResetCircuitBreaker(_ context.Context, _
 func setupCostHandler(costRepo *mockCostRepoForHandler, projectRepo *mockProjectRepoForCostHandler) *CostHandler {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
 	svc := service.NewCostService(costRepo, projectRepo, nil, nil, logger)
+	return NewCostHandler(svc)
+}
+
+func setupCostHandlerWithRunRepo(costRepo *mockCostRepoForHandler, runRepo *epicRunRepo) *CostHandler {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
+	svc := service.NewCostService(costRepo, nil, nil, runRepo, logger)
 	return NewCostHandler(svc)
 }
 
@@ -178,4 +204,78 @@ func TestGetProjectCostsByAgent_404ProjectNotFound(t *testing.T) {
 	h.GetProjectCostsByAgent(rec, req, uuid.New())
 
 	assert.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+// --- GetRunCostsByRole handler tests ---
+
+func TestGetRunCostsByRole_200WithResults(t *testing.T) {
+	projectID := uuid.New()
+	runID := uuid.New()
+	costRepo := &mockCostRepoForHandler{
+		sumCostByRunFn: func(_ context.Context, _ uuid.UUID) (float64, error) {
+			return 6.30, nil
+		},
+		sumTokensByRunFn: func(_ context.Context, _ uuid.UUID) (int64, int64, error) {
+			return 300000, 50000, nil
+		},
+		listCostsByRunByRoleFn: func(_ context.Context, _ uuid.UUID) ([]model.RoleCostBreakdown, error) {
+			return []model.RoleCostBreakdown{
+				{Role: "implement", TokensInput: 200000, TokensOutput: 30000, CostUSD: 4.50},
+				{Role: "review", TokensInput: 100000, TokensOutput: 20000, CostUSD: 1.80},
+			}, nil
+		},
+	}
+	runRepo := newEpicRunRepo()
+	runRepo.run = &model.Run{ID: runID, ProjectID: projectID}
+	h := setupCostHandlerWithRunRepo(costRepo, runRepo)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects/"+projectID.String()+"/runs/"+runID.String()+"/costs/by-role", nil)
+	rec := httptest.NewRecorder()
+
+	h.GetRunCostsByRole(rec, req, projectID, runID)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	var result RunCostByRole
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&result))
+	assert.Equal(t, runID, result.RunId)
+	assert.InDelta(t, 6.30, result.TotalCost, 0.001)
+	assert.Equal(t, int64(300000), result.TotalTokensInput)
+	assert.Equal(t, int64(50000), result.TotalTokensOutput)
+	require.Len(t, result.Roles, 2)
+	assert.Equal(t, "implement", result.Roles[0].Role)
+	assert.InDelta(t, 4.50, result.Roles[0].CostUsd, 0.001)
+}
+
+func TestGetRunCostsByRole_404RunNotFound(t *testing.T) {
+	projectID := uuid.New()
+	runID := uuid.New()
+	runRepo := newEpicRunRepo() // run not configured -> GetRun returns NotFound
+	h := setupCostHandlerWithRunRepo(&mockCostRepoForHandler{}, runRepo)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects/"+projectID.String()+"/runs/"+runID.String()+"/costs/by-role", nil)
+	rec := httptest.NewRecorder()
+
+	h.GetRunCostsByRole(rec, req, projectID, runID)
+
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+func TestGetRunCostsByRole_200EmptyRoles(t *testing.T) {
+	projectID := uuid.New()
+	runID := uuid.New()
+	runRepo := newEpicRunRepo()
+	runRepo.run = &model.Run{ID: runID, ProjectID: projectID}
+	h := setupCostHandlerWithRunRepo(&mockCostRepoForHandler{}, runRepo)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects/"+projectID.String()+"/runs/"+runID.String()+"/costs/by-role", nil)
+	rec := httptest.NewRecorder()
+
+	h.GetRunCostsByRole(rec, req, projectID, runID)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	var result RunCostByRole
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&result))
+	assert.Equal(t, runID, result.RunId)
+	assert.Empty(t, result.Roles)
 }

@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/google/uuid"
+
 	"github.com/zakari/hopeitworks/backend/internal/domain/model"
 	"github.com/zakari/hopeitworks/backend/internal/domain/port"
 	"github.com/zakari/hopeitworks/backend/internal/domain/service"
@@ -14,11 +16,12 @@ type EpicHandler struct {
 	service   *service.EpicService
 	scheduler *service.SchedulerService
 	storyRepo port.StoryRepository
+	runRepo   port.RunRepository
 }
 
 // NewEpicHandler creates a new EpicHandler.
-func NewEpicHandler(svc *service.EpicService, scheduler *service.SchedulerService, storyRepo port.StoryRepository) *EpicHandler {
-	return &EpicHandler{service: svc, scheduler: scheduler, storyRepo: storyRepo}
+func NewEpicHandler(svc *service.EpicService, scheduler *service.SchedulerService, storyRepo port.StoryRepository, runRepo port.RunRepository) *EpicHandler {
+	return &EpicHandler{service: svc, scheduler: scheduler, storyRepo: storyRepo, runRepo: runRepo}
 }
 
 // ListEpics handles GET /projects/{projectId}/epics.
@@ -152,23 +155,46 @@ func (h *EpicHandler) GetEpicDAG(w http.ResponseWriter, r *http.Request, _ Proje
 		return
 	}
 
-	writeJSON(w, http.StatusOK, toEpicDAGResponse(dag))
+	// Best-effort enrichment of each node with its story's latest-run data
+	// (run id/status, container id, cost). Enrichment errors are non-fatal: the
+	// DAG still renders with bare nodes.
+	storyIDs := make([]uuid.UUID, len(storyValues))
+	for i, s := range storyValues {
+		storyIDs[i] = s.ID
+	}
+	runInfo, err := h.runRepo.GetDAGNodeRunInfoByStories(r.Context(), storyIDs)
+	if err != nil {
+		runInfo = map[uuid.UUID]model.DAGNodeRunInfo{}
+	}
+
+	writeJSON(w, http.StatusOK, toEpicDAGResponse(dag, runInfo))
 }
 
-// toEpicDAGResponse converts a DAGResult to the API EpicDAGResponse type.
-func toEpicDAGResponse(dag model.DAGResult) EpicDAGResponse {
+// toEpicDAGResponse converts a DAGResult to the API EpicDAGResponse type,
+// enriching each node with its story's latest-run data when available.
+func toEpicDAGResponse(dag model.DAGResult, runInfo map[uuid.UUID]model.DAGNodeRunInfo) EpicDAGResponse {
 	nodes := make([]EpicDAGNode, 0)
 	edges := make([]EpicDAGEdge, 0)
 
 	for layer, group := range dag.Groups {
 		for _, s := range group {
-			nodes = append(nodes, EpicDAGNode{
+			node := EpicDAGNode{
 				Id:     s.ID,
 				Key:    s.Key,
 				Title:  s.Title,
 				Status: s.Status,
 				Layer:  layer,
-			})
+			}
+			if info, ok := runInfo[s.ID]; ok {
+				runID := info.RunID
+				runStatus := info.RunStatus
+				costUSD := info.CostUSD
+				node.RunId = &runID
+				node.RunStatus = &runStatus
+				node.ContainerId = info.ContainerID
+				node.CostUsd = &costUSD
+			}
+			nodes = append(nodes, node)
 			for _, dep := range s.DependsOn {
 				edges = append(edges, EpicDAGEdge{Source: dep, Target: s.Key})
 			}

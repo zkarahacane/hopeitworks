@@ -30,6 +30,8 @@ type mockCostRepo struct {
 	listCostsByProjectByRunPaginatedFn func(ctx context.Context, projectID uuid.UUID, since time.Time, limit, offset int32) ([]model.RunCostRow, error)
 	countCostsByProjectByRunFn         func(ctx context.Context, projectID uuid.UUID, since time.Time) (int64, error)
 	listByProjectByAgentFn             func(ctx context.Context, projectID uuid.UUID) ([]model.AgentCostBreakdown, error)
+	listCostsByRunByRoleFn             func(ctx context.Context, runID uuid.UUID) ([]model.RoleCostBreakdown, error)
+	sumTokensByRunFn                   func(ctx context.Context, runID uuid.UUID) (int64, int64, error)
 
 	insertCalls []model.CostRecord
 }
@@ -125,6 +127,20 @@ func (m *mockCostRepo) ListByProjectByAgent(ctx context.Context, projectID uuid.
 		return m.listByProjectByAgentFn(ctx, projectID)
 	}
 	return []model.AgentCostBreakdown{}, nil
+}
+
+func (m *mockCostRepo) ListCostsByRunByRole(ctx context.Context, runID uuid.UUID) ([]model.RoleCostBreakdown, error) {
+	if m.listCostsByRunByRoleFn != nil {
+		return m.listCostsByRunByRoleFn(ctx, runID)
+	}
+	return []model.RoleCostBreakdown{}, nil
+}
+
+func (m *mockCostRepo) SumTokensByRun(ctx context.Context, runID uuid.UUID) (int64, int64, error) {
+	if m.sumTokensByRunFn != nil {
+		return m.sumTokensByRunFn(ctx, runID)
+	}
+	return 0, 0, nil
 }
 
 type mockProjectRepoForCost struct {
@@ -569,6 +585,111 @@ func TestGetRunCosts_ZeroCosts(t *testing.T) {
 	assert.Empty(t, result.Steps)
 }
 
+// --- GetRunCostsByRole tests ---
+
+func TestGetRunCostsByRole_RunNotFound(t *testing.T) {
+	runRepo := &mockRunRepoForCost{err: errors.NewNotFound("run", uuid.New())}
+	svc := newTestCostService(&mockCostRepo{}, nil, nil, runRepo)
+
+	_, err := svc.GetRunCostsByRole(context.Background(), uuid.New(), uuid.New())
+	assert.Error(t, err)
+}
+
+func TestGetRunCostsByRole_WrongProject(t *testing.T) {
+	runID := uuid.New()
+	runRepo := &mockRunRepoForCost{
+		run: &model.Run{ID: runID, ProjectID: uuid.New()},
+	}
+	svc := newTestCostService(&mockCostRepo{}, nil, nil, runRepo)
+
+	_, err := svc.GetRunCostsByRole(context.Background(), uuid.New(), runID) // different projectID
+	assert.Error(t, err)
+	domErr, ok := err.(*errors.DomainError)
+	assert.True(t, ok)
+	assert.Equal(t, errors.CategoryNotFound, domErr.Category)
+}
+
+func TestGetRunCostsByRole_Success(t *testing.T) {
+	projectID := uuid.New()
+	runID := uuid.New()
+	runRepo := &mockRunRepoForCost{
+		run: &model.Run{ID: runID, ProjectID: projectID},
+	}
+	costRepo := &mockCostRepo{
+		sumCostByRunFn: func(_ context.Context, _ uuid.UUID) (float64, error) {
+			return 6.30, nil
+		},
+		sumTokensByRunFn: func(_ context.Context, _ uuid.UUID) (int64, int64, error) {
+			return 300000, 50000, nil
+		},
+		listCostsByRunByRoleFn: func(_ context.Context, _ uuid.UUID) ([]model.RoleCostBreakdown, error) {
+			return []model.RoleCostBreakdown{
+				{Role: "implement", TokensInput: 200000, TokensOutput: 30000, CostUSD: 4.50},
+				{Role: "review", TokensInput: 100000, TokensOutput: 20000, CostUSD: 1.80},
+			}, nil
+		},
+	}
+	svc := newTestCostService(costRepo, nil, nil, runRepo)
+
+	result, err := svc.GetRunCostsByRole(context.Background(), projectID, runID)
+	require.NoError(t, err)
+	assert.Equal(t, runID, result.RunID)
+	assert.InDelta(t, 6.30, result.TotalCost, 0.001)
+	assert.Equal(t, int64(300000), result.TotalInput)
+	assert.Equal(t, int64(50000), result.TotalOutput)
+	require.Len(t, result.Roles, 2)
+	assert.Equal(t, "implement", result.Roles[0].Role)
+	assert.InDelta(t, 4.50, result.Roles[0].CostUSD, 0.001)
+	assert.Equal(t, "review", result.Roles[1].Role)
+	assert.InDelta(t, 1.80, result.Roles[1].CostUSD, 0.001)
+}
+
+// TestGetRunCostsByRole_FailedRunReportsRealTotal verifies the regression where a
+// failed run previously rolled up to $0.00: totals come from every cost record of
+// the run regardless of run/step status, so the reported total is the real total.
+func TestGetRunCostsByRole_FailedRunReportsRealTotal(t *testing.T) {
+	projectID := uuid.New()
+	runID := uuid.New()
+	runRepo := &mockRunRepoForCost{
+		run: &model.Run{ID: runID, ProjectID: projectID, Status: model.RunStatusFailed},
+	}
+	costRepo := &mockCostRepo{
+		sumCostByRunFn: func(_ context.Context, _ uuid.UUID) (float64, error) {
+			return 2.75, nil // real cost incurred before the run failed
+		},
+		sumTokensByRunFn: func(_ context.Context, _ uuid.UUID) (int64, int64, error) {
+			return 120000, 15000, nil
+		},
+		listCostsByRunByRoleFn: func(_ context.Context, _ uuid.UUID) ([]model.RoleCostBreakdown, error) {
+			return []model.RoleCostBreakdown{
+				{Role: "implement", TokensInput: 120000, TokensOutput: 15000, CostUSD: 2.75},
+			}, nil
+		},
+	}
+	svc := newTestCostService(costRepo, nil, nil, runRepo)
+
+	result, err := svc.GetRunCostsByRole(context.Background(), projectID, runID)
+	require.NoError(t, err)
+	assert.InDelta(t, 2.75, result.TotalCost, 0.001, "failed run must report its real total, not $0.00")
+	require.Len(t, result.Roles, 1)
+	assert.InDelta(t, 2.75, result.Roles[0].CostUSD, 0.001)
+}
+
+func TestGetRunCostsByRole_EmptyRoles(t *testing.T) {
+	projectID := uuid.New()
+	runID := uuid.New()
+	runRepo := &mockRunRepoForCost{
+		run: &model.Run{ID: runID, ProjectID: projectID},
+	}
+	svc := newTestCostService(&mockCostRepo{}, nil, nil, runRepo)
+
+	result, err := svc.GetRunCostsByRole(context.Background(), projectID, runID)
+	require.NoError(t, err)
+	assert.Equal(t, runID, result.RunID)
+	assert.Equal(t, float64(0), result.TotalCost)
+	assert.Empty(t, result.Roles)
+}
+
 // --- ComputeCostUSD tests ---
 
 func TestComputeCostUSD(t *testing.T) {
@@ -802,6 +923,10 @@ func (m *mockRunRepoForCost) GetLatestRunByStory(_ context.Context, _ uuid.UUID)
 
 func (m *mockRunRepoForCost) GetLatestRunsByStories(_ context.Context, _ []uuid.UUID) (map[uuid.UUID]*model.LatestRun, error) {
 	return map[uuid.UUID]*model.LatestRun{}, nil
+}
+
+func (m *mockRunRepoForCost) GetDAGNodeRunInfoByStories(_ context.Context, _ []uuid.UUID) (map[uuid.UUID]model.DAGNodeRunInfo, error) {
+	return map[uuid.UUID]model.DAGNodeRunInfo{}, nil
 }
 
 func (m *mockRunRepoForCost) UpdateRunMetadata(_ context.Context, _ uuid.UUID, _ map[string]interface{}) error {

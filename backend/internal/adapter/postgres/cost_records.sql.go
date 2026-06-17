@@ -356,6 +356,56 @@ func (q *Queries) ListCostsByProjectByStory(ctx context.Context, arg ListCostsBy
 	return items, nil
 }
 
+const listCostsByRunByRole = `-- name: ListCostsByRunByRole :many
+SELECT
+  COALESCE(a.type, 'unknown')      AS role,
+  SUM(cr.tokens_input)::bigint     AS tokens_input,
+  SUM(cr.tokens_output)::bigint    AS tokens_output,
+  SUM(cr.cost_usd)::DECIMAL(10,6)  AS cost_usd
+FROM cost_records cr
+JOIN run_steps rs ON rs.id = cr.run_step_id
+LEFT JOIN agents a ON a.id = cr.agent_id
+WHERE rs.run_id = $1
+GROUP BY COALESCE(a.type, 'unknown')
+ORDER BY cost_usd DESC
+`
+
+type ListCostsByRunByRoleRow struct {
+	Role         string         `json:"role"`
+	TokensInput  int64          `json:"tokens_input"`
+	TokensOutput int64          `json:"tokens_output"`
+	CostUsd      pgtype.Numeric `json:"cost_usd"`
+}
+
+// Per-role cost aggregation for a single run. Role is derived from the agent
+// type attributed to each cost record (agents.type); cost records with no agent
+// attribution are bucketed under the 'unknown' role. No run/step status filter is
+// applied, so a failed run still reports the real cost incurred by every step.
+func (q *Queries) ListCostsByRunByRole(ctx context.Context, runID uuid.UUID) ([]ListCostsByRunByRoleRow, error) {
+	rows, err := q.db.Query(ctx, listCostsByRunByRole, runID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCostsByRunByRoleRow{}
+	for rows.Next() {
+		var i ListCostsByRunByRoleRow
+		if err := rows.Scan(
+			&i.Role,
+			&i.TokensInput,
+			&i.TokensOutput,
+			&i.CostUsd,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listDailyCostsByProject = `-- name: ListDailyCostsByProject :many
 SELECT
     DATE(cr.created_at)::text AS date,
@@ -513,5 +563,27 @@ func (q *Queries) SumCostByStory(ctx context.Context, storyID uuid.UUID) (SumCos
 		&i.TotalOutput,
 		&i.RunCount,
 	)
+	return i, err
+}
+
+const sumTokensByRun = `-- name: SumTokensByRun :one
+SELECT
+  COALESCE(SUM(cr.tokens_input), 0)::bigint  AS tokens_input,
+  COALESCE(SUM(cr.tokens_output), 0)::bigint AS tokens_output
+FROM cost_records cr
+JOIN run_steps rs ON rs.id = cr.run_step_id
+WHERE rs.run_id = $1
+`
+
+type SumTokensByRunRow struct {
+	TokensInput  int64 `json:"tokens_input"`
+	TokensOutput int64 `json:"tokens_output"`
+}
+
+// Total input/output tokens for a run across all steps, regardless of status.
+func (q *Queries) SumTokensByRun(ctx context.Context, runID uuid.UUID) (SumTokensByRunRow, error) {
+	row := q.db.QueryRow(ctx, sumTokensByRun, runID)
+	var i SumTokensByRunRow
+	err := row.Scan(&i.TokensInput, &i.TokensOutput)
 	return i, err
 }
