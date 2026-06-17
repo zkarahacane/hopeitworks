@@ -39,7 +39,7 @@ async function handleSave(payload: UpdateProjectPayload) {
       @save="handleSave"
     />
 
-    <p v-else class="text-surface-500">Loading project settings...</p>
+    <p v-else :style="{ color: 'var(--p-text-muted-color)' }">Loading project settings...</p>
 
     <Toast />
   </div>

@@ -27,9 +27,9 @@ const emit = defineEmits<{
         :key="i"
         class="flex flex-col gap-3 p-4"
         style="
-          border: 1px solid var(--p-surface-200);
+          border: 1px solid var(--surface-border);
           border-radius: var(--p-border-radius);
-          background: var(--p-surface-0);
+          background: var(--surface-raised);
         "
       >
         <div class="flex gap-3">

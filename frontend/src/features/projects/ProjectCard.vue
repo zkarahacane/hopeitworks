@@ -29,13 +29,13 @@ function providerIcon(provider?: string): string {
 function onMouseEnter(e: MouseEvent) {
   const el = e.currentTarget as HTMLElement
   el.style.boxShadow = '0 4px 12px rgba(0,0,0,0.08)'
-  el.style.borderColor = 'var(--p-surface-400)'
+  el.style.borderColor = 'var(--p-text-muted-color)'
 }
 
 function onMouseLeave(e: MouseEvent) {
   const el = e.currentTarget as HTMLElement
   el.style.boxShadow = 'none'
-  el.style.borderColor = 'var(--p-surface-200)'
+  el.style.borderColor = 'var(--surface-border)'
 }
 </script>
 
@@ -46,8 +46,8 @@ function onMouseLeave(e: MouseEvent) {
     tabindex="0"
     :aria-label="`Project: ${project.name}`"
     style="
-      background: var(--p-surface-0);
-      border: 1px solid var(--p-surface-200);
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-border);
       border-radius: 0.5rem;
       transition: box-shadow 0.15s, border-color 0.15s;
       cursor: pointer;
@@ -80,12 +80,12 @@ function onMouseLeave(e: MouseEvent) {
             style="
               width: 0.5rem;
               height: 0.5rem;
-              background: var(--p-green-500);
+              background: var(--status-running-color);
               flex-shrink: 0;
             "
             aria-hidden="true"
           />
-          <span style="font-size: 0.75rem; color: var(--p-green-600)">
+          <span style="font-size: 0.75rem; color: var(--status-running-color)">
             {{ activeRunCount }} running
           </span>
         </template>
@@ -96,7 +96,7 @@ function onMouseLeave(e: MouseEvent) {
     <!-- Chips row: runtime, provider, model, gate -->
     <div
       class="flex flex-wrap items-center gap-1.5 px-4 pb-3"
-      style="border-top: 1px solid var(--p-surface-100); padding-top: 0.625rem"
+      :style="{ borderTop: '1px solid var(--surface-border)', paddingTop: '0.625rem' }"
     >
       <Tag
         v-if="project.agent_runtime"
@@ -125,7 +125,7 @@ function onMouseLeave(e: MouseEvent) {
     <div
       class="flex items-center justify-between px-4 py-2"
       style="
-        border-top: 1px solid var(--p-surface-100);
+        border-top: 1px solid var(--surface-border);
         font-size: 0.75rem;
         font-family: var(--p-font-family-mono, monospace);
         color: var(--p-text-muted-color);

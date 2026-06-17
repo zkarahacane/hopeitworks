@@ -132,7 +132,7 @@ async function handleSave() {
           <h1 class="text-2xl font-bold">Pipeline</h1>
           <span
             class="text-xs px-2 py-0.5 rounded-full"
-            style="background-color: var(--p-surface-100); border: 1px solid var(--p-surface-300); color: var(--p-text-muted-color)"
+            :style="{ backgroundColor: 'var(--surface-overlay)', border: '1px solid var(--surface-border)', color: 'var(--p-text-muted-color)' }"
           >
             opinionated on runtime · free on process
           </span>

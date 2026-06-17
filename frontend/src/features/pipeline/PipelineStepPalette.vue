@@ -32,7 +32,7 @@ function onDragStart(event: DragEvent, actionType: string) {
 <template>
   <div
     class="flex flex-col gap-4 p-4 rounded-lg h-full"
-    style="background-color: var(--p-surface-50, var(--p-surface-100))"
+    :style="{ backgroundColor: 'var(--surface-overlay)' }"
     data-testid="pipeline-step-palette"
   >
     <!-- Step types section -->
@@ -52,7 +52,7 @@ function onDragStart(event: DragEvent, actionType: string) {
           :class="type.isGate ? 'amber-breathe' : ''"
           :style="type.isGate
             ? 'background-color: var(--status-gate-surface); border: 1px solid var(--status-gate-color)'
-            : 'background-color: var(--p-surface-100); border: 1px solid var(--p-surface-300)'"
+            : 'background-color: var(--surface-overlay); border: 1px solid var(--surface-border)'"
           :data-testid="`step-type-tile-${type.type}`"
           @dragstart="onDragStart($event, type.type)"
           @click="emit('add-step', type.type)"

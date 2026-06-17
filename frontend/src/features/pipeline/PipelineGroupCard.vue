@@ -100,7 +100,7 @@ function toggleStepExpand(index: number) {
     <!-- Group header -->
     <div
       class="flex items-center gap-2 px-3 py-2 rounded-lg"
-      style="background-color: var(--p-surface-50, var(--p-surface-100))"
+      :style="{ backgroundColor: 'var(--surface-overlay)' }"
     >
       <span class="cursor-grab opacity-40 text-lg select-none" data-testid="group-drag-handle">⠿</span>
 

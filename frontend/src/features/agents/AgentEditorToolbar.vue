@@ -21,8 +21,8 @@ const emit = defineEmits<{
 <template>
   <div class="flex items-center justify-between px-4 py-2">
     <div class="flex items-center gap-2">
-      <span v-if="isDirty" class="text-xs text-orange-500">Unsaved changes</span>
-      <span v-if="isReadOnly" class="text-xs text-surface-500">Read-only</span>
+      <span v-if="isDirty" class="text-xs" :style="{ color: 'var(--status-gate-color)' }">Unsaved changes</span>
+      <span v-if="isReadOnly" class="text-xs" :style="{ color: 'var(--p-text-muted-color)' }">Read-only</span>
     </div>
     <div class="flex items-center gap-2">
       <Button
