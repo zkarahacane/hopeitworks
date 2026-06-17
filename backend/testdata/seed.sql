@@ -173,7 +173,7 @@ VALUES (
     'implement',
     'global',
     'claude-opus-4-6',
-    'ghcr.io/hopeitworks/agent:latest'
+    'hopeitworks/agent-go-node:latest'
 ) ON CONFLICT DO NOTHING;
 
 -- Global: Sonnet Review Agent
@@ -198,7 +198,7 @@ VALUES (
     'review',
     'global',
     'claude-sonnet-4-6',
-    'ghcr.io/hopeitworks/agent:latest'
+    'hopeitworks/agent-go-node:latest'
 ) ON CONFLICT DO NOTHING;
 
 -- Project: Todo Dev Agent (overrides global with project context)
@@ -223,7 +223,7 @@ Todo App — Go backend (chi, pgx, sqlc) + Vue 3 frontend (PrimeVue, Tailwind).
     'implement',
     'project',
     'claude-sonnet-4-6',
-    'ghcr.io/hopeitworks/agent:latest'
+    'hopeitworks/agent-go-node:latest'
 ) ON CONFLICT (project_id, name) DO UPDATE SET
     template_content = EXCLUDED.template_content,
     model = EXCLUDED.model;
@@ -243,7 +243,7 @@ VALUES (
     'merge',
     'project',
     'claude-opus-4-6',
-    'ghcr.io/hopeitworks/agent:latest'
+    'hopeitworks/agent-go-node:latest'
 ) ON CONFLICT (project_id, name) DO UPDATE SET
     template_content = EXCLUDED.template_content,
     model = EXCLUDED.model;
