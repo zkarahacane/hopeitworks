@@ -17,11 +17,21 @@ const emit = defineEmits<{
 <template>
   <div
     class="flex flex-col min-w-52 relative"
-    :class="{ 'border-r border-surface-200 dark:border-surface-600 pr-2 mr-2': !isLast }"
+    :class="{ 'pr-2 mr-2': !isLast }"
+    :style="!isLast ? { borderRight: '1px solid var(--p-surface-200)' } : undefined"
     data-testid="stage-column"
   >
     <!-- Stage header -->
-    <div class="px-3 py-2 text-sm font-semibold text-surface-600 dark:text-surface-300 uppercase tracking-wider" data-testid="stage-header">
+    <div
+      class="px-3 py-2 uppercase"
+      :style="{
+        fontSize: '0.72rem',
+        fontWeight: 600,
+        letterSpacing: '0.06em',
+        color: 'var(--p-text-muted-color)',
+      }"
+      data-testid="stage-header"
+    >
       {{ stageName }}
     </div>
 
@@ -31,7 +41,11 @@ const emit = defineEmits<{
       class="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 z-10"
       data-testid="stage-connector"
     >
-      <i class="pi pi-chevron-right text-surface-300 dark:text-surface-500 text-xs" />
+      <i
+        class="pi pi-chevron-right"
+        :style="{ fontSize: '0.7rem', color: 'var(--p-surface-400)' }"
+        aria-hidden="true"
+      />
     </div>
 
     <!-- Step rows -->
@@ -45,7 +59,8 @@ const emit = defineEmits<{
       />
       <div
         v-if="steps.length === 0"
-        class="px-3 py-2 text-xs text-surface-400 italic"
+        class="px-3 py-2"
+        :style="{ fontSize: '0.72rem', color: 'var(--p-surface-400)', fontStyle: 'italic' }"
         data-testid="empty-stage"
       >
         No steps

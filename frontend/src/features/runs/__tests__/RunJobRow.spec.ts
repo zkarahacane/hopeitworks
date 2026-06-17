@@ -40,11 +40,12 @@ describe('RunJobRow', () => {
     expect(wrapper.find('[data-testid="step-name"]').text()).toBe('code-review')
   })
 
-  it('renders status tag', () => {
+  it('routes status through StatusBadge (statusToken family)', () => {
     mountRow(makeStep({ status: 'failed' }))
-    const tag = wrapper.find('[data-testid="status-tag"]')
-    expect(tag.exists()).toBe(true)
-    expect(tag.text()).toBe('failed')
+    const badge = wrapper.find('[data-testid="status-tag"]')
+    expect(badge.exists()).toBe(true)
+    // statusToken normalizes "failed" → failed family.
+    expect(badge.attributes('data-family')).toBe('failed')
   })
 
   it('renders duration as "--" for pending steps', () => {
@@ -71,43 +72,40 @@ describe('RunJobRow', () => {
     expect(wrapper.emitted('click')![0]).toEqual([step])
   })
 
-  it('applies selected styling when selected is true', () => {
+  it('marks the row selected via data-selected when selected', () => {
     mountRow(makeStep(), true)
     const row = wrapper.find('[data-testid="job-row"]')
-    expect(row.classes()).toContain('bg-primary-50')
+    expect(row.attributes('data-selected')).toBe('true')
   })
 
-  it('does not apply selected styling when selected is false', () => {
+  it('does not mark the row selected when not selected', () => {
     mountRow(makeStep(), false)
     const row = wrapper.find('[data-testid="job-row"]')
-    expect(row.classes()).not.toContain('bg-primary-50')
+    expect(row.attributes('data-selected')).toBe('false')
   })
 
-  it('applies running-indicator class for running status', () => {
-    mountRow(makeStep({ status: 'running' }))
-    const icon = wrapper.find('[data-testid="status-icon"]')
-    expect(icon.classes()).toContain('running-indicator')
+  it('renders an AgentChip for agent_run steps', () => {
+    mountRow(makeStep({ action: 'agent_run' }))
+    expect(wrapper.find('[data-testid="job-agent-chip"]').exists()).toBe(true)
   })
 
-  it('does not apply running-indicator class for non-running status', () => {
-    mountRow(makeStep({ status: 'completed' }))
-    const icon = wrapper.find('[data-testid="status-icon"]')
-    expect(icon.classes()).not.toContain('running-indicator')
+  it('renders a ContainerChip for non-agent steps that have a container', () => {
+    mountRow(makeStep({ action: 'git_branch', container_id: 'abc123def456' }))
+    expect(wrapper.find('[data-testid="job-agent-chip"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="job-container-chip"]').exists()).toBe(true)
   })
 
-  it('renders correct icon for each status', () => {
-    const statuses = [
-      { status: 'pending', icon: 'pi-clock' },
-      { status: 'running', icon: 'pi-spinner' },
-      { status: 'completed', icon: 'pi-check-circle' },
-      { status: 'failed', icon: 'pi-times-circle' },
-      { status: 'cancelled', icon: 'pi-minus-circle' },
+  it('renders a type icon matching the step action', () => {
+    const cases = [
+      { action: 'git_branch', icon: 'pi-code' },
+      { action: 'human', icon: 'pi-user' },
+      { action: 'git_pr', icon: 'pi-github' },
+      { action: 'notify', icon: 'pi-bell' },
     ] as const
-
-    for (const { status, icon } of statuses) {
-      mountRow(makeStep({ status }))
-      const iconEl = wrapper.find('[data-testid="status-icon"]')
-      expect(iconEl.classes().join(' ')).toContain(icon)
+    for (const { action, icon } of cases) {
+      mountRow(makeStep({ action }))
+      const typeIcon = wrapper.find('[data-testid="step-type-icon"] i')
+      expect(typeIcon.classes().join(' ')).toContain(icon)
       wrapper.unmount()
     }
   })

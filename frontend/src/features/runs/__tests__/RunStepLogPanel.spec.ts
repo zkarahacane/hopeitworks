@@ -22,11 +22,12 @@ vi.mock('../composables/useStepLogs', () => ({
 
 const mockedUseStepLogs = vi.mocked(useStepLogs)
 
-vi.mock('@/ui/composed/LogViewer.vue', () => ({
+vi.mock('@/ui/composed/LogStreamPanel.vue', () => ({
   default: {
-    name: 'LogViewer',
-    template: '<div data-testid="log-viewer" />',
-    props: ['lines', 'status'],
+    name: 'LogStreamPanel',
+    template: '<div data-testid="log-stream-mock" />',
+    props: ['lines', 'status', 'active'],
+    emits: ['clear'],
   },
 }))
 
@@ -106,11 +107,12 @@ describe('RunStepLogPanel', () => {
     expect(stepName.text()).toBe('code-review')
   })
 
-  it('displays step status tag', () => {
+  it('displays step status via StatusBadge', () => {
     mountPanel({ step: makeStep({ status: 'failed' }), visible: true })
-    const statusTag = wrapper.find('[data-testid="step-status"]')
-    expect(statusTag.exists()).toBe(true)
-    expect(statusTag.text()).toBe('failed')
+    const statusBadge = wrapper.find('[data-testid="step-status"]')
+    expect(statusBadge.exists()).toBe(true)
+    // statusToken normalizes "failed" → failed family.
+    expect(statusBadge.attributes('data-family')).toBe('failed')
   })
 
   it('displays started_at timestamp', () => {
@@ -183,9 +185,16 @@ describe('RunStepLogPanel', () => {
     expect(wrapper.find('[data-testid="step-error-message"]').exists()).toBe(false)
   })
 
-  it('renders LogViewer component', () => {
+  it('renders LogStreamPanel component (replaces the old LogViewer)', () => {
     mountPanel({ step: makeStep(), visible: true })
-    expect(wrapper.find('[data-testid="log-viewer"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="log-stream-mock"]').exists()).toBe(true)
+  })
+
+  it('renders the typed step type chip', () => {
+    mountPanel({ step: makeStep({ action: 'agent_run' }), visible: true })
+    const typeChip = wrapper.find('[data-testid="step-type-chip"]')
+    expect(typeChip.exists()).toBe(true)
+    expect(typeChip.text()).toContain('agent_run')
   })
 
   it('emits close and update:visible when drawer closes', async () => {

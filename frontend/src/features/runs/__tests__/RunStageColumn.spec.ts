@@ -84,15 +84,18 @@ describe('RunStageColumn', () => {
     expect(wrapper.find('[data-testid="stage-connector"]').exists()).toBe(false)
   })
 
-  it('applies border-r class when not last column', () => {
+  it('applies a right border (token) when not last column', () => {
     mountColumn({ stageName: 'Dev', steps: [], isLast: false })
     const col = wrapper.find('[data-testid="stage-column"]')
-    expect(col.classes()).toContain('border-r')
+    // Border is a token-driven inline style, not a Tailwind color class.
+    expect(col.attributes('style') ?? '').toContain('border-right')
+    expect(col.classes()).toContain('pr-2')
   })
 
-  it('does not apply border-r class on last column', () => {
+  it('does not apply a right border on the last column', () => {
     mountColumn({ stageName: 'Dev', steps: [], isLast: true })
     const col = wrapper.find('[data-testid="stage-column"]')
-    expect(col.classes()).not.toContain('border-r')
+    expect(col.attributes('style') ?? '').not.toContain('border-right')
+    expect(col.classes()).not.toContain('pr-2')
   })
 })
