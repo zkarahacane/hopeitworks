@@ -86,7 +86,7 @@ function navigateBack() {
   <div class="flex flex-col h-full p-6">
     <Toast />
 
-    <div class="flex items-center gap-3 mb-4">
+    <div class="flex items-start gap-3 mb-4">
       <Button
         icon="pi pi-arrow-left"
         severity="secondary"
@@ -95,7 +95,12 @@ function navigateBack() {
         aria-label="Back to run"
         @click="navigateBack"
       />
-      <h1 class="m-0 text-2xl font-bold">Review &amp; Approve</h1>
+      <div class="flex flex-col gap-1">
+        <h1 class="m-0 text-2xl font-bold">Review &amp; Approve</h1>
+        <p class="m-0 text-sm" :style="{ color: 'var(--p-text-muted-color)' }">
+          The runtime is holding the container — your decision unblocks the pipeline.
+        </p>
+      </div>
     </div>
 
     <!-- Loading -->
@@ -120,7 +125,7 @@ function navigateBack() {
     <div v-else-if="fetchAction.data.value" class="flex flex-col gap-4">
       <!-- Story context -->
       <div class="flex items-center gap-3">
-        <Tag :value="fetchAction.data.value.story_key" severity="info" />
+        <Tag :value="fetchAction.data.value.story_key" severity="secondary" />
         <h2 class="m-0 text-xl font-semibold">{{ fetchAction.data.value.story_title }}</h2>
       </div>
 
@@ -145,7 +150,7 @@ function navigateBack() {
         />
         <Button
           label="Approve"
-          severity="success"
+          severity="warning"
           :loading="approveAction.isLoading.value"
           @click="handleApprove"
         />
