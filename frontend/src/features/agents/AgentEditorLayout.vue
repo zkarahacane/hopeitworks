@@ -2,13 +2,15 @@
 import { ref } from 'vue'
 import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
+import AutoComplete from 'primevue/autocomplete'
+import type { AutoCompleteCompleteEvent } from 'primevue/autocomplete'
 import Message from 'primevue/message'
 import MonacoEditorWrapper from './MonacoEditorWrapper.vue'
 import AgentVariableSidebar from './AgentVariableSidebar.vue'
 import AgentEditorToolbar from './AgentEditorToolbar.vue'
 import AgentPreviewDialog from './AgentPreviewDialog.vue'
 import type { AgentScope } from '@/stores/agents'
-import { LLM_MODEL_OPTIONS } from '@/utils/models'
+import { DEFAULT_MODEL_SUGGESTIONS } from '@/utils/models'
 
 interface Props {
   content: string
@@ -54,6 +56,15 @@ const providerOptions = [
   { label: 'OpenCode', value: 'opencode' },
 ]
 
+const filteredModels = ref<string[]>([])
+
+function searchModels(event: AutoCompleteCompleteEvent) {
+  const query = event.query.toLowerCase()
+  filteredModels.value = query
+    ? DEFAULT_MODEL_SUGGESTIONS.filter((m) => m.toLowerCase().includes(query))
+    : [...DEFAULT_MODEL_SUGGESTIONS]
+}
+
 const editorRef = ref<InstanceType<typeof MonacoEditorWrapper> | null>(null)
 </script>
 
@@ -96,14 +107,14 @@ const editorRef = ref<InstanceType<typeof MonacoEditorWrapper> | null>(null)
       </div>
       <div class="flex flex-col gap-1">
         <label class="text-xs font-medium text-surface-500">Model</label>
-        <Select
+        <AutoComplete
           :model-value="agentModel"
-          :options="LLM_MODEL_OPTIONS"
-          option-label="label"
-          option-value="value"
-          size="small"
-          class="w-64"
+          :suggestions="filteredModels"
+          dropdown
           :disabled="isReadOnly"
+          placeholder="Type or select a model..."
+          class="w-64"
+          @complete="searchModels"
           @update:model-value="emit('update:agentModel', $event)"
         />
       </div>
