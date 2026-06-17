@@ -75,16 +75,46 @@ function handleCreated(project: Project) {
       @create="showCreateDialog = true"
     />
 
-    <ProjectCardGrid
-      v-else
-      :projects="projects"
-      :total-records="pagination?.total ?? 0"
-      :rows="perPage"
-      :loading="isLoading"
-      :first="first"
-      @page="handlePage"
-      @project-click="handleCardClick"
-    />
+    <template v-else>
+      <ProjectCardGrid
+        :projects="projects"
+        :total-records="pagination?.total ?? 0"
+        :rows="perPage"
+        :loading="isLoading"
+        :first="first"
+        @page="handlePage"
+        @project-click="handleCardClick"
+      />
+
+      <!-- Connect a repo card -->
+      <div
+        v-if="!isLoading && !error"
+        class="flex flex-col items-center justify-center gap-2"
+        role="button"
+        tabindex="0"
+        aria-label="Connect a repository"
+        style="
+          border: 2px dashed var(--p-surface-300);
+          border-radius: 0.5rem;
+          background: transparent;
+          cursor: pointer;
+          min-height: 8rem;
+          transition: border-color 0.15s, background 0.15s;
+        "
+        @click="showCreateDialog = true"
+        @keydown.enter="showCreateDialog = true"
+        @mouseenter="($event.currentTarget as HTMLElement).style.borderColor = 'var(--p-surface-400)'"
+        @mouseleave="($event.currentTarget as HTMLElement).style.borderColor = 'var(--p-surface-300)'"
+      >
+        <i
+          class="pi pi-plus-circle"
+          style="font-size: 1.5rem; color: var(--p-text-muted-color)"
+        />
+        <span style="color: var(--p-text-muted-color); font-size: 0.875rem">
+          Connect a repo
+        </span>
+      </div>
+    </template>
 
     <CreateProjectDialog
       v-model:visible="showCreateDialog"
