@@ -168,6 +168,10 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/settings',
+      redirect: { name: 'profile' },
+    },
+    {
       path: '/:pathMatch(.*)*',
       name: 'not-found',
       component: NotFoundView,
