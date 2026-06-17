@@ -5,6 +5,7 @@ import ProgressSpinner from 'primevue/progressspinner'
 import Tag from 'primevue/tag'
 import type { Story, KanbanColumn } from '@/stores/stories'
 import { boardColumn } from '@/stores/stories'
+import { statusTokenSeverity } from '@/utils/statusToken'
 
 const props = defineProps<{
   stories: Story[]
@@ -16,19 +17,20 @@ const emit = defineEmits<{
 }>()
 
 // ── Column definitions ──────────────────────────────────────────────────────
+// Severities route through the unified statusToken system (the column key IS a
+// status family alias), so columns + cards share one color vocabulary.
 
 interface ColumnDef {
   key: KanbanColumn
   label: string
-  severity: 'secondary' | 'info' | 'warn' | 'success' | 'danger'
 }
 
 const COLUMNS: ColumnDef[] = [
-  { key: 'backlog', label: 'Backlog', severity: 'secondary' },
-  { key: 'in_progress', label: 'In Progress', severity: 'info' },
-  { key: 'blocked', label: 'Blocked', severity: 'warn' },
-  { key: 'done', label: 'Done', severity: 'success' },
-  { key: 'failed', label: 'Failed', severity: 'danger' },
+  { key: 'backlog', label: 'Backlog' },
+  { key: 'in_progress', label: 'In Progress' },
+  { key: 'blocked', label: 'Blocked' },
+  { key: 'done', label: 'Done' },
+  { key: 'failed', label: 'Failed' },
 ]
 
 // ── Grouping ────────────────────────────────────────────────────────────────
@@ -75,7 +77,7 @@ function stepProgress(story: Story): string | null {
         <span style="font-weight: 600; font-size: 0.85rem">{{ col.label }}</span>
         <Tag
           :value="String(grouped[col.key].length)"
-          :severity="col.severity"
+          :severity="statusTokenSeverity(col.key)"
           rounded
           style="font-size: 0.7rem; padding: 0.1rem 0.4rem"
         />
@@ -102,12 +104,7 @@ function stepProgress(story: Story): string | null {
             </span>
             <Badge
               :value="story.status"
-              :severity="
-                story.status === 'done' ? 'success'
-                : story.status === 'failed' ? 'danger'
-                : story.status === 'running' ? 'info'
-                : 'secondary'
-              "
+              :severity="statusTokenSeverity(story.status)"
             />
           </div>
 

@@ -41,6 +41,9 @@ function onScroll() {
   autoScroll.value = distFromBottom < 50
 }
 
+// SSE *connection* state — deliberately NOT routed through the product
+// statusToken system (that's for run/step/story/epic status). "connecting" uses
+// the blue informational accent, which is allowed for non-status signals.
 const statusSeverity: Record<SSEStatus, 'info' | 'success' | 'warn' | 'danger'> = {
   connecting: 'info',
   open: 'success',

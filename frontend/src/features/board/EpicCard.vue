@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import Badge from 'primevue/badge'
 import type { Epic } from '@/stores/epics'
+import { statusTokenSeverity } from '@/utils/statusToken'
 
 defineProps<{
   epic: Epic
@@ -10,11 +11,12 @@ const emit = defineEmits<{
   click: [epicId: string]
 }>()
 
+// Severities route through the unified statusToken system.
 const statusConfig = [
-  { key: 'backlog', label: 'Backlog', severity: 'secondary' },
-  { key: 'running', label: 'Running', severity: 'info' },
-  { key: 'done', label: 'Done', severity: 'success' },
-  { key: 'failed', label: 'Failed', severity: 'danger' },
+  { key: 'backlog', label: 'Backlog' },
+  { key: 'running', label: 'Running' },
+  { key: 'done', label: 'Done' },
+  { key: 'failed', label: 'Failed' },
 ] as const
 </script>
 
@@ -57,7 +59,7 @@ const statusConfig = [
       >
         <Badge
           :value="String(epic.story_counts[status.key])"
-          :severity="status.severity"
+          :severity="statusTokenSeverity(status.key)"
         />
         <span style="font-size: 0.8rem; color: var(--p-text-muted-color)">{{ status.label }}</span>
       </span>
