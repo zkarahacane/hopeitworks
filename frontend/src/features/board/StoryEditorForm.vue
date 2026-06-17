@@ -67,7 +67,7 @@ function updateFile(index: number, value: string) {
         />
         <label for="story-title">Title *</label>
       </FloatLabel>
-      <small v-if="errors.title" class="text-red-500">{{ errors.title }}</small>
+      <small v-if="errors.title" :style="{ color: 'var(--status-failed-color)' }">{{ errors.title }}</small>
     </div>
 
     <div class="flex flex-col gap-2">

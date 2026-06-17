@@ -124,7 +124,7 @@ function close() {
           />
           <label for="story-key">Key *</label>
         </FloatLabel>
-        <small v-if="errors.key" class="text-red-500">{{ errors.key }}</small>
+        <small v-if="errors.key" :style="{ color: 'var(--status-failed-color)' }">{{ errors.key }}</small>
       </div>
 
       <div class="flex flex-col gap-2">
@@ -138,7 +138,7 @@ function close() {
           />
           <label for="story-title">Title *</label>
         </FloatLabel>
-        <small v-if="errors.title" class="text-red-500">{{ errors.title }}</small>
+        <small v-if="errors.title" :style="{ color: 'var(--status-failed-color)' }">{{ errors.title }}</small>
       </div>
 
       <div class="flex flex-col gap-2">

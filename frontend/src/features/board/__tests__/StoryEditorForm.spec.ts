@@ -72,7 +72,7 @@ describe('StoryEditorForm', () => {
       errors: { title: 'Title is required' },
     })
 
-    const errorEl = wrapper.find('.text-red-500')
+    const errorEl = wrapper.find('small')
     expect(errorEl.exists()).toBe(true)
     expect(errorEl.text()).toBe('Title is required')
   })

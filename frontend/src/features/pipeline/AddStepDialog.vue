@@ -135,7 +135,7 @@ function close() {
           :invalid="!!validationError"
           data-testid="step-name-input"
         />
-        <small v-if="validationError" class="text-red-500">{{ validationError }}</small>
+        <small v-if="validationError" :style="{ color: 'var(--status-failed-color)' }">{{ validationError }}</small>
       </div>
 
       <div class="flex flex-col gap-2">
