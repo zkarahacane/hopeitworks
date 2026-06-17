@@ -14,6 +14,9 @@ type LatestRunStep struct {
 	Index int
 	// Total is the number of steps in the run.
 	Total int
+	// ContainerID is the Docker container id of the current step, nil when no
+	// container is attached yet.
+	ContainerID *string
 }
 
 // LatestRun is a lightweight projection of a story's most recent run, carrying

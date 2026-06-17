@@ -102,6 +102,68 @@ func (q *Queries) GetActiveRunByStory(ctx context.Context, storyID uuid.UUID) (R
 	return i, err
 }
 
+const getDAGNodeRunInfoByStories = `-- name: GetDAGNodeRunInfoByStories :many
+SELECT DISTINCT ON (r.story_id)
+    r.story_id              AS story_id,
+    r.id                   AS run_id,
+    r.status               AS run_status,
+    (
+        SELECT s.container_id
+        FROM run_steps s
+        WHERE s.run_id = r.id AND s.container_id IS NOT NULL
+        ORDER BY (s.status IN ('running', 'waiting_approval')) DESC, s.step_order DESC
+        LIMIT 1
+    )                      AS container_id,
+    (
+        SELECT COALESCE(SUM(cr.cost_usd), 0)::DECIMAL(10,6)
+        FROM cost_records cr
+        JOIN run_steps rs ON rs.id = cr.run_step_id
+        WHERE rs.run_id = r.id
+    )                      AS cost_usd
+FROM runs r
+WHERE r.story_id = ANY($1::uuid[])
+ORDER BY r.story_id, r.created_at DESC
+`
+
+type GetDAGNodeRunInfoByStoriesRow struct {
+	StoryID     uuid.UUID      `json:"story_id"`
+	RunID       uuid.UUID      `json:"run_id"`
+	RunStatus   string         `json:"run_status"`
+	ContainerID pgtype.Text    `json:"container_id"`
+	CostUsd     pgtype.Numeric `json:"cost_usd"`
+}
+
+// Per-story enrichment for the epic DAG: the latest run id/status, the most
+// relevant container id of that run (the active step's container, else the most
+// recent step that has one), and the total cost incurred by that latest run.
+// One row per story that has at least one run; stories with no run are absent.
+// No status filter on cost so a failed run reports its real total.
+func (q *Queries) GetDAGNodeRunInfoByStories(ctx context.Context, dollar_1 []uuid.UUID) ([]GetDAGNodeRunInfoByStoriesRow, error) {
+	rows, err := q.db.Query(ctx, getDAGNodeRunInfoByStories, dollar_1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetDAGNodeRunInfoByStoriesRow{}
+	for rows.Next() {
+		var i GetDAGNodeRunInfoByStoriesRow
+		if err := rows.Scan(
+			&i.StoryID,
+			&i.RunID,
+			&i.RunStatus,
+			&i.ContainerID,
+			&i.CostUsd,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getLatestRunByStory = `-- name: GetLatestRunByStory :one
 SELECT
     r.id AS run_id,
@@ -109,7 +171,7 @@ SELECT
     (
         SELECT to_jsonb(cs)
         FROM (
-            SELECT s.id, s.step_name AS name, s.action AS action_type, s.status, s.step_order AS index
+            SELECT s.id, s.step_name AS name, s.action AS action_type, s.status, s.step_order AS index, s.container_id
             FROM run_steps s
             WHERE s.run_id = r.id AND s.status IN ('running', 'waiting_approval')
             ORDER BY s.step_order ASC
@@ -133,7 +195,7 @@ type GetLatestRunByStoryRow struct {
 // Returns the most recent run for a story along with its current in-progress step
 // (running or waiting_approval, lowest step_order) and the total step count.
 // current_step is a JSON object (NULL when no step is in progress) carrying
-// id, name, action_type, status and index (step_order).
+// id, name, action_type, status, index (step_order) and container_id.
 func (q *Queries) GetLatestRunByStory(ctx context.Context, storyID uuid.UUID) (GetLatestRunByStoryRow, error) {
 	row := q.db.QueryRow(ctx, getLatestRunByStory, storyID)
 	var i GetLatestRunByStoryRow
@@ -154,7 +216,7 @@ SELECT DISTINCT ON (r.story_id)
     (
         SELECT to_jsonb(cs)
         FROM (
-            SELECT s.id, s.step_name AS name, s.action AS action_type, s.status, s.step_order AS index
+            SELECT s.id, s.step_name AS name, s.action AS action_type, s.status, s.step_order AS index, s.container_id
             FROM run_steps s
             WHERE s.run_id = r.id AND s.status IN ('running', 'waiting_approval')
             ORDER BY s.step_order ASC

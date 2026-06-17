@@ -109,14 +109,39 @@ func (r *RunRepo) GetLatestRunsByStories(ctx context.Context, storyIDs []uuid.UU
 	return result, nil
 }
 
+func (r *RunRepo) GetDAGNodeRunInfoByStories(ctx context.Context, storyIDs []uuid.UUID) (map[uuid.UUID]model.DAGNodeRunInfo, error) {
+	result := make(map[uuid.UUID]model.DAGNodeRunInfo, len(storyIDs))
+	if len(storyIDs) == 0 {
+		return result, nil
+	}
+	rows, err := r.queries.GetDAGNodeRunInfoByStories(ctx, storyIDs)
+	if err != nil {
+		return nil, apperrors.NewInternal("failed to get dag node run info by stories", err)
+	}
+	for _, row := range rows {
+		info := model.DAGNodeRunInfo{
+			RunID:     row.RunID,
+			RunStatus: row.RunStatus,
+			CostUSD:   numericToFloat64(row.CostUsd),
+		}
+		if row.ContainerID.Valid {
+			containerID := row.ContainerID.String
+			info.ContainerID = &containerID
+		}
+		result[row.StoryID] = info
+	}
+	return result, nil
+}
+
 // currentStepJSON mirrors the JSON object produced by to_jsonb in the
 // GetLatestRun* queries.
 type currentStepJSON struct {
-	ID         uuid.UUID `json:"id"`
-	Name       string    `json:"name"`
-	ActionType string    `json:"action_type"`
-	Status     string    `json:"status"`
-	Index      int       `json:"index"`
+	ID          uuid.UUID `json:"id"`
+	Name        string    `json:"name"`
+	ActionType  string    `json:"action_type"`
+	Status      string    `json:"status"`
+	Index       int       `json:"index"`
+	ContainerID *string   `json:"container_id"`
 }
 
 // toDomainLatestRun maps the latest-run query columns into a domain LatestRun,
@@ -132,12 +157,13 @@ func toDomainLatestRun(runID uuid.UUID, runStatus string, currentStep []byte, to
 			return nil, apperrors.NewInternal("failed to unmarshal current step", err)
 		}
 		latest.CurrentStep = &model.LatestRunStep{
-			ID:         cs.ID,
-			Name:       cs.Name,
-			ActionType: cs.ActionType,
-			Status:     cs.Status,
-			Index:      cs.Index,
-			Total:      int(totalSteps),
+			ID:          cs.ID,
+			Name:        cs.Name,
+			ActionType:  cs.ActionType,
+			Status:      cs.Status,
+			Index:       cs.Index,
+			Total:       int(totalSteps),
+			ContainerID: cs.ContainerID,
 		}
 	}
 	return latest, nil

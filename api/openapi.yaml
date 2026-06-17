@@ -1795,6 +1795,26 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /projects/{projectId}/runs/{runId}/costs/by-role:
+    get:
+      operationId: getRunCostsByRole
+      summary: Get per-role cost breakdown for a run with roll-up totals
+      tags: [costs]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/RunIdPath"
+      responses:
+        "200":
+          description: Per-role cost breakdown plus run totals
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunCostByRole"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /projects/{projectId}/costs/runs:
     get:
       operationId: getProjectCostRuns
@@ -2552,6 +2572,27 @@ components:
           type: integer
           description: Zero-based execution layer index
           example: 0
+        run_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Id of the story's latest run. Null when the story has never been run.
+        run_status:
+          type: string
+          nullable: true
+          description: Status of the story's latest run (pending, running, paused, completed, failed, cancelled). Null when the story has never been run.
+          example: running
+        container_id:
+          type: string
+          nullable: true
+          description: Container id of the latest run's most relevant step. Null when no container is attached.
+          example: a1b2c3d4e5f6
+        cost_usd:
+          type: number
+          format: double
+          nullable: true
+          description: Total cost in USD incurred by the story's latest run. Null when the story has never been run.
+          example: 1.23
 
     EpicDAGEdge:
       type: object
@@ -2759,6 +2800,11 @@ components:
           type: integer
           description: Total number of steps in the run
           example: 4
+        container_id:
+          type: string
+          description: Docker container id of the current step (null when no container is attached yet).
+          nullable: true
+          example: a1b2c3d4e5f6
 
     StoryList:
       type: object
@@ -3877,6 +3923,62 @@ components:
           type: number
           format: double
           example: 0.01234
+
+    RoleCostBreakdown:
+      type: object
+      description: Cost aggregated for a single role (agent type) within a run.
+      required:
+        - role
+        - tokens_input
+        - tokens_output
+        - cost_usd
+      properties:
+        role:
+          type: string
+          description: Agent type the cost was attributed to (implement, retry, review, merge, custom), or "unknown" for unattributed cost.
+          example: implement
+        tokens_input:
+          type: integer
+          format: int64
+          example: 100000
+        tokens_output:
+          type: integer
+          format: int64
+          example: 20000
+        cost_usd:
+          type: number
+          format: double
+          example: 3.15
+
+    RunCostByRole:
+      type: object
+      description: Per-role cost breakdown of a run plus roll-up totals computed across all roles regardless of run or step status.
+      required:
+        - run_id
+        - total_cost
+        - total_tokens_input
+        - total_tokens_output
+        - roles
+      properties:
+        run_id:
+          type: string
+          format: uuid
+        total_cost:
+          type: number
+          format: double
+          example: 6.30
+        total_tokens_input:
+          type: integer
+          format: int64
+          example: 300000
+        total_tokens_output:
+          type: integer
+          format: int64
+          example: 50000
+        roles:
+          type: array
+          items:
+            $ref: "#/components/schemas/RoleCostBreakdown"
 
     AgentCostBreakdown:
       type: object
