@@ -27,8 +27,8 @@ const hasModel = computed(() => !!props.model)
     class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md"
     data-testid="agent-chip"
     :style="{
-      backgroundColor: 'var(--p-surface-100)',
-      border: '1px solid var(--p-surface-200)',
+      backgroundColor: 'var(--surface-overlay)',
+      border: '1px solid var(--surface-border)',
     }"
   >
     <i class="pi pi-microchip-ai" :style="{ fontSize: '0.75rem', color: 'var(--p-text-muted-color)' }" aria-hidden="true" />

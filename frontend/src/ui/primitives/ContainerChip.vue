@@ -34,8 +34,8 @@ const shortId = computed(() => {
     :title="containerId"
     :style="{
       fontSize: '0.72rem',
-      backgroundColor: 'var(--p-surface-100)',
-      border: '1px solid var(--p-surface-200)',
+      backgroundColor: 'var(--surface-overlay)',
+      border: '1px solid var(--surface-border)',
       color: 'var(--p-text-muted-color)',
     }"
   >

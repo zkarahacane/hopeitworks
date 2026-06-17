@@ -120,14 +120,14 @@ function onScroll() {
 <template>
   <div
     class="flex flex-col rounded-lg overflow-hidden"
-    :style="{ border: '1px solid var(--p-surface-200)' }"
+    :style="{ border: '1px solid var(--surface-border)' }"
     data-testid="log-stream-panel"
     :data-lifecycle="lifecycle"
   >
     <!-- Status bar -->
     <div
       class="flex items-center justify-between px-3 py-2"
-      :style="{ backgroundColor: 'var(--p-surface-100)', borderBottom: '1px solid var(--p-surface-200)' }"
+      :style="{ backgroundColor: 'var(--surface-overlay)', borderBottom: '1px solid var(--surface-border)' }"
     >
       <div class="flex items-center gap-2">
         <span
@@ -158,7 +158,7 @@ function onScroll() {
     <div
       ref="scrollContainer"
       class="overflow-y-auto font-mono p-3 min-h-48 max-h-96"
-      :style="{ fontSize: '0.78rem', backgroundColor: 'var(--p-surface-950)', color: 'var(--p-surface-100)' }"
+      :style="{ fontSize: '0.78rem', backgroundColor: 'var(--surface-base)', color: 'var(--p-text-color)' }"
       @scroll="onScroll"
     >
       <div
@@ -180,7 +180,7 @@ function onScroll() {
       <div
         v-if="!hasLines && emptyMessage"
         class="text-center py-8"
-        :style="{ color: 'var(--p-surface-400)' }"
+        :style="{ color: 'var(--p-text-muted-color)' }"
         data-testid="log-stream-empty"
       >
         {{ emptyMessage }}
@@ -191,7 +191,7 @@ function onScroll() {
 
 <style scoped>
 :deep(.log-ts) {
-  color: var(--p-surface-400);
+  color: var(--p-text-muted-color);
   opacity: 0.7;
   font-size: 0.8em;
 }

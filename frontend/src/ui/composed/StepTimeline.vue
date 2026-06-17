@@ -102,7 +102,7 @@ function markerColor(status: string): string {
             class="flex items-center gap-2 w-full text-left rounded-md px-2 py-1"
             :class="{ 'cursor-pointer': true }"
             :style="{
-              backgroundColor: item.id === selectedId ? 'var(--p-surface-100)' : 'transparent',
+              backgroundColor: item.id === selectedId ? 'var(--surface-overlay)' : 'transparent',
             }"
             :data-selected="item.id === selectedId"
             data-testid="step-timeline-item"

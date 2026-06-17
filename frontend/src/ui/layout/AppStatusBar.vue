@@ -4,8 +4,8 @@
   <footer
     class="flex h-6 items-center justify-between px-4 text-xs"
     :style="{
-      borderTop: '1px solid var(--p-content-border-color)',
-      background: 'var(--app-chrome-bg)',
+      borderTop: '1px solid var(--surface-border)',
+      background: 'var(--surface-raised)',
       color: 'var(--p-text-muted-color)',
     }"
   >

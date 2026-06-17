@@ -60,14 +60,21 @@ const statusLabel: Record<SSEStatus, string> = {
 </script>
 
 <template>
-  <div class="flex flex-col border border-surface rounded-lg overflow-hidden">
+  <div
+    class="flex flex-col rounded-lg overflow-hidden"
+    :style="{ border: '1px solid var(--surface-border)' }"
+  >
     <!-- Toolbar -->
-    <div class="flex items-center justify-between px-3 py-2 bg-surface-50 dark:bg-surface-800 border-b border-surface">
+    <div
+      class="flex items-center justify-between px-3 py-2"
+      :style="{ backgroundColor: 'var(--surface-overlay)', borderBottom: '1px solid var(--surface-border)' }"
+    >
       <div class="flex items-center gap-2">
         <Tag :value="statusLabel[status]" :severity="statusSeverity[status]" />
         <span
           v-if="!autoScroll"
-          class="text-xs text-surface-500 cursor-pointer hover:text-primary"
+          class="text-xs cursor-pointer"
+          :style="{ color: 'var(--p-text-muted-color)' }"
           @click="autoScroll = true"
         >
           Auto-scroll paused — click to resume
@@ -86,7 +93,8 @@ const statusLabel: Record<SSEStatus, string> = {
     <!-- Log lines -->
     <div
       ref="scrollContainer"
-      class="overflow-y-auto font-mono text-sm p-3 bg-surface-900 text-surface-100 min-h-48 max-h-96"
+      class="overflow-y-auto font-mono text-sm p-3 min-h-48 max-h-96"
+      :style="{ backgroundColor: 'var(--surface-base)', color: 'var(--p-text-color)' }"
       @scroll="onScroll"
     >
       <div
@@ -95,7 +103,11 @@ const statusLabel: Record<SSEStatus, string> = {
         class="log-line whitespace-pre-wrap leading-relaxed"
         v-html="formatLogLine(line.text, line.timestamp)"
       />
-      <div v-if="lines.length === 0" class="text-surface-500 text-center py-8">
+      <div
+        v-if="lines.length === 0"
+        class="text-center py-8"
+        :style="{ color: 'var(--p-text-muted-color)' }"
+      >
         No log output yet
       </div>
     </div>
@@ -104,7 +116,7 @@ const statusLabel: Record<SSEStatus, string> = {
 
 <style scoped>
 :deep(.log-ts) {
-  color: var(--p-surface-400);
+  color: var(--p-text-muted-color);
   opacity: 0.7;
   font-size: 0.8em;
 }

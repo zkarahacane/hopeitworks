@@ -90,8 +90,8 @@ function navigate(route: string) {
       !mobileOpen ? sidebarWidth : '',
     ]"
     :style="{
-      borderRight: '1px solid var(--p-content-border-color)',
-      background: 'var(--app-chrome-bg)',
+      borderRight: '1px solid var(--surface-border)',
+      background: 'var(--surface-raised)',
     }"
   >
     <nav class="flex flex-1 flex-col gap-1 p-2" aria-label="Main navigation">
