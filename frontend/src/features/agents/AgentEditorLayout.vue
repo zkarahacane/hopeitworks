@@ -72,7 +72,7 @@ const editorRef = ref<InstanceType<typeof MonacoEditorWrapper> | null>(null)
   <div class="flex h-full flex-col">
     <!-- Toolbar -->
     <AgentEditorToolbar
-      class="border-b border-surface-200 dark:border-surface-700"
+      :style="{ borderBottom: '1px solid var(--surface-border)' }"
       :is-admin="isAdmin"
       :can-save="canSave"
       :is-saving="isSaving"
@@ -92,10 +92,11 @@ const editorRef = ref<InstanceType<typeof MonacoEditorWrapper> | null>(null)
 
     <!-- Agent metadata fields -->
     <div
-      class="flex flex-wrap items-end gap-4 border-b border-surface-200 px-4 py-3 dark:border-surface-700"
+      class="flex flex-wrap items-end gap-4 px-4 py-3"
+      :style="{ borderBottom: '1px solid var(--surface-border)' }"
     >
       <div class="flex min-w-[200px] flex-1 flex-col gap-1">
-        <label class="text-xs font-medium text-surface-500">Agent Name</label>
+        <label class="text-xs font-medium" :style="{ color: 'var(--p-text-muted-color)' }">Agent Name</label>
         <InputText
           :value="agentName"
           placeholder="e.g. Default Implement Agent"
@@ -106,7 +107,7 @@ const editorRef = ref<InstanceType<typeof MonacoEditorWrapper> | null>(null)
         />
       </div>
       <div class="flex flex-col gap-1">
-        <label class="text-xs font-medium text-surface-500">Model</label>
+        <label class="text-xs font-medium" :style="{ color: 'var(--p-text-muted-color)' }">Model</label>
         <AutoComplete
           :model-value="agentModel"
           :suggestions="filteredModels"
@@ -119,7 +120,7 @@ const editorRef = ref<InstanceType<typeof MonacoEditorWrapper> | null>(null)
         />
       </div>
       <div class="flex flex-col gap-1">
-        <label class="text-xs font-medium text-surface-500">Provider</label>
+        <label class="text-xs font-medium" :style="{ color: 'var(--p-text-muted-color)' }">Provider</label>
         <Select
           :model-value="agentProvider"
           :options="providerOptions"
@@ -132,7 +133,7 @@ const editorRef = ref<InstanceType<typeof MonacoEditorWrapper> | null>(null)
         />
       </div>
       <div class="flex min-w-[200px] flex-1 flex-col gap-1">
-        <label class="text-xs font-medium text-surface-500">Docker Image</label>
+        <label class="text-xs font-medium" :style="{ color: 'var(--p-text-muted-color)' }">Docker Image</label>
         <InputText
           :value="agentImage"
           placeholder="ghcr.io/org/agent-name:latest"
@@ -143,7 +144,7 @@ const editorRef = ref<InstanceType<typeof MonacoEditorWrapper> | null>(null)
         />
       </div>
       <div class="flex flex-col gap-1">
-        <label class="text-xs font-medium text-surface-500">Scope</label>
+        <label class="text-xs font-medium" :style="{ color: 'var(--p-text-muted-color)' }">Scope</label>
         <Select
           :model-value="agentScope"
           :options="scopeOptions"
@@ -171,7 +172,8 @@ const editorRef = ref<InstanceType<typeof MonacoEditorWrapper> | null>(null)
 
       <!-- Variable sidebar -->
       <AgentVariableSidebar
-        class="w-[250px] shrink-0 overflow-y-auto border-l border-surface-200 dark:border-surface-700"
+        class="w-[250px] shrink-0 overflow-y-auto"
+        :style="{ borderLeft: '1px solid var(--surface-border)' }"
         :editor-ref="editorRef"
       />
     </div>

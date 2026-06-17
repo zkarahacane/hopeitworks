@@ -55,8 +55,8 @@ watch(
         <!-- Left: Project info -->
         <div
           style="
-            background: var(--p-surface-0);
-            border: 1px solid var(--p-surface-200);
+            background: var(--surface-raised);
+            border: 1px solid var(--surface-border);
             border-radius: 0.5rem;
             padding: 1.5rem;
           "
@@ -131,8 +131,8 @@ watch(
         <!-- Right: Runtime panel -->
         <div
           style="
-            background: var(--p-surface-0);
-            border: 1px solid var(--p-surface-200);
+            background: var(--surface-raised);
+            border: 1px solid var(--surface-border);
             border-radius: 0.5rem;
             padding: 1.5rem;
           "
@@ -184,7 +184,7 @@ watch(
       <div class="flex items-center gap-3">
         <span
           style="
-            background: var(--p-surface-100);
+            background: var(--surface-overlay);
             border-radius: 0.25rem;
             padding: 0.25rem 0.75rem;
             font-size: 0.875rem;
@@ -195,7 +195,7 @@ watch(
         </span>
         <span
           style="
-            background: var(--p-surface-100);
+            background: var(--surface-overlay);
             border-radius: 0.25rem;
             padding: 0.25rem 0.75rem;
             font-size: 0.875rem;

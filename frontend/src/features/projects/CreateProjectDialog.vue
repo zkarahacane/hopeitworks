@@ -104,7 +104,7 @@ function close() {
           />
           <label for="project-name">Name *</label>
         </FloatLabel>
-        <small v-if="errors.name" class="text-red-500">{{ errors.name }}</small>
+        <small v-if="errors.name" :style="{ color: 'var(--status-failed-color)' }">{{ errors.name }}</small>
       </div>
 
       <div class="flex flex-col gap-2">
@@ -119,11 +119,11 @@ function close() {
           />
           <label for="project-description">Description</label>
         </FloatLabel>
-        <small v-if="errors.description" class="text-red-500">{{ errors.description }}</small>
+        <small v-if="errors.description" :style="{ color: 'var(--status-failed-color)' }">{{ errors.description }}</small>
       </div>
 
       <div class="flex flex-col gap-1">
-        <p class="text-sm font-semibold text-surface-600">Pipeline Configuration</p>
+        <p class="text-sm font-semibold" :style="{ color: 'var(--p-text-muted-color)' }">Pipeline Configuration</p>
       </div>
 
       <div class="flex flex-col gap-2">
@@ -137,7 +137,7 @@ function close() {
           />
           <label for="project-repo-url">Repository URL *</label>
         </FloatLabel>
-        <small v-if="errors.repo_url" class="text-red-500">{{ errors.repo_url }}</small>
+        <small v-if="errors.repo_url" :style="{ color: 'var(--status-failed-color)' }">{{ errors.repo_url }}</small>
       </div>
 
       <div class="flex flex-col gap-2">
@@ -152,7 +152,7 @@ function close() {
           />
           <label for="project-git-provider">Git Provider *</label>
         </FloatLabel>
-        <small v-if="errors.git_provider" class="text-red-500">{{ errors.git_provider }}</small>
+        <small v-if="errors.git_provider" :style="{ color: 'var(--status-failed-color)' }">{{ errors.git_provider }}</small>
       </div>
 
       <div class="flex flex-col gap-2">
@@ -166,7 +166,7 @@ function close() {
           />
           <label for="project-git-token-env">Git Token Env Var</label>
         </FloatLabel>
-        <small class="text-surface-500">Name of the environment variable holding the git token (defaults to GITHUB_TOKEN)</small>
+        <small :style="{ color: 'var(--p-text-muted-color)' }">Name of the environment variable holding the git token (defaults to GITHUB_TOKEN)</small>
       </div>
 
       <div class="flex flex-col gap-2">
@@ -181,7 +181,7 @@ function close() {
           />
           <label for="project-agent-runtime">Agent Runtime *</label>
         </FloatLabel>
-        <small v-if="errors.agent_runtime" class="text-red-500">{{ errors.agent_runtime }}</small>
+        <small v-if="errors.agent_runtime" :style="{ color: 'var(--status-failed-color)' }">{{ errors.agent_runtime }}</small>
       </div>
 
       <div class="flex flex-col gap-2">
@@ -195,7 +195,7 @@ function close() {
           />
           <label for="project-default-model">Default Model</label>
         </FloatLabel>
-        <small v-if="errors.default_model" class="text-red-500">{{ errors.default_model }}</small>
+        <small v-if="errors.default_model" :style="{ color: 'var(--status-failed-color)' }">{{ errors.default_model }}</small>
       </div>
 
       <Message v-if="createProject.error.value" severity="error" :closable="false">

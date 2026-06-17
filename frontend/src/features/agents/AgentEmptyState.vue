@@ -12,9 +12,9 @@ const emit = defineEmits<{
 
 <template>
   <div class="flex flex-col items-center justify-center gap-4 py-16">
-    <i class="pi pi-microchip text-4xl text-surface-400" />
+    <i class="pi pi-microchip text-4xl" :style="{ color: 'var(--p-text-muted-color)' }" />
     <h2 class="text-xl font-semibold">No agents found for this project.</h2>
-    <p class="text-surface-500">
+    <p :style="{ color: 'var(--p-text-muted-color)' }">
       Agents define how AI models generate code for your pipeline steps.
     </p>
     <Button

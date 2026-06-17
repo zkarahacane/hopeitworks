@@ -158,7 +158,7 @@ function onRetryTypeChange(value: PipelineStep['retry_policy']['retry_type']) {
           :class="isTypeChipGate ? 'type-chip--gate' : 'type-chip--normal'"
           :style="isTypeChipGate
             ? 'background-color: var(--status-gate-surface); border: 1px solid var(--status-gate-color); color: var(--status-gate-color)'
-            : 'background-color: var(--p-surface-100); border: 1px solid var(--p-surface-300)'"
+            : 'background-color: var(--surface-overlay); border: 1px solid var(--surface-border)'"
           data-testid="step-type-chip"
         >
           <i :class="ACTION_TYPE_ICONS[step.action_type] ?? 'pi pi-cog'" class="text-xs" />

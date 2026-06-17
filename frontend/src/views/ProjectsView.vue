@@ -93,18 +93,18 @@ function handleCreated(project: Project) {
         role="button"
         tabindex="0"
         aria-label="Connect a repository"
-        style="
-          border: 2px dashed var(--p-surface-300);
-          border-radius: 0.5rem;
-          background: transparent;
-          cursor: pointer;
-          min-height: 8rem;
-          transition: border-color 0.15s, background 0.15s;
-        "
+        :style="{
+          border: '2px dashed var(--surface-border)',
+          borderRadius: '0.5rem',
+          background: 'transparent',
+          cursor: 'pointer',
+          minHeight: '8rem',
+          transition: 'border-color 0.15s, background 0.15s',
+        }"
         @click="showCreateDialog = true"
         @keydown.enter="showCreateDialog = true"
-        @mouseenter="($event.currentTarget as HTMLElement).style.borderColor = 'var(--p-surface-400)'"
-        @mouseleave="($event.currentTarget as HTMLElement).style.borderColor = 'var(--p-surface-300)'"
+        @mouseenter="($event.currentTarget as HTMLElement).style.borderColor = 'var(--p-text-muted-color)'"
+        @mouseleave="($event.currentTarget as HTMLElement).style.borderColor = 'var(--surface-border)'"
       >
         <i
           class="pi pi-plus-circle"

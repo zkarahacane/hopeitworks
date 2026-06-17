@@ -78,7 +78,7 @@ watch(
 <template>
   <div class="flex h-full flex-col">
     <!-- Header -->
-    <div class="flex items-center gap-3 border-b border-surface-200 px-6 py-4">
+    <div class="flex items-center gap-3 px-6 py-4" :style="{ borderBottom: '1px solid var(--surface-border)' }">
       <Button
         icon="pi pi-arrow-left"
         text
@@ -94,7 +94,7 @@ watch(
       <h1 v-else-if="project" class="text-2xl font-bold" data-testid="project-name">
         {{ project.name }}
       </h1>
-      <h1 v-else class="text-2xl font-bold text-surface-400">Project</h1>
+      <h1 v-else class="text-2xl font-bold" :style="{ color: 'var(--p-text-muted-color)' }">Project</h1>
     </div>
 
     <!-- Circuit breaker banner -->
@@ -118,7 +118,7 @@ watch(
     </div>
 
     <!-- Tab menu -->
-    <div v-if="!error" class="border-b border-surface-200 px-6">
+    <div v-if="!error" class="px-6" :style="{ borderBottom: '1px solid var(--surface-border)' }">
       <TabMenu
         :model="tabs"
         :active-index="activeIndex"

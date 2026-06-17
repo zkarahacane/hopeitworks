@@ -42,7 +42,8 @@ const emit = defineEmits<{
     <!-- Rendered content -->
     <pre
       v-else
-      class="max-h-[60vh] overflow-auto rounded-md bg-surface-900 p-4 text-sm text-surface-100 whitespace-pre-wrap"
+      class="max-h-[60vh] overflow-auto rounded-md p-4 text-sm whitespace-pre-wrap"
+      :style="{ backgroundColor: 'var(--surface-base)', color: 'var(--p-text-color)' }"
     >{{ renderedContent }}</pre>
 
     <template #footer>
