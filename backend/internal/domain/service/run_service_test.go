@@ -703,16 +703,18 @@ func TestLaunchRun_BranchNameInMetadata(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	// Verify branch_name in metadata
+	// branch_name is no longer pre-seeded at launch — git_branch action computes and
+	// persists it after the step executes. Verify it is absent from the initial metadata.
 	if capturedRun.Metadata == nil {
 		t.Fatal("expected run metadata to be set")
 	}
-	bn, ok := capturedRun.Metadata["branch_name"].(string)
-	if !ok {
-		t.Fatal("expected branch_name in metadata")
+	if _, hasBranch := capturedRun.Metadata["branch_name"]; hasBranch {
+		t.Error("branch_name must NOT be pre-seeded in metadata at launch; git_branch action sets it")
 	}
-	if bn != "feat/runtime-4" {
-		t.Errorf("expected branch_name %q, got %q", "feat/runtime-4", bn)
+
+	// launched_by_user_id must still be present
+	if _, ok := capturedRun.Metadata["launched_by_user_id"]; !ok {
+		t.Error("expected launched_by_user_id in metadata")
 	}
 
 	// Verify returned run also has metadata
@@ -2037,4 +2039,12 @@ func (m *mockRunRepo) GetLatestRunByStory(_ context.Context, _ uuid.UUID) (*mode
 
 func (m *mockRunRepo) GetLatestRunsByStories(_ context.Context, _ []uuid.UUID) (map[uuid.UUID]*model.LatestRun, error) {
 	return map[uuid.UUID]*model.LatestRun{}, nil
+}
+
+func (m *mockRunRepo) UpdateRunMetadata(_ context.Context, _ uuid.UUID, _ map[string]interface{}) error {
+	return nil
+}
+
+func (m *mockRunRepo) AppendStepLogTail(_ context.Context, _ uuid.UUID, _ string) error {
+	return nil
 }

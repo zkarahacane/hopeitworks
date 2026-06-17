@@ -19,8 +19,9 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /build/api ./cmd/api
 # Stage 2: Runtime
 FROM alpine:3.19
 
-# Install ca-certificates for HTTPS
-RUN apk add --no-cache ca-certificates
+# ca-certificates for HTTPS, plus git + gh CLI: the GitProvider (github) adapter
+# shells out to `gh` for branch/PR/CI operations, which needs git available too.
+RUN apk add --no-cache ca-certificates git github-cli
 
 # Create non-root user
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup

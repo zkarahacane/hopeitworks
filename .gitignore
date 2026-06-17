@@ -47,3 +47,8 @@ deploy/docker-compose.local.yml
 
 # Claude Code agent worktrees (harness-managed)
 .claude/worktrees/
+
+# UI test capture artifacts
+.playwright-mcp/
+/ui-*.png
+/hopeitworks-ui-screens.pdf

@@ -78,6 +78,21 @@ func (r *Runner) Run(ctx context.Context) error {
 		}
 	}
 
+	// 4b. Commit and push the agent's changes when the provider succeeded.
+	// No-op when the working tree is clean (e.g. review-only roles). This is the
+	// step that turns claude's file edits into a real commit on the run's branch.
+	if lastResult.ExitCode == 0 {
+		msg := "feat: agent implementation"
+		if r.cfg.StoryKey != "" {
+			msg = fmt.Sprintf("feat(%s): agent implementation", r.cfg.StoryKey)
+		}
+		if err := git.CommitAndPush(ctx, workDir, r.cfg.BranchName, msg); err != nil {
+			_ = r.callback.SendLog(ctx, fmt.Sprintf("commit/push failed: %v", err))
+			_ = r.callback.SendStatus(ctx, 1, fmt.Sprintf("commit/push failed: %v", err))
+			return err
+		}
+	}
+
 	// 5. Send final status
 	errMsg := ""
 	if lastResult.ExitCode != 0 {
