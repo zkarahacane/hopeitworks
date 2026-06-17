@@ -21,9 +21,7 @@ beforeAll(() => {
   })
 })
 
-vi.mock('@/utils/formatDate', () => ({
-  formatRelativeDate: (date: string) => `mocked-${date}`,
-}))
+// formatRelativeDate is no longer used in AgentTable (Last Updated column removed in favour of AgentChip layout)
 
 const sampleAgents: Agent[] = [
   {
@@ -67,9 +65,10 @@ describe('AgentTable', () => {
   it('renders column headers', () => {
     const wrapper = mountComponent()
     const text = wrapper.text()
-    expect(text).toContain('Name')
+    // Column renamed: "Name" → "Agent" (now shows AgentChip with name+model inline)
+    expect(text).toContain('Agent')
     expect(text).toContain('Scope')
-    expect(text).toContain('Model')
+    // Model column removed — model is shown inside AgentChip in the Agent column
     expect(text).toContain('Image')
     expect(text).toContain('Actions')
   })
@@ -136,10 +135,11 @@ describe('AgentTable', () => {
     expect(deleteButtons.length).toBe(2)
   })
 
-  it('renders formatted dates using formatRelativeDate', () => {
+  it('model is visible via AgentChip inside Agent column', () => {
+    // Model column was removed; model is now rendered inside AgentChip in the Agent column.
     const wrapper = mountComponent()
     const text = wrapper.text()
-    expect(text).toContain('mocked-2026-01-15T10:00:00Z')
-    expect(text).toContain('mocked-2026-01-16T10:00:00Z')
+    expect(text).toContain('claude-opus-4-6')
+    expect(text).toContain('claude-sonnet-4-6')
   })
 })

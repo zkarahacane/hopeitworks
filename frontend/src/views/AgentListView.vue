@@ -69,7 +69,12 @@ function handleDelete(agentId: string) {
   <ConfirmDialog />
   <div class="flex flex-col gap-6 p-6">
     <div class="flex items-center justify-between">
-      <h1 class="text-2xl font-bold">Agents</h1>
+      <div class="flex flex-col gap-1">
+        <h1 class="text-2xl font-bold">Agents</h1>
+        <p class="text-sm" :style="{ color: 'var(--p-text-muted-color)' }">
+          Roles available to assign in your pipeline.
+        </p>
+      </div>
       <Button
         v-if="isAdmin && agents.length > 0"
         label="New Agent"
