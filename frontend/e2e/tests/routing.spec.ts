@@ -44,7 +44,8 @@ test.describe('Application Routing', () => {
     test('should render Dashboard view at /', async ({ page }) => {
       await page.goto('/')
 
-      await expect(page.locator('h1')).toHaveText('Dashboard')
+      // Redesign: dashboard greets the user instead of a static "Dashboard" title
+      await expect(page.locator('h1')).toHaveText(/Welcome back,/)
       await expect(page).toHaveURL('/')
     })
 
@@ -141,9 +142,9 @@ test.describe('Application Routing', () => {
     test('should navigate between routes using sidebar links (Dashboard → Projects)', async ({
       page,
     }) => {
-      // Start at dashboard
+      // Start at dashboard (redesign greets the user)
       await page.goto('/')
-      await expect(page.locator('h1')).toHaveText('Dashboard')
+      await expect(page.locator('h1')).toHaveText(/Welcome back,/)
 
       // Navigate to Projects using sidebar button
       const sidebar = page.locator('aside')
@@ -168,17 +169,17 @@ test.describe('Application Routing', () => {
     test('should redirect /projects to /login when unauthenticated', async ({ page }) => {
       await page.goto('/projects')
 
-      // Should be redirected to login with redirect param
+      // Should be redirected to login with redirect param (login heading is "Sign in")
       await expect(page).toHaveURL('/login?redirect=/projects')
-      await expect(page.locator('h1')).toHaveText('hopeitworks')
+      await expect(page.locator('h1')).toHaveText('Sign in')
     })
 
     test('should redirect /approvals to /login when unauthenticated', async ({ page }) => {
       await page.goto('/approvals')
 
-      // Should be redirected to login with redirect param
+      // Should be redirected to login with redirect param (login heading is "Sign in")
       await expect(page).toHaveURL('/login?redirect=/approvals')
-      await expect(page.locator('h1')).toHaveText('hopeitworks')
+      await expect(page.locator('h1')).toHaveText('Sign in')
     })
   })
 })

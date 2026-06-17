@@ -75,15 +75,20 @@ test.describe('HITL Pending List and Notification Badge', () => {
     const heading = page.locator('h1')
     await expect(heading).toHaveText('Approvals')
 
-    // Verify table rows are rendered
-    const table = page.locator('[data-testid="hitl-pending-table"]')
-    await expect(table.getByText('S-01')).toBeVisible()
-    await expect(table.getByText('S-02')).toBeVisible()
-    await expect(table.getByText('Implement login page')).toBeVisible()
-    await expect(table.getByText('Add dashboard')).toBeVisible()
+    // Redesign: pending items render as gate cards (one per pending request),
+    // each showing the story key. Story title is no longer shown on the card.
+    const cards = page.getByTestId('approvals-gate-card')
+    await expect(cards).toHaveCount(2)
+    await expect(page.getByTestId('hitl-gate-story').filter({ hasText: 'S-01' })).toBeVisible()
+    await expect(page.getByTestId('hitl-gate-story').filter({ hasText: 'S-02' })).toBeVisible()
   })
 
-  test('clicking Review navigates to the approval page', async ({ page }) => {
+  // TODO(redesign): the standalone "Review" button + navigation to
+  // /projects/:projectId/runs/:runId/approve/:stepId was removed. The Approvals
+  // page now exposes inline Approve / Request changes / Reject actions on each
+  // gate card (navigating to /runs/:runId on action), so this Review-navigation
+  // flow no longer exists and can't be salvaged without re-asserting a different intent.
+  test.skip('clicking Review navigates to the approval page', async ({ page }) => {
     await page.route('**/api/v1/hitl-requests?status=pending*', async (route) => {
       await route.fulfill({
         status: 200,

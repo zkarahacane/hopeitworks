@@ -61,7 +61,9 @@ test.describe('Board Page', () => {
     })
   })
 
-  test('displays epic cards with story counts', async ({ page }) => {
+  test('loads the board with epics available in the epic selector', async ({ page }) => {
+    // Redesign: the board no longer renders a grid of epic cards. Epics populate
+    // an epic dropdown; the first epic is auto-selected and its kanban is shown.
     await page.route('**/api/v1/projects/p1/epics*', async (route) => {
       await route.fulfill({
         status: 200,
@@ -76,13 +78,15 @@ test.describe('Board Page', () => {
     await page.goto('/projects/p1/board')
 
     await expect(page.getByRole('heading', { name: 'Story Board' })).toBeVisible()
-    await expect(page.getByRole('heading', { name: 'User Authentication' })).toBeVisible()
-    await expect(page.getByRole('heading', { name: 'Pipeline Execution' })).toBeVisible()
 
-    await expect(page.getByText('Backlog')).toHaveCount(2)
-    await expect(page.getByText('Running')).toHaveCount(2)
-    await expect(page.getByText('Done')).toHaveCount(2)
-    await expect(page.getByText('Failed')).toHaveCount(2)
+    // First epic auto-selected → its name shows in the epic selector
+    const epicSelect = page.locator('#epic-select')
+    await expect(epicSelect).toContainText('User Authentication')
+
+    // Both epics are offered as options in the selector
+    await epicSelect.click()
+    await expect(page.getByRole('option', { name: 'User Authentication' })).toBeVisible()
+    await expect(page.getByRole('option', { name: 'Pipeline Execution' })).toBeVisible()
   })
 
   test('displays empty state when no epics exist', async ({ page }) => {
@@ -99,11 +103,16 @@ test.describe('Board Page', () => {
 
     await page.goto('/projects/p1/board')
 
-    await expect(page.getByText('No epics found for this project')).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Create Epic' })).toBeVisible()
+    // Redesign: empty board prompts importing stories instead of creating an epic
+    await expect(page.getByText('No epics found. Import stories to get started.')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Create Epic' })).not.toBeVisible()
   })
 
-  test('navigates to epic detail when clicking an epic card', async ({ page }) => {
+  // TODO(redesign): epics are no longer rendered as clickable cards on the board.
+  // Selecting an epic in the dropdown loads its kanban in place (no navigation to
+  // /projects/:id/epics/:epicId), so this card-click → epic-detail navigation
+  // flow no longer exists.
+  test.skip('navigates to epic detail when clicking an epic card', async ({ page }) => {
     await page.route('**/api/v1/projects/p1/epics*', async (route) => {
       await route.fulfill({
         status: 200,
@@ -122,7 +131,11 @@ test.describe('Board Page', () => {
     await expect(page).toHaveURL('/projects/p1/epics/e1')
   })
 
-  test('displays error message with retry button on API failure', async ({ page }) => {
+  // TODO(redesign): an epics-fetch failure no longer surfaces a "Failed to load
+  // epics" banner with a Retry button on the board. The redesigned board shows an
+  // inline warn Message next to the epic selector (no retry) and falls back to the
+  // "No epics found" empty state, so this retry flow no longer exists here.
+  test.skip('displays error message with retry button on API failure', async ({ page }) => {
     let callCount = 0
     await page.route('**/api/v1/projects/p1/epics*', async (route) => {
       callCount++
@@ -156,7 +169,11 @@ test.describe('Board Page', () => {
     await expect(page.getByRole('heading', { name: 'User Authentication' })).toBeVisible()
   })
 
-  test('shows informational text for non-admin when no epics', async ({ page }) => {
+  // TODO(redesign): the board no longer renders an admin-gated "Create Epic" CTA
+  // nor a non-admin "Contact an administrator" hint. The empty state is a single
+  // "No epics found. Import stories to get started." message for all roles, so the
+  // role-specific empty-state copy this asserted no longer exists.
+  test.skip('shows informational text for non-admin when no epics', async ({ page }) => {
     await page.route('**/api/v1/auth/me', async (route) => {
       await route.fulfill({
         status: 200,

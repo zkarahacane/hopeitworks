@@ -271,7 +271,7 @@ test.describe('Pipeline Config — Groups', () => {
       await expect(page.getByTestId('branch-pattern-input')).toBeVisible()
 
       // Model selector should NOT be visible for git_branch
-      await expect(page.getByTestId('agent-select')).not.toBeVisible()
+      await expect(page.locator('.p-dialog').getByTestId('agent-select')).not.toBeVisible()
 
       // Submit
       await page.getByTestId('add-step-submit').click()
@@ -298,7 +298,7 @@ test.describe('Pipeline Config — Groups', () => {
       await expect(page.getByTestId('draft-toggle')).toBeVisible()
 
       // Model selector should NOT be visible for git_pr
-      await expect(page.getByTestId('agent-select')).not.toBeVisible()
+      await expect(page.locator('.p-dialog').getByTestId('agent-select')).not.toBeVisible()
 
       await page.getByTestId('add-step-submit').click()
       await expect(page.getByTestId('save-config-btn')).toBeEnabled()
@@ -320,7 +320,7 @@ test.describe('Pipeline Config — Groups', () => {
       await expect(page.getByTestId('notification-message-input')).toBeVisible()
 
       // Model selector should NOT be visible for notification
-      await expect(page.getByTestId('agent-select')).not.toBeVisible()
+      await expect(page.locator('.p-dialog').getByTestId('agent-select')).not.toBeVisible()
 
       await page.getByTestId('add-step-submit').click()
       await expect(page.getByTestId('save-config-btn')).toBeEnabled()
@@ -343,7 +343,7 @@ test.describe('Pipeline Config — Groups', () => {
       await expect(page.getByTestId('human-instructions-input')).toBeVisible()
 
       // Model selector should NOT be visible for human
-      await expect(page.getByTestId('agent-select')).not.toBeVisible()
+      await expect(page.locator('.p-dialog').getByTestId('agent-select')).not.toBeVisible()
 
       await page.getByTestId('add-step-submit').click()
       await expect(page.getByTestId('save-config-btn')).toBeEnabled()
@@ -358,14 +358,14 @@ test.describe('Pipeline Config — Groups', () => {
       await page.getByTestId('step-name-input').fill('changing-step')
 
       // Default type is agent_run — agent selector should be visible
-      await expect(page.getByTestId('agent-select')).toBeVisible()
+      await expect(page.locator('.p-dialog').getByTestId('agent-select')).toBeVisible()
 
       // Switch to git_branch
       await page.getByTestId('action-type-select').click()
       await page.getByRole('option', { name: 'Create Git Branch' }).click()
 
       // agent_run fields should be gone, git_branch fields should appear
-      await expect(page.getByTestId('agent-select')).not.toBeVisible()
+      await expect(page.locator('.p-dialog').getByTestId('agent-select')).not.toBeVisible()
       await expect(page.getByTestId('branch-pattern-input')).toBeVisible()
 
       // Switch to notification
@@ -382,7 +382,7 @@ test.describe('Pipeline Config — Groups', () => {
 
       // notification fields should be gone, agent selector should reappear
       await expect(page.getByTestId('notification-message-input')).not.toBeVisible()
-      await expect(page.getByTestId('agent-select')).toBeVisible()
+      await expect(page.locator('.p-dialog').getByTestId('agent-select')).toBeVisible()
     })
   })
 

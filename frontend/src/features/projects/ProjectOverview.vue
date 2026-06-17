@@ -54,6 +54,7 @@ watch(
       <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <!-- Left: Project info -->
         <div
+          data-testid="project-overview-card"
           style="
             background: var(--surface-raised);
             border: 1px solid var(--surface-border);

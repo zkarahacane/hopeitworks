@@ -56,11 +56,10 @@ test.describe('Project List Page', () => {
     // Page header is visible
     await expect(page.locator('h1')).toHaveText('Projects')
 
-    // Project cards are visible with project names and descriptions
+    // Project cards are visible with project names
+    // (redesign: cards show name + chips + story count, not the description text)
     await expect(page.getByText('Alpha Project')).toBeVisible()
     await expect(page.getByText('Beta Project')).toBeVisible()
-    await expect(page.getByText('First project')).toBeVisible()
-    await expect(page.getByText('Second project')).toBeVisible()
   })
 
   test('displays empty state when API returns no projects', async ({ page }) => {

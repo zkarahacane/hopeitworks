@@ -102,7 +102,7 @@ function onRetryTypeChange(value: PipelineStep['retry_policy']['retry_type']) {
       <span class="font-mono text-sm opacity-60">{{ index + 1 }}.</span>
 
       <!-- Step name -->
-      <span class="flex-1 font-medium text-sm min-w-0">{{ step.name }}</span>
+      <span class="flex-1 font-medium text-sm min-w-0" data-testid="step-name">{{ step.name }}</span>
 
       <!-- Human gate description -->
       <em v-if="isHuman" class="text-xs opacity-70" style="color: var(--status-gate-color)">human stops the pipeline here</em>

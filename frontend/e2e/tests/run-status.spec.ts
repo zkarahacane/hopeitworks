@@ -61,7 +61,16 @@ const mockStoriesWithRuns = [
   },
 ]
 
-test.describe('Run Status Display on Story Cards', () => {
+// TODO(redesign): the rich per-card RunStatusIndicator (data-testid
+// "run-status-indicator"/"run-status-text"/"run-status-icon" with "Running..."
+// text, relative-time, and a click→"Run Failed" toast) was removed from the
+// story list cards. The redesigned StoryStatusCard now shows story.status via a
+// plain StatusBadge (no relative time, no error toast, no per-card run
+// indicator). RunStatusIndicator.vue is now orphaned (referenced only by its own
+// unit test), so this whole "run status on story cards" surface no longer exists
+// and can't be salvaged with a selector swap — re-asserting StatusBadge would
+// change the tests' intent.
+test.describe.skip('Run Status Display on Story Cards', () => {
   test.beforeEach(async ({ page }) => {
     await page.route('**/api/v1/auth/me', async (route) => {
       await route.fulfill({
