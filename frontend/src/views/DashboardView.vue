@@ -1,109 +1,149 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
-import DataTable from 'primevue/datatable'
-import Column from 'primevue/column'
-import Tag from 'primevue/tag'
-import ProgressBar from 'primevue/progressbar'
 import Skeleton from 'primevue/skeleton'
 import Message from 'primevue/message'
 import Button from 'primevue/button'
-import Card from 'primevue/card'
 import { useRecentRuns } from '@/features/runs/composables/useRecentRuns'
-import { useHITLStore } from '@/stores/hitl'
-import { useProjects } from '@/composables/useProjects'
-import { runStatusSeverity } from '@/utils/runStatus'
-import { formatRelativeDate } from '@/utils/formatDate'
 import type { RunSummary } from '@/features/runs/composables/useRecentRuns'
+import { useHITLStore } from '@/stores/hitl'
+import { useAuthStore } from '@/stores/auth'
+import { useRuntimeStream } from '@/stores/runtimeStream'
+import { useProjects } from '@/composables/useProjects'
+import StatusBadge from '@/ui/primitives/StatusBadge.vue'
+import { formatRelativeDate } from '@/utils/formatDate'
 
 const router = useRouter()
-
-// Recent runs (cross-project, limit 10)
-const { runs, isLoading: runsLoading, error: runsError, refresh: refreshRuns } = useRecentRuns({ limit: 10 })
-
-// Pending approvals
+const authStore = useAuthStore()
 const hitlStore = useHITLStore()
-onMounted(() => hitlStore.fetchPending())
+const stream = useRuntimeStream()
 
-// Projects (quick access, limit 5)
-const { projects, isLoading: projectsLoading, error: projectsError, fetchProjects } = useProjects()
-onMounted(() => fetchProjects({ per_page: 5, page: 1 }))
+// Recent runs (cross-project, limit 20 so dedup still gives enough)
+const { runs, isLoading: runsLoading, error: runsError, refresh: refreshRuns } = useRecentRuns({ limit: 20 })
 
-const activeRunCount = computed(() => runs.value.filter((r) => r.status === 'running').length)
-const projectCount = computed(() => projects.value.length)
+// Projects (prefetch to prime the store; projects ref not used directly in this view)
+const { fetchProjects } = useProjects()
 
-function onRunRowClick(row: RunSummary) {
-  router.push({ name: 'run-detail', params: { id: row.id }, query: { projectId: row.project_id } })
+onMounted(() => {
+  hitlStore.fetchPending()
+  fetchProjects({ per_page: 5, page: 1 })
+})
+
+// Clock tick for live elapsed timers
+let tickInterval: ReturnType<typeof setInterval> | null = null
+onMounted(() => {
+  tickInterval = setInterval(() => stream.tick(), 1000)
+})
+onBeforeUnmount(() => {
+  if (tickInterval) clearInterval(tickInterval)
+})
+
+// ── Dedup runs by story_id, keep most recent per story ───────────────────────
+const dedupedRuns = computed(() => {
+  const byStory = new Map<string, RunSummary>()
+  for (const run of runs.value) {
+    const existing = byStory.get(run.story_id)
+    if (!existing || new Date(run.created_at) > new Date(existing.created_at)) {
+      byStory.set(run.story_id, run)
+    }
+  }
+  return [...byStory.values()].sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+  )
+})
+
+// ── KPI counts ────────────────────────────────────────────────────────────────
+const activeRunCount = computed(() => dedupedRuns.value.filter((r) => r.status === 'running').length)
+const gatesWaiting = computed(() => hitlStore.pendingCount)
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function formatElapsed(s: number): string {
+  const m = Math.floor(s / 60)
+  const sec = s % 60
+  return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
 }
+
+function navigateToRun(run: RunSummary) {
+  router.push({ name: 'run-detail', params: { id: run.id }, query: { projectId: run.project_id } })
+}
+
+function navigateToApproval(item: typeof hitlStore.pendingItems[0]) {
+  router.push(
+    '/projects/' + item.projectId + '/runs/' + item.runId + '/approve/' + item.stepId,
+  )
+}
+
 </script>
 
 <template>
   <div class="flex flex-col gap-6 p-6">
     <!-- Header -->
     <div>
-      <h1 class="text-2xl font-bold">Dashboard</h1>
-      <p class="text-surface-500 mt-1">Welcome back</p>
+      <h1 class="text-2xl font-bold">Welcome back, {{ authStore.user?.name || 'there' }}</h1>
+      <p class="mt-1" style="color: var(--p-surface-400)">Here's what's happening right now.</p>
     </div>
 
-    <!-- Stat cards row -->
-    <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
-      <Card class="shadow-sm">
-        <template #content>
-          <div class="flex items-center gap-3">
-            <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-orange-100 text-orange-600">
-              <i class="pi pi-bell text-lg" />
-            </div>
-            <div>
-              <p class="text-sm text-surface-500">Pending Approvals</p>
-              <p class="text-2xl font-bold">{{ hitlStore.pendingCount }}</p>
-            </div>
-          </div>
-          <Button
-            v-if="hitlStore.pendingCount > 0"
-            label="View approvals"
-            text
-            size="small"
-            class="mt-2 !p-0"
-            @click="router.push({ name: 'approvals' })"
+    <!-- KPI cards row -->
+    <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <!-- Active Runs -->
+      <div
+        class="flex flex-col gap-3 rounded-xl p-4"
+        style="background: var(--p-surface-800); border: 1px solid var(--p-surface-700)"
+      >
+        <div class="flex items-center justify-between">
+          <span class="text-sm" style="color: var(--p-surface-400)">Active runs</span>
+          <i class="pi pi-play text-lg" style="color: var(--status-running-color)" />
+        </div>
+        <span class="text-3xl font-bold" style="color: var(--status-running-color)">{{ activeRunCount }}</span>
+      </div>
+
+      <!-- Gates waiting -->
+      <div
+        class="flex flex-col gap-3 rounded-xl p-4"
+        style="background: var(--p-surface-800); border: 1px solid var(--p-surface-700)"
+      >
+        <div class="flex items-center justify-between">
+          <span class="text-sm" style="color: var(--p-surface-400)">Gates waiting</span>
+          <i
+            class="pi pi-pause-circle text-lg"
+            :class="{ 'amber-breathe': gatesWaiting > 0 }"
+            style="color: var(--status-gate-color)"
           />
-        </template>
-      </Card>
+        </div>
+        <span class="text-3xl font-bold" style="color: var(--status-gate-color)">{{ gatesWaiting }}</span>
+      </div>
 
-      <Card class="shadow-sm">
-        <template #content>
-          <div class="flex items-center gap-3">
-            <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 text-blue-600">
-              <i class="pi pi-play text-lg" />
-            </div>
-            <div>
-              <p class="text-sm text-surface-500">Active Runs</p>
-              <p class="text-2xl font-bold">{{ activeRunCount }}</p>
-            </div>
-          </div>
-        </template>
-      </Card>
+      <!-- Stories done today -->
+      <div
+        class="flex flex-col gap-3 rounded-xl p-4"
+        style="background: var(--p-surface-800); border: 1px solid var(--p-surface-700)"
+      >
+        <div class="flex items-center justify-between">
+          <span class="text-sm" style="color: var(--p-surface-400)">Stories done today</span>
+          <i class="pi pi-check-circle text-lg" style="color: var(--status-done-color)" />
+        </div>
+        <span class="text-3xl font-bold" style="color: var(--status-done-color)">0</span>
+      </div>
 
-      <Card class="shadow-sm">
-        <template #content>
-          <div class="flex items-center gap-3">
-            <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-green-100 text-green-600">
-              <i class="pi pi-folder text-lg" />
-            </div>
-            <div>
-              <p class="text-sm text-surface-500">Projects</p>
-              <p class="text-2xl font-bold">{{ projectCount }}</p>
-            </div>
-          </div>
-        </template>
-      </Card>
+      <!-- Spend today -->
+      <div
+        class="flex flex-col gap-3 rounded-xl p-4"
+        style="background: var(--p-surface-800); border: 1px solid var(--p-surface-700)"
+      >
+        <div class="flex items-center justify-between">
+          <span class="text-sm" style="color: var(--p-surface-400)">Spend today</span>
+          <i class="pi pi-dollar text-lg" style="color: var(--status-done-color)" />
+        </div>
+        <span class="text-3xl font-bold font-mono" style="color: var(--status-done-color)">$0.00</span>
+      </div>
     </div>
 
-    <!-- Main content grid -->
+    <!-- Main 2-col grid -->
     <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
-      <!-- Recent Runs (wide column) -->
-      <div class="lg:col-span-2">
-        <div class="flex items-center justify-between mb-3">
-          <h2 class="text-lg font-semibold">Recent Runs</h2>
+      <!-- Live Runs (2/3) -->
+      <div class="lg:col-span-2 flex flex-col gap-3">
+        <div class="flex items-center justify-between">
+          <h2 class="text-lg font-semibold">Live Runs</h2>
           <Button
             v-if="!runsLoading && !runsError"
             icon="pi pi-refresh"
@@ -118,7 +158,7 @@ function onRunRowClick(row: RunSummary) {
 
         <!-- Loading -->
         <div v-if="runsLoading" class="flex flex-col gap-2">
-          <Skeleton v-for="i in 4" :key="i" width="100%" height="2.5rem" />
+          <Skeleton v-for="i in 4" :key="i" width="100%" height="3rem" />
         </div>
 
         <!-- Error -->
@@ -130,79 +170,96 @@ function onRunRowClick(row: RunSummary) {
         </Message>
 
         <!-- Empty -->
-        <div v-else-if="runs.length === 0" class="flex flex-col items-center py-8 text-surface-400">
-          <i class="pi pi-play text-3xl mb-2" />
+        <div
+          v-else-if="dedupedRuns.length === 0"
+          class="flex flex-col items-center py-10 gap-2"
+          style="color: var(--p-surface-400)"
+        >
+          <i class="pi pi-play text-3xl" />
           <p>No runs yet</p>
         </div>
 
-        <!-- Table -->
-        <DataTable
-          v-else
-          :value="runs"
-          :rows="10"
-          row-hover
-          class="cursor-pointer"
-          data-testid="dashboard-runs-table"
-          @row-click="onRunRowClick($event.data)"
-        >
-          <Column field="project_name" header="Project" />
-          <Column field="story_key" header="Story Key" />
-          <Column field="status" header="Status">
-            <template #body="{ data }">
-              <Tag :value="data.status" :severity="runStatusSeverity[data.status]" />
-            </template>
-          </Column>
-          <Column field="progress" header="Progress">
-            <template #body="{ data }">
-              <ProgressBar :value="data.progress ?? 0" :show-value="false" style="height: 0.5rem; width: 6rem" />
-            </template>
-          </Column>
-          <Column field="started_at" header="Started">
-            <template #body="{ data }">
-              {{ data.started_at ? formatRelativeDate(data.started_at) : '-' }}
-            </template>
-          </Column>
-        </DataTable>
+        <!-- Run rows -->
+        <div v-else class="flex flex-col gap-2">
+          <div
+            v-for="run in dedupedRuns"
+            :key="run.id"
+            class="flex items-center gap-3 rounded-lg px-4 py-3 cursor-pointer transition-colors"
+            style="background: var(--p-surface-800); border: 1px solid var(--p-surface-700)"
+            @click="navigateToRun(run)"
+          >
+            <StatusBadge :status="run.status" />
+
+            <div class="flex flex-col min-w-0 flex-1 gap-0.5">
+              <span class="font-mono text-sm truncate">{{ run.story_key || run.story_id }}</span>
+              <span class="text-xs truncate" style="color: var(--p-surface-400)">{{ run.project_name || run.project_id }}</span>
+            </div>
+
+            <span class="text-xs shrink-0 font-mono" style="color: var(--p-surface-400)">
+              <template v-if="run.status === 'running'">
+                {{ formatElapsed(stream.runElapsedSeconds(run.id)) }}
+              </template>
+              <template v-else>
+                {{ formatRelativeDate(run.started_at || run.created_at) }}
+              </template>
+            </span>
+          </div>
+        </div>
       </div>
 
-      <!-- Projects quick-access (narrow column) -->
-      <div>
-        <h2 class="text-lg font-semibold mb-3">Projects</h2>
-
-        <!-- Loading -->
-        <div v-if="projectsLoading" class="flex flex-col gap-2">
-          <Skeleton v-for="i in 3" :key="i" width="100%" height="2rem" />
-        </div>
-
-        <!-- Error -->
-        <Message v-else-if="projectsError" severity="error" :closable="false" class="text-sm">
-          Failed to load projects
-        </Message>
+      <!-- Needs you panel (1/3) -->
+      <div class="flex flex-col gap-3">
+        <h2 class="text-lg font-semibold">
+          Needs you
+          <span
+            v-if="gatesWaiting > 0"
+            class="ml-2 rounded-full px-2 py-0.5 text-xs font-bold"
+            style="background: var(--status-gate-color); color: #000"
+          >{{ gatesWaiting }}</span>
+        </h2>
 
         <!-- Empty -->
-        <div v-else-if="projects.length === 0" class="text-surface-400 text-sm py-4">
-          No projects yet
+        <div
+          v-if="hitlStore.pendingItems.length === 0"
+          class="rounded-lg px-4 py-6 text-center text-sm"
+          style="color: var(--p-surface-400); background: var(--p-surface-800); border: 1px solid var(--p-surface-700)"
+        >
+          No pending approvals
         </div>
 
-        <!-- List -->
-        <div v-else class="flex flex-col gap-1">
+        <!-- Items (up to 3) -->
+        <div
+          v-for="item in hitlStore.pendingItems.slice(0, 3)"
+          :key="item.hitlRequestId"
+          class="flex flex-col gap-2 rounded-lg px-4 py-3"
+          style="border-left: 3px solid var(--status-gate-color); background: var(--p-surface-800)"
+        >
+          <div class="flex items-center gap-2">
+            <span class="font-mono text-sm">{{ item.storyKey }}</span>
+            <span
+              class="rounded px-1.5 py-0.5 text-xs font-semibold"
+              style="background: color-mix(in srgb, var(--status-gate-color) 20%, transparent); color: var(--status-gate-color)"
+            >awaiting</span>
+          </div>
+          <p class="text-sm truncate" style="color: var(--p-surface-300)">{{ item.storyTitle || '—' }}</p>
           <Button
-            v-for="project in projects"
-            :key="project.id"
-            :label="project.name"
-            icon="pi pi-folder"
-            text
-            class="w-full justify-start"
-            @click="router.push({ name: 'project-overview', params: { id: project.id } })"
-          />
-          <Button
-            label="View all projects"
-            text
+            label="Approve"
+            severity="warn"
             size="small"
-            class="mt-2 !p-0 text-primary"
-            @click="router.push({ name: 'projects' })"
+            @click.stop="navigateToApproval(item)"
           />
         </div>
+
+        <!-- More link if > 3 -->
+        <Button
+          v-if="hitlStore.pendingItems.length > 3"
+          :label="`View all ${hitlStore.pendingItems.length} approvals`"
+          text
+          size="small"
+          severity="warn"
+          class="w-full"
+          @click="router.push({ name: 'approvals' })"
+        />
       </div>
     </div>
   </div>
