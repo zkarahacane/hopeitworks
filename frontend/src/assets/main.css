@@ -25,14 +25,26 @@
   --font-sans: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', 'Menlo', monospace;
 
-  /* App content background — the scroll surface behind page content. Sits one
-   * step below cards so `--p-surface-0` cards/panels get elevation in BOTH
-   * schemes (the PrimeVue surface ramp is inverted, so no single --p-surface-N
-   * gives "below the card" in both light and dark — define them explicitly). */
-  --app-content-bg: #f6f8f6; /* light: surfaceTokens.light.base */
-  /* App chrome (sidebar / header / status bar) — the raised panel surface,
-   * one step above the content scroll surface so the shell reads as a frame. */
-  --app-chrome-bg: #ffffff; /* light: surfaceTokens.light.raised */
+  /* ── Canonical semantic surface system ─────────────────────────────────────
+   * THE single surface contract. Scheme-aware (light here, dark under .dark),
+   * mapped to the design palette in theme/tokens.ts (surfaceTokens). Components
+   * consume ONLY these — never raw PrimeVue primitives (--p-surface-N) or hexes.
+   * The PrimeVue surface ramp is inverted between schemes, so no single
+   * --p-surface-N means the same thing in both; these tokens fix that.
+   *
+   *   --surface-base    app / content scroll background (deepest)
+   *   --surface-raised  cards / panels / chrome (sits above base)
+   *   --surface-overlay nested rows / hover / inputs / log surfaces
+   *   --surface-border  borders / dividers
+   *
+   * Text uses PrimeVue semantic tokens (--p-text-color / --p-text-muted-color)
+   * which already flip per scheme. --text-subtle is a third, dimmer level for
+   * the rare cases the two-level system is not enough. */
+  --surface-base: #f6f8f6;
+  --surface-raised: #ffffff;
+  --surface-overlay: #eff2ef;
+  --surface-border: #d7dcd8;
+  --text-subtle: #717a74; /* light: between muted and border (surface-500) */
 
   /* running → phosphor green (animated) */
   --status-running-color: #16a34a;
@@ -54,10 +66,12 @@
 }
 
 .dark {
-  /* App content background — dark app base, below the raised cards. */
-  --app-content-bg: #0b0f0d; /* dark: surfaceTokens.dark.base */
-  /* App chrome — raised surface above the dark content base. */
-  --app-chrome-bg: #131a16; /* dark: surfaceTokens.dark.raised */
+  /* Canonical semantic surfaces — dark scheme (surfaceTokens.dark). */
+  --surface-base: #0b0f0d;
+  --surface-raised: #131a16;
+  --surface-overlay: #1a221d;
+  --surface-border: #28332c;
+  --text-subtle: #6e7a73; /* dark: between muted and border */
 
   /* running → vivid phosphor green */
   --status-running-color: #39ff8b;
