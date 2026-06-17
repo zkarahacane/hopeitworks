@@ -713,6 +713,14 @@ func (m *storyHandlerRunRepo) ListRetryStepsByParent(_ context.Context, _ uuid.U
 	return nil, nil
 }
 
+func (m *storyHandlerRunRepo) UpdateRunMetadata(_ context.Context, _ uuid.UUID, _ map[string]interface{}) error {
+	return nil
+}
+
+func (m *storyHandlerRunRepo) AppendStepLogTail(_ context.Context, _ uuid.UUID, _ string) error {
+	return nil
+}
+
 func TestGetStory_PopulatesLatestRun(t *testing.T) {
 	h, repo, runRepo := setupStoryHandlerWithRuns()
 	projectID := uuid.New()

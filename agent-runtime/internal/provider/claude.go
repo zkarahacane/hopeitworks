@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"strings"
 )
 
 // ClaudeProvider wraps the Claude Code CLI.
@@ -13,18 +14,26 @@ type ClaudeProvider struct {
 	apiKey string
 }
 
-// claudeStreamLine represents a single line of Claude Code's stream-json output.
+// claudeContentBlock is one block of an assistant message's content array.
+type claudeContentBlock struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
+}
+
+// claudeStreamLine represents a single line of Claude Code's --output-format
+// stream-json output. Assistant text lives at message.content[].text; the final
+// "result" event carries total_cost_usd and usage at the TOP level of the event.
 type claudeStreamLine struct {
 	Type    string `json:"type"`
-	Content string `json:"content"`
-	Message string `json:"message"`
-	Result  *struct {
-		TotalCostUSD float64 `json:"total_cost_usd"`
-		Usage        *struct {
-			InputTokens  int64 `json:"input_tokens"`
-			OutputTokens int64 `json:"output_tokens"`
-		} `json:"usage"`
-	} `json:"result"`
+	Subtype string `json:"subtype"`
+	Message *struct {
+		Content []claudeContentBlock `json:"content"`
+	} `json:"message"`
+	TotalCostUSD float64 `json:"total_cost_usd"`
+	Usage        *struct {
+		InputTokens  int64 `json:"input_tokens"`
+		OutputTokens int64 `json:"output_tokens"`
+	} `json:"usage"`
 }
 
 // Run executes the Claude Code CLI in workDir with the given prompt.
@@ -40,7 +49,15 @@ func (c *ClaudeProvider) Run(ctx context.Context, workDir string, prompt string,
 		prompt,
 	)
 	cmd.Dir = workDir
-	cmd.Env = append(cmd.Environ(), "ANTHROPIC_API_KEY="+c.apiKey)
+	// Route the credential to the right auth env based on its type:
+	//   - OAuth tokens (sk-ant-oat...) authenticate Claude Code against a
+	//     subscription via CLAUDE_CODE_OAUTH_TOKEN (no API billing).
+	//   - API keys (sk-ant-api... or any other) use the billed API via ANTHROPIC_API_KEY.
+	authEnv := "ANTHROPIC_API_KEY=" + c.apiKey
+	if strings.HasPrefix(c.apiKey, "sk-ant-oat") {
+		authEnv = "CLAUDE_CODE_OAUTH_TOKEN=" + c.apiKey
+	}
+	cmd.Env = append(cmd.Environ(), authEnv)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -75,28 +92,33 @@ func (c *ClaudeProvider) Run(ctx context.Context, workDir string, prompt string,
 
 			switch parsed.Type {
 			case "assistant":
-				msg := parsed.Content
-				if msg == "" {
-					msg = parsed.Message
-				}
-				if msg != "" {
-					events <- Event{Type: "log", Message: msg}
+				if parsed.Message != nil {
+					var sb strings.Builder
+					for _, b := range parsed.Message.Content {
+						if b.Type == "text" && b.Text != "" {
+							if sb.Len() > 0 {
+								sb.WriteByte('\n')
+							}
+							sb.WriteString(b.Text)
+						}
+					}
+					if sb.Len() > 0 {
+						events <- Event{Type: "log", Message: sb.String()}
+					}
 				}
 
 			case "result":
-				if parsed.Result != nil {
-					var inputTokens, outputTokens int64
-					if parsed.Result.Usage != nil {
-						inputTokens = parsed.Result.Usage.InputTokens
-						outputTokens = parsed.Result.Usage.OutputTokens
-					}
-					events <- Event{
-						Type:         "cost",
-						InputTokens:  inputTokens,
-						OutputTokens: outputTokens,
-						Model:        model,
-						CostUSD:      parsed.Result.TotalCostUSD,
-					}
+				var inputTokens, outputTokens int64
+				if parsed.Usage != nil {
+					inputTokens = parsed.Usage.InputTokens
+					outputTokens = parsed.Usage.OutputTokens
+				}
+				events <- Event{
+					Type:         "cost",
+					InputTokens:  inputTokens,
+					OutputTokens: outputTokens,
+					Model:        model,
+					CostUSD:      parsed.TotalCostUSD,
 				}
 			}
 		}

@@ -349,11 +349,11 @@ func (a *AgentRunAction) streamAndWait(
 	// Wait for log goroutine to finish
 	wg.Wait()
 
-	// On failure, persist log tail
-	if exitCode != 0 {
-		tail := strings.Join(logTail, "\n")
-		a.persistLogTail(ctx, runCtx.RunStep.ID, tail)
-	}
+	// Persist the log tail for every step — not just failures — so an agent's
+	// output stays visible in the UI after a successful run, and still feeds
+	// error context into retries on failure.
+	tail := strings.Join(logTail, "\n")
+	a.persistLogTail(ctx, runCtx.RunStep.ID, tail)
 
 	// Record accumulated cost events, regardless of exit code.
 	// Cost recording failure is non-fatal.

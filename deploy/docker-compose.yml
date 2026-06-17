@@ -61,7 +61,8 @@ services:
       JWT_SECRET: ${JWT_SECRET:-dev-secret-key-change-in-production}
       # --- docker / agent runtime ---
       DOCKER_HOST: tcp://socket-proxy:2375
-      DOCKER_AGENT_NETWORK: ${DOCKER_AGENT_NETWORK:-deploy_hopeitworks_agent-network}
+      # Compose names this network "<project>_agent-network" (project = compose dir, "deploy").
+      DOCKER_AGENT_NETWORK: ${DOCKER_AGENT_NETWORK:-deploy_agent-network}
       AGENT_IMAGE: ${AGENT_IMAGE:-hopeitworks/agent-go-node:latest}
       CLAUDE_MD_PATH: ${CLAUDE_MD_PATH:-agent/claude-md}
       # --- agent tokens (required for pipeline execution) ---
