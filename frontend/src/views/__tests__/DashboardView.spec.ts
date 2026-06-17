@@ -70,8 +70,8 @@ describe('DashboardView — dedupedRuns (fix #5)', () => {
 
     const result = dedupRuns([older, newer])
     expect(result).toHaveLength(1)
-    expect(result[0].id).toBe('run-new')
-    expect(result[0].status).toBe('running')
+    expect(result[0]!.id).toBe('run-new')
+    expect(result[0]!.status).toBe('running')
   })
 
   it('keeps 6 identical story_id rows as a single entry (original bug #5 scenario)', () => {
@@ -89,7 +89,7 @@ describe('DashboardView — dedupedRuns (fix #5)', () => {
     const result = dedupRuns(duplicates)
     expect(result).toHaveLength(1)
     // The most recent (index 5, hour 05) is the retained one
-    expect(result[0].id).toBe('run-5')
+    expect(result[0]!.id).toBe('run-5')
   })
 
   it('preserves distinct runs from different stories', () => {
