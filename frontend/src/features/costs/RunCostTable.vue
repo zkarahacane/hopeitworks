@@ -22,13 +22,16 @@ const skeletonRows = [1, 2, 3]
 </script>
 
 <template>
-  <div class="rounded-lg border border-surface-200 bg-surface-0">
-    <div class="border-b border-surface-200 px-4 py-3">
+  <div
+    class="rounded-lg"
+    :style="{ background: 'var(--surface-raised)', border: '1px solid var(--surface-border)' }"
+  >
+    <div class="px-4 py-3" :style="{ borderBottom: '1px solid var(--surface-border)' }">
       <h3 class="font-semibold">Recent Runs</h3>
     </div>
 
     <!-- Skeleton loading state -->
-    <div v-if="isLoading" class="divide-y divide-surface-100">
+    <div v-if="isLoading" class="divide-y" :style="{ '--tw-divide-color': 'var(--surface-border)' }">
       <div v-for="n in skeletonRows" :key="n" class="flex items-center gap-4 px-4 py-3">
         <Skeleton width="4rem" height="1.25rem" />
         <Skeleton width="5rem" height="1.5rem" class="rounded-full" />
@@ -42,8 +45,8 @@ const skeletonRows = [1, 2, 3]
       v-else-if="runs.length === 0"
       class="flex flex-col items-center justify-center py-10"
     >
-      <i class="pi pi-list mb-3 text-3xl text-surface-300" />
-      <p class="text-surface-500">No runs in this period</p>
+      <i class="pi pi-list mb-3 text-3xl" :style="{ color: 'var(--p-text-muted-color)' }" />
+      <p :style="{ color: 'var(--p-text-muted-color)' }">No runs in this period</p>
     </div>
 
     <!-- Data table -->

@@ -41,22 +41,22 @@ const onSubmit = handleSubmit(async (values) => {
 </script>
 
 <template>
-  <div class="flex min-h-screen items-center justify-center p-6" style="background: var(--p-surface-900)">
+  <div class="flex min-h-screen items-center justify-center p-6" style="background: var(--surface-base)">
     <div
       class="flex w-full max-w-sm flex-col gap-6 rounded-xl p-8"
-      style="background: var(--p-surface-800)"
+      style="background: var(--surface-raised)"
     >
       <div>
-        <p class="text-xs font-semibold tracking-widest uppercase mb-4" style="color: var(--p-surface-400)">
+        <p class="text-xs font-semibold tracking-widest uppercase mb-4" style="color: var(--p-text-muted-color)">
           hopeitworks
         </p>
-        <h1 class="text-2xl font-bold" style="color: var(--p-surface-0)">Set new password</h1>
+        <h1 class="text-2xl font-bold" style="color: var(--p-text-color)">Set new password</h1>
       </div>
 
       <template v-if="hasToken">
         <form class="flex flex-col gap-4" @submit.prevent="onSubmit">
           <div class="flex flex-col gap-1">
-            <label for="password" class="text-sm font-medium" style="color: var(--p-surface-200)">New password</label>
+            <label for="password" class="text-sm font-medium" style="color: var(--p-text-color)">New password</label>
             <Password
               inputId="password"
               v-model="password"
@@ -70,7 +70,7 @@ const onSubmit = handleSubmit(async (values) => {
           </div>
 
           <div class="flex flex-col gap-1">
-            <label for="confirmPassword" class="text-sm font-medium" style="color: var(--p-surface-200)">Confirm new password</label>
+            <label for="confirmPassword" class="text-sm font-medium" style="color: var(--p-text-color)">Confirm new password</label>
             <Password
               inputId="confirmPassword"
               v-model="confirmPassword"
