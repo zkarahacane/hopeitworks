@@ -169,6 +169,12 @@ func (m *epicRunRepo) ListRunsByStory(_ context.Context, _ uuid.UUID, _, _ int32
 func (m *epicRunRepo) UpdateRunStatus(_ context.Context, _ uuid.UUID, _ model.RunStatus, _, _, _ *time.Time, _ *string) (*model.Run, error) {
 	return nil, nil
 }
+func (m *epicRunRepo) UpdateRunMetadata(_ context.Context, _ uuid.UUID, _ map[string]interface{}) error {
+	return nil
+}
+func (m *epicRunRepo) AppendStepLogTail(_ context.Context, _ uuid.UUID, _ string) error {
+	return nil
+}
 func (m *epicRunRepo) CountRunsByProject(_ context.Context, _ uuid.UUID) (int64, error) {
 	return 0, nil
 }

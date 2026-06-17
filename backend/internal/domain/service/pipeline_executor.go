@@ -271,6 +271,17 @@ func (e *PipelineExecutor) executeStep(ctx context.Context, run *model.Run, step
 		return err
 	}
 
+	// Persist metadata mutations made by the action (e.g. branch_name set by git_branch)
+	// so they survive a HITL suspend/resume where a fresh ExecuteRun reads from the DB.
+	// Non-fatal: log and continue if the write fails.
+	if persistErr := e.runRepo.UpdateRunMetadata(ctx, run.ID, metadata); persistErr != nil {
+		e.logger.Warn("failed to persist run metadata after step",
+			"run_id", run.ID,
+			"step_id", step.ID,
+			"error", persistErr,
+		)
+	}
+
 	// Re-fetch step to detect suspension (e.g., hitl_gate sets waiting_approval)
 	refetchedStep, fetchErr := e.runRepo.GetRunStep(ctx, step.ID)
 	if fetchErr != nil {

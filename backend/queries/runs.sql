@@ -48,6 +48,9 @@ WHERE story_id = $1 AND status IN ('pending', 'running', 'paused')
 ORDER BY created_at DESC
 LIMIT 1;
 
+-- name: UpdateRunMetadata :exec
+UPDATE runs SET metadata = $2, updated_at = now() WHERE id = $1;
+
 -- name: UpdateRunStatus :one
 UPDATE runs
 SET status = $2,

@@ -999,3 +999,11 @@ func (m *mockRunRepo) GetLatestRunsByStories(_ context.Context, _ []uuid.UUID) (
 func (m *mockRunRepo) GetDAGNodeRunInfoByStories(_ context.Context, _ []uuid.UUID) (map[uuid.UUID]model.DAGNodeRunInfo, error) {
 	return map[uuid.UUID]model.DAGNodeRunInfo{}, nil
 }
+
+func (m *mockRunRepo) UpdateRunMetadata(_ context.Context, _ uuid.UUID, _ map[string]interface{}) error {
+	return nil
+}
+
+func (m *mockRunRepo) AppendStepLogTail(_ context.Context, _ uuid.UUID, _ string) error {
+	return nil
+}

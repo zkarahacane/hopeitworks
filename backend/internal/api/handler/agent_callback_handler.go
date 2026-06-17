@@ -2,7 +2,9 @@ package handler
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -90,6 +92,14 @@ func (h *AgentCallbackHandler) HandleLogs(w http.ResponseWriter, r *http.Request
 			Payload:    payload,
 		}
 		_ = h.eventPub.Publish(r.Context(), event)
+	}
+
+	// Persist log lines to run_steps.log_tail (bounded tail, non-fatal on failure).
+	if len(req.Lines) > 0 {
+		joined := strings.Join(req.Lines, "\n") + "\n"
+		if err := h.runRepo.AppendStepLogTail(r.Context(), stepID, joined); err != nil {
+			slog.Warn("failed to persist log tail", "step_id", stepID, "error", err)
+		}
 	}
 
 	w.WriteHeader(http.StatusOK)

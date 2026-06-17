@@ -231,6 +231,24 @@ func (r *RunRepo) UpdateRunStatus(ctx context.Context, id uuid.UUID, status mode
 	return toDomainRun(row), nil
 }
 
+func (r *RunRepo) UpdateRunMetadata(ctx context.Context, runID uuid.UUID, metadata map[string]interface{}) error {
+	metadataJSON := []byte("{}")
+	if metadata != nil {
+		var err error
+		metadataJSON, err = json.Marshal(metadata)
+		if err != nil {
+			return apperrors.NewInternal("failed to marshal run metadata", err)
+		}
+	}
+	if err := r.queries.UpdateRunMetadata(ctx, UpdateRunMetadataParams{
+		ID:       runID,
+		Metadata: metadataJSON,
+	}); err != nil {
+		return apperrors.NewInternal("failed to update run metadata", err)
+	}
+	return nil
+}
+
 func (r *RunRepo) CountRunsByProject(ctx context.Context, projectID uuid.UUID) (int64, error) {
 	count, err := r.queries.CountRunsByProject(ctx, projectID)
 	if err != nil {
@@ -402,6 +420,16 @@ func (r *RunRepo) CreateRetryRunStep(ctx context.Context, step *model.RunStep) (
 		return nil, apperrors.NewInternal("failed to create retry run step", err)
 	}
 	return toDomainRunStep(row), nil
+}
+
+func (r *RunRepo) AppendStepLogTail(ctx context.Context, stepID uuid.UUID, text string) error {
+	if err := r.queries.AppendRunStepLogTail(ctx, AppendRunStepLogTailParams{
+		ID:      stepID,
+		LogTail: pgtype.Text{String: text, Valid: true},
+	}); err != nil {
+		return apperrors.NewInternal("failed to append run step log tail", err)
+	}
+	return nil
 }
 
 func (r *RunRepo) ListRetryStepsByParent(ctx context.Context, parentStepID uuid.UUID) ([]*model.RunStep, error) {

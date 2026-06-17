@@ -42,3 +42,8 @@ RETURNING *;
 SELECT * FROM run_steps
 WHERE parent_step_id = $1
 ORDER BY retry_count ASC;
+
+-- name: AppendRunStepLogTail :exec
+UPDATE run_steps
+SET log_tail = right(coalesce(log_tail, '') || $2, 16000)
+WHERE id = $1;

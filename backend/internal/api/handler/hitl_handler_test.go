@@ -467,3 +467,11 @@ func (m *mockRunRepoForHITLHandler) GetLatestRunsByStories(_ context.Context, _ 
 func (m *mockRunRepoForHITLHandler) GetDAGNodeRunInfoByStories(_ context.Context, _ []uuid.UUID) (map[uuid.UUID]model.DAGNodeRunInfo, error) {
 	return map[uuid.UUID]model.DAGNodeRunInfo{}, nil
 }
+
+func (m *mockRunRepoForHITLHandler) UpdateRunMetadata(_ context.Context, _ uuid.UUID, _ map[string]interface{}) error {
+	return nil
+}
+
+func (m *mockRunRepoForHITLHandler) AppendStepLogTail(_ context.Context, _ uuid.UUID, _ string) error {
+	return nil
+}

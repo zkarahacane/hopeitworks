@@ -617,3 +617,11 @@ func (m *runHandlerRunRepo) GetLatestRunsByStories(_ context.Context, _ []uuid.U
 func (m *runHandlerRunRepo) GetDAGNodeRunInfoByStories(_ context.Context, _ []uuid.UUID) (map[uuid.UUID]model.DAGNodeRunInfo, error) {
 	return map[uuid.UUID]model.DAGNodeRunInfo{}, nil
 }
+
+func (m *runHandlerRunRepo) UpdateRunMetadata(_ context.Context, _ uuid.UUID, _ map[string]interface{}) error {
+	return nil
+}
+
+func (m *runHandlerRunRepo) AppendStepLogTail(_ context.Context, _ uuid.UUID, _ string) error {
+	return nil
+}

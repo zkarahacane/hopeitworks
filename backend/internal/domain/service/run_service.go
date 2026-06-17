@@ -327,10 +327,11 @@ func (s *RunService) LaunchRun(ctx context.Context, projectID, storyID, userID u
 		return nil, errors.NewInternal("marshal pipeline config snapshot", err)
 	}
 
-	// 7. Compute run metadata
-	branchName := "feat/" + story.Key
+	// 7. Compute run metadata.
+	// branch_name is intentionally NOT pre-seeded here — git_branch action computes
+	// the real branch name and persists it via UpdateRunMetadata. Pre-seeding a stale
+	// "feat/<key>" value caused git_pr to use the wrong branch after HITL resume.
 	runMetadata := map[string]interface{}{
-		"branch_name":         branchName,
 		"launched_by_user_id": userID.String(),
 	}
 
