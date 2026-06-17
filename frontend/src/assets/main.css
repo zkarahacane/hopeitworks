@@ -1,10 +1,86 @@
 @layer tailwind-base, primevue, tailwind-utilities;
 
+/* ── Self-hosted fonts (no CDN) ───────────────────────────────────────────── */
+/* Space Grotesk — UI / headings / KPIs (human voice) */
+@import '@fontsource/space-grotesk/300.css';
+@import '@fontsource/space-grotesk/400.css';
+@import '@fontsource/space-grotesk/500.css';
+@import '@fontsource/space-grotesk/600.css';
+/* JetBrains Mono — IDs, durations, costs, branches, container ids, logs (machine voice) */
+@import '@fontsource/jetbrains-mono/400.css';
+@import '@fontsource/jetbrains-mono/500.css';
+
 @import 'tailwindcss/preflight.css' layer(tailwind-base);
 @import 'tailwindcss/theme.css' layer(tailwind-base);
 @import 'tailwindcss/utilities.css' layer(tailwind-utilities);
 
-/* Running step pulse animation for pipeline view */
+/* ── Design tokens: status families + fonts ──────────────────────────────────
+ * Canonical CSS custom properties consumed by the unified statusToken system
+ * (utils/statusToken.ts) and shared components. Light values at :root, dark
+ * values under .dark (the configured darkModeSelector). Keep dark/light parity:
+ * every token defined here must exist in both blocks.
+ * Source of truth for the hex values is theme/tokens.ts (statusColorTokens).
+ */
+:root {
+  --font-sans: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', 'Menlo', monospace;
+
+  /* running → phosphor green (animated) */
+  --status-running-color: #16a34a;
+  --status-running-surface: rgba(22, 163, 74, 0.12);
+  /* done → calm/solid green (no animation) */
+  --status-done-color: #15803d;
+  --status-done-surface: rgba(21, 128, 61, 0.12);
+  /* gate → amber (breathing while awaiting a human) */
+  --status-gate-color: #b7791f;
+  --status-gate-surface: rgba(183, 121, 31, 0.14);
+  /* failed → red */
+  --status-failed-color: #dc2626;
+  --status-failed-surface: rgba(220, 38, 38, 0.12);
+  /* queued → gray (neutral) */
+  --status-queued-color: #6b7280;
+  --status-queued-surface: rgba(107, 114, 128, 0.14);
+  /* informational accent (NEVER a status) */
+  --status-accent-color: #2563eb;
+}
+
+.dark {
+  /* running → vivid phosphor green */
+  --status-running-color: #39ff8b;
+  --status-running-surface: rgba(57, 255, 139, 0.14);
+  /* done → calm/solid green */
+  --status-done-color: #37b66b;
+  --status-done-surface: rgba(55, 182, 107, 0.14);
+  /* gate → amber */
+  --status-gate-color: #f5b342;
+  --status-gate-surface: rgba(245, 179, 66, 0.16);
+  /* failed → red */
+  --status-failed-color: #f56565;
+  --status-failed-surface: rgba(245, 101, 101, 0.16);
+  /* queued → gray */
+  --status-queued-color: #8a958e;
+  --status-queued-surface: rgba(138, 149, 142, 0.16);
+  /* informational accent */
+  --status-accent-color: #5b9dff;
+}
+
+/* App-wide type: Space Grotesk is the UI voice. */
+body {
+  font-family: var(--font-sans);
+}
+
+/* Reusable machine-voice utility (mono token). */
+.font-mono {
+  font-family: var(--font-mono);
+  font-feature-settings: 'liga' 0;
+}
+
+/* ── Live-signal primitives ──────────────────────────────────────────────────
+ * Animations are allowed in main.css (project rule: no <style scoped> except
+ * complex animations/SVG). These are the shared visual vocabulary for "live".
+ */
+
+/* Legacy running-step pulse (kept for existing pipeline view consumers). */
 @keyframes pulse-run {
   0%,
   100% {
@@ -16,4 +92,80 @@
 }
 .running-indicator {
   animation: pulse-run 1.2s ease-in-out infinite;
+}
+
+/* Phosphor "live" dot — opacity + scale breathing. Apply to a small dot/icon
+ * sitting next to a running entity. Color comes from the consumer (currentColor
+ * or a status token), so the dot inherits the right hue. */
+@keyframes live-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(0.82);
+  }
+}
+.live-pulse {
+  animation: live-pulse 1.4s ease-in-out infinite;
+}
+
+/* Amber breathe — gate awaiting a human. Slower, glow-forward. Drives both
+ * opacity and a soft box-shadow halo in the current (amber) color. */
+@keyframes amber-breathe {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 var(--status-gate-surface);
+  }
+  50% {
+    opacity: 0.7;
+    box-shadow: 0 0 0 4px var(--status-gate-surface);
+  }
+}
+.amber-breathe {
+  animation: amber-breathe 2.4s ease-in-out infinite;
+}
+
+/* Marching edges — animated dashed stroke for the DAG hero's live edges.
+ * Apply to an SVG <path>/<line>; expose `--march-duration` to retune speed.
+ * The DAG agent consumes this class on its edges. */
+@keyframes marching-edge {
+  to {
+    stroke-dashoffset: -16;
+  }
+}
+.marching-edge {
+  stroke-dasharray: 6 4;
+  animation: marching-edge var(--march-duration, 0.6s) linear infinite;
+}
+
+/* Blinking caret — terminal-style cursor for streaming logs. */
+@keyframes blink-caret {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+.blink-caret {
+  display: inline-block;
+  width: 0.55ch;
+  animation: blink-caret 1s step-end infinite;
+}
+
+/* Respect reduced-motion: kill all the live animations for sensitive users. */
+@media (prefers-reduced-motion: reduce) {
+  .running-indicator,
+  .live-pulse,
+  .amber-breathe,
+  .marching-edge,
+  .blink-caret {
+    animation: none;
+  }
 }
