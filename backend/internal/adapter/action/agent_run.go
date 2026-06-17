@@ -184,6 +184,75 @@ func (a *AgentRunAction) Execute(ctx context.Context, runCtx *model.RunContext) 
 	return nil
 }
 
+// buildClaudeMD generates a per-run CLAUDE.md string injected as CLAUDE_MD_CONTENT.
+// The agent-runtime writes this to /workspace/repo/.claude/CLAUDE.md so Claude Code
+// picks it up as project-level context.
+//
+// Role is resolved from RunStep.Config["role"] (set in the pipeline YAML config map).
+// Known roles: "dev" / "implement" → implementer framing; "review" → reviewer framing.
+// Unknown or empty role defaults to the implementer framing.
+func buildClaudeMD(project *model.Project, role string, story *model.Story) string {
+	projectName := project.Name
+	projectDescription := ""
+	if project.Description != nil {
+		projectDescription = *project.Description
+	}
+	repoURL := ""
+	if project.RepoURL != nil {
+		repoURL = *project.RepoURL
+	}
+
+	storyRef := story.Key
+	if story.Title != "" {
+		storyRef = story.Key + " — " + story.Title
+	}
+
+	switch role {
+	case "review", "reviewer":
+		return "# Agent context — " + projectName + "\n\n" +
+			"You are the **reviewer** agent. Review the changes made for story " + story.Key + " against the acceptance criteria.\n\n" +
+			"## Project\n" +
+			projectDescription + "\n" +
+			"Repository: " + repoURL + "\n\n" +
+			"## The changes to review\n" +
+			"Inspect the diff for this story yourself with `git diff origin/main...HEAD` and `git log -p origin/main..HEAD`. Review only those changes.\n\n" +
+			"## Review checklist\n" +
+			"- Acceptance criteria are met.\n" +
+			"- The project builds and tests pass (verify or note if you cannot).\n" +
+			"- No secrets, tokens, or credentials are committed.\n" +
+			"- No unrelated changes are included.\n" +
+			"- Code follows existing style and conventions.\n\n" +
+			"Be concise and specific. Flag blockers clearly.\n"
+	default:
+		// Covers "dev", "implement", "" and any unknown role.
+		return "# Agent context — " + projectName + "\n\n" +
+			"You are the **implementer** agent. Implement the task described in your prompt, scoped to story " + storyRef + ".\n\n" +
+			"## Project\n" +
+			projectDescription + "\n" +
+			"Repository: " + repoURL + "\n\n" +
+			"## Conventions\n" +
+			"- Follow the existing structure, style, and conventions of the repository.\n" +
+			"- Keep your changes scoped to the story. Do not refactor unrelated code.\n" +
+			"- Never commit secrets, tokens, or credentials.\n\n" +
+			"## Definition of done — MANDATORY before you finish\n" +
+			"1. The project BUILDS. Run the build and make it succeed.\n" +
+			"2. The TESTS pass. Run the test suite; everything must be green.\n" +
+			"3. If the build or tests fail, FIX the code and re-run until they pass. Do NOT finish with a broken build or failing tests.\n"
+	}
+}
+
+// resolveRole returns the agent role for the current run step.
+// It reads RunStep.Config["role"] (set in the pipeline YAML config map, e.g. role: "dev").
+// Falls back to an empty string (treated as implementer by buildClaudeMD).
+func resolveRole(runCtx *model.RunContext) string {
+	if runCtx.RunStep != nil && runCtx.RunStep.Config != nil {
+		if r, ok := runCtx.RunStep.Config["role"]; ok {
+			return r
+		}
+	}
+	return ""
+}
+
 // createContainer builds ContainerOpts and creates the container.
 // For callback mode (hopeitworks/agent-* images), it injects CALLBACK_URL, AUTH_TOKEN,
 // API_KEY, PROVIDER, MODEL, RUN_ID, and STEP_ID env vars instead of CLAUDE_CODE_OAUTH_TOKEN.
@@ -206,6 +275,9 @@ func (a *AgentRunAction) createContainer(
 	}
 	gitToken := os.Getenv(tokenEnvName)
 
+	// Resolve role from step config and build per-run CLAUDE.md context.
+	role := resolveRole(runCtx)
+
 	env := []string{
 		"REPO_URL=" + repoURL,
 		"BRANCH_NAME=" + branchName,
@@ -218,6 +290,11 @@ func (a *AgentRunAction) createContainer(
 		"GIT_TOKEN=" + gitToken,
 		"GIT_PROVIDER=" + project.GitProvider,
 		"GITHUB_TOKEN=" + gitToken,
+		// CLAUDE_MD_CONTENT is written to /workspace/repo/.claude/CLAUDE.md by the agent-runtime,
+		// giving Claude Code role-aware project context for every run.
+		// priorFailureContext appends a "Previous attempt" block when there is a prior
+		// failed run for this story, so the agent can learn from earlier mistakes.
+		"CLAUDE_MD_CONTENT=" + buildClaudeMD(project, role, story) + a.priorFailureContext(ctx, story.ID, runCtx.Run.ID),
 	}
 
 	isCallback := a.isCallbackMode(agentImage)
@@ -503,6 +580,82 @@ func resolveProvider(runCtx *model.RunContext) string {
 		return p
 	}
 	return "claude"
+}
+
+// priorFailureContext looks up the most recent failed run for storyID (excluding
+// currentRunID) and returns a markdown block describing the failure so the agent
+// can avoid repeating the same mistake. Returns "" when there is no prior failure
+// or when any lookup error occurs (memory is best-effort and must never fail the run).
+func (a *AgentRunAction) priorFailureContext(ctx context.Context, storyID, currentRunID uuid.UUID) string {
+	// Fetch a small window of recent runs for this story (descending by created_at).
+	// A limit of 10 is generous enough to find the last failed run without a large scan.
+	runs, err := a.runRepo.ListRunsByStory(ctx, storyID, 10, 0)
+	if err != nil {
+		a.logger.Debug("priorFailureContext: failed to list runs by story",
+			"story_id", storyID, "error", err)
+		return ""
+	}
+
+	// Find the most recent failed run that is not the current run.
+	var failedRun *model.Run
+	for _, r := range runs {
+		if r.ID == currentRunID {
+			continue
+		}
+		if r.Status == model.RunStatusFailed {
+			failedRun = r
+			break // runs are ordered DESC — first match is the most recent
+		}
+	}
+	if failedRun == nil {
+		return ""
+	}
+
+	// Retrieve the steps for the failed run to find the failure detail.
+	steps, err := a.runRepo.ListRunStepsByRun(ctx, failedRun.ID)
+	if err != nil {
+		a.logger.Debug("priorFailureContext: failed to list run steps",
+			"run_id", failedRun.ID, "error", err)
+		return ""
+	}
+
+	// Pick the first step with status "failed"; fall back to the last step.
+	var targetStep *model.RunStep
+	for _, s := range steps {
+		if s.Status == model.StepStatusFailed {
+			targetStep = s
+			break
+		}
+	}
+	if targetStep == nil && len(steps) > 0 {
+		targetStep = steps[len(steps)-1]
+	}
+
+	// Build the reason and log snippet.
+	reason := "(no error message recorded)"
+	if failedRun.ErrorMessage != nil && *failedRun.ErrorMessage != "" {
+		reason = *failedRun.ErrorMessage
+	} else if targetStep != nil && targetStep.ErrorMessage != nil && *targetStep.ErrorMessage != "" {
+		reason = *targetStep.ErrorMessage
+	}
+
+	logSnippet := ""
+	if targetStep != nil && targetStep.LogTail != nil && *targetStep.LogTail != "" {
+		tail := *targetStep.LogTail
+		const maxLogChars = 1500
+		if len(tail) > maxLogChars {
+			tail = tail[len(tail)-maxLogChars:]
+		}
+		logSnippet = tail
+	}
+
+	block := "\n\n## Previous attempt for this story FAILED — learn from it\n" +
+		"Reason: " + reason + "\n"
+	if logSnippet != "" {
+		block += "Recent log output from the failed attempt:\n" + logSnippet + "\n"
+	}
+	block += "Do not repeat the mistake that caused this failure.\n"
+	return block
 }
 
 // derefString safely dereferences a string pointer, returning empty string if nil.
