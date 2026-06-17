@@ -12,6 +12,10 @@ const props = defineProps<{
   isLoading: boolean
 }>()
 
+// Green line — use literal hex #39ff8b (= var(--status-running-color) in dark).
+// Chart.js does not resolve CSS custom properties, so we cannot pass CSS vars here.
+const GREEN = '#39ff8b'
+
 const chartDataset = computed(() => ({
   labels: props.data.map((d) => format(parseISO(d.date), 'MMM d')),
   datasets: [
@@ -19,14 +23,14 @@ const chartDataset = computed(() => ({
       label: 'Daily Cost (USD)',
       data: props.data.map((d) => d.total_cost_usd),
       fill: false,
-      tension: 0.3,
-      borderColor: '#6366f1',
-      pointBackgroundColor: '#6366f1',
+      tension: 0.4,
+      borderColor: GREEN,
+      pointBackgroundColor: GREEN,
     },
   ],
 }))
 
-const chartOptions = {
+const chartOptions = computed(() => ({
   responsive: true,
   maintainAspectRatio: false,
   plugins: {
@@ -34,16 +38,21 @@ const chartOptions = {
   },
   scales: {
     x: {
-      grid: { display: false },
+      grid: { color: 'var(--p-surface-200)' },
     },
     y: {
       beginAtZero: true,
+      grid: { color: 'var(--p-surface-200)' },
       ticks: {
         callback: (value: number) => `$${value.toFixed(2)}`,
       },
     },
   },
-}
+  elements: {
+    line: { borderColor: GREEN, tension: 0.4 },
+    point: { backgroundColor: GREEN },
+  },
+}))
 </script>
 
 <template>
@@ -55,7 +64,7 @@ const chartOptions = {
       <p class="text-surface-500">No cost data yet</p>
     </div>
     <div v-else style="height: 16rem">
-      <Chart type="line" :data="chartDataset" :options="chartOptions" style="height: 100%" />
+      <Chart type="line" :data="chartDataset" :options="chartOptions" style="height: 100%" data-testid="cost-chart-canvas" />
     </div>
   </div>
 </template>

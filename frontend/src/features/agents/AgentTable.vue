@@ -6,7 +6,7 @@ import Select from 'primevue/select'
 import Tag from 'primevue/tag'
 import Button from 'primevue/button'
 import type { Agent, AgentScope } from '@/stores/agents'
-import { formatRelativeDate } from '@/utils/formatDate'
+import AgentChip from '@/ui/primitives/AgentChip.vue'
 
 const props = defineProps<{
   agents: Agent[]
@@ -30,11 +30,6 @@ const filteredAgents = computed(() => {
   if (!selectedScope.value) return props.agents
   return props.agents.filter((a) => a.scope === selectedScope.value)
 })
-
-/** Map agent scope to PrimeVue Tag severity */
-function scopeSeverity(scope: AgentScope): string {
-  return scope === 'global' ? 'info' : 'success'
-}
 
 /** Whether the edit action should be enabled for this agent */
 function canEdit(agent: Agent): boolean {
@@ -71,33 +66,27 @@ function handleRowClick(event: { data: Agent }) {
       data-testid="agents-table"
       @row-click="handleRowClick($event as unknown as { data: Agent })"
     >
-      <Column field="name" header="Name" sortable>
+      <Column field="name" header="Agent" sortable>
         <template #body="{ data }">
-          <span class="font-semibold">{{ (data as Agent).name }}</span>
+          <AgentChip
+            :role="(data as Agent).name"
+            :model="(data as Agent).model"
+            :provider="(data as Agent).provider ?? undefined"
+          />
         </template>
       </Column>
       <Column field="scope" header="Scope" sortable>
         <template #body="{ data }">
           <Tag
             :value="(data as Agent).scope"
-            :severity="scopeSeverity((data as Agent).scope)"
+            :severity="(data as Agent).scope === 'global' ? 'info' : 'secondary'"
             data-testid="scope-badge"
           />
-        </template>
-      </Column>
-      <Column field="model" header="Model" sortable>
-        <template #body="{ data }">
-          {{ (data as Agent).model }}
         </template>
       </Column>
       <Column field="image" header="Image" sortable>
         <template #body="{ data }">
           <code class="text-sm">{{ (data as Agent).image }}</code>
-        </template>
-      </Column>
-      <Column field="updated_at" header="Last Updated" sortable>
-        <template #body="{ data }">
-          {{ formatRelativeDate((data as Agent).updated_at) }}
         </template>
       </Column>
       <Column header="Actions" :style="{ width: '8rem' }">
