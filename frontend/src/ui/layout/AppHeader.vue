@@ -63,7 +63,9 @@ function toggleUserMenu(event: Event) {
         aria-label="Toggle sidebar"
         @click="emit('toggle-sidebar')"
       />
-      <span class="text-lg font-semibold text-surface-700">Hope</span>
+      <span class="text-lg" style="font-family: var(--font-sans)">
+        <span class="font-semibold text-surface-900">hope</span><span class="font-normal text-surface-400">it</span><span class="font-semibold text-surface-900">works</span>
+      </span>
     </div>
     <div class="flex items-center gap-2">
       <Button
