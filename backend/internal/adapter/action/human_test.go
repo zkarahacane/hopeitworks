@@ -506,3 +506,7 @@ func (m *humanMockRunRepo) GetLatestRunByStory(_ context.Context, _ uuid.UUID) (
 func (m *humanMockRunRepo) GetLatestRunsByStories(_ context.Context, _ []uuid.UUID) (map[uuid.UUID]*model.LatestRun, error) {
 	return map[uuid.UUID]*model.LatestRun{}, nil
 }
+
+func (m *humanMockRunRepo) GetDAGNodeRunInfoByStories(_ context.Context, _ []uuid.UUID) (map[uuid.UUID]model.DAGNodeRunInfo, error) {
+	return map[uuid.UUID]model.DAGNodeRunInfo{}, nil
+}

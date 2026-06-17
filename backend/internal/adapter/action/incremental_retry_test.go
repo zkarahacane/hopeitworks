@@ -369,3 +369,7 @@ func (m *retryMockRunRepo) GetLatestRunByStory(_ context.Context, _ uuid.UUID) (
 func (m *retryMockRunRepo) GetLatestRunsByStories(_ context.Context, _ []uuid.UUID) (map[uuid.UUID]*model.LatestRun, error) {
 	return map[uuid.UUID]*model.LatestRun{}, nil
 }
+
+func (m *retryMockRunRepo) GetDAGNodeRunInfoByStories(_ context.Context, _ []uuid.UUID) (map[uuid.UUID]model.DAGNodeRunInfo, error) {
+	return map[uuid.UUID]model.DAGNodeRunInfo{}, nil
+}
