@@ -77,13 +77,13 @@ function onCancel() {
       <div class="flex flex-col gap-1">
         <label for="create-name" class="text-sm font-medium">Name</label>
         <InputText id="create-name" v-model="name" :invalid="!!nameError" />
-        <small v-if="nameError" class="text-red-500">{{ nameError }}</small>
+        <small v-if="nameError" :style="{ color: 'var(--status-failed-color)' }">{{ nameError }}</small>
       </div>
 
       <div class="flex flex-col gap-1">
         <label for="create-email" class="text-sm font-medium">Email</label>
         <InputText id="create-email" v-model="email" type="email" :invalid="!!emailError" />
-        <small v-if="emailError" class="text-red-500">{{ emailError }}</small>
+        <small v-if="emailError" :style="{ color: 'var(--status-failed-color)' }">{{ emailError }}</small>
       </div>
 
       <div class="flex flex-col gap-1">
@@ -97,7 +97,7 @@ function onCancel() {
           input-class="w-full"
           class="w-full"
         />
-        <small v-if="passwordError" class="text-red-500">{{ passwordError }}</small>
+        <small v-if="passwordError" :style="{ color: 'var(--status-failed-color)' }">{{ passwordError }}</small>
       </div>
 
       <div class="flex flex-col gap-1">
@@ -110,7 +110,7 @@ function onCancel() {
           option-value="value"
           :invalid="!!roleError"
         />
-        <small v-if="roleError" class="text-red-500">{{ roleError }}</small>
+        <small v-if="roleError" :style="{ color: 'var(--status-failed-color)' }">{{ roleError }}</small>
       </div>
 
       <div class="flex justify-end gap-2 pt-2">

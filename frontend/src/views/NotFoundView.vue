@@ -8,37 +8,37 @@ const router = useRouter()
 <template>
   <div
     class="flex items-center justify-center min-h-screen"
-    style="background: #0B0F0D;"
+    :style="{ background: 'var(--surface-base)' }"
   >
     <div class="flex flex-col items-center gap-8 max-w-md px-6 text-center">
       <!-- Mini graph motif -->
       <svg width="120" height="80" viewBox="0 0 120 80" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
         <!-- Edges -->
-        <line x1="20" y1="40" x2="55" y2="40" stroke="#28332C" stroke-width="1.5" stroke-dasharray="4 3"/>
-        <line x1="65" y1="40" x2="100" y2="20" stroke="#28332C" stroke-width="1.5" stroke-dasharray="4 3"/>
-        <line x1="65" y1="40" x2="100" y2="60" stroke="#28332C" stroke-width="1.5" stroke-dasharray="4 3"/>
+        <line x1="20" y1="40" x2="55" y2="40" stroke="var(--surface-border)" stroke-width="1.5" stroke-dasharray="4 3"/>
+        <line x1="65" y1="40" x2="100" y2="20" stroke="var(--surface-border)" stroke-width="1.5" stroke-dasharray="4 3"/>
+        <line x1="65" y1="40" x2="100" y2="60" stroke="var(--surface-border)" stroke-width="1.5" stroke-dasharray="4 3"/>
         <!-- Done node -->
-        <circle cx="20" cy="40" r="8" fill="#1A221D" stroke="#2D6A4F" stroke-width="1.5"/>
-        <text x="20" y="44" text-anchor="middle" font-size="7" fill="#2D6A4F" font-family="monospace">✓</text>
+        <circle cx="20" cy="40" r="8" fill="var(--status-done-surface)" stroke="var(--status-done-color)" stroke-width="1.5"/>
+        <text x="20" y="44" text-anchor="middle" font-size="7" fill="var(--status-done-color)" font-family="monospace">✓</text>
         <!-- Failed / 404 node (center) -->
-        <circle cx="60" cy="40" r="10" fill="#1A0A0A" stroke="var(--status-failed-color, #EF4444)" stroke-width="2"/>
-        <text x="60" y="44" text-anchor="middle" font-size="8" fill="var(--status-failed-color, #EF4444)" font-family="monospace">×</text>
+        <circle cx="60" cy="40" r="10" fill="var(--status-failed-surface)" stroke="var(--status-failed-color)" stroke-width="2"/>
+        <text x="60" y="44" text-anchor="middle" font-size="8" fill="var(--status-failed-color)" font-family="monospace">×</text>
         <!-- Queued nodes -->
-        <circle cx="100" cy="20" r="7" fill="#1A221D" stroke="#28332C" stroke-width="1.5"/>
-        <circle cx="100" cy="60" r="7" fill="#1A221D" stroke="#28332C" stroke-width="1.5"/>
+        <circle cx="100" cy="20" r="7" fill="var(--status-queued-surface)" stroke="var(--status-queued-color)" stroke-width="1.5"/>
+        <circle cx="100" cy="60" r="7" fill="var(--status-queued-surface)" stroke="var(--status-queued-color)" stroke-width="1.5"/>
       </svg>
 
       <!-- Text -->
       <div class="flex flex-col gap-3">
         <h1
           class="text-3xl font-bold"
-          style="font-family: var(--font-sans); color: var(--status-failed-color, #EF4444);"
+          style="font-family: var(--font-sans); color: var(--status-failed-color);"
         >
           404 · This node isn't in the graph
         </h1>
         <p
           class="text-sm"
-          style="color: #8A9E93; font-family: var(--font-mono, monospace);"
+          :style="{ color: 'var(--p-text-muted-color)', fontFamily: 'var(--font-mono, monospace)' }"
         >
           /settings now lives under your profile.
         </p>

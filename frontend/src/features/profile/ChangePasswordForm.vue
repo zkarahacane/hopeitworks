@@ -64,7 +64,7 @@ const onSubmit = handleSubmit((values) => {
         input-class="w-full"
         class="w-full"
       />
-      <small v-if="currentPasswordError" class="text-red-500">{{ currentPasswordError }}</small>
+      <small v-if="currentPasswordError" :style="{ color: 'var(--status-failed-color)' }">{{ currentPasswordError }}</small>
     </div>
 
     <div class="flex flex-col gap-1">
@@ -78,7 +78,7 @@ const onSubmit = handleSubmit((values) => {
         input-class="w-full"
         class="w-full"
       />
-      <small v-if="newPasswordError" class="text-red-500">{{ newPasswordError }}</small>
+      <small v-if="newPasswordError" :style="{ color: 'var(--status-failed-color)' }">{{ newPasswordError }}</small>
     </div>
 
     <div class="flex flex-col gap-1">
@@ -92,7 +92,7 @@ const onSubmit = handleSubmit((values) => {
         input-class="w-full"
         class="w-full"
       />
-      <small v-if="confirmPasswordError" class="text-red-500">{{ confirmPasswordError }}</small>
+      <small v-if="confirmPasswordError" :style="{ color: 'var(--status-failed-color)' }">{{ confirmPasswordError }}</small>
     </div>
 
     <Button

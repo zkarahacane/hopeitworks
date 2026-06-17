@@ -125,7 +125,7 @@ function close() {
           />
           <label for="channel-type">Channel Type *</label>
         </FloatLabel>
-        <small v-if="errors.channel_type" class="text-red-500">{{ errors.channel_type }}</small>
+        <small v-if="errors.channel_type" :style="{ color: 'var(--status-failed-color)' }">{{ errors.channel_type }}</small>
       </div>
 
       <div class="flex flex-col gap-2">
@@ -139,7 +139,7 @@ function close() {
           />
           <label for="webhook-url">Webhook URL *</label>
         </FloatLabel>
-        <small v-if="errors.url" class="text-red-500">{{ errors.url }}</small>
+        <small v-if="errors.url" :style="{ color: 'var(--status-failed-color)' }">{{ errors.url }}</small>
       </div>
 
       <div class="flex flex-col gap-2">
