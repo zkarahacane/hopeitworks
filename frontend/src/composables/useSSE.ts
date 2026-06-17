@@ -35,25 +35,40 @@ export function useSSE(
     }
   }
 
+  // Authoritative event names = `{entity_type}.{action}` from the backend.
+  // The `hitl.*` and `epic_run.group.*` names are kept for backwards-compat with
+  // existing consumers/tests; the `hitl_gate.*`, `run.paused/resumed`,
+  // `circuit_breaker.*` and `epic_run_group.started` names are what the backend
+  // actually emits. Registering both is purely additive and harmless.
   const knownEvents = [
     'run.started',
     'run.completed',
     'run.failed',
     'run.cancelled',
+    'run.paused',
+    'run.resumed',
     'step.started',
     'step.completed',
     'step.failed',
     'step.cancelled',
     'log.emitted',
+    // legacy hitl.* aliases (kept for existing consumers)
     'hitl.pending',
     'hitl.approved',
     'hitl.rejected',
+    // authoritative hitl_gate.* names
+    'hitl_gate.pending',
+    'hitl_gate.approved',
+    'hitl_gate.rejected',
     'story.status_updated',
     'epic_run.started',
     'epic_run.group.started',
+    'epic_run_group.started',
     'epic_run.story.completed',
     'epic_run.completed',
     'epic_run.failed',
+    'circuit_breaker.triggered',
+    'circuit_breaker.reset',
   ]
   for (const name of knownEvents) {
     es.addEventListener(name, (e) => {
