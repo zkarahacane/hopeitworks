@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { formatDuration } from '../formatDuration'
+import { formatDuration, formatDurationSeconds } from '../formatDuration'
 
 describe('formatDuration', () => {
   afterEach(() => {
@@ -38,5 +38,19 @@ describe('formatDuration', () => {
 
   it('returns "--" when startedAt is null and completedAt is provided', () => {
     expect(formatDuration(null, '2026-01-01T10:01:30Z')).toBe('--')
+  })
+})
+
+describe('formatDurationSeconds', () => {
+  it('formats a seconds count as mm:ss', () => {
+    expect(formatDurationSeconds(0)).toBe('00:00')
+    expect(formatDurationSeconds(90)).toBe('01:30')
+    expect(formatDurationSeconds(222)).toBe('03:42')
+    expect(formatDurationSeconds(765)).toBe('12:45')
+  })
+
+  it('clamps negatives to 00:00 and floors fractional seconds', () => {
+    expect(formatDurationSeconds(-5)).toBe('00:00')
+    expect(formatDurationSeconds(90.9)).toBe('01:30')
   })
 })
