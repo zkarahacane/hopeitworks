@@ -559,3 +559,11 @@ func (m *hitlMockRunRepo) GetLatestRunByStory(_ context.Context, _ uuid.UUID) (*
 func (m *hitlMockRunRepo) GetLatestRunsByStories(_ context.Context, _ []uuid.UUID) (map[uuid.UUID]*model.LatestRun, error) {
 	return map[uuid.UUID]*model.LatestRun{}, nil
 }
+
+func (m *hitlMockRunRepo) UpdateRunMetadata(_ context.Context, _ uuid.UUID, _ map[string]interface{}) error {
+	return nil
+}
+
+func (m *hitlMockRunRepo) AppendStepLogTail(_ context.Context, _ uuid.UUID, _ string) error {
+	return nil
+}

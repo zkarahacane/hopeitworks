@@ -24,6 +24,9 @@ type RunRepository interface {
 	ListRunsByProject(ctx context.Context, projectID uuid.UUID, limit, offset int32) ([]*model.Run, error)
 	ListRunsByStory(ctx context.Context, storyID uuid.UUID, limit, offset int32) ([]*model.Run, error)
 	UpdateRunStatus(ctx context.Context, id uuid.UUID, status model.RunStatus, startedAt, completedAt, pausedAt *time.Time, errorMsg *string) (*model.Run, error)
+	// UpdateRunMetadata persists the run's metadata map to the DB.
+	// Used to survive HITL suspend/resume by flushing in-memory mutations after each step.
+	UpdateRunMetadata(ctx context.Context, runID uuid.UUID, metadata map[string]interface{}) error
 	CountRunsByProject(ctx context.Context, projectID uuid.UUID) (int64, error)
 	CountRunsByStory(ctx context.Context, storyID uuid.UUID) (int64, error)
 
@@ -41,4 +44,8 @@ type RunRepository interface {
 
 	// ListRetryStepsByParent returns all retry steps for a given parent step, ordered by retry_count asc.
 	ListRetryStepsByParent(ctx context.Context, parentStepID uuid.UUID) ([]*model.RunStep, error)
+
+	// AppendStepLogTail atomically appends text to a run step's log_tail, keeping
+	// at most 16 000 characters (right-truncated at the DB level).
+	AppendStepLogTail(ctx context.Context, stepID uuid.UUID, text string) error
 }
