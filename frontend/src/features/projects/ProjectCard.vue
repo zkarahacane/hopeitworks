@@ -1,10 +1,14 @@
 <script setup lang="ts">
 import Tag from 'primevue/tag'
+import StatusBadge from '@/ui/primitives/StatusBadge.vue'
 import type { Project } from '@/stores/projects'
 import { formatRelativeDate } from '@/utils/formatDate'
 
 defineProps<{
   project: Project
+  activeRunCount?: number
+  gateCount?: number
+  storyCount?: number
 }>()
 
 const emit = defineEmits<{
@@ -22,65 +26,82 @@ function providerIcon(provider?: string): string {
   return providerIcons[provider ?? ''] ?? 'pi pi-folder'
 }
 
-function truncateUrl(url?: string): string {
-  if (!url) return ''
-  return url
-    .replace(/^https?:\/\//, '')
-    .replace(/\.git$/, '')
+function onMouseEnter(e: MouseEvent) {
+  const el = e.currentTarget as HTMLElement
+  el.style.boxShadow = '0 4px 12px rgba(0,0,0,0.08)'
+  el.style.borderColor = 'var(--p-surface-400)'
+}
+
+function onMouseLeave(e: MouseEvent) {
+  const el = e.currentTarget as HTMLElement
+  el.style.boxShadow = 'none'
+  el.style.borderColor = 'var(--p-surface-200)'
 }
 </script>
 
 <template>
   <div
-    class="flex flex-col cursor-pointer"
+    class="flex flex-col"
     role="button"
     tabindex="0"
     :aria-label="`Project: ${project.name}`"
+    style="
+      background: var(--p-surface-0);
+      border: 1px solid var(--p-surface-200);
+      border-radius: 0.5rem;
+      transition: box-shadow 0.15s, border-color 0.15s;
+      cursor: pointer;
+    "
     @click="emit('click', project.id)"
     @keydown.enter="emit('click', project.id)"
-    style="
-      border: 1px solid var(--p-surface-200);
-      border-radius: var(--p-border-radius);
-      background: var(--p-surface-0);
-      transition: box-shadow 0.2s;
-    "
-    @mouseenter="($event.currentTarget as HTMLElement).style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)'"
-    @mouseleave="($event.currentTarget as HTMLElement).style.boxShadow = 'none'"
+    @mouseenter="onMouseEnter"
+    @mouseleave="onMouseLeave"
   >
-    <!-- Header: icon + name + description -->
-    <div class="flex gap-3 p-4">
-      <i
-        :class="providerIcon(project.git_provider)"
-        style="font-size: 1.4rem; color: var(--p-text-muted-color); margin-top: 2px"
-      />
-      <div class="flex flex-col gap-1" style="min-width: 0">
-        <h3 class="m-0" style="font-size: 1.1rem; font-weight: 600">{{ project.name }}</h3>
-        <p
-          v-if="project.description"
-          class="m-0"
-          style="
-            color: var(--p-text-muted-color);
-            font-size: 0.875rem;
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
-          "
+    <!-- Header row: provider icon + project name + status indicator -->
+    <div class="flex items-center justify-between gap-3 px-4 pt-4 pb-3">
+      <div class="flex items-center gap-2" style="min-width: 0">
+        <i
+          :class="providerIcon(project.git_provider)"
+          style="font-size: 1.25rem; color: var(--p-text-muted-color); flex-shrink: 0"
+        />
+        <h3
+          class="m-0 truncate"
+          style="font-size: 1rem; font-weight: 600; color: var(--p-text-color)"
         >
-          {{ project.description }}
-        </p>
+          {{ project.name }}
+        </h3>
+      </div>
+
+      <!-- Status indicator -->
+      <div class="flex items-center gap-1.5 flex-shrink-0">
+        <template v-if="(activeRunCount ?? 0) > 0">
+          <span
+            class="inline-block rounded-full live-pulse"
+            style="
+              width: 0.5rem;
+              height: 0.5rem;
+              background: var(--p-green-500);
+              flex-shrink: 0;
+            "
+            aria-hidden="true"
+          />
+          <span style="font-size: 0.75rem; color: var(--p-green-600)">
+            {{ activeRunCount }} running
+          </span>
+        </template>
+        <span v-else style="font-size: 0.75rem; color: var(--p-text-muted-color)">idle</span>
       </div>
     </div>
 
-    <!-- Tags: runtime, provider, model -->
+    <!-- Chips row: runtime, provider, model, gate -->
     <div
-      class="flex flex-wrap gap-2 px-4 py-2"
-      style="border-top: 1px solid var(--p-surface-100)"
+      class="flex flex-wrap items-center gap-1.5 px-4 pb-3"
+      style="border-top: 1px solid var(--p-surface-100); padding-top: 0.625rem"
     >
       <Tag
         v-if="project.agent_runtime"
         :value="project.agent_runtime"
-        severity="info"
+        severity="secondary"
       />
       <Tag
         v-if="project.git_provider"
@@ -92,19 +113,27 @@ function truncateUrl(url?: string): string {
         :value="project.default_model"
         severity="secondary"
       />
+      <StatusBadge
+        v-if="(gateCount ?? 0) > 0"
+        status="paused"
+        :label="'◑ ' + gateCount + ' gate'"
+        :animated="false"
+      />
     </div>
 
-    <!-- Footer: repo URL + relative date -->
+    <!-- Footer: story count + updated date -->
     <div
       class="flex items-center justify-between px-4 py-2"
       style="
         border-top: 1px solid var(--p-surface-100);
-        font-size: 0.8rem;
+        font-size: 0.75rem;
+        font-family: var(--p-font-family-mono, monospace);
         color: var(--p-text-muted-color);
       "
     >
-      <span class="truncate" style="max-width: 60%">{{ truncateUrl(project.repo_url) }}</span>
-      <span>Updated {{ formatRelativeDate(project.updated_at) }}</span>
+      <span v-if="(storyCount ?? 0) > 0">{{ storyCount }} stories</span>
+      <span v-else style="opacity: 0.5">no stories</span>
+      <span>updated {{ formatRelativeDate(project.updated_at) }}</span>
     </div>
   </div>
 </template>
