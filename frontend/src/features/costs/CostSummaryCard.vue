@@ -16,7 +16,12 @@ const props = defineProps<{
     <p class="mb-1 text-sm text-surface-500">{{ label }}</p>
     <Skeleton v-if="isLoading" width="6rem" height="1.75rem" />
     <template v-else>
-      <p class="text-2xl font-bold">{{ value }}</p>
+      <p
+        class="font-mono text-2xl font-bold"
+        :style="{ color: 'var(--status-done-color)' }"
+      >
+        {{ value }}
+      </p>
       <div
         v-if="props.tokensInput !== undefined || props.tokensOutput !== undefined"
         class="mt-1 text-sm text-surface-500"

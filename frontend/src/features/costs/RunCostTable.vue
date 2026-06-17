@@ -1,11 +1,10 @@
 <script setup lang="ts">
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
-import Tag from 'primevue/tag'
 import Skeleton from 'primevue/skeleton'
+import StatusBadge from '@/ui/primitives/StatusBadge.vue'
 import { useRelativeTime } from '@/composables/useRelativeTime'
 import { formatCostUSD, formatTokenCount } from '@/utils/formatCost'
-import { statusSeverity } from '@/utils/runStatus'
 import type { components } from '@/api/schema'
 
 type RunCostRow = components['schemas']['RunCostRow']
@@ -58,7 +57,7 @@ const skeletonRows = [1, 2, 3]
       <Column field="story_key" header="Story" />
       <Column field="status" header="Status">
         <template #body="{ data: row }">
-          <Tag :value="row.status" :severity="statusSeverity(row.status)" />
+          <StatusBadge :status="row.status" />
         </template>
       </Column>
       <Column field="started_at" header="Started">
