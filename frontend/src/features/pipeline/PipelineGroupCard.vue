@@ -96,9 +96,15 @@ function toggleStepExpand(index: number) {
 </script>
 
 <template>
-  <div class="flex flex-col gap-2 rounded-lg border p-4" data-testid="pipeline-group-card">
-    <!-- Header row -->
-    <div class="flex items-center gap-2">
+  <div class="flex flex-col gap-1" data-testid="pipeline-group-card">
+    <!-- Group header -->
+    <div
+      class="flex items-center gap-2 px-3 py-2 rounded-lg"
+      style="background-color: var(--p-surface-50, var(--p-surface-100))"
+    >
+      <span class="cursor-grab opacity-40 text-lg select-none" data-testid="group-drag-handle">⠿</span>
+
+      <!-- Collapse toggle -->
       <Button
         :icon="collapsed ? 'pi pi-chevron-right' : 'pi pi-chevron-down'"
         text
@@ -109,6 +115,7 @@ function toggleStepExpand(index: number) {
         @click="toggleCollapse"
       />
 
+      <!-- Editable group name -->
       <InputText
         v-if="isEditing"
         ref="nameInputRef"
@@ -128,10 +135,12 @@ function toggleStepExpand(index: number) {
         {{ group.name }}
       </span>
 
+      <!-- Step count badge -->
       <span class="text-sm opacity-60" data-testid="step-count">
         {{ group.steps.length }} {{ group.steps.length === 1 ? 'step' : 'steps' }}
       </span>
 
+      <!-- Admin controls -->
       <template v-if="isAdmin">
         <Button
           icon="pi pi-arrow-up"
@@ -166,8 +175,8 @@ function toggleStepExpand(index: number) {
       </template>
     </div>
 
-    <!-- Steps list (collapsible) -->
-    <div v-show="!collapsed" class="flex flex-col gap-2 pl-4" data-testid="group-steps">
+    <!-- Steps area -->
+    <div v-show="!collapsed" class="flex flex-col gap-0.5 pl-4 mt-1" data-testid="group-steps">
       <PipelineStepCard
         v-for="(step, stepIndex) in group.steps"
         :key="step.id"
@@ -185,10 +194,10 @@ function toggleStepExpand(index: number) {
         @move-down="handleMoveStepDown(stepIndex)"
       />
 
+      <!-- Add step button -->
       <Button
         v-if="isAdmin"
-        label="Add Step"
-        icon="pi pi-plus"
+        label="+ Add step"
         text
         size="small"
         data-testid="add-step-to-group"

@@ -1,6 +1,23 @@
-import { describe, it, expect, afterEach } from 'vitest'
+import { describe, it, expect, afterEach, vi, beforeAll } from 'vitest'
 import { mount, type VueWrapper } from '@vue/test-utils'
 import PrimeVue from 'primevue/config'
+
+beforeAll(() => {
+  // PrimeVue Select uses matchMedia which is not available in jsdom
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  })
+})
 import PipelineStepCard from '../PipelineStepCard.vue'
 import type { PipelineStep } from '@/stores/pipelineConfig'
 import type { Agent } from '@/stores/agents'
@@ -48,62 +65,81 @@ describe('PipelineStepCard', () => {
     wrapper?.unmount()
   })
 
-  describe('action type icon/badge', () => {
-    it('renders action type tag', () => {
+  describe('type chip', () => {
+    it('renders step type chip', () => {
+      mountComponent()
+      const chip = wrapper.find('[data-testid="step-type-chip"]')
+      expect(chip.exists()).toBe(true)
+    })
+
+    it('displays action type in chip', () => {
+      mountComponent({ action_type: 'git_pr' })
+      const chip = wrapper.find('[data-testid="step-type-chip"]')
+      expect(chip.text()).toContain('git_pr')
+    })
+
+    it('backward compat: action-type-tag testid still works', () => {
       mountComponent()
       const tag = wrapper.find('[data-testid="action-type-tag"]')
       expect(tag.exists()).toBe(true)
     })
 
-    it('displays correct icon for agent_run', () => {
-      mountComponent({ action_type: 'agent_run' })
-      const tag = wrapper.find('[data-testid="action-type-tag"]')
-      expect(tag.exists()).toBe(true)
-      // The Tag component renders with the icon attribute
-      expect(tag.attributes('icon') || tag.html()).toContain('android')
-    })
-
-    it('displays correct icon for git_branch', () => {
+    it('normal step type chip has normal class', () => {
       mountComponent({ action_type: 'git_branch' })
-      const tag = wrapper.find('[data-testid="action-type-tag"]')
-      expect(tag.html()).toContain('code-branch')
+      const chip = wrapper.find('[data-testid="step-type-chip"]')
+      expect(chip.classes()).toContain('type-chip--normal')
     })
+  })
 
-    it('displays correct icon for git_pr', () => {
-      mountComponent({ action_type: 'git_pr' })
-      const tag = wrapper.find('[data-testid="action-type-tag"]')
-      expect(tag.html()).toContain('arrow-right-arrow-left')
-    })
-
-    it('displays correct icon for notification', () => {
-      mountComponent({ action_type: 'notification' })
-      const tag = wrapper.find('[data-testid="action-type-tag"]')
-      expect(tag.html()).toContain('bell')
-    })
-
-    it('displays correct icon for human', () => {
+  describe('human gate row', () => {
+    it('human step row has amber-breathe class', () => {
       mountComponent({ action_type: 'human' })
-      const tag = wrapper.find('[data-testid="action-type-tag"]')
-      expect(tag.html()).toContain('user')
+      const row = wrapper.find('[data-testid="pipeline-step-card"]')
+      expect(row.classes()).toContain('amber-breathe')
     })
 
-    it('displays correct icon for ci_poll', () => {
-      mountComponent({ action_type: 'ci_poll' })
-      const tag = wrapper.find('[data-testid="action-type-tag"]')
-      expect(tag.html()).toContain('sync')
+    it('human step row has amber-breathe class for gate surface', () => {
+      mountComponent({ action_type: 'human' })
+      const row = wrapper.find('[data-testid="pipeline-step-card"]')
+      // amber-breathe class confirms the gate surface styling path is taken
+      expect(row.classes()).toContain('amber-breathe')
     })
 
-    it('displays correct icon for hitl_gate', () => {
-      mountComponent({ action_type: 'hitl_gate' })
-      const tag = wrapper.find('[data-testid="action-type-tag"]')
-      expect(tag.html()).toContain('shield')
+    it('human step type chip has gate class', () => {
+      mountComponent({ action_type: 'human' })
+      const chip = wrapper.find('[data-testid="step-type-chip"]')
+      expect(chip.classes()).toContain('type-chip--gate')
+    })
+
+    it('human step shows descriptive text', () => {
+      mountComponent({ action_type: 'human' })
+      expect(wrapper.text()).toContain('human stops the pipeline here')
+    })
+
+    it('human step does not show agent selector', () => {
+      mountComponent({ action_type: 'human' })
+      expect(wrapper.find('[data-testid="agent-select"]').exists()).toBe(false)
+    })
+  })
+
+  describe('auto/manual toggle', () => {
+    it('toggle reflects auto_approve=false as Manual', () => {
+      mountComponent({ auto_approve: false })
+      const toggle = wrapper.find('[data-testid="auto-approve-toggle"]')
+      expect(toggle.exists()).toBe(true)
+      expect(wrapper.text()).toContain('Manual')
+    })
+
+    it('toggle reflects auto_approve=true as Auto', () => {
+      mountComponent({ auto_approve: true })
+      expect(wrapper.text()).toContain('Auto')
     })
   })
 
   describe('agent/model display visibility', () => {
-    it('shows agent name when agent_id matches an agent', () => {
+    it('shows agent display when agent_id matches an agent', () => {
       mountComponent({ agent_id: 'agent-1' })
-      expect(wrapper.find('[data-testid="agent-display"]').text()).toBe('Dev Agent')
+      expect(wrapper.find('[data-testid="agent-display"]').exists()).toBe(true)
     })
 
     it('shows legacy model string when model is set and no agent_id', () => {
@@ -117,13 +153,13 @@ describe('PipelineStepCard', () => {
     })
   })
 
-  describe('step name and action type display', () => {
+  describe('step name display', () => {
     it('displays step name', () => {
       mountComponent({ name: 'my-step' })
       expect(wrapper.text()).toContain('my-step')
     })
 
-    it('displays action type in tag', () => {
+    it('displays action type in chip', () => {
       mountComponent({ action_type: 'git_pr' })
       expect(wrapper.text()).toContain('git_pr')
     })

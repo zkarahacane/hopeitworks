@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue'
+import { computed, ref, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useToast } from 'primevue/usetoast'
 import Button from 'primevue/button'
@@ -9,6 +9,7 @@ import Skeleton from 'primevue/skeleton'
 import Toast from 'primevue/toast'
 import PipelineStepList from '@/features/pipeline/PipelineStepList.vue'
 import AddStepDialog from '@/features/pipeline/AddStepDialog.vue'
+import PipelineStepPalette from '@/features/pipeline/PipelineStepPalette.vue'
 import { usePipelineConfig } from '@/composables/usePipelineConfig'
 import { useAuth } from '@/composables/useAuth'
 import { useAgents } from '@/composables/useAgents'
@@ -47,6 +48,7 @@ onMounted(() => {
 const isAdmin = computed(() => user.value?.role === 'admin')
 const showAddDialog = ref(false)
 const addStepTargetGroupId = ref<string | null>(null)
+const paletteActionType = ref<string | null>(null)
 
 function handleAddGroup() {
   addGroup()
@@ -88,6 +90,19 @@ function handleReorderStep(groupId: string, fromIndex: number, toIndex: number) 
   reorderStepsInGroup(groupId, fromIndex, toIndex)
 }
 
+function handlePaletteAddStep(actionType: string) {
+  paletteActionType.value = actionType
+  const firstGroupId = groups.value[0]?.id ?? null
+  addStepTargetGroupId.value = firstGroupId
+  showAddDialog.value = true
+}
+
+watch(showAddDialog, (visible) => {
+  if (!visible) {
+    paletteActionType.value = null
+  }
+})
+
 async function handleSave() {
   const success = await saveConfig()
   if (success) {
@@ -109,13 +124,34 @@ async function handleSave() {
 </script>
 
 <template>
-  <div class="flex flex-col gap-6 p-6">
-    <div class="flex items-center justify-between">
-      <h1 class="text-2xl font-bold">Pipeline Configuration</h1>
+  <div class="flex flex-col gap-4 p-6">
+    <!-- Header -->
+    <div class="flex items-start justify-between">
+      <div class="flex flex-col gap-1">
+        <div class="flex items-center gap-3">
+          <h1 class="text-2xl font-bold">Pipeline</h1>
+          <span
+            class="text-xs px-2 py-0.5 rounded-full"
+            style="background-color: var(--p-surface-100); border: 1px solid var(--p-surface-300); color: var(--p-text-muted-color)"
+          >
+            opinionated on runtime · free on process
+          </span>
+          <span
+            v-if="isDirty"
+            class="text-xs"
+            style="color: var(--status-gate-color)"
+            data-testid="unsaved-indicator"
+          >
+            · unsaved changes
+          </span>
+        </div>
+        <p class="text-sm" style="color: var(--p-text-muted-color)">
+          Compose roles, steps and gates. The runtime handles containers, isolation &amp; parallelism.
+        </p>
+      </div>
       <div v-if="isAdmin && !isLoading && !error" class="flex gap-2">
         <Button
-          label="Add Group"
-          icon="pi pi-folder-plus"
+          label="+ Add group"
           severity="secondary"
           data-testid="add-group-btn"
           @click="handleAddGroup"
@@ -147,44 +183,57 @@ async function handleSave() {
       </div>
     </Message>
 
-    <!-- Empty state -->
-    <Message
-      v-else-if="groups.length === 0 || steps.length === 0"
-      severity="info"
-      :closable="false"
-      data-testid="empty-message"
-    >
-      <span>No pipeline steps configured.</span>
-      <Button
-        v-if="isAdmin"
-        label="Add your first group"
-        text
-        size="small"
-        class="ml-2"
-        @click="handleAddGroup"
-      />
-    </Message>
+    <!-- Two-column layout -->
+    <div v-else class="flex gap-6 items-start">
+      <!-- Left: pipeline groups (~70%) -->
+      <div class="flex-1 min-w-0 flex flex-col gap-3">
+        <!-- Empty state inline -->
+        <Message
+          v-if="groups.length === 0 || steps.length === 0"
+          severity="info"
+          :closable="false"
+          data-testid="empty-message"
+        >
+          <span>No pipeline steps configured.</span>
+          <Button
+            v-if="isAdmin"
+            label="Add your first group"
+            text
+            size="small"
+            class="ml-2"
+            @click="handleAddGroup"
+          />
+        </Message>
+        <PipelineStepList
+          v-else
+          :groups="groups"
+          :is-admin="isAdmin"
+          :agents="agents"
+          @rename-group="handleRenameGroup"
+          @remove-group="handleRemoveGroup"
+          @add-step="handleOpenAddStep"
+          @update-step="handleUpdateStep"
+          @remove-step="handleRemoveStep"
+          @reorder-groups="handleReorderGroups"
+          @reorder-step="handleReorderStep"
+        />
+      </div>
 
-    <!-- Group list -->
-    <PipelineStepList
-      v-else
-      :groups="groups"
-      :is-admin="isAdmin"
-      :agents="agents"
-      @rename-group="handleRenameGroup"
-      @remove-group="handleRemoveGroup"
-      @add-step="handleOpenAddStep"
-      @update-step="handleUpdateStep"
-      @remove-step="handleRemoveStep"
-      @reorder-groups="handleReorderGroups"
-      @reorder-step="handleReorderStep"
-    />
+      <!-- Right rail: palette (~30%) -->
+      <div v-if="isAdmin" class="w-72 shrink-0">
+        <PipelineStepPalette
+          :agents="agents"
+          @add-step="handlePaletteAddStep"
+        />
+      </div>
+    </div>
 
-    <!-- Add step dialog (admin only, scoped to target group) -->
+    <!-- Add step dialog -->
     <AddStepDialog
       v-if="isAdmin"
       v-model:visible="showAddDialog"
       :agents="agents"
+      :initial-action-type="paletteActionType ?? undefined"
       @add="handleAddStep"
     />
 
