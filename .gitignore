@@ -38,3 +38,12 @@ frontend/*.tsbuildinfo
 
 # Docker
 docker-compose.override.yml
+
+# Local personal deploy overrides (reverse proxy, hostnames)
+deploy/Caddyfile.local
+deploy/docker-compose.local.yml
+# Scratch screenshots
+/image.png
+
+# Claude Code agent worktrees (harness-managed)
+.claude/worktrees/
