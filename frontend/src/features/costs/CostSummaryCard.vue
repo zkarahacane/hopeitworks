@@ -12,8 +12,11 @@ const props = defineProps<{
 </script>
 
 <template>
-  <div class="rounded-lg border border-surface-200 bg-surface-0 p-4">
-    <p class="mb-1 text-sm text-surface-500">{{ label }}</p>
+  <div
+    class="rounded-lg p-4"
+    :style="{ background: 'var(--surface-raised)', border: '1px solid var(--surface-border)' }"
+  >
+    <p class="mb-1 text-sm" :style="{ color: 'var(--p-text-muted-color)' }">{{ label }}</p>
     <Skeleton v-if="isLoading" width="6rem" height="1.75rem" />
     <template v-else>
       <p
@@ -24,7 +27,8 @@ const props = defineProps<{
       </p>
       <div
         v-if="props.tokensInput !== undefined || props.tokensOutput !== undefined"
-        class="mt-1 text-sm text-surface-500"
+        class="mt-1 text-sm"
+        :style="{ color: 'var(--p-text-muted-color)' }"
       >
         <span>In: {{ formatTokenCount(props.tokensInput ?? 0) }}</span>
         <span class="ml-2">Out: {{ formatTokenCount(props.tokensOutput ?? 0) }}</span>

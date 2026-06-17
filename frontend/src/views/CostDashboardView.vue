@@ -165,7 +165,7 @@ const byRoleBreakdown = computed<CostByRoleResult>(() => ({
               <div
                 v-if="summary && (summary.budget_limit_usd ?? 0) > 0"
                 class="rounded-lg p-4"
-                :style="{ border: '1px solid var(--p-surface-200)', backgroundColor: 'var(--p-surface-0)' }"
+                :style="{ border: '1px solid var(--surface-border)', backgroundColor: 'var(--surface-raised)' }"
                 data-testid="budget-bar"
               >
                 <div class="mb-2 flex items-center justify-between text-sm">

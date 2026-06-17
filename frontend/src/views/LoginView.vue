@@ -39,42 +39,42 @@ function onGitHub() {
 </script>
 
 <template>
-  <div class="flex min-h-screen" style="background: var(--p-surface-900)">
+  <div class="flex min-h-screen" style="background: var(--surface-base)">
     <!-- Left hero panel — hidden on mobile, visible lg+ -->
     <div
       class="hidden lg:flex lg:w-1/2 flex-col justify-between p-12"
-      style="background: var(--p-surface-950, var(--p-surface-900)); border-right: 1px solid var(--p-surface-700)"
+      style="background: var(--surface-base); border-right: 1px solid var(--surface-border)"
     >
       <!-- Top wordmark -->
-      <div class="text-sm font-semibold tracking-widest uppercase" style="color: var(--p-surface-400)">
+      <div class="text-sm font-semibold tracking-widest uppercase" style="color: var(--p-text-muted-color)">
         hopeitworks
       </div>
 
       <!-- Center tagline + graph motif -->
       <div class="flex flex-col gap-10">
         <div>
-          <p class="text-5xl font-bold leading-tight" style="color: var(--p-surface-0)">Plan anywhere.</p>
-          <p class="text-5xl font-bold leading-tight" style="color: var(--p-surface-0)">Watch it run.</p>
+          <p class="text-5xl font-bold leading-tight" style="color: var(--p-text-color)">Plan anywhere.</p>
+          <p class="text-5xl font-bold leading-tight" style="color: var(--p-text-color)">Watch it run.</p>
         </div>
 
         <!-- Inline SVG graph motif: 3 nodes, 2 edges, pulse on center node -->
         <svg width="160" height="80" viewBox="0 0 160 80" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
           <!-- Edges -->
-          <line x1="20" y1="40" x2="80" y2="40" stroke="var(--p-surface-600)" stroke-width="1.5" stroke-dasharray="4 3" />
-          <line x1="80" y1="40" x2="140" y2="40" stroke="var(--p-surface-600)" stroke-width="1.5" stroke-dasharray="4 3" />
+          <line x1="20" y1="40" x2="80" y2="40" stroke="var(--surface-border)" stroke-width="1.5" stroke-dasharray="4 3" />
+          <line x1="80" y1="40" x2="140" y2="40" stroke="var(--surface-border)" stroke-width="1.5" stroke-dasharray="4 3" />
           <!-- Left node -->
-          <circle cx="20" cy="40" r="7" fill="var(--p-surface-700)" stroke="var(--p-surface-500)" stroke-width="1.5" />
+          <circle cx="20" cy="40" r="7" fill="var(--surface-overlay)" stroke="var(--p-text-muted-color)" stroke-width="1.5" />
           <!-- Right node -->
-          <circle cx="140" cy="40" r="7" fill="var(--p-surface-700)" stroke="var(--p-surface-500)" stroke-width="1.5" />
+          <circle cx="140" cy="40" r="7" fill="var(--surface-overlay)" stroke="var(--p-text-muted-color)" stroke-width="1.5" />
           <!-- Center node (larger, with pulse) -->
-          <circle cx="80" cy="40" r="9" fill="var(--p-surface-700)" stroke="var(--p-surface-400)" stroke-width="1.5" />
+          <circle cx="80" cy="40" r="9" fill="var(--surface-overlay)" stroke="var(--p-text-muted-color)" stroke-width="1.5" />
           <!-- Live pulse dot on center node -->
           <circle cx="80" cy="40" r="4" class="live-pulse" />
         </svg>
       </div>
 
       <!-- Footer -->
-      <div class="flex items-center gap-2 text-xs" style="color: var(--p-surface-500)">
+      <div class="flex items-center gap-2 text-xs" style="color: var(--p-text-muted-color)">
         <span>© 2026 · runtime online</span>
         <span class="live-pulse-dot" style="font-size: 10px; color: var(--status-running-color)">●</span>
       </div>
@@ -84,14 +84,14 @@ function onGitHub() {
     <div class="flex flex-1 items-center justify-center p-6 lg:p-12">
       <div
         class="flex w-full max-w-sm flex-col gap-6 rounded-xl p-8"
-        style="background: var(--p-surface-800)"
+        style="background: var(--surface-raised)"
       >
         <!-- Mobile wordmark -->
-        <p class="text-center text-xs font-semibold tracking-widest uppercase lg:hidden" style="color: var(--p-surface-400)">
+        <p class="text-center text-xs font-semibold tracking-widest uppercase lg:hidden" style="color: var(--p-text-muted-color)">
           hopeitworks
         </p>
 
-        <h1 class="text-2xl font-bold" style="color: var(--p-surface-0)">Sign in</h1>
+        <h1 class="text-2xl font-bold" style="color: var(--p-text-color)">Sign in</h1>
 
         <Message v-if="route.query.reset === 'success'" severity="success" :closable="false">
           Password reset successfully. Please sign in.
@@ -99,7 +99,7 @@ function onGitHub() {
 
         <form class="flex flex-col gap-4" @submit.prevent="onSubmit">
           <div class="flex flex-col gap-1">
-            <label for="email" class="text-sm font-medium" style="color: var(--p-surface-200)">Email</label>
+            <label for="email" class="text-sm font-medium" style="color: var(--p-text-color)">Email</label>
             <InputText
               id="email"
               v-model="email"
@@ -113,7 +113,7 @@ function onGitHub() {
 
           <div class="flex flex-col gap-1">
             <div class="flex items-center justify-between">
-              <label for="password" class="text-sm font-medium" style="color: var(--p-surface-200)">Password</label>
+              <label for="password" class="text-sm font-medium" style="color: var(--p-text-color)">Password</label>
               <RouterLink
                 to="/forgot-password"
                 class="text-xs"
@@ -140,9 +140,9 @@ function onGitHub() {
         </form>
 
         <div class="flex items-center gap-3">
-          <div class="flex-1 h-px" style="background: var(--p-surface-600)" />
-          <span class="text-xs" style="color: var(--p-surface-500)">or</span>
-          <div class="flex-1 h-px" style="background: var(--p-surface-600)" />
+          <div class="flex-1 h-px" style="background: var(--surface-border)" />
+          <span class="text-xs" style="color: var(--p-text-muted-color)">or</span>
+          <div class="flex-1 h-px" style="background: var(--surface-border)" />
         </div>
 
         <!-- TODO: wire up backend /auth/github endpoint -->
@@ -155,7 +155,7 @@ function onGitHub() {
           @click="onGitHub"
         />
 
-        <p class="text-center text-xs" style="color: var(--p-surface-500)">
+        <p class="text-center text-xs" style="color: var(--p-text-muted-color)">
           No account? Ask your workspace admin.
         </p>
       </div>
@@ -166,7 +166,7 @@ function onGitHub() {
 <style scoped>
 /* SVG center node pulse */
 .live-pulse {
-  fill: var(--status-running-color, #22c55e);
+  fill: var(--status-running-color);
   animation: node-pulse 2s ease-in-out infinite;
 }
 

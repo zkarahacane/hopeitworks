@@ -80,7 +80,7 @@ function navigateToApproval(item: typeof hitlStore.pendingItems[0]) {
     <!-- Header -->
     <div>
       <h1 class="text-2xl font-bold">Welcome back, {{ authStore.user?.name || 'there' }}</h1>
-      <p class="mt-1" style="color: var(--p-surface-400)">Here's what's happening right now.</p>
+      <p class="mt-1" style="color: var(--p-text-muted-color)">Here's what's happening right now.</p>
     </div>
 
     <!-- KPI cards row -->
@@ -88,10 +88,10 @@ function navigateToApproval(item: typeof hitlStore.pendingItems[0]) {
       <!-- Active Runs -->
       <div
         class="flex flex-col gap-3 rounded-xl p-4"
-        style="background: var(--p-surface-800); border: 1px solid var(--p-surface-700)"
+        style="background: var(--surface-raised); border: 1px solid var(--surface-border)"
       >
         <div class="flex items-center justify-between">
-          <span class="text-sm" style="color: var(--p-surface-400)">Active runs</span>
+          <span class="text-sm" style="color: var(--p-text-muted-color)">Active runs</span>
           <i class="pi pi-play text-lg" style="color: var(--status-running-color)" />
         </div>
         <span class="text-3xl font-bold" style="color: var(--status-running-color)">{{ activeRunCount }}</span>
@@ -100,10 +100,10 @@ function navigateToApproval(item: typeof hitlStore.pendingItems[0]) {
       <!-- Gates waiting -->
       <div
         class="flex flex-col gap-3 rounded-xl p-4"
-        style="background: var(--p-surface-800); border: 1px solid var(--p-surface-700)"
+        style="background: var(--surface-raised); border: 1px solid var(--surface-border)"
       >
         <div class="flex items-center justify-between">
-          <span class="text-sm" style="color: var(--p-surface-400)">Gates waiting</span>
+          <span class="text-sm" style="color: var(--p-text-muted-color)">Gates waiting</span>
           <i
             class="pi pi-pause-circle text-lg"
             :class="{ 'amber-breathe': gatesWaiting > 0 }"
@@ -116,10 +116,10 @@ function navigateToApproval(item: typeof hitlStore.pendingItems[0]) {
       <!-- Stories done today -->
       <div
         class="flex flex-col gap-3 rounded-xl p-4"
-        style="background: var(--p-surface-800); border: 1px solid var(--p-surface-700)"
+        style="background: var(--surface-raised); border: 1px solid var(--surface-border)"
       >
         <div class="flex items-center justify-between">
-          <span class="text-sm" style="color: var(--p-surface-400)">Stories done today</span>
+          <span class="text-sm" style="color: var(--p-text-muted-color)">Stories done today</span>
           <i class="pi pi-check-circle text-lg" style="color: var(--status-done-color)" />
         </div>
         <span class="text-3xl font-bold" style="color: var(--status-done-color)">0</span>
@@ -128,10 +128,10 @@ function navigateToApproval(item: typeof hitlStore.pendingItems[0]) {
       <!-- Spend today -->
       <div
         class="flex flex-col gap-3 rounded-xl p-4"
-        style="background: var(--p-surface-800); border: 1px solid var(--p-surface-700)"
+        style="background: var(--surface-raised); border: 1px solid var(--surface-border)"
       >
         <div class="flex items-center justify-between">
-          <span class="text-sm" style="color: var(--p-surface-400)">Spend today</span>
+          <span class="text-sm" style="color: var(--p-text-muted-color)">Spend today</span>
           <i class="pi pi-dollar text-lg" style="color: var(--status-done-color)" />
         </div>
         <span class="text-3xl font-bold font-mono" style="color: var(--status-done-color)">$0.00</span>
@@ -173,7 +173,7 @@ function navigateToApproval(item: typeof hitlStore.pendingItems[0]) {
         <div
           v-else-if="dedupedRuns.length === 0"
           class="flex flex-col items-center py-10 gap-2"
-          style="color: var(--p-surface-400)"
+          style="color: var(--p-text-muted-color)"
         >
           <i class="pi pi-play text-3xl" />
           <p>No runs yet</p>
@@ -185,17 +185,17 @@ function navigateToApproval(item: typeof hitlStore.pendingItems[0]) {
             v-for="run in dedupedRuns"
             :key="run.id"
             class="flex items-center gap-3 rounded-lg px-4 py-3 cursor-pointer transition-colors"
-            style="background: var(--p-surface-800); border: 1px solid var(--p-surface-700)"
+            style="background: var(--surface-raised); border: 1px solid var(--surface-border)"
             @click="navigateToRun(run)"
           >
             <StatusBadge :status="run.status" />
 
             <div class="flex flex-col min-w-0 flex-1 gap-0.5">
               <span class="font-mono text-sm truncate">{{ run.story_key || run.story_id }}</span>
-              <span class="text-xs truncate" style="color: var(--p-surface-400)">{{ run.project_name || run.project_id }}</span>
+              <span class="text-xs truncate" style="color: var(--p-text-muted-color)">{{ run.project_name || run.project_id }}</span>
             </div>
 
-            <span class="text-xs shrink-0 font-mono" style="color: var(--p-surface-400)">
+            <span class="text-xs shrink-0 font-mono" style="color: var(--p-text-muted-color)">
               <template v-if="run.status === 'running'">
                 {{ formatElapsed(stream.runElapsedSeconds(run.id)) }}
               </template>
@@ -214,7 +214,7 @@ function navigateToApproval(item: typeof hitlStore.pendingItems[0]) {
           <span
             v-if="gatesWaiting > 0"
             class="ml-2 rounded-full px-2 py-0.5 text-xs font-bold"
-            style="background: var(--status-gate-color); color: #000"
+            style="background: var(--status-gate-color); color: var(--surface-base)"
           >{{ gatesWaiting }}</span>
         </h2>
 
@@ -222,7 +222,7 @@ function navigateToApproval(item: typeof hitlStore.pendingItems[0]) {
         <div
           v-if="hitlStore.pendingItems.length === 0"
           class="rounded-lg px-4 py-6 text-center text-sm"
-          style="color: var(--p-surface-400); background: var(--p-surface-800); border: 1px solid var(--p-surface-700)"
+          style="color: var(--p-text-muted-color); background: var(--surface-raised); border: 1px solid var(--surface-border)"
         >
           No pending approvals
         </div>
@@ -232,7 +232,7 @@ function navigateToApproval(item: typeof hitlStore.pendingItems[0]) {
           v-for="item in hitlStore.pendingItems.slice(0, 3)"
           :key="item.hitlRequestId"
           class="flex flex-col gap-2 rounded-lg px-4 py-3"
-          style="border-left: 3px solid var(--status-gate-color); background: var(--p-surface-800)"
+          style="border-left: 3px solid var(--status-gate-color); background: var(--surface-raised)"
         >
           <div class="flex items-center gap-2">
             <span class="font-mono text-sm">{{ item.storyKey }}</span>
@@ -241,7 +241,7 @@ function navigateToApproval(item: typeof hitlStore.pendingItems[0]) {
               style="background: color-mix(in srgb, var(--status-gate-color) 20%, transparent); color: var(--status-gate-color)"
             >awaiting</span>
           </div>
-          <p class="text-sm truncate" style="color: var(--p-surface-300)">{{ item.storyTitle || '—' }}</p>
+          <p class="text-sm truncate" style="color: var(--p-text-muted-color)">{{ item.storyTitle || '—' }}</p>
           <Button
             label="Approve"
             severity="warn"
