@@ -27,7 +27,7 @@ const menuItems = computed<MenuItem[]>(() => [
   {
     label: authStore.user?.email ?? '',
     disabled: true,
-    class: 'text-surface-500 text-sm',
+    class: 'text-sm',
   },
   { separator: true },
   {
@@ -52,7 +52,11 @@ function toggleUserMenu(event: Event) {
 
 <template>
   <header
-    class="flex h-12 items-center justify-between border-b border-surface-200 bg-surface-0 px-4"
+    class="flex h-12 items-center justify-between px-4"
+    :style="{
+      borderBottom: '1px solid var(--p-content-border-color)',
+      background: 'var(--app-chrome-bg)',
+    }"
   >
     <div class="flex items-center gap-2">
       <Button
@@ -64,7 +68,7 @@ function toggleUserMenu(event: Event) {
         @click="emit('toggle-sidebar')"
       />
       <span class="text-lg" style="font-family: var(--font-sans)">
-        <span class="font-semibold text-surface-900">hope</span><span class="font-normal text-surface-400">it</span><span class="font-semibold text-surface-900">works</span>
+        <span class="font-semibold" style="color: var(--p-text-color)">hope</span><span class="font-normal" style="color: var(--p-text-muted-color)">it</span><span class="font-semibold" style="color: var(--p-text-color)">works</span>
       </span>
     </div>
     <div class="flex items-center gap-2">

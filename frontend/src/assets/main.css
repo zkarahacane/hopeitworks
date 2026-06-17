@@ -25,6 +25,15 @@
   --font-sans: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', 'Menlo', monospace;
 
+  /* App content background — the scroll surface behind page content. Sits one
+   * step below cards so `--p-surface-0` cards/panels get elevation in BOTH
+   * schemes (the PrimeVue surface ramp is inverted, so no single --p-surface-N
+   * gives "below the card" in both light and dark — define them explicitly). */
+  --app-content-bg: #f6f8f6; /* light: surfaceTokens.light.base */
+  /* App chrome (sidebar / header / status bar) — the raised panel surface,
+   * one step above the content scroll surface so the shell reads as a frame. */
+  --app-chrome-bg: #ffffff; /* light: surfaceTokens.light.raised */
+
   /* running → phosphor green (animated) */
   --status-running-color: #16a34a;
   --status-running-surface: rgba(22, 163, 74, 0.12);
@@ -45,6 +54,11 @@
 }
 
 .dark {
+  /* App content background — dark app base, below the raised cards. */
+  --app-content-bg: #0b0f0d; /* dark: surfaceTokens.dark.base */
+  /* App chrome — raised surface above the dark content base. */
+  --app-chrome-bg: #131a16; /* dark: surfaceTokens.dark.raised */
+
   /* running → vivid phosphor green */
   --status-running-color: #39ff8b;
   --status-running-surface: rgba(57, 255, 139, 0.14);
