@@ -27,7 +27,7 @@ const typeMeta = computed(() => stepTypeMeta(props.step.action))
 const duration = computed(() => formatDuration(props.step.started_at, props.step.completed_at))
 
 const rowStyle = computed(() => ({
-  backgroundColor: props.selected ? 'var(--p-surface-100)' : 'transparent',
+  backgroundColor: props.selected ? 'var(--surface-overlay)' : 'transparent',
   border: props.selected
     ? '1px solid var(--status-accent-color)'
     : '1px solid transparent',

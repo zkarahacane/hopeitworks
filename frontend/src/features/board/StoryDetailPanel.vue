@@ -235,14 +235,14 @@ async function handleSave() {
   font-size: 0.85rem;
   padding: 0.1rem 0.3rem;
   border-radius: 0.25rem;
-  background-color: var(--p-surface-100);
+  background-color: var(--surface-overlay);
 }
 
 .prose-content :deep(pre) {
   margin: 0.5rem 0;
   padding: 0.75rem;
   border-radius: 0.375rem;
-  background-color: var(--p-surface-100);
+  background-color: var(--surface-overlay);
   overflow-x: auto;
 }
 

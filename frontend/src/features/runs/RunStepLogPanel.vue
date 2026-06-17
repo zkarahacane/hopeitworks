@@ -120,8 +120,8 @@ function handleVisibleUpdate(value: boolean) {
             class="font-mono inline-flex items-center gap-1 px-2 py-0.5 rounded-md"
             :style="{
               fontSize: '0.72rem',
-              backgroundColor: 'var(--p-surface-100)',
-              border: '1px solid var(--p-surface-200)',
+              backgroundColor: 'var(--surface-overlay)',
+              border: '1px solid var(--surface-border)',
               color: 'var(--p-text-muted-color)',
             }"
             data-testid="step-type-chip"

@@ -192,7 +192,7 @@ function handleStoryUpdated() {
             class="flex flex-col gap-2 min-w-[220px]"
           >
             <Skeleton width="100%" height="1.25rem" class="mb-1" />
-            <div v-for="m in 3" :key="m" class="flex flex-col gap-2 p-3" style="border: 1px solid var(--p-surface-200); border-radius: var(--p-border-radius)">
+            <div v-for="m in 3" :key="m" class="flex flex-col gap-2 p-3" style="border: 1px solid var(--surface-border); border-radius: var(--p-border-radius)">
               <Skeleton width="60%" height="0.9rem" />
               <Skeleton width="100%" height="0.9rem" />
               <Skeleton width="80%" height="0.9rem" />
@@ -239,7 +239,7 @@ function handleStoryUpdated() {
         <div
           v-if="selectedStoryId"
           class="shrink-0 overflow-hidden"
-          style="width: 380px; border-left: 1px solid var(--p-surface-200)"
+          style="width: 380px; border-left: 1px solid var(--surface-border)"
         >
           <StoryDetailPanel
             :story="storiesStore.selectedStory"

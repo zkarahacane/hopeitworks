@@ -102,7 +102,7 @@ const elapsedLabel = computed(() =>
 .dag-inspector {
   width: 22rem;
   min-width: 22rem;
-  border-left: 1px solid var(--p-surface-700);
-  background: var(--p-surface-900);
+  border-left: 1px solid var(--surface-border);
+  background: var(--surface-raised);
 }
 </style>

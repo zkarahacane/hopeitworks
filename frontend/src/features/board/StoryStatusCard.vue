@@ -1,8 +1,9 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { Story } from '@/stores/stories'
 import StatusBadge from '@/ui/primitives/StatusBadge.vue'
 
-defineProps<{
+const props = defineProps<{
   story: Story
   isSelected: boolean
 }>()
@@ -10,12 +11,28 @@ defineProps<{
 const emit = defineEmits<{
   click: [storyId: string]
 }>()
+
+const cardStyleObj = computed(() =>
+  props.isSelected
+    ? {
+        border: '2px solid var(--p-primary-color)',
+        background: 'var(--p-primary-50)',
+        borderRadius: 'var(--p-border-radius)',
+        transition: 'border-color 0.2s, background-color 0.2s',
+      }
+    : {
+        border: '1px solid var(--surface-border)',
+        background: 'var(--surface-raised)',
+        borderRadius: 'var(--p-border-radius)',
+        transition: 'border-color 0.2s, background-color 0.2s',
+      }
+)
 </script>
 
 <template>
   <div
     class="story-card flex flex-col gap-2 p-3 cursor-pointer"
-    :class="isSelected ? 'story-card--selected' : 'story-card--default'"
+    :style="cardStyleObj"
     role="button"
     tabindex="0"
     :aria-label="`Story: ${story.key} - ${story.title}`"
@@ -48,20 +65,3 @@ const emit = defineEmits<{
   </div>
 </template>
 
-<style scoped>
-.story-card {
-  border-radius: var(--p-border-radius);
-  transition: border-color 0.2s, background-color 0.2s;
-}
-.story-card--selected {
-  border: 2px solid var(--p-primary-color);
-  background: var(--p-primary-50);
-}
-.story-card--default {
-  border: 1px solid var(--p-surface-200);
-  background: var(--p-surface-0);
-}
-.story-card--default:hover {
-  background: var(--p-surface-50);
-}
-</style>

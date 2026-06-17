@@ -74,7 +74,10 @@ function handleBack() {
         @click="handleBack"
       />
       <h1 class="m-0 text-2xl font-bold flex-1">Epic Run Monitor</h1>
-      <code class="text-sm bg-surface-100 dark:bg-surface-800 px-2 py-1 rounded font-mono">
+      <code
+        class="text-sm px-2 py-1 rounded font-mono"
+        :style="{ background: 'var(--surface-overlay)' }"
+      >
         {{ truncatedId }}
       </code>
       <Tag :value="sseStatus" :severity="sseSeverity" class="text-xs" />
@@ -105,7 +108,7 @@ function handleBack() {
       <!-- Progress Bar -->
       <div class="flex flex-col gap-1">
         <ProgressBar :value="epicRunStore.progressPercent" :show-value="false" />
-        <span class="text-sm text-surface-500">
+        <span class="text-sm" :style="{ color: 'var(--p-text-muted-color)' }">
           {{ epicRunStore.completedCount }} / {{ epicRunStore.totalCount }} stories completed
         </span>
       </div>

@@ -149,18 +149,18 @@ function onNodeClick(key: string) {
 
 /* Dark canvas — the flagship surface. Tints VueFlow's background + minimap. */
 .dag-graph-container.dark :deep(.dag-flow) {
-  background: var(--p-surface-950);
+  background: var(--surface-base);
 }
 
 .dag-graph-container :deep(.vue-flow__minimap) {
-  background-color: var(--p-surface-900);
-  border: 1px solid var(--p-surface-700);
+  background-color: var(--surface-raised);
+  border: 1px solid var(--surface-border);
   border-radius: 8px;
 }
 
 .dag-controls {
-  background-color: var(--p-surface-900);
-  border: 1px solid var(--p-surface-700);
+  background-color: var(--surface-raised);
+  border: 1px solid var(--surface-border);
   border-radius: 10px;
   padding: 0.25rem;
 }

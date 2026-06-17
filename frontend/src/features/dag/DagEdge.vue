@@ -47,7 +47,7 @@ const path = computed(
 
 /** Active edges march in running-green; idle edges are a muted static line. */
 const edgeStyle = computed(() => ({
-  stroke: active.value ? 'var(--status-running-color)' : 'var(--p-surface-600)',
+  stroke: active.value ? 'var(--status-running-color)' : 'var(--surface-border)',
   strokeWidth: active.value ? 2 : 1.5,
 }))
 </script>

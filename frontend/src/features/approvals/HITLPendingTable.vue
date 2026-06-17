@@ -31,7 +31,7 @@ function RelativeTime(date: string) {
     data-testid="hitl-pending-table"
   >
     <template #empty>
-      <div class="flex items-center justify-center py-8 text-surface-500">
+      <div class="flex items-center justify-center py-8" :style="{ color: 'var(--p-text-muted-color)' }">
         No pending approvals
       </div>
     </template>
@@ -61,11 +61,12 @@ function RelativeTime(date: string) {
           :href="(data as HITLPendingItem).prUrl!"
           target="_blank"
           rel="noopener noreferrer"
-          class="text-primary-600 underline"
+          class="underline"
+          :style="{ color: 'var(--p-primary-color)' }"
         >
           View PR
         </a>
-        <span v-else class="text-surface-400">—</span>
+        <span v-else :style="{ color: 'var(--p-text-muted-color)' }">—</span>
       </template>
     </Column>
 

@@ -29,9 +29,9 @@ const statusConfig = [
     @click="emit('click', epic.id)"
     @keydown.enter="emit('click', epic.id)"
     style="
-      border: 1px solid var(--p-surface-200);
+      border: 1px solid var(--surface-border);
       border-radius: var(--p-border-radius);
-      background: var(--p-surface-0);
+      background: var(--surface-raised);
       transition: box-shadow 0.2s;
     "
     @mouseenter="($event.currentTarget as HTMLElement).style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)'"

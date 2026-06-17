@@ -18,7 +18,7 @@ const emit = defineEmits<{
   <div
     class="flex flex-col min-w-52 relative"
     :class="{ 'pr-2 mr-2': !isLast }"
-    :style="!isLast ? { borderRight: '1px solid var(--p-surface-200)' } : undefined"
+    :style="!isLast ? { borderRight: '1px solid var(--surface-border)' } : undefined"
     data-testid="stage-column"
   >
     <!-- Stage header -->
@@ -43,7 +43,7 @@ const emit = defineEmits<{
     >
       <i
         class="pi pi-chevron-right"
-        :style="{ fontSize: '0.7rem', color: 'var(--p-surface-400)' }"
+        :style="{ fontSize: '0.7rem', color: 'var(--p-text-muted-color)' }"
         aria-hidden="true"
       />
     </div>
@@ -60,7 +60,7 @@ const emit = defineEmits<{
       <div
         v-if="steps.length === 0"
         class="px-3 py-2"
-        :style="{ fontSize: '0.72rem', color: 'var(--p-surface-400)', fontStyle: 'italic' }"
+        :style="{ fontSize: '0.72rem', color: 'var(--p-text-muted-color)', fontStyle: 'italic' }"
         data-testid="empty-stage"
       >
         No steps
