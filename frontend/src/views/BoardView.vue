@@ -11,6 +11,10 @@ import StoryDetailPanel from '@/features/board/StoryDetailPanel.vue'
 import { useBoard } from '@/composables/useBoard'
 import { useProject } from '@/composables/useProject'
 import { useStoriesStore } from '@/stores/stories'
+import { useToast } from 'primevue/usetoast'
+import Toast from 'primevue/toast'
+import RunLaunchConfirmDialog from '@/features/runs/RunLaunchConfirmDialog.vue'
+import { useRunLauncher, ALREADY_RUNNING_ERROR } from '@/composables/useRunLauncher'
 
 const route = useRoute()
 const projectId = route.params.id as string
@@ -102,10 +106,57 @@ function handleSelectStory(storyId: string) {
 function handleStoryUpdated() {
   // story updated in panel — store already reflects change via updateStory
 }
+
+// ── Run launch ────────────────────────────────────────────────────────────────
+
+const toast = useToast()
+const dialogVisible = ref(false)
+const { isLoading: launchLoading, error: launchError, launchRun } = useRunLauncher()
+
+function handleLaunchClick() {
+  dialogVisible.value = true
+}
+
+async function handleConfirm() {
+  const story = storiesStore.selectedStory
+  if (!story) return
+
+  const result = await launchRun(projectId, story.id)
+
+  if (result !== null) {
+    toast.add({
+      severity: 'success',
+      summary: 'Run launched',
+      detail: `Run started for ${story.key}`,
+      life: 3000,
+    })
+    dialogVisible.value = false
+    return
+  }
+
+  if (launchError.value?.message === ALREADY_RUNNING_ERROR) {
+    toast.add({
+      severity: 'warn',
+      summary: 'Already running',
+      detail: 'This story already has a run in progress',
+      life: 5000,
+    })
+    return
+  }
+
+  toast.add({
+    severity: 'error',
+    summary: 'Launch failed',
+    detail: launchError.value?.message ?? 'An unexpected error occurred',
+    life: 5000,
+  })
+  dialogVisible.value = false
+}
 </script>
 
 <template>
   <div class="flex flex-col h-full overflow-hidden">
+    <Toast />
     <!-- ── Header ──────────────────────────────────────────────────────────── -->
     <div class="flex items-start justify-between gap-4 px-6 pt-6 pb-4 shrink-0">
       <div class="flex flex-col gap-1">
@@ -247,12 +298,22 @@ function handleStoryUpdated() {
             :project-id="projectId"
             :show-launch-button="true"
             @select-dependency="handleSelectStory"
-            @launch-click="() => {}"
+            @launch-click="handleLaunchClick"
             @story-updated="handleStoryUpdated"
           />
         </div>
       </Transition>
     </div>
+
+    <RunLaunchConfirmDialog
+      v-if="storiesStore.selectedStory"
+      v-model:visible="dialogVisible"
+      :story-key="storiesStore.selectedStory.key"
+      :story-title="storiesStore.selectedStory.title"
+      :loading="launchLoading"
+      @confirm="handleConfirm"
+      @cancel="dialogVisible = false"
+    />
   </div>
 </template>
 
