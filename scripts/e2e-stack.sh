@@ -144,18 +144,33 @@ cmd_reset() {
   docker exec "${container}" psql -U "${db_user}" -d postgres \
     -c "CREATE DATABASE ${db_name} OWNER ${db_user};"
 
-  # Run migrations (sorted order)
-  log_info "Running migrations..."
-  local migration_dir="${PROJECT_ROOT}/backend/migrations"
-  local migration_count=0
-  for f in "${migration_dir}"/*.up.sql; do
-    [ -f "$f" ] || continue
-    docker exec -i "${container}" psql -U "${db_user}" -d "${db_name}" --set ON_ERROR_STOP=1 < "$f"
-    migration_count=$((migration_count + 1))
+  # Restart the API so it applies all migrations against the fresh database at startup
+  # (DB_AUTO_MIGRATE=true). The API runs BOTH golang-migrate (schema migrations, which
+  # also writes the schema_migrations tracking table correctly) AND rivermigrate (the
+  # River job-queue tables river_job/river_leader). Doing it this way avoids re-applying
+  # migrations by hand and the brittle "schema_migrations version == file count" hack;
+  # it also guarantees the River tables exist, otherwise Launch Run 500s with
+  # "relation \"river_job\" does not exist".
+  log_info "Restarting API to apply migrations (schema + River job queue) on the fresh DB..."
+  docker compose -f "${COMPOSE_FILE}" restart api
+  log_info "Waiting for backend to be healthy (migrations run at startup)..."
+  local elapsed=0
+  local interval=2
+  while true; do
+    if check_backend; then
+      log_success "Backend is healthy."
+      break
+    fi
+    sleep "${interval}"
+    elapsed=$((elapsed + interval))
+    if [ "${elapsed}" -ge "${HEALTH_TIMEOUT}" ]; then
+      log_error "Backend health timeout reached (${HEALTH_TIMEOUT}s) after restart."
+      return 1
+    fi
+    log_info "Backend not ready yet (${elapsed}s)..."
   done
-  log_info "Applied ${migration_count} migrations."
 
-  # Seed dev data
+  # Seed dev data (tables now exist after the API applied its startup migrations)
   log_info "Seeding dev data..."
   docker exec -i "${container}" psql -U "${db_user}" -d "${db_name}" --set ON_ERROR_STOP=1 \
     < "${PROJECT_ROOT}/backend/testdata/seed.sql"
