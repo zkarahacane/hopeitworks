@@ -5,12 +5,6 @@ declare module 'vue-router' {
   interface RouteMeta {
     requiresAuth?: boolean
     requiresAdmin?: boolean
-    /**
-     * Per-route color scheme for the app shell + PrimeVue. `dark` for
-     * runtime/observability surfaces, `light` for management/config surfaces.
-     * Missing meta defaults to `dark` (see useTheme, auto mode).
-     */
-    theme?: 'dark' | 'light'
   }
 }
 
