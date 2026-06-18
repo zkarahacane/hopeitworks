@@ -65,24 +65,34 @@ describe('RunLaunchButton', () => {
     expect(button.attributes('disabled')).toBeDefined()
   })
 
-  it('does not render any button when status is done', () => {
+  it('renders "Re-run" button when status is done and emits launchClick', async () => {
     mountComponent({
       storyId: 's-1',
       storyKey: 'S-01',
       storyTitle: 'Test Story',
       status: 'done',
     })
-    expect(wrapper.find('button').exists()).toBe(false)
+    const button = wrapper.find('button')
+    expect(button.exists()).toBe(true)
+    expect(button.text()).toContain('Re-run')
+    expect(button.attributes('disabled')).toBeUndefined()
+    await button.trigger('click')
+    expect(wrapper.emitted('launchClick')).toHaveLength(1)
   })
 
-  it('does not render any button when status is failed', () => {
+  it('renders "Retry Run" button when status is failed and emits launchClick', async () => {
     mountComponent({
       storyId: 's-1',
       storyKey: 'S-01',
       storyTitle: 'Test Story',
       status: 'failed',
     })
-    expect(wrapper.find('button').exists()).toBe(false)
+    const button = wrapper.find('button')
+    expect(button.exists()).toBe(true)
+    expect(button.text()).toContain('Retry Run')
+    expect(button.attributes('disabled')).toBeUndefined()
+    await button.trigger('click')
+    expect(wrapper.emitted('launchClick')).toHaveLength(1)
   })
 
   it('does not emit launchClick when running button is clicked', async () => {

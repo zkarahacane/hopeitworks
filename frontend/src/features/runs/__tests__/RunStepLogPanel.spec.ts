@@ -25,7 +25,7 @@ const mockedUseStepLogs = vi.mocked(useStepLogs)
 vi.mock('@/ui/composed/LogStreamPanel.vue', () => ({
   default: {
     name: 'LogStreamPanel',
-    template: '<div data-testid="log-stream-mock" />',
+    template: '<div data-testid="log-stream-mock" :data-lines="JSON.stringify(lines)" />',
     props: ['lines', 'status', 'active'],
     emits: ['clear'],
   },
@@ -230,5 +230,30 @@ describe('RunStepLogPanel', () => {
     mountPanel({ step: makeStep({ id: 'step-99', status: 'failed' }), visible: true })
     await wrapper.find('[data-testid="retry-step-btn"]').trigger('click')
     expect(wrapper.emitted('retry')?.[0]).toEqual(['step-99'])
+  })
+
+  it('passes persisted log_tail lines to LogStreamPanel when no live SSE lines exist', () => {
+    mockLines.value = []
+    mountPanel({
+      step: makeStep({ status: 'completed', log_tail: 'line one\nline two\nline three' }),
+      visible: true,
+    })
+    const mock = wrapper.find('[data-testid="log-stream-mock"]')
+    const passed = JSON.parse(mock.attributes('data-lines') ?? '[]') as { text: string }[]
+    expect(passed).toHaveLength(3)
+    expect(passed[0]!.text).toBe('line one')
+    expect(passed[2]!.text).toBe('line three')
+  })
+
+  it('prefers live SSE lines over log_tail when both exist', () => {
+    mockLines.value = [{ text: 'live line', timestamp: new Date() }]
+    mountPanel({
+      step: makeStep({ status: 'running', log_tail: 'persisted line' }),
+      visible: true,
+    })
+    const mock = wrapper.find('[data-testid="log-stream-mock"]')
+    const passed = JSON.parse(mock.attributes('data-lines') ?? '[]') as { text: string }[]
+    expect(passed).toHaveLength(1)
+    expect(passed[0]!.text).toBe('live line')
   })
 })
