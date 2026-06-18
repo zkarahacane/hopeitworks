@@ -32,6 +32,12 @@ const {
   storiesError,
 } = useBoard(projectId)
 
+const selectedEpicName = computed(() => {
+  if (!selectedEpicId.value) return 'All epics'
+  const epic = epics.value.find((e) => e.id === selectedEpicId.value)
+  return epic?.name ?? 'Unknown epic'
+})
+
 const { project } = useProject(projectId)
 
 // ── PLANNED IN segmented control ─────────────────────────────────────────────
@@ -178,7 +184,7 @@ async function handleConfirm() {
           class="m-0"
           style="font-size: 0.82rem; color: var(--p-text-muted-color)"
         >
-          Epic · MVP — board generated from your stories, kept live by the runtime
+          Epic · {{ selectedEpicName }} — board generated from your stories, kept live by the runtime
         </p>
       </div>
 

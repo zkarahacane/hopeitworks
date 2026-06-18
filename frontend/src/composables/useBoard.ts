@@ -29,7 +29,7 @@ export function useBoard(projectId: string) {
     if (epicId) {
       storiesStore.fetchStoriesByEpic(projectId, epicId)
     } else {
-      storiesStore.reset()
+      storiesStore.fetchAllStories(projectId)
     }
   }
 
