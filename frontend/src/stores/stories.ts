@@ -158,28 +158,56 @@ export const useStoriesStore = defineStore('stories', () => {
     items.value.find((s) => s.id === selectedStoryId.value) ?? null,
   )
 
-  /** Fetch stories for an epic from the API */
-  async function fetchStoriesByEpic(projectId: string, epicId: string) {
-    isLoading.value = true
-    error.value = null
-    try {
+  /** Helper: fetch all pages for a given query until all results are collected */
+  async function fetchAllPages(
+    projectId: string,
+    queryParams: Record<string, string | undefined>,
+  ): Promise<Story[]> {
+    const allStories: Story[] = []
+    let page = 1
+    const perPage = 50
+
+    while (true) {
       const { data, error: apiError } = await apiClient.GET(
         '/projects/{projectId}/stories',
         {
           params: {
             path: { projectId },
+            query: {
+              ...queryParams,
+              page,
+              per_page: perPage,
+            },
           },
         },
       )
+
       if (apiError) {
-        error.value = 'Failed to load stories'
-        return
+        throw new Error('Failed to load stories')
       }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const responseData = data as any
-      const allStories = responseData?.data ?? []
-      // Filter by epic_id since the API doesn't support epic_id as a query param
-      items.value = allStories.filter((s: Story) => s.epic_id === epicId)
+
+      if (!data) break
+
+      const responseData = data as unknown as { data: Story[]; pagination: { total: number } }
+      const stories = responseData?.data ?? []
+      allStories.push(...stories)
+
+      const pagination = responseData?.pagination
+      if (!pagination || allStories.length >= pagination.total) break
+
+      page += 1
+    }
+
+    return allStories
+  }
+
+  /** Fetch stories for an epic from the API with server-side filtering */
+  async function fetchStoriesByEpic(projectId: string, epicId: string) {
+    isLoading.value = true
+    error.value = null
+    try {
+      const allStories = await fetchAllPages(projectId, { epic_id: epicId })
+      items.value = allStories
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Failed to load stories'
     } finally {
@@ -187,26 +215,13 @@ export const useStoriesStore = defineStore('stories', () => {
     }
   }
 
-  /** Fetch all stories for a project (across all epics) from the API */
+  /** Fetch all stories for a project (across all epics) from the API, fetching all pages */
   async function fetchAllStories(projectId: string) {
     isLoading.value = true
     error.value = null
     try {
-      const { data, error: apiError } = await apiClient.GET(
-        '/projects/{projectId}/stories',
-        {
-          params: {
-            path: { projectId },
-          },
-        },
-      )
-      if (apiError) {
-        error.value = 'Failed to load stories'
-        return
-      }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const responseData = data as any
-      items.value = responseData?.data ?? []
+      const allStories = await fetchAllPages(projectId, {})
+      items.value = allStories
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Failed to load stories'
     } finally {

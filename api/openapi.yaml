@@ -689,6 +689,13 @@ paths:
           schema:
             type: string
           description: Story key to look up (returns single story)
+        - name: epic_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+          description: Filter stories by epic ID
       responses:
         "200":
           description: Paginated list of stories or single story by key
