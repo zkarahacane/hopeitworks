@@ -35,6 +35,30 @@ const { lines, sseStatus, clearLogs } = useStepLogs(props.projectId, props.runId
 const typeMeta = computed(() => stepTypeMeta(props.step?.action))
 
 /**
+ * Persisted log lines from `step.log_tail` (set by backend for completed steps).
+ * Split on newlines, drop trailing empty line.
+ * Timestamp is approximated from step completion time (no per-line timestamps in tail).
+ */
+const persistedLines = computed<import('@/ui/composed/LogViewer.vue').LogLine[]>(() => {
+  const tail = props.step?.log_tail
+  if (!tail) return []
+  const ts = props.step?.completed_at ?? props.step?.started_at
+  const timestamp = ts ? parseISO(ts) : new Date(0)
+  return tail
+    .split('\n')
+    .filter((_, i, arr) => i < arr.length - 1 || arr[i] !== '')
+    .map((text) => ({ text, timestamp }))
+})
+
+/**
+ * Lines fed to LogStreamPanel: prefer live SSE lines once any have arrived,
+ * fall back to persisted log_tail for completed/historical steps.
+ */
+const displayLines = computed(() =>
+  lines.value.length > 0 ? lines.value : persistedLines.value,
+)
+
+/**
  * LogStreamPanel `active` — a stream is only expected for a selected, running
  * (or recently active) step. Completed/pending steps show "idle" instead of a
  * misleading "no output" (the U1 / #4 fix is carried by LogStreamPanel; we feed
@@ -42,7 +66,7 @@ const typeMeta = computed(() => stepTypeMeta(props.step?.action))
  */
 const streamActive = computed(() => {
   if (!props.step) return false
-  return props.step.status === 'running' || lines.value.length > 0
+  return props.step.status === 'running' || displayLines.value.length > 0
 })
 
 /** Format an ISO timestamp to HH:mm:ss. */
@@ -165,7 +189,7 @@ function handleVisibleUpdate(value: boolean) {
       <!-- Live log stream (LogStreamPanel — fixes the U1/#4 lifecycle). -->
       <div class="flex-1 overflow-hidden">
         <LogStreamPanel
-          :lines="lines"
+          :lines="displayLines"
           :status="sseStatus"
           :active="streamActive"
           @clear="clearLogs"
