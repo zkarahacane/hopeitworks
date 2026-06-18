@@ -66,6 +66,17 @@ func (e *PipelineExecutor) ExecuteRun(ctx context.Context, runID uuid.UUID) erro
 		return err
 	}
 
+	// Terminal guard: if run is already in a terminal state (failed, completed, cancelled),
+	// skip re-execution and return success so River doesn't retry.
+	// paused is NOT terminal and should be resumed.
+	if run.Status == model.RunStatusFailed || run.Status == model.RunStatusCompleted || run.Status == model.RunStatusCancelled {
+		e.logger.Info("run already terminal, skipping re-execution",
+			"run_id", runID,
+			"status", string(run.Status),
+		)
+		return nil
+	}
+
 	// 2. Check circuit breaker before starting
 	if e.circuitBreaker != nil {
 		if err := e.circuitBreaker.CheckCircuitBreaker(ctx, run.ProjectID); err != nil {

@@ -85,6 +85,17 @@ func (a *GitBranchAction) Execute(ctx context.Context, runCtx *model.RunContext)
 	)
 
 	if err := gitProvider.CreateRemoteBranch(ctx, *project.RepoURL, branchName, baseBranch); err != nil {
+		// Make idempotent: if branch already exists, treat as success (HTTP 409 or "already exists" in message)
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "409") || strings.Contains(errMsg, "already exists") || strings.Contains(errMsg, "reference already exists") {
+			a.logger.Info("remote branch already exists, treating as success",
+				"branch", branchName,
+				"story_key", story.Key,
+				"repo_url", *project.RepoURL,
+			)
+			runCtx.Metadata["branch_name"] = branchName
+			return nil
+		}
 		return fmt.Errorf("create branch %q: %w", branchName, err)
 	}
 

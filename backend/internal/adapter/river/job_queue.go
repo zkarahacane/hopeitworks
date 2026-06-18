@@ -52,8 +52,13 @@ func (q *JobQueue) Client() *river.Client[pgx.Tx] {
 }
 
 // EnqueueExecuteRun enqueues a job to execute a pipeline run asynchronously.
+// MaxAttempts is set to 1 to prevent River from auto-retrying the job if ExecuteRun returns
+// an error. The terminal guard in ExecuteRun will skip re-execution of already-terminal runs,
+// and the step-level retry_policy in the action layer handles step-specific retries.
 func (q *JobQueue) EnqueueExecuteRun(ctx context.Context, runID uuid.UUID) error {
-	_, err := q.client.Insert(ctx, ExecuteRunArgs{RunID: runID}, nil)
+	_, err := q.client.Insert(ctx, ExecuteRunArgs{RunID: runID}, &river.InsertOpts{
+		MaxAttempts: 1,
+	})
 	if err != nil {
 		return fmt.Errorf("enqueue execute_run job: %w", err)
 	}
