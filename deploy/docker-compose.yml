@@ -105,6 +105,25 @@ services:
       - hopeitworks
     restart: unless-stopped
 
+  # Frontend SPA built and served by nginx. nginx reverse-proxies /api/v1 to the
+  # api service (same-origin → cookies + SSE work without CORS). The whole app is
+  # reached at http://localhost:${FRONTEND_HOST_PORT:-5173}.
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    container_name: hopeitworks-frontend
+    environment:
+      API_BACKEND: http://api:8080
+    ports:
+      - "${FRONTEND_HOST_PORT:-5173}:80"
+    depends_on:
+      api:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - hopeitworks
+
 volumes:
   postgres_data:
 
