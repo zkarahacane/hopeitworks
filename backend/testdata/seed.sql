@@ -193,7 +193,7 @@ VALUES (
     'Implement task CRUD endpoints',
     'Create REST endpoints to create, read, update, and delete tasks.',
     'backend',
-    'completed',
+    'done',
     '[]',
     'POST/GET/PUT/DELETE /tasks all return correct status codes and persist to the database.'
 ) ON CONFLICT (project_id, key) DO UPDATE SET
@@ -344,6 +344,7 @@ VALUES (
       - id: 10000000-0000-0000-0000-000000000002
         name: Implement Story
         action_type: agent_run
+        agent_id: 00000000-0000-0000-0000-000000000903
         model: claude-sonnet-4-6
         auto_approve: false
         config:
@@ -358,6 +359,7 @@ VALUES (
       - id: 10000000-0000-0000-0000-000000000003
         name: Code Review
         action_type: agent_run
+        agent_id: 00000000-0000-0000-0000-000000000902
         model: claude-sonnet-4-6
         auto_approve: true
         config:
