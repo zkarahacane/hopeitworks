@@ -56,6 +56,24 @@ VALUES (
     git_token_env = EXCLUDED.git_token_env,
     default_model = EXCLUDED.default_model;
 
+INSERT INTO projects (id, name, description, owner_id, repo_url, git_provider, git_token_env, default_model)
+VALUES (
+    '00000000-0000-0000-0000-000000000102',
+    'E-commerce API',
+    'REST API for an e-commerce backend',
+    '00000000-0000-0000-0000-000000000001',
+    'http://localhost:3030/devops/todo-app',
+    'gitea',
+    'GITEA_TOKEN',
+    'claude-sonnet-4-6'
+) ON CONFLICT (name) DO UPDATE SET
+    description = EXCLUDED.description,
+    owner_id = EXCLUDED.owner_id,
+    repo_url = EXCLUDED.repo_url,
+    git_provider = EXCLUDED.git_provider,
+    git_token_env = EXCLUDED.git_token_env,
+    default_model = EXCLUDED.default_model;
+
 -- ---------------------------------------------------------------------------
 -- Project memberships
 -- ---------------------------------------------------------------------------
@@ -78,15 +96,30 @@ BEGIN
 END $$;
 
 -- ---------------------------------------------------------------------------
--- Epic: MVP
+-- Epic: Foundation
 -- ---------------------------------------------------------------------------
 
 INSERT INTO epics (id, project_id, name, description, status)
 VALUES (
     '00000000-0000-0000-0000-000000000201',
     '00000000-0000-0000-0000-000000000101',
-    'MVP',
-    'Minimum viable product — project scaffolding, CI, and basic infrastructure',
+    'Foundation',
+    'Foundation — project scaffolding, CI, and core infrastructure',
+    'in_progress'
+) ON CONFLICT (project_id, name) DO UPDATE SET
+    description = EXCLUDED.description,
+    status = EXCLUDED.status;
+
+-- ---------------------------------------------------------------------------
+-- Epic: Task Management
+-- ---------------------------------------------------------------------------
+
+INSERT INTO epics (id, project_id, name, description, status)
+VALUES (
+    '00000000-0000-0000-0000-000000000202',
+    '00000000-0000-0000-0000-000000000101',
+    'Task Management',
+    'Task management features — CRUD, assignments, and status tracking',
     'in_progress'
 ) ON CONFLICT (project_id, name) DO UPDATE SET
     description = EXCLUDED.description,
@@ -145,6 +178,42 @@ VALUES (
     'backlog',
     '["S-01"]',
     'golangci-lint runs clean on backend. ESLint + Prettier run clean on frontend. Lefthook pre-commit hook runs both. npm run format and gofmt produce no changes on committed code.'
+) ON CONFLICT (project_id, key) DO UPDATE SET
+    title = EXCLUDED.title,
+    objective = EXCLUDED.objective,
+    status = EXCLUDED.status;
+
+-- S-04: Task CRUD endpoints (Task Management epic)
+INSERT INTO stories (id, project_id, epic_id, key, title, objective, scope, status, depends_on, acceptance_criteria)
+VALUES (
+    '00000000-0000-0000-0000-000000000304',
+    '00000000-0000-0000-0000-000000000101',
+    '00000000-0000-0000-0000-000000000202',
+    'S-04',
+    'Implement task CRUD endpoints',
+    'Create REST endpoints to create, read, update, and delete tasks.',
+    'backend',
+    'completed',
+    '[]',
+    'POST/GET/PUT/DELETE /tasks all return correct status codes and persist to the database.'
+) ON CONFLICT (project_id, key) DO UPDATE SET
+    title = EXCLUDED.title,
+    objective = EXCLUDED.objective,
+    status = EXCLUDED.status;
+
+-- S-05: Task list UI with status filter (Task Management epic)
+INSERT INTO stories (id, project_id, epic_id, key, title, objective, scope, status, depends_on, acceptance_criteria)
+VALUES (
+    '00000000-0000-0000-0000-000000000305',
+    '00000000-0000-0000-0000-000000000101',
+    '00000000-0000-0000-0000-000000000202',
+    'S-05',
+    'Task list UI with status filter',
+    'Build the task list view with filtering by status.',
+    'frontend',
+    'running',
+    '["S-04"]',
+    'The task list renders, supports filtering by status, and updates live.'
 ) ON CONFLICT (project_id, key) DO UPDATE SET
     title = EXCLUDED.title,
     objective = EXCLUDED.objective,
