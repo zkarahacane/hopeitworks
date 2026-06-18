@@ -591,7 +591,7 @@ func TestAgentRunAction_HappyPath(t *testing.T) {
 		t.Errorf("expected story_key label S-42, got %s", opts.Labels["story_key"])
 	}
 
-	// Verify env vars contain expected keys (no CLAUDE_MD_CONTENT)
+	// Verify env vars contain expected keys (including CLAUDE_MD_CONTENT)
 	envMap := make(map[string]string)
 	for _, env := range opts.Env {
 		parts := strings.SplitN(env, "=", 2)
@@ -599,8 +599,11 @@ func TestAgentRunAction_HappyPath(t *testing.T) {
 			envMap[parts[0]] = parts[1]
 		}
 	}
-	if _, ok := envMap["CLAUDE_MD_CONTENT"]; ok {
-		t.Error("CLAUDE_MD_CONTENT should not be in env vars")
+	if _, ok := envMap["CLAUDE_MD_CONTENT"]; !ok {
+		t.Error("expected CLAUDE_MD_CONTENT env var to be set")
+	}
+	if !strings.Contains(envMap["CLAUDE_MD_CONTENT"], "Test Project") {
+		t.Errorf("expected CLAUDE_MD_CONTENT to contain project name, got: %q", envMap["CLAUDE_MD_CONTENT"])
 	}
 	if envMap["REPO_URL"] != "https://github.com/test/repo" {
 		t.Errorf("expected REPO_URL, got %q", envMap["REPO_URL"])
