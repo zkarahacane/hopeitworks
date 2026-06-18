@@ -1,28 +1,23 @@
 import { computed, watch, type Ref } from 'vue'
-import { useRoute } from 'vue-router'
-import { useLocalStorage } from '@vueuse/core'
+import { useLocalStorage, usePreferredDark } from '@vueuse/core'
 
 /**
  * useTheme — the single, canonical theme controller.
  *
- * Three persisted modes:
- *  - `auto`  → follow the active route's `route.meta.theme` (runtime surfaces
- *              are dark, management surfaces are light). Missing meta ⇒ dark,
- *              matching the product's runtime-first default. This folds in the
- *              former `useRouteTheme` logic — there is no second toggler.
- *  - `dark`  → force dark globally, regardless of route.
- *  - `light` → force light globally, regardless of route.
+ * Three persisted modes, applied GLOBALLY and stable across navigation
+ * (the theme never changes just because you switched page/tab):
+ *  - `auto`  → follow the OS / browser preference (`prefers-color-scheme`),
+ *              reactive to system changes.
+ *  - `dark`  → force dark.
+ *  - `light` → force light.
  *
  * The resolved scheme drives the `.dark` class on <html>, which is PrimeVue's
  * configured `darkModeSelector` AND the selector our scheme-aware design tokens
- * key off (assets/main.css). Applied reactively: on mode change always, and on
- * route change when in `auto`.
+ * key off (assets/main.css).
  *
  * The chosen MODE (not the resolved scheme) is persisted in localStorage so the
- * user's intent survives reloads; `auto` then re-derives per route on load.
- *
- * Wire once at the app shell root (AppShell calls useTheme()). The toggle
- * control lives in AppHeader and binds to the returned `mode` ref.
+ * user's intent survives reloads. Wire once at the app shell root (AppShell
+ * calls useTheme()); the toggle control in AppHeader binds to `mode`/`cycle`.
  */
 
 export type ThemeMode = 'auto' | 'dark' | 'light'
@@ -49,34 +44,24 @@ export function __resetThemeForTests() {
   modeSingleton = null
 }
 
-/**
- * Resolve a route's declared scheme. Missing meta ⇒ dark (runtime-first).
- * `light` is the only value that maps to light; anything else is dark.
- */
-function routeScheme(theme: unknown): 'dark' | 'light' {
-  return theme === 'light' ? 'light' : 'dark'
-}
-
 export function useTheme() {
-  const route = useRoute()
   const mode = getMode()
+  const prefersDark = usePreferredDark()
 
-  /** The scheme actually applied to <html>, given the mode + current route. */
+  /** The scheme actually applied to <html>. `auto` follows the system. */
   const resolvedScheme = computed<'dark' | 'light'>(() => {
     if (mode.value === 'dark') return 'dark'
     if (mode.value === 'light') return 'light'
-    // auto → follow the route's declared theme.
-    return routeScheme(route.meta?.theme)
+    return prefersDark.value ? 'dark' : 'light'
   })
 
-  const apply = (scheme: 'dark' | 'light') => {
-    document.documentElement.classList.toggle('dark', scheme === 'dark')
-  }
-
-  // React to BOTH mode changes (force) and route changes (auto branch): both
-  // feed resolvedScheme, so a single watcher covers everything. immediate so the
-  // class is applied on mount / first restore.
-  watch(resolvedScheme, apply, { immediate: true })
+  // One watcher covers mode changes and (in auto) system-preference changes.
+  // immediate so the class is applied on mount / first restore.
+  watch(
+    resolvedScheme,
+    (scheme) => document.documentElement.classList.toggle('dark', scheme === 'dark'),
+    { immediate: true },
+  )
 
   /** Cycle order for a single-button control: auto → dark → light → auto. */
   function cycle() {

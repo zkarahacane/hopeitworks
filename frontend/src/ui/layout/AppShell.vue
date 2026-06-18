@@ -22,7 +22,7 @@ const { isMobile } = useBreakpoint()
 const { isAuthenticated, loading: authLoading } = useAuth()
 const route = useRoute()
 
-// The single theme controller (.dark on <html>) — auto follows route.meta.theme,
+// The single theme controller (.dark on <html>) — auto follows the OS preference,
 // dark/light force globally. Wired here once; the toggle lives in AppHeader.
 useTheme()
 
