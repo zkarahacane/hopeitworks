@@ -102,7 +102,7 @@ test.describe('smoke: agents CRUD (real backend)', () => {
     }
   })
 
-  test('agents list shows model and image columns', async ({ page }) => {
+  test('agents list shows model (inline) and image column', async ({ page }) => {
     await page.goto(`/projects/${TODO_APP_ID}/agents`)
 
     // Wait for the table to appear
@@ -110,18 +110,22 @@ test.describe('smoke: agents CRUD (real backend)', () => {
       timeout: 10000,
     })
 
-    // Column headers must be visible
+    // Column headers: Agent and Image must be visible (Model is inline in Agent column)
     await expect(
-      page.getByRole('columnheader', { name: 'Model' }),
+      page.getByRole('columnheader', { name: 'Agent' }),
     ).toBeVisible()
     await expect(
       page.getByRole('columnheader', { name: 'Image' }),
     ).toBeVisible()
 
-    // At least one row should show non-empty model and image values
+    // At least one row should exist
     const rows = page.locator('[data-testid="agents-table"] tbody tr')
     const rowCount = await rows.count()
     expect(rowCount).toBeGreaterThan(0)
+
+    // Model should be shown inline within the table (seed agents use claude-sonnet-4-6 or similar)
+    const tableLocator = page.locator('[data-testid="agents-table"]')
+    await expect(tableLocator.getByText(/claude/i).first()).toBeVisible()
   })
 
   test('can create a project-scoped agent', async ({ page, context }) => {
