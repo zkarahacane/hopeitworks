@@ -76,7 +76,7 @@ function handleDelete(agentId: string) {
         </p>
       </div>
       <Button
-        v-if="isAdmin && agents.length > 0"
+        v-if="isAdmin"
         label="New Agent"
         icon="pi pi-plus"
         severity="success"
