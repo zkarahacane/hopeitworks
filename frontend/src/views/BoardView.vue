@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useRoute } from 'vue-router'
-import SelectButton from 'primevue/selectbutton'
 import Select from 'primevue/select'
 import Message from 'primevue/message'
 import Skeleton from 'primevue/skeleton'
 import Button from 'primevue/button'
+import Tag from 'primevue/tag'
 import KanbanBoard from '@/features/board/KanbanBoard.vue'
 import StoryDetailPanel from '@/features/board/StoryDetailPanel.vue'
 import { useBoard } from '@/composables/useBoard'
@@ -40,48 +40,17 @@ const selectedEpicName = computed(() => {
 
 const { project } = useProject(projectId)
 
-// ── PLANNED IN segmented control ─────────────────────────────────────────────
+// ── PLANNED IN read-only indicator ──────────────────────────────────────────
 // Frontend-only derivation: maps git_provider to a planning source label.
 // Backend gap: no planning_source field on Epic or Project — this is a
 // UI-layer heuristic until the backend exposes an explicit planning_source.
-
-interface PlanningOption {
-  label: string
-  value: string
-}
-
-const planningOptions: PlanningOption[] = [
-  { label: '✓ GitHub Issues', value: 'github' },
-  { label: 'GitLab Issues', value: 'gitlab' },
-  { label: 'BMAD', value: 'bmad' },
-  { label: 'Jira', value: 'jira' },
-  { label: 'Markdown', value: 'markdown' },
-]
-
-/**
- * The active planning source — null means "use derived default".
- * Initialized to null so we can show the derived value as highlighted
- * without hardcoding it before the project loads.
- *
- * Backend gap: no planning_source field on Epic or Project.
- * This computed is the source-of-truth for the SelectButton value.
- */
-const selectedPlanningSource = ref<string | null>(null)
+// The indicator is read-only; the control is not interactive pending backend support.
 
 const derivedPlanningSource = computed((): string => {
   const provider = project.value?.git_provider
-  if (provider === 'github') return 'github'
-  if (provider === 'gitlab') return 'gitlab'
-  return 'github' // sensible default
-})
-
-/**
- * The value actually bound to SelectButton.
- * Falls back to the git_provider-derived source when user hasn't picked.
- */
-const activePlanningSource = computed({
-  get: () => selectedPlanningSource.value ?? derivedPlanningSource.value,
-  set: (val: string | null) => { selectedPlanningSource.value = val },
+  if (provider === 'github') return 'GitHub'
+  if (provider === 'gitlab') return 'GitLab'
+  return 'GitHub' // sensible default
 })
 
 // ── Epic selector ─────────────────────────────────────────────────────────────
@@ -188,19 +157,12 @@ async function handleConfirm() {
         </p>
       </div>
 
-      <!-- PLANNED IN segmented control -->
+      <!-- PLANNED IN read-only indicator (backend planning_source not yet available) -->
       <div class="flex flex-col items-end gap-1 shrink-0">
         <span style="font-size: 0.72rem; color: var(--p-text-muted-color); text-transform: uppercase; letter-spacing: 0.05em">
           Planned in
         </span>
-        <SelectButton
-          v-model="activePlanningSource"
-          :options="planningOptions"
-          option-label="label"
-          option-value="value"
-          :allow-empty="true"
-          :pt="{ root: { style: 'font-size: 0.78rem' } }"
-        />
+        <Tag :value="derivedPlanningSource" :pt="{ root: { style: 'font-size: 0.78rem' } }" />
       </div>
     </div>
 

@@ -75,7 +75,7 @@ export function useAgentEditor(projectId: string, agentId: string) {
     () =>
       isDirty.value &&
       content.value.trim() !== '' &&
-      (!isNewAgent.value || name.value.trim() !== ''),
+      name.value.trim() !== '',
   )
 
   /** Fetch an existing agent from the API */

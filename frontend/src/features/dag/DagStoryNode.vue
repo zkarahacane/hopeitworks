@@ -27,7 +27,7 @@ const props = withDefaults(
   { selected: false },
 )
 
-const emit = defineEmits<{
+defineEmits<{
   retry: [key: string]
 }>()
 
@@ -113,7 +113,7 @@ const cardStyle = computed(() => ({
       waiting on {{ data.waitingOn.join(', ') }}
     </span>
 
-    <!-- failed: exit + retry -->
+    <!-- failed: exit + retry (disabled — API not yet available) -->
     <div v-if="isFailed" class="flex items-center justify-between gap-2">
       <span
         class="font-mono"
@@ -128,8 +128,9 @@ const cardStyle = computed(() => ({
         severity="danger"
         text
         size="small"
+        disabled
+        title="Retry not available yet"
         data-testid="dag-node-retry"
-        @click.stop="emit('retry', data.key)"
       />
     </div>
 
