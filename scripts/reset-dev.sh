@@ -135,9 +135,9 @@ log "Creating project..."
 PROJECT=$(api_post POST "/projects" '{
   "name": "Todo App",
   "description": "Simple todo application — Go backend + Vue 3 frontend. Used as test project for pipeline validation.",
-  "repo_url": "http://localhost:3030/devops/todo-app",
-  "git_provider": "gitea",
-  "git_token_env": "GITEA_TOKEN",
+  "repo_url": "https://github.com/zkarahacane/todo-app",
+  "git_provider": "github",
+  "git_token_env": "GITHUB_TOKEN",
   "default_model": "claude-sonnet-4-6"
 }')
 PROJECT_ID=$(echo "$PROJECT" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
