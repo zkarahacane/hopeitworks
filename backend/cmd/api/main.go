@@ -143,7 +143,7 @@ func run() error {
 
 	// Scheduler service (DAG computation, pure domain service)
 	schedulerService := service.NewSchedulerService()
-	epicHandler := handler.NewEpicHandler(epicService, schedulerService, storyRepo)
+	epicHandler := handler.NewEpicHandler(epicService, schedulerService, storyRepo, runRepo)
 
 	// Agent repository and service (first-class Agent entity, replaces prompt_templates)
 	agentRepo := pgadapter.NewAgentRepo(queries)

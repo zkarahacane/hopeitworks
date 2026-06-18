@@ -29,10 +29,8 @@ const resetSchema = toTypedSchema(
 )
 
 const { handleSubmit } = useForm({ validationSchema: resetSchema })
-
 const { value: password, errorMessage: passwordError } = useField<string>('password')
-const { value: confirmPassword, errorMessage: confirmPasswordError } =
-  useField<string>('confirmPassword')
+const { value: confirmPassword, errorMessage: confirmPasswordError } = useField<string>('confirmPassword')
 
 const onSubmit = handleSubmit(async (values) => {
   const success = await resetPassword(token.value, values.password)
@@ -43,16 +41,22 @@ const onSubmit = handleSubmit(async (values) => {
 </script>
 
 <template>
-  <div class="flex min-h-screen items-center justify-center p-4">
-    <div class="flex w-full max-w-md flex-col gap-6">
-      <h1 class="text-center text-3xl font-bold">hopeitworks</h1>
+  <div class="flex min-h-screen items-center justify-center p-6" style="background: var(--surface-base)">
+    <div
+      class="flex w-full max-w-sm flex-col gap-6 rounded-xl p-8"
+      style="background: var(--surface-raised)"
+    >
+      <div>
+        <p class="text-xs font-semibold tracking-widest uppercase mb-4" style="color: var(--p-text-muted-color)">
+          hopeitworks
+        </p>
+        <h1 class="text-2xl font-bold" style="color: var(--p-text-color)">Set new password</h1>
+      </div>
 
       <template v-if="hasToken">
-        <h2 class="text-center text-xl">Set new password</h2>
-
         <form class="flex flex-col gap-4" @submit.prevent="onSubmit">
           <div class="flex flex-col gap-1">
-            <label for="password" class="text-sm font-medium">New password</label>
+            <label for="password" class="text-sm font-medium" style="color: var(--p-text-color)">New password</label>
             <Password
               inputId="password"
               v-model="password"
@@ -62,11 +66,11 @@ const onSubmit = handleSubmit(async (values) => {
               input-class="w-full"
               class="w-full"
             />
-            <small v-if="passwordError" class="text-red-500">{{ passwordError }}</small>
+            <small v-if="passwordError" style="color: var(--p-red-400)">{{ passwordError }}</small>
           </div>
 
           <div class="flex flex-col gap-1">
-            <label for="confirmPassword" class="text-sm font-medium">Confirm new password</label>
+            <label for="confirmPassword" class="text-sm font-medium" style="color: var(--p-text-color)">Confirm new password</label>
             <Password
               inputId="confirmPassword"
               v-model="confirmPassword"
@@ -76,9 +80,7 @@ const onSubmit = handleSubmit(async (values) => {
               input-class="w-full"
               class="w-full"
             />
-            <small v-if="confirmPasswordError" class="text-red-500">
-              {{ confirmPasswordError }}
-            </small>
+            <small v-if="confirmPasswordError" style="color: var(--p-red-400)">{{ confirmPasswordError }}</small>
           </div>
 
           <Button
@@ -86,12 +88,10 @@ const onSubmit = handleSubmit(async (values) => {
             label="Set new password"
             :loading="loading"
             :disabled="loading"
-            class="mt-2"
+            class="w-full mt-1"
           />
 
-          <Message v-if="error" severity="error" :closable="false">
-            {{ error }}
-          </Message>
+          <Message v-if="error" severity="error" :closable="false">{{ error }}</Message>
         </form>
       </template>
 

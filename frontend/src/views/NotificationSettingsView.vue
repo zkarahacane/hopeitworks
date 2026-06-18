@@ -87,7 +87,7 @@ function handleCreated() {
     <div class="mb-6 flex items-center justify-between">
       <div>
         <h2 class="text-xl font-semibold">Notification Channels</h2>
-        <p class="mt-1 text-sm text-surface-500">
+        <p class="mt-1 text-sm" :style="{ color: 'var(--p-text-muted-color)' }">
           Configure Discord or webhook alerts for pipeline events.
         </p>
       </div>
@@ -108,11 +108,12 @@ function handleCreated() {
     <!-- Empty state -->
     <div
       v-else-if="!isLoading && configs.length === 0"
-      class="flex flex-col items-center justify-center rounded-lg border border-dashed border-surface-300 py-16 text-center"
+      class="flex flex-col items-center justify-center rounded-lg border border-dashed py-16 text-center"
+      :style="{ borderColor: 'var(--surface-border)' }"
       data-testid="empty-state"
     >
-      <i class="pi pi-bell mb-4 text-4xl text-surface-300" />
-      <p class="text-surface-500">No notification channels configured</p>
+      <i class="pi pi-bell mb-4 text-4xl" :style="{ color: 'var(--surface-border)' }" />
+      <p :style="{ color: 'var(--p-text-muted-color)' }">No notification channels configured</p>
       <Button
         v-if="isAdmin"
         label="Add your first channel"

@@ -372,6 +372,14 @@ func (m *mockCostRepo) ListByProjectByAgent(_ context.Context, _ uuid.UUID) ([]m
 	return nil, nil
 }
 
+func (m *mockCostRepo) ListCostsByRunByRole(_ context.Context, _ uuid.UUID) ([]model.RoleCostBreakdown, error) {
+	return nil, nil
+}
+
+func (m *mockCostRepo) SumTokensByRun(_ context.Context, _ uuid.UUID) (int64, int64, error) {
+	return 0, 0, nil
+}
+
 type agentRunFixture struct {
 	projectID uuid.UUID
 	storyID   uuid.UUID
@@ -986,6 +994,10 @@ func (m *mockRunRepo) GetLatestRunByStory(_ context.Context, _ uuid.UUID) (*mode
 
 func (m *mockRunRepo) GetLatestRunsByStories(_ context.Context, _ []uuid.UUID) (map[uuid.UUID]*model.LatestRun, error) {
 	return map[uuid.UUID]*model.LatestRun{}, nil
+}
+
+func (m *mockRunRepo) GetDAGNodeRunInfoByStories(_ context.Context, _ []uuid.UUID) (map[uuid.UUID]model.DAGNodeRunInfo, error) {
+	return map[uuid.UUID]model.DAGNodeRunInfo{}, nil
 }
 
 func (m *mockRunRepo) UpdateRunMetadata(_ context.Context, _ uuid.UUID, _ map[string]interface{}) error {

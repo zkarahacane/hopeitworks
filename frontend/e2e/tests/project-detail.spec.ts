@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './fixtures'
 
 const mockProject = {
   id: 'p1',
@@ -119,7 +119,7 @@ test.describe('Project Detail — Tabbed Navigation', () => {
     await page.getByTestId('project-tabs').getByText('Pipeline').click()
 
     await expect(page).toHaveURL('/projects/p1/pipeline')
-    await expect(page.getByRole('heading', { name: 'Pipeline Configuration' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Pipeline', exact: true })).toBeVisible()
   })
 
   test('clicking Agents tab navigates to agents sub-page', async ({ page }) => {

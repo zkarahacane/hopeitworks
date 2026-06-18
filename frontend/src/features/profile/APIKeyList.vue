@@ -41,7 +41,7 @@ function handleDelete(keyId: string, keyName: string) {
 
   <div class="flex flex-col gap-4">
     <div class="flex items-center justify-between">
-      <span class="text-sm text-surface-500">
+      <span class="text-sm" :style="{ color: 'var(--p-text-muted-color)' }">
         API keys are stored encrypted. Only the last 4 characters are shown.
       </span>
       <Button
@@ -61,7 +61,7 @@ function handleDelete(keyId: string, keyName: string) {
       :rows="20"
     >
       <template #empty>
-        <div class="p-4 text-center text-surface-400">No API keys configured yet.</div>
+        <div class="p-4 text-center" :style="{ color: 'var(--p-text-muted-color)' }">No API keys configured yet.</div>
       </template>
 
       <Column field="provider" header="Provider">

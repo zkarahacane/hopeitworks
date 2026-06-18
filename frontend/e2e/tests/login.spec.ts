@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './fixtures'
 
 test.describe('Login Page', () => {
   test.beforeEach(async ({ page }) => {
@@ -15,8 +15,8 @@ test.describe('Login Page', () => {
   test('should display login form with all elements', async ({ page }) => {
     await page.goto('/login')
 
-    // Check heading
-    await expect(page.locator('h1')).toHaveText('hopeitworks')
+    // Check heading (redesign: form heading is "Sign in"; brand wordmark moved to spans)
+    await expect(page.locator('h1')).toHaveText('Sign in')
 
     // Check email field
     await expect(page.locator('label[for="email"]')).toHaveText('Email')
@@ -39,11 +39,11 @@ test.describe('Login Page', () => {
     // Submit without filling fields
     await page.getByRole('button', { name: 'Sign In' }).click()
 
-    // Check validation errors
-    const errors = page.locator('small.text-red-500')
+    // Check validation errors (redesign: field errors are <small> without a color class)
+    const errors = page.locator('form small')
     await expect(errors).toHaveCount(2)
-    await expect(errors.first()).toContainText('Required')
-    await expect(errors.last()).toContainText('Required')
+    await expect(errors.first()).toContainText(/required/i)
+    await expect(errors.last()).toContainText(/required/i)
   })
 
   test('should show validation error for invalid email format', async ({ page }) => {
@@ -57,7 +57,7 @@ test.describe('Login Page', () => {
     await page.getByRole('button', { name: 'Sign In' }).click()
 
     // Check email validation error
-    const emailError = page.locator('small.text-red-500').first()
+    const emailError = page.locator('form small').first()
     await expect(emailError).toContainText('Invalid email format')
   })
 
@@ -71,7 +71,7 @@ test.describe('Login Page', () => {
     await page.getByRole('button', { name: 'Sign In' }).click()
 
     // Check password validation error
-    const passwordError = page.locator('small.text-red-500').last()
+    const passwordError = page.locator('form small').last()
     await expect(passwordError).toContainText(/required/i)
   })
 
@@ -194,8 +194,8 @@ test.describe('Login Page', () => {
   }) => {
     await page.goto('/login')
 
-    // Login form should be visible
-    await expect(page.locator('h1')).toHaveText('hopeitworks')
+    // Login form should be visible (redesign: form heading is "Sign in")
+    await expect(page.locator('h1')).toHaveText('Sign in')
 
     // Header and sidebar should not be present
     await expect(page.locator('header')).toHaveCount(0)

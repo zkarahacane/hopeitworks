@@ -58,8 +58,13 @@ async function handlePasswordSave(payload: {
 </script>
 
 <template>
-  <div class="flex flex-col gap-6 p-6">
-    <h1 class="text-2xl font-bold">My Profile</h1>
+  <div class="flex flex-col gap-6 p-6 max-w-4xl">
+    <div>
+      <h1 class="text-2xl font-bold" style="font-family: var(--font-sans)">My Profile</h1>
+      <p class="mt-1 text-sm" style="color: var(--p-text-muted-color)">
+        Manage your account, profile information, password, and API credentials.
+      </p>
+    </div>
 
     <!-- Loading state -->
     <div v-if="fetchMe.isLoading.value && !user" class="flex flex-col gap-4">
@@ -102,8 +107,9 @@ async function handlePasswordSave(payload: {
         </Card>
       </div>
 
-      <Card class="col-span-full">
+      <Card>
         <template #title>API Keys</template>
+        <template #subtitle>Stored encrypted — only the last 4 characters are shown.</template>
         <template #content>
           <APIKeyList />
         </template>

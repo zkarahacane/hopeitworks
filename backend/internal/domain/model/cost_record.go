@@ -143,6 +143,28 @@ type RunCostDetail struct {
 	Steps     []StepCostBreakdown
 }
 
+// RoleCostBreakdown holds cost data aggregated per role (agent type) for a run.
+// Role is the agent type the cost was attributed to ("implement", "retry",
+// "review", "merge", "custom"), or "unknown" for cost records with no agent.
+type RoleCostBreakdown struct {
+	Role         string
+	TokensInput  int64
+	TokensOutput int64
+	CostUSD      float64
+}
+
+// RunCostByRole holds the per-role cost breakdown of a single run plus the
+// roll-up totals across all roles. The totals are computed from every cost
+// record of the run regardless of run or step status, so a failed run reports
+// its real total rather than zero.
+type RunCostByRole struct {
+	RunID       uuid.UUID
+	TotalCost   float64
+	TotalInput  int64
+	TotalOutput int64
+	Roles       []RoleCostBreakdown
+}
+
 // StepCostBreakdown holds cost data for a single step.
 type StepCostBreakdown struct {
 	StepID       uuid.UUID

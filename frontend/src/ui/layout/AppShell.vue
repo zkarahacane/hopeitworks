@@ -13,6 +13,7 @@ import { useHITLStore } from '@/stores/hitl'
 import { useKeyboard } from '@/composables/useKeyboard'
 import { useBreakpoint } from '@/composables/useBreakpoint'
 import { useAuth } from '@/composables/useAuth'
+import { useTheme } from '@/composables/useTheme'
 
 const layoutStore = useLayoutStore()
 const hitlStore = useHITLStore()
@@ -20,6 +21,11 @@ const toast = useToast()
 const { isMobile } = useBreakpoint()
 const { isAuthenticated, loading: authLoading } = useAuth()
 const route = useRoute()
+
+// The single theme controller (.dark on <html>) — auto follows route.meta.theme,
+// dark/light force globally. Wired here once; the toggle lives in AppHeader.
+useTheme()
+
 // NOTE: With router.isReady() in main.ts, routeResolved is always true at mount time.
 // This computed is kept as a safety net for future programmatic navigations where
 // matched routes could momentarily be empty (e.g. dynamic route additions).
@@ -107,7 +113,8 @@ function toggleMobileSidebar() {
       <!-- Skip navigation link -->
       <a
         href="#main-content"
-        class="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:bg-primary focus:px-4 focus:py-2 focus:text-white"
+        class="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:px-4 focus:py-2"
+        :style="{ background: 'var(--status-running-color)', color: 'var(--surface-base)' }"
       >
         Skip to main content
       </a>
@@ -126,7 +133,8 @@ function toggleMobileSidebar() {
 
         <main
           id="main-content"
-          class="flex-1 overflow-auto bg-surface-100 p-4"
+          class="flex-1 overflow-auto p-4"
+          :style="{ background: 'var(--surface-base)' }"
         >
           <router-view />
         </main>
@@ -135,7 +143,11 @@ function toggleMobileSidebar() {
       <!-- Mobile bottom nav -->
       <nav
         v-if="isMobile"
-        class="flex h-14 items-center justify-around border-t border-surface-200 bg-surface-0"
+        class="flex h-14 items-center justify-around"
+        :style="{
+          borderTop: '1px solid var(--surface-border)',
+          background: 'var(--surface-raised)',
+        }"
         aria-label="Mobile navigation"
       >
         <Button

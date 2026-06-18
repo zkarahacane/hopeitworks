@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, toRef } from 'vue'
-import Badge from 'primevue/badge'
 import Tag from 'primevue/tag'
 import Button from 'primevue/button'
 import type { Story } from '@/stores/stories'
@@ -8,6 +7,7 @@ import { renderMarkdown } from '@/utils/renderMarkdown'
 import RunLaunchButton from '@/features/runs/RunLaunchButton.vue'
 import StoryEditorForm from './StoryEditorForm.vue'
 import { useStoryEditor } from '@/composables/useStoryEditor'
+import StatusBadge from '@/ui/primitives/StatusBadge.vue'
 
 const props = defineProps<{
   story: Story | null
@@ -29,13 +29,6 @@ const { isEditing, draftFields, validationErrors, apiError, isSaving, startEdit,
 const canEdit = computed(() => {
   return props.story?.status === 'backlog' || props.story?.status === 'failed'
 })
-
-const severityMap: Record<string, 'secondary' | 'info' | 'success' | 'danger'> = {
-  backlog: 'secondary',
-  running: 'info',
-  done: 'success',
-  failed: 'danger',
-}
 
 const scopeSeverityMap: Record<string, 'info' | 'warn' | 'secondary'> = {
   backend: 'info',
@@ -78,9 +71,9 @@ async function handleSave() {
           >
             {{ story.key }}
           </span>
-          <Badge
-            :value="story.status"
-            :severity="severityMap[story.status] ?? 'secondary'"
+          <StatusBadge
+            :status="story.status"
+            :animated="story.status === 'running'"
           />
           <Tag
             v-if="story.scope"
@@ -242,14 +235,14 @@ async function handleSave() {
   font-size: 0.85rem;
   padding: 0.1rem 0.3rem;
   border-radius: 0.25rem;
-  background-color: var(--p-surface-100);
+  background-color: var(--surface-overlay);
 }
 
 .prose-content :deep(pre) {
   margin: 0.5rem 0;
   padding: 0.75rem;
   border-radius: 0.375rem;
-  background-color: var(--p-surface-100);
+  background-color: var(--surface-overlay);
   overflow-x: auto;
 }
 

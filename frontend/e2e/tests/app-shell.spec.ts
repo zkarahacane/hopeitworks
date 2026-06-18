@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './fixtures'
 
 /**
  * E2E tests for Story 1-8: App Shell Layout
@@ -54,10 +54,11 @@ test.describe('App Shell Layout', () => {
   })
 
   test.describe('Header', () => {
-    test('should display header with brand name "Hope"', async ({ page }) => {
-      const brandText = page.locator('header span.text-lg.font-semibold')
+    test('should display header with brand wordmark "hopeitworks"', async ({ page }) => {
+      // Redesign: brand is split into hope/it/works spans inside a .text-lg wrapper
+      const brandText = page.locator('header span.text-lg')
       await expect(brandText).toBeVisible()
-      await expect(brandText).toHaveText('Hope')
+      await expect(brandText).toHaveText('hopeitworks')
     })
 
     test('should show user menu button', async ({ page }) => {
@@ -116,10 +117,10 @@ test.describe('App Shell Layout', () => {
       const mainContent = page.locator('main#main-content')
       await expect(mainContent).toBeVisible()
 
-      // Verify router-view renders content (Dashboard heading)
+      // Verify router-view renders content (redesign greets the user)
       const heading = mainContent.locator('h1')
       await expect(heading).toBeVisible()
-      await expect(heading).toHaveText('Dashboard')
+      await expect(heading).toHaveText(/Welcome back,/)
     })
   })
 
@@ -207,7 +208,7 @@ test.describe('App Shell Layout', () => {
 
       const heading = page.locator('h1')
       await expect(heading).toBeVisible()
-      await expect(heading).toHaveText('Dashboard')
+      await expect(heading).toHaveText(/Welcome back,/)
     })
 
     test('should render Projects view at /projects route', async ({ page }) => {

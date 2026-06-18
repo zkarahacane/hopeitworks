@@ -82,6 +82,10 @@ func TestIntegration_GetLatestRunByStory(t *testing.T) {
 	if _, err := runRepo.UpdateRunStepStatus(ctx, s1.ID, model.StepStatusRunning, nil, nil, nil); err != nil {
 		t.Fatalf("UpdateRunStepStatus(s1) error = %v", err)
 	}
+	wantContainer := "container-int-123"
+	if _, err := runRepo.UpdateRunStepContainerInfo(ctx, s1.ID, &wantContainer, nil); err != nil {
+		t.Fatalf("UpdateRunStepContainerInfo(s1) error = %v", err)
+	}
 
 	latest, err = runRepo.GetLatestRunByStory(ctx, storyID)
 	if err != nil {
@@ -107,6 +111,9 @@ func TestIntegration_GetLatestRunByStory(t *testing.T) {
 	}
 	if latest.CurrentStep.Total != 3 {
 		t.Errorf("expected total 3, got %d", latest.CurrentStep.Total)
+	}
+	if latest.CurrentStep.ContainerID == nil || *latest.CurrentStep.ContainerID != wantContainer {
+		t.Errorf("expected current step container_id %q, got %v", wantContainer, latest.CurrentStep.ContainerID)
 	}
 
 	// Complete the running step -> no step in progress -> current_step NULL.

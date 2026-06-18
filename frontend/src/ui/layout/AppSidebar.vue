@@ -43,6 +43,27 @@ const adminNavItems = [
 
 const sidebarWidth = computed(() => (props.collapsed ? 'w-12' : 'w-60'))
 
+/**
+ * Active nav treatment — the new design language: a green status-accent left
+ * bar + green text/icon + a subtle elevated surface. NOT a blue pill. Inactive
+ * items are muted text on transparent. All colors are scheme-aware PrimeVue /
+ * status tokens so the chrome flips with `.dark` / light automatically.
+ */
+function navItemStyle(active: boolean) {
+  if (active) {
+    return {
+      color: 'var(--status-running-color)',
+      background: 'var(--status-running-surface)',
+      borderLeft: '3px solid var(--status-running-color)',
+    }
+  }
+  return {
+    color: 'var(--p-text-muted-color)',
+    background: 'transparent',
+    borderLeft: '3px solid transparent',
+  }
+}
+
 function navigate(route: string) {
   router.push(route)
   emit('close')
@@ -59,7 +80,7 @@ function navigate(route: string) {
 
   <aside
     :class="[
-      'flex flex-col border-r border-surface-200 bg-surface-50',
+      'flex flex-col',
       'transition-all duration-200 ease-in-out',
       // Mobile: overlay drawer
       mobileOpen
@@ -68,6 +89,10 @@ function navigate(route: string) {
       // Desktop: collapsible width
       !mobileOpen ? sidebarWidth : '',
     ]"
+    :style="{
+      borderRight: '1px solid var(--surface-border)',
+      background: 'var(--surface-raised)',
+    }"
   >
     <nav class="flex flex-1 flex-col gap-1 p-2" aria-label="Main navigation">
       <div
@@ -76,15 +101,15 @@ function navigate(route: string) {
         class="relative"
       >
         <Button
+          text
           :icon="item.icon"
           :label="collapsed && !mobileOpen ? undefined : item.label"
-          :text="!isActive(item.route)"
-          :severity="isActive(item.route) ? 'primary' : undefined"
+          :aria-current="isActive(item.route) ? 'page' : undefined"
           :class="[
-            'w-full justify-start',
+            'w-full justify-start !rounded-md',
             collapsed && !mobileOpen ? '!px-0 justify-center' : '',
-            isActive(item.route) ? '!bg-primary-50 !text-primary-700' : '',
           ]"
+          :style="navItemStyle(isActive(item.route))"
           @click="navigate(item.route)"
         />
         <Badge
@@ -100,15 +125,15 @@ function navigate(route: string) {
         <Button
           v-for="item in adminNavItems"
           :key="item.route"
+          text
           :icon="item.icon"
           :label="collapsed && !mobileOpen ? undefined : item.label"
-          :text="!isActive(item.route)"
-          :severity="isActive(item.route) ? 'primary' : undefined"
+          :aria-current="isActive(item.route) ? 'page' : undefined"
           :class="[
-            'justify-start',
+            'w-full justify-start !rounded-md',
             collapsed && !mobileOpen ? '!px-0 justify-center' : '',
-            isActive(item.route) ? '!bg-primary-50 !text-primary-700' : '',
           ]"
+          :style="navItemStyle(isActive(item.route))"
           @click="navigate(item.route)"
         />
       </template>

@@ -310,3 +310,41 @@ func (s *CostService) GetRunCosts(ctx context.Context, projectID, runID uuid.UUI
 		Steps:     steps,
 	}, nil
 }
+
+// GetRunCostsByRole returns the per-role cost breakdown for a run plus the
+// roll-up totals. Totals are computed from every cost record of the run
+// regardless of run or step status, so a failed run reports its real total
+// rather than zero.
+func (s *CostService) GetRunCostsByRole(ctx context.Context, projectID, runID uuid.UUID) (*model.RunCostByRole, error) {
+	// Verify run exists and belongs to project.
+	run, err := s.runRepo.GetRun(ctx, runID)
+	if err != nil {
+		return nil, err
+	}
+	if run.ProjectID != projectID {
+		return nil, errors.NewNotFound("run", runID)
+	}
+
+	totalCost, err := s.costRepo.SumCostByRun(ctx, runID)
+	if err != nil {
+		return nil, err
+	}
+
+	totalInput, totalOutput, err := s.costRepo.SumTokensByRun(ctx, runID)
+	if err != nil {
+		return nil, err
+	}
+
+	roles, err := s.costRepo.ListCostsByRunByRole(ctx, runID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &model.RunCostByRole{
+		RunID:       runID,
+		TotalCost:   totalCost,
+		TotalInput:  totalInput,
+		TotalOutput: totalOutput,
+		Roles:       roles,
+	}, nil
+}

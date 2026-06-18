@@ -639,6 +639,10 @@ func (m *mockRunRepoForHITL) GetLatestRunsByStories(_ context.Context, _ []uuid.
 	return map[uuid.UUID]*model.LatestRun{}, nil
 }
 
+func (m *mockRunRepoForHITL) GetDAGNodeRunInfoByStories(_ context.Context, _ []uuid.UUID) (map[uuid.UUID]model.DAGNodeRunInfo, error) {
+	return map[uuid.UUID]model.DAGNodeRunInfo{}, nil
+}
+
 func (m *mockRunRepoForHITL) UpdateRunMetadata(_ context.Context, _ uuid.UUID, _ map[string]interface{}) error {
 	return nil
 }

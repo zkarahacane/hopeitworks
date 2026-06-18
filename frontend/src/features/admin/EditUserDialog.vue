@@ -76,13 +76,13 @@ function onCancel() {
       <div class="flex flex-col gap-1">
         <label for="edit-name" class="text-sm font-medium">Name</label>
         <InputText id="edit-name" v-model="name" :invalid="!!nameError" />
-        <small v-if="nameError" class="text-red-500">{{ nameError }}</small>
+        <small v-if="nameError" :style="{ color: 'var(--status-failed-color)' }">{{ nameError }}</small>
       </div>
 
       <div class="flex flex-col gap-1">
         <label for="edit-email" class="text-sm font-medium">Email</label>
         <InputText id="edit-email" v-model="email" type="email" :invalid="!!emailError" />
-        <small v-if="emailError" class="text-red-500">{{ emailError }}</small>
+        <small v-if="emailError" :style="{ color: 'var(--status-failed-color)' }">{{ emailError }}</small>
       </div>
 
       <div class="flex flex-col gap-1">

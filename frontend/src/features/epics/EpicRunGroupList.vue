@@ -23,6 +23,19 @@ function groupStatus(stories: EpicRunStory[]): 'secondary' | 'info' | 'success' 
   return 'secondary'
 }
 
+function groupItemStyle(status: StoryGroup['status']): Record<string, string> {
+  if (status === 'info') {
+    return {
+      background: 'var(--status-accent-surface, color-mix(in srgb, var(--status-accent-color) 12%, transparent))',
+      borderColor: 'var(--status-accent-color)',
+    }
+  }
+  return {
+    background: 'var(--surface-raised)',
+    borderColor: 'var(--surface-border)',
+  }
+}
+
 const groups = computed<StoryGroup[]>(() => {
   const map = new Map<number, EpicRunStory[]>()
   for (const story of props.stories) {
@@ -46,15 +59,11 @@ const groups = computed<StoryGroup[]>(() => {
     <div
       v-for="group in groups"
       :key="group.index"
-      :class="[
-        'flex items-center gap-3 p-3 rounded border',
-        group.status === 'info'
-          ? 'border-blue-300 bg-blue-50 dark:bg-blue-900/20'
-          : 'border-surface-200',
-      ]"
+      class="flex items-center gap-3 p-3 rounded border"
+      :style="groupItemStyle(group.status)"
     >
       <span class="font-medium">Layer {{ group.index }}</span>
-      <span class="text-sm text-surface-500">{{ group.stories.length }} stories</span>
+      <span class="text-sm" :style="{ color: 'var(--p-text-muted-color)' }">{{ group.stories.length }} stories</span>
       <Tag
         :value="
           group.status === 'danger'
@@ -69,6 +78,6 @@ const groups = computed<StoryGroup[]>(() => {
         class="text-xs"
       />
     </div>
-    <p v-if="groups.length === 0" class="text-sm text-surface-400">No execution layers</p>
+    <p v-if="groups.length === 0" class="text-sm" :style="{ color: 'var(--p-text-muted-color)' }">No execution layers</p>
   </div>
 </template>

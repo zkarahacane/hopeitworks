@@ -33,7 +33,7 @@ const emit = defineEmits<{
         @create-story="emit('create-story')"
       />
     </div>
-    <div class="flex-1 overflow-y-auto border-l border-surface-200">
+    <div class="flex-1 overflow-y-auto border-l" :style="{ borderColor: 'var(--surface-border)' }">
       <StoryDetailPanel
         :story="selectedStory"
         :all-stories="allStories"

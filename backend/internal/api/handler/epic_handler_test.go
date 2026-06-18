@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/zakari/hopeitworks/backend/internal/api/middleware"
@@ -97,16 +98,109 @@ func setupEpicHandler() (*EpicHandler, *mockEpicRepo) {
 	storyRepo := newMockStoryRepo()
 	svc := service.NewEpicService(repo)
 	scheduler := service.NewSchedulerService()
-	h := NewEpicHandler(svc, scheduler, storyRepo)
+	h := NewEpicHandler(svc, scheduler, storyRepo, newEpicRunRepo())
 	return h, repo
 }
 
 func setupEpicHandlerWithStoryRepo(storyRepo port.StoryRepository) (*EpicHandler, *mockEpicRepo) {
+	h, repo, _ := setupEpicHandlerWithStoryAndRunRepo(storyRepo, newEpicRunRepo())
+	return h, repo
+}
+
+func setupEpicHandlerWithStoryAndRunRepo(storyRepo port.StoryRepository, runRepo *epicRunRepo) (*EpicHandler, *mockEpicRepo, *epicRunRepo) {
 	epicRepo := newMockEpicRepo()
 	svc := service.NewEpicService(epicRepo)
 	scheduler := service.NewSchedulerService()
-	h := NewEpicHandler(svc, scheduler, storyRepo)
-	return h, epicRepo
+	h := NewEpicHandler(svc, scheduler, storyRepo, runRepo)
+	return h, epicRepo, runRepo
+}
+
+// epicRunRepo is a configurable port.RunRepository mock for epic DAG tests. Only
+// GetDAGNodeRunInfoByStories carries behaviour; everything else is a no-op stub.
+type epicRunRepo struct {
+	dagNodeInfo map[uuid.UUID]model.DAGNodeRunInfo
+	dagErr      error
+	run         *model.Run
+}
+
+var _ port.RunRepository = (*epicRunRepo)(nil)
+
+func newEpicRunRepo() *epicRunRepo {
+	return &epicRunRepo{dagNodeInfo: map[uuid.UUID]model.DAGNodeRunInfo{}}
+}
+
+func (m *epicRunRepo) GetDAGNodeRunInfoByStories(_ context.Context, storyIDs []uuid.UUID) (map[uuid.UUID]model.DAGNodeRunInfo, error) {
+	if m.dagErr != nil {
+		return nil, m.dagErr
+	}
+	out := make(map[uuid.UUID]model.DAGNodeRunInfo)
+	for _, id := range storyIDs {
+		if info, ok := m.dagNodeInfo[id]; ok {
+			out[id] = info
+		}
+	}
+	return out, nil
+}
+
+func (m *epicRunRepo) CreateRun(_ context.Context, run *model.Run) (*model.Run, error) {
+	return run, nil
+}
+func (m *epicRunRepo) GetRun(_ context.Context, id uuid.UUID) (*model.Run, error) {
+	if m.run != nil && m.run.ID == id {
+		return m.run, nil
+	}
+	return nil, errors.NewNotFound("run", id)
+}
+func (m *epicRunRepo) GetActiveRunByStory(_ context.Context, _ uuid.UUID) (*model.Run, error) {
+	return nil, nil
+}
+func (m *epicRunRepo) GetLatestRunByStory(_ context.Context, _ uuid.UUID) (*model.LatestRun, error) {
+	return nil, nil
+}
+func (m *epicRunRepo) GetLatestRunsByStories(_ context.Context, _ []uuid.UUID) (map[uuid.UUID]*model.LatestRun, error) {
+	return map[uuid.UUID]*model.LatestRun{}, nil
+}
+func (m *epicRunRepo) ListRunsByProject(_ context.Context, _ uuid.UUID, _, _ int32) ([]*model.Run, error) {
+	return nil, nil
+}
+func (m *epicRunRepo) ListRunsByStory(_ context.Context, _ uuid.UUID, _, _ int32) ([]*model.Run, error) {
+	return nil, nil
+}
+func (m *epicRunRepo) UpdateRunStatus(_ context.Context, _ uuid.UUID, _ model.RunStatus, _, _, _ *time.Time, _ *string) (*model.Run, error) {
+	return nil, nil
+}
+func (m *epicRunRepo) UpdateRunMetadata(_ context.Context, _ uuid.UUID, _ map[string]interface{}) error {
+	return nil
+}
+func (m *epicRunRepo) AppendStepLogTail(_ context.Context, _ uuid.UUID, _ string) error {
+	return nil
+}
+func (m *epicRunRepo) CountRunsByProject(_ context.Context, _ uuid.UUID) (int64, error) {
+	return 0, nil
+}
+func (m *epicRunRepo) CountRunsByStory(_ context.Context, _ uuid.UUID) (int64, error) {
+	return 0, nil
+}
+func (m *epicRunRepo) CreateRunStep(_ context.Context, step *model.RunStep) (*model.RunStep, error) {
+	return step, nil
+}
+func (m *epicRunRepo) GetRunStep(_ context.Context, id uuid.UUID) (*model.RunStep, error) {
+	return nil, errors.NewNotFound("run_step", id)
+}
+func (m *epicRunRepo) ListRunStepsByRun(_ context.Context, _ uuid.UUID) ([]*model.RunStep, error) {
+	return nil, nil
+}
+func (m *epicRunRepo) UpdateRunStepStatus(_ context.Context, _ uuid.UUID, _ model.StepStatus, _, _ *time.Time, _ *string) (*model.RunStep, error) {
+	return nil, nil
+}
+func (m *epicRunRepo) UpdateRunStepContainerInfo(_ context.Context, _ uuid.UUID, _ *string, _ *string) (*model.RunStep, error) {
+	return nil, nil
+}
+func (m *epicRunRepo) CreateRetryRunStep(_ context.Context, step *model.RunStep) (*model.RunStep, error) {
+	return step, nil
+}
+func (m *epicRunRepo) ListRetryStepsByParent(_ context.Context, _ uuid.UUID) ([]*model.RunStep, error) {
+	return nil, nil
 }
 
 func TestCreateEpic_AdminOnly(t *testing.T) {
@@ -613,6 +707,110 @@ func TestGetEpicDAG_StoryRepoError(t *testing.T) {
 
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("expected 404, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestGetEpicDAG_EnrichesNodesWithRunInfo(t *testing.T) {
+	projectID := uuid.New()
+	epicID := uuid.New()
+
+	const runningStatus = "running"
+	s1ID := uuid.New()
+	s2ID := uuid.New()
+	storyRepo := newMockStoryRepo()
+	storyRepo.stories[s1ID] = &model.Story{ID: s1ID, ProjectID: projectID, EpicID: &epicID, Key: "S-01", Title: "Story 1", Status: runningStatus}
+	storyRepo.stories[s2ID] = &model.Story{ID: s2ID, ProjectID: projectID, EpicID: &epicID, Key: "S-02", Title: "Story 2", Status: "backlog"}
+
+	runRepo := newEpicRunRepo()
+	runID := uuid.New()
+	containerID := "container-abc123"
+	// S-01 has a run with container + cost; S-02 has no run (absent from map).
+	runRepo.dagNodeInfo[s1ID] = model.DAGNodeRunInfo{
+		RunID:       runID,
+		RunStatus:   runningStatus,
+		ContainerID: &containerID,
+		CostUSD:     1.23,
+	}
+
+	h, _, _ := setupEpicHandlerWithStoryAndRunRepo(storyRepo, runRepo)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects/"+projectID.String()+"/epics/"+epicID.String()+"/dag", nil)
+	ctx := middleware.SetUserContext(req.Context(), uuid.New(), model.RoleUser)
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.GetEpicDAG(rec, req, projectID, epicID)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp EpicDAGResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	byKey := make(map[string]EpicDAGNode)
+	for _, n := range resp.Nodes {
+		byKey[n.Key] = n
+	}
+
+	// S-01 enriched with run id/status/container/cost.
+	n1 := byKey["S-01"]
+	if n1.RunId == nil || *n1.RunId != runID {
+		t.Errorf("expected S-01 run_id %s, got %v", runID, n1.RunId)
+	}
+	if n1.RunStatus == nil || *n1.RunStatus != runningStatus {
+		t.Errorf("expected S-01 run_status running, got %v", n1.RunStatus)
+	}
+	if n1.ContainerId == nil || *n1.ContainerId != containerID {
+		t.Errorf("expected S-01 container_id %s, got %v", containerID, n1.ContainerId)
+	}
+	if n1.CostUsd == nil || *n1.CostUsd != 1.23 {
+		t.Errorf("expected S-01 cost_usd 1.23, got %v", n1.CostUsd)
+	}
+
+	// S-02 has no run: enrichment fields stay nil.
+	n2 := byKey["S-02"]
+	if n2.RunId != nil || n2.RunStatus != nil || n2.ContainerId != nil || n2.CostUsd != nil {
+		t.Errorf("expected S-02 to have nil run fields, got run_id=%v status=%v container=%v cost=%v",
+			n2.RunId, n2.RunStatus, n2.ContainerId, n2.CostUsd)
+	}
+}
+
+func TestGetEpicDAG_RunInfoErrorIsNonFatal(t *testing.T) {
+	projectID := uuid.New()
+	epicID := uuid.New()
+
+	s1ID := uuid.New()
+	storyRepo := newMockStoryRepo()
+	storyRepo.stories[s1ID] = &model.Story{ID: s1ID, ProjectID: projectID, EpicID: &epicID, Key: "S-01", Title: "Story 1", Status: "backlog"}
+
+	runRepo := newEpicRunRepo()
+	runRepo.dagErr = errors.NewInternal("db down", nil)
+
+	h, _, _ := setupEpicHandlerWithStoryAndRunRepo(storyRepo, runRepo)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects/"+projectID.String()+"/epics/"+epicID.String()+"/dag", nil)
+	ctx := middleware.SetUserContext(req.Context(), uuid.New(), model.RoleUser)
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.GetEpicDAG(rec, req, projectID, epicID)
+
+	// DAG still renders (enrichment failure is best-effort) with bare nodes.
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+	var resp EpicDAGResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if len(resp.Nodes) != 1 {
+		t.Fatalf("expected 1 node, got %d", len(resp.Nodes))
+	}
+	if resp.Nodes[0].RunId != nil || resp.Nodes[0].CostUsd != nil {
+		t.Errorf("expected bare node (nil run fields) when enrichment fails, got %+v", resp.Nodes[0])
 	}
 }
 

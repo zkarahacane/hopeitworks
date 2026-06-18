@@ -91,7 +91,7 @@ function handleClose() {
         <div
           class="flex flex-col items-center justify-center gap-3 p-8 border-2 border-dashed rounded-lg cursor-pointer"
           :style="{
-            borderColor: isDragging ? 'var(--p-primary-color)' : 'var(--p-surface-300)',
+            borderColor: isDragging ? 'var(--p-primary-color)' : 'var(--surface-border)',
             backgroundColor: isDragging ? 'var(--p-primary-50)' : 'transparent',
           }"
           data-testid="drop-zone"
@@ -115,7 +115,7 @@ function handleClose() {
           data-testid="file-input"
           @change="handleFileInput"
         />
-        <small v-if="fileError" class="text-red-500" data-testid="file-error">{{
+        <small v-if="fileError" :style="{ color: 'var(--status-failed-color)' }" data-testid="file-error">{{
           fileError
         }}</small>
       </div>
@@ -147,7 +147,7 @@ function handleClose() {
             Invalid stories
           </h4>
           <ul class="list-disc pl-5 text-sm">
-            <li v-for="(story, idx) in invalidStories" :key="idx" class="text-red-500">
+            <li v-for="(story, idx) in invalidStories" :key="idx" :style="{ color: 'var(--status-failed-color)' }">
               {{ story.key }}: {{ story.error }}
             </li>
           </ul>
@@ -175,7 +175,7 @@ function handleClose() {
             Errors
           </h4>
           <ul class="list-disc pl-5 text-sm">
-            <li v-for="(err, idx) in importResult.errors" :key="idx" class="text-red-500">
+            <li v-for="(err, idx) in importResult.errors" :key="idx" :style="{ color: 'var(--status-failed-color)' }">
               {{ err.key }}: {{ err.message }}
             </li>
           </ul>

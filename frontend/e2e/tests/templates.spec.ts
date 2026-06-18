@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './fixtures'
 
 const PROJECT_ID = 'p1'
 
@@ -89,9 +89,9 @@ test.describe('Agent List Page', () => {
       await expect(page.getByText('Code Review')).toBeVisible()
       await expect(page.getByText('Merge Strategy')).toBeVisible()
 
-      await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible()
+      // Redesign: DataTable columns are Agent (name+model), Scope, Image
+      await expect(page.getByRole('columnheader', { name: 'Agent' })).toBeVisible()
       await expect(page.getByRole('columnheader', { name: 'Scope' })).toBeVisible()
-      await expect(page.getByRole('columnheader', { name: 'Model' })).toBeVisible()
       await expect(page.getByRole('columnheader', { name: 'Image' })).toBeVisible()
     })
 

@@ -13,12 +13,18 @@ const truncatedTitle = computed(() =>
   props.data.title.length > 40 ? props.data.title.slice(0, 40) + '\u2026' : props.data.title,
 )
 
-const nodeClass = computed(() => ({
-  'bg-surface-200': props.data.status === 'pending',
-  'bg-blue-500 animate-pulse': props.data.status === 'running',
-  'bg-green-500': props.data.status === 'completed',
-  'bg-red-500': props.data.status === 'failed',
-}))
+const nodeStyle = computed(() => {
+  const statusBg: Record<string, string> = {
+    pending: 'var(--status-queued-surface)',
+    running: 'var(--status-accent-color)',
+    completed: 'var(--status-done-surface)',
+    failed: 'var(--status-failed-color)',
+  }
+  return {
+    background: statusBg[props.data.status] ?? 'var(--surface-overlay)',
+    borderColor: 'var(--surface-border)',
+  }
+})
 
 const statusSeverity = computed(() => {
   const map: Record<string, 'secondary' | 'info' | 'success' | 'danger'> = {
@@ -39,9 +45,10 @@ function handleClick() {
   <div
     :class="[
       'epic-run-node rounded p-2',
-      nodeClass,
+      data.status === 'running' ? 'animate-pulse' : '',
       data.runId ? 'cursor-pointer' : 'cursor-default',
     ]"
+    :style="nodeStyle"
     @click="handleClick"
   >
     <Handle type="target" :position="Position.Top" />
@@ -56,7 +63,7 @@ function handleClick() {
 
 <style scoped>
 .epic-run-node {
-  border: 1px solid var(--p-surface-300);
+  border: 1px solid;
   min-width: 160px;
 }
 </style>

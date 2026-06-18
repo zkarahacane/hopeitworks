@@ -34,7 +34,7 @@ describe('RunStatusIndicator', () => {
   })
 
   describe('running state', () => {
-    it('renders a spinner and "Running..." text in blue', () => {
+    it('renders a spinner and "Running..." text with running color', () => {
       mountComponent({ status: 'running' })
 
       const spinner = wrapper.find('[data-testid="run-status-spinner"]')
@@ -43,7 +43,7 @@ describe('RunStatusIndicator', () => {
       const text = wrapper.find('[data-testid="run-status-text"]')
       expect(text.exists()).toBe(true)
       expect(text.text()).toBe('Running...')
-      expect(text.classes()).toContain('text-blue-500')
+      expect(text.attributes('style')).toContain('--status-running-color')
     })
 
     it('does not render an icon', () => {
@@ -53,7 +53,7 @@ describe('RunStatusIndicator', () => {
   })
 
   describe('completed state', () => {
-    it('renders a check circle icon in green', () => {
+    it('renders a check circle icon with done color', () => {
       mountComponent({
         status: 'completed',
         completedAt: new Date().toISOString(),
@@ -63,10 +63,10 @@ describe('RunStatusIndicator', () => {
       expect(icon.exists()).toBe(true)
       expect(icon.classes()).toContain('pi')
       expect(icon.classes()).toContain('pi-check-circle')
-      expect(icon.classes()).toContain('text-green-500')
+      expect(icon.attributes('style')).toContain('--status-done-color')
     })
 
-    it('renders relative time text', () => {
+    it('renders relative time text with done color', () => {
       mountComponent({
         status: 'completed',
         completedAt: new Date().toISOString(),
@@ -74,7 +74,7 @@ describe('RunStatusIndicator', () => {
 
       const text = wrapper.find('[data-testid="run-status-text"]')
       expect(text.exists()).toBe(true)
-      expect(text.classes()).toContain('text-green-500')
+      expect(text.attributes('style')).toContain('--status-done-color')
     })
 
     it('does not render a spinner', () => {
@@ -87,19 +87,19 @@ describe('RunStatusIndicator', () => {
   })
 
   describe('failed state', () => {
-    it('renders a times circle icon in red with "Failed" text', () => {
+    it('renders a times circle icon in failed color with "Failed" text', () => {
       mountComponent({ status: 'failed', errorMessage: 'Build error' })
 
       const icon = wrapper.find('[data-testid="run-status-icon"]')
       expect(icon.exists()).toBe(true)
       expect(icon.classes()).toContain('pi')
       expect(icon.classes()).toContain('pi-times-circle')
-      expect(icon.classes()).toContain('text-red-500')
+      expect(icon.attributes('style')).toContain('--status-failed-color')
 
       const text = wrapper.find('[data-testid="run-status-text"]')
       expect(text.exists()).toBe(true)
       expect(text.text()).toBe('Failed')
-      expect(text.classes()).toContain('text-red-500')
+      expect(text.attributes('style')).toContain('--status-failed-color')
     })
 
     it('has cursor-pointer class for clickable behavior', () => {
@@ -118,19 +118,19 @@ describe('RunStatusIndicator', () => {
   })
 
   describe('paused state', () => {
-    it('renders a pause circle icon in yellow with "Paused" text', () => {
+    it('renders a pause circle icon in gate color with "Paused" text', () => {
       mountComponent({ status: 'paused' })
 
       const icon = wrapper.find('[data-testid="run-status-icon"]')
       expect(icon.exists()).toBe(true)
       expect(icon.classes()).toContain('pi')
       expect(icon.classes()).toContain('pi-pause-circle')
-      expect(icon.classes()).toContain('text-yellow-500')
+      expect(icon.attributes('style')).toContain('--status-gate-color')
 
       const text = wrapper.find('[data-testid="run-status-text"]')
       expect(text.exists()).toBe(true)
       expect(text.text()).toBe('Paused')
-      expect(text.classes()).toContain('text-yellow-500')
+      expect(text.attributes('style')).toContain('--status-gate-color')
     })
 
     it('does not render a spinner', () => {
@@ -147,19 +147,19 @@ describe('RunStatusIndicator', () => {
   })
 
   describe('backlog state', () => {
-    it('renders a minus circle icon in gray with "Backlog" text', () => {
+    it('renders a minus circle icon in queued color with "Backlog" text', () => {
       mountComponent({ status: 'backlog' })
 
       const icon = wrapper.find('[data-testid="run-status-icon"]')
       expect(icon.exists()).toBe(true)
       expect(icon.classes()).toContain('pi')
       expect(icon.classes()).toContain('pi-minus-circle')
-      expect(icon.classes()).toContain('text-gray-400')
+      expect(icon.attributes('style')).toContain('--status-queued-color')
 
       const text = wrapper.find('[data-testid="run-status-text"]')
       expect(text.exists()).toBe(true)
       expect(text.text()).toBe('Backlog')
-      expect(text.classes()).toContain('text-gray-400')
+      expect(text.attributes('style')).toContain('--status-queued-color')
     })
 
     it('does not have cursor-pointer class', () => {

@@ -507,6 +507,10 @@ func (m *humanMockRunRepo) GetLatestRunsByStories(_ context.Context, _ []uuid.UU
 	return map[uuid.UUID]*model.LatestRun{}, nil
 }
 
+func (m *humanMockRunRepo) GetDAGNodeRunInfoByStories(_ context.Context, _ []uuid.UUID) (map[uuid.UUID]model.DAGNodeRunInfo, error) {
+	return map[uuid.UUID]model.DAGNodeRunInfo{}, nil
+}
+
 func (m *humanMockRunRepo) UpdateRunMetadata(_ context.Context, _ uuid.UUID, _ map[string]interface{}) error {
 	return nil
 }

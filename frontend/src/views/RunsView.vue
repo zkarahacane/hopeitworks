@@ -2,14 +2,14 @@
 import { useRouter } from 'vue-router'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
-import Tag from 'primevue/tag'
-import ProgressBar from 'primevue/progressbar'
 import Skeleton from 'primevue/skeleton'
 import Message from 'primevue/message'
 import Button from 'primevue/button'
+import { differenceInSeconds } from 'date-fns'
 import { useRecentRuns } from '@/features/runs/composables/useRecentRuns'
-import { runStatusSeverity } from '@/utils/runStatus'
 import { formatRelativeDate } from '@/utils/formatDate'
+import { formatCostUSD } from '@/utils/formatCost'
+import StatusBadge from '@/ui/primitives/StatusBadge.vue'
 import type { RunSummary } from '@/features/runs/composables/useRecentRuns'
 
 const router = useRouter()
@@ -18,12 +18,27 @@ const { runs, isLoading, error, refresh } = useRecentRuns()
 function onRowClick(row: RunSummary) {
   router.push({ name: 'run-detail', params: { id: row.id }, query: { projectId: row.project_id } })
 }
+
+function formatDuration(run: RunSummary): string {
+  if (!run.started_at) return '—'
+  const end = run.completed_at ? new Date(run.completed_at) : new Date()
+  const secs = differenceInSeconds(end, new Date(run.started_at))
+  const m = Math.floor(secs / 60)
+  const s = secs % 60
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+}
 </script>
 
 <template>
   <div class="flex flex-col gap-6 p-6">
-    <div class="flex items-center justify-between">
-      <h1 class="text-2xl font-bold">Runs</h1>
+    <!-- Header -->
+    <div class="flex items-start justify-between">
+      <div class="flex flex-col gap-1">
+        <h1 class="text-2xl font-bold" :style="{ color: 'var(--p-text-color)' }">Runs</h1>
+        <p class="text-sm" :style="{ color: 'var(--p-text-muted-color)' }">
+          All pipeline runs across your projects
+        </p>
+      </div>
       <Button
         v-if="!isLoading && !error"
         icon="pi pi-refresh"
@@ -43,14 +58,18 @@ function onRowClick(row: RunSummary) {
     <!-- Error state -->
     <Message v-else-if="error" severity="error" :closable="false">
       <div class="flex items-center gap-3">
-        <span>{{ error.message }}</span>
+        <span :style="{ color: 'var(--p-text-color)' }">{{ error.message }}</span>
         <Button label="Retry" icon="pi pi-refresh" text size="small" @click="refresh" />
       </div>
     </Message>
 
     <!-- Empty state -->
-    <div v-else-if="runs.length === 0" class="flex flex-col items-center justify-center py-12 text-surface-400">
-      <i class="pi pi-play text-4xl mb-3" />
+    <div
+      v-else-if="runs.length === 0"
+      class="flex flex-col items-center justify-center py-12"
+      :style="{ color: 'var(--p-text-muted-color)' }"
+    >
+      <i class="pi pi-activity text-4xl mb-3" />
       <p class="text-lg font-medium">No runs yet</p>
       <p class="text-sm">Pipeline runs will appear here once triggered from a project.</p>
     </div>
@@ -65,21 +84,84 @@ function onRowClick(row: RunSummary) {
       data-testid="runs-table"
       @row-click="onRowClick($event.data)"
     >
+      <!-- Project -->
       <Column field="project_name" header="Project" />
-      <Column field="story_key" header="Story Key" />
-      <Column field="status" header="Status">
+
+      <!-- Story -->
+      <Column header="Story">
         <template #body="{ data }">
-          <Tag :value="data.status" :severity="runStatusSeverity[data.status]" />
+          <span class="font-semibold" :style="{ color: 'var(--p-text-color)' }">
+            {{ data.story_key }}
+          </span>
         </template>
       </Column>
-      <Column field="progress" header="Progress">
+
+      <!-- Run ID -->
+      <Column header="Run ID">
         <template #body="{ data }">
-          <ProgressBar :value="data.progress ?? 0" :show-value="false" style="height: 0.5rem; width: 6rem" />
+          <span class="font-mono text-xs" :style="{ color: 'var(--p-text-muted-color)' }">
+            {{ data.id.substring(0, 8) }}
+          </span>
         </template>
       </Column>
-      <Column field="started_at" header="Started">
+
+      <!-- Status -->
+      <Column header="Status">
         <template #body="{ data }">
-          {{ data.started_at ? formatRelativeDate(data.started_at) : '-' }}
+          <StatusBadge :status="data.status" />
+        </template>
+      </Column>
+
+      <!-- Started -->
+      <Column header="Started">
+        <template #body="{ data }">
+          <span :style="{ color: 'var(--p-text-muted-color)' }">
+            {{ data.started_at ? formatRelativeDate(data.started_at) : '—' }}
+          </span>
+        </template>
+      </Column>
+
+      <!-- Duration -->
+      <Column header="Duration">
+        <template #body="{ data }">
+          <span
+            v-if="data.status === 'running'"
+            class="inline-flex items-center gap-1.5 font-mono text-sm"
+            :style="{ color: 'var(--p-text-color)' }"
+          >
+            <span
+              class="live-pulse inline-block rounded-full"
+              :style="{
+                width: '0.5rem',
+                height: '0.5rem',
+                backgroundColor: 'var(--status-running-color)',
+                flexShrink: '0',
+              }"
+              aria-hidden="true"
+            />
+            {{ formatDuration(data) }}
+          </span>
+          <span
+            v-else
+            class="font-mono text-sm"
+            :style="{ color: 'var(--p-text-muted-color)' }"
+          >
+            {{ formatDuration(data) }}
+          </span>
+        </template>
+      </Column>
+
+      <!-- Cost -->
+      <Column header="Cost">
+        <template #body="{ data }">
+          <span
+            v-if="data.total_cost_usd != null"
+            class="font-mono text-sm"
+            :style="{ color: 'var(--p-text-muted-color)' }"
+          >
+            {{ formatCostUSD(data.total_cost_usd) }}
+          </span>
+          <span v-else :style="{ color: 'var(--p-text-muted-color)' }">—</span>
         </template>
       </Column>
     </DataTable>

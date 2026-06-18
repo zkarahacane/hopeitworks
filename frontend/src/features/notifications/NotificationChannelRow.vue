@@ -26,7 +26,8 @@ const channelTagSeverity: Record<string, 'info' | 'secondary'> = {
 
 <template>
   <div
-    class="flex items-center gap-4 rounded-lg border border-surface-200 bg-surface-0 p-4"
+    class="flex items-center gap-4 rounded-lg p-4"
+    :style="{ border: '1px solid var(--surface-border)', background: 'var(--surface-raised)' }"
     data-testid="notification-channel-row"
   >
     <!-- Channel type badge -->
@@ -39,7 +40,8 @@ const channelTagSeverity: Record<string, 'info' | 'secondary'> = {
 
     <!-- Masked URL -->
     <span
-      class="flex-1 font-mono text-sm text-surface-600"
+      class="flex-1 font-mono text-sm"
+      :style="{ color: 'var(--p-text-muted-color)' }"
       data-testid="masked-url"
     >
       {{ maskUrl(config.config['url'] ?? '') }}
@@ -53,7 +55,7 @@ const channelTagSeverity: Record<string, 'info' | 'secondary'> = {
         :label="event"
         class="text-xs"
       />
-      <span v-if="config.events_filter.length === 0" class="text-xs text-surface-400">
+      <span v-if="config.events_filter.length === 0" class="text-xs" :style="{ color: 'var(--p-text-muted-color)' }">
         No events
       </span>
     </div>

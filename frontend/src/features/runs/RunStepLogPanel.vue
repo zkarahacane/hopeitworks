@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import Drawer from 'primevue/drawer'
-import Tag from 'primevue/tag'
 import Button from 'primevue/button'
 import Message from 'primevue/message'
-import LogViewer from '@/ui/composed/LogViewer.vue'
+import StatusBadge from '@/ui/primitives/StatusBadge.vue'
+import AgentChip from '@/ui/primitives/AgentChip.vue'
+import ContainerChip from '@/ui/primitives/ContainerChip.vue'
+import LogStreamPanel from '@/ui/composed/LogStreamPanel.vue'
 import { useStepLogs } from './composables/useStepLogs'
-import { statusSeverity } from '@/utils/runStatus'
+import { stepTypeMeta } from '@/utils/stepType'
 import { format, parseISO, differenceInSeconds } from 'date-fns'
 import type { components } from '@/api/schema'
 
@@ -28,6 +30,20 @@ const emit = defineEmits<{
 
 const stepId = computed(() => props.step?.id ?? null)
 const { lines, sseStatus, clearLogs } = useStepLogs(props.projectId, props.runId, stepId)
+
+/** Typed-step metadata (type chip + agent flag) — single derived identity. */
+const typeMeta = computed(() => stepTypeMeta(props.step?.action))
+
+/**
+ * LogStreamPanel `active` — a stream is only expected for a selected, running
+ * (or recently active) step. Completed/pending steps show "idle" instead of a
+ * misleading "no output" (the U1 / #4 fix is carried by LogStreamPanel; we feed
+ * it an honest `active` flag).
+ */
+const streamActive = computed(() => {
+  if (!props.step) return false
+  return props.step.status === 'running' || lines.value.length > 0
+})
 
 /** Format an ISO timestamp to HH:mm:ss. */
 function formatTime(iso?: string | null): string {
@@ -85,11 +101,8 @@ function handleVisibleUpdate(value: boolean) {
           <h3 class="text-lg font-semibold m-0" data-testid="step-name">
             {{ step.step_name }}
           </h3>
-          <Tag
-            :value="step.status"
-            :severity="statusSeverity(step.status)"
-            data-testid="step-status"
-          />
+          <!-- Single derived status — no badge+spinner contradiction (#2). -->
+          <StatusBadge :status="step.status" data-testid="step-status" />
           <Button
             v-if="canRetry"
             label="Retry"
@@ -101,17 +114,37 @@ function handleVisibleUpdate(value: boolean) {
             @click="emit('retry', step.id)"
           />
         </div>
-        <div class="flex items-center gap-4 text-sm text-surface-500">
+        <!-- Typed metadata: type chip + agent/container chips. -->
+        <div class="flex items-center gap-2 flex-wrap">
+          <span
+            class="font-mono inline-flex items-center gap-1 px-2 py-0.5 rounded-md"
+            :style="{
+              fontSize: '0.72rem',
+              backgroundColor: 'var(--surface-overlay)',
+              border: '1px solid var(--surface-border)',
+              color: 'var(--p-text-muted-color)',
+            }"
+            data-testid="step-type-chip"
+          >
+            <i :class="typeMeta.icon" :style="{ fontSize: '0.7rem' }" aria-hidden="true" />
+            {{ typeMeta.typeLabel }}
+          </span>
+          <AgentChip v-if="typeMeta.isAgent" :role="step.step_name" data-testid="step-agent-chip" />
+          <ContainerChip
+            v-if="step.container_id"
+            :container-id="step.container_id"
+            data-testid="step-container-chip"
+          />
+        </div>
+        <div class="flex items-center gap-4 text-sm" :style="{ color: 'var(--p-text-muted-color)' }">
           <span v-if="step.started_at" data-testid="step-started-at">
             Started: {{ formatTime(step.started_at) }}
           </span>
           <span v-if="step.completed_at" data-testid="step-completed-at">
             Completed: {{ formatTime(step.completed_at) }}
           </span>
-          <span v-else-if="isRunning" data-testid="step-running-indicator">
-            Running...
-          </span>
-          <span v-if="duration" data-testid="step-duration">
+          <span v-else-if="isRunning" data-testid="step-running-indicator"> Running... </span>
+          <span v-if="duration" class="font-mono" data-testid="step-duration">
             Duration: {{ duration }}
           </span>
         </div>
@@ -129,9 +162,14 @@ function handleVisibleUpdate(value: boolean) {
         {{ step.error_message }}
       </Message>
 
-      <!-- Log viewer -->
+      <!-- Live log stream (LogStreamPanel — fixes the U1/#4 lifecycle). -->
       <div class="flex-1 overflow-hidden">
-        <LogViewer :lines="lines" :status="sseStatus" @clear="clearLogs" />
+        <LogStreamPanel
+          :lines="lines"
+          :status="sseStatus"
+          :active="streamActive"
+          @clear="clearLogs"
+        />
       </div>
     </div>
   </Drawer>

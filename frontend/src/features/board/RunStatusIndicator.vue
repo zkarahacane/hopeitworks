@@ -21,7 +21,7 @@ interface StatusConfig {
   icon: string | null
   spinner: boolean
   text: string | null
-  color: string
+  colorVar: string
   clickable: boolean
 }
 
@@ -29,7 +29,7 @@ const backlogConfig: StatusConfig = {
   icon: 'pi pi-minus-circle',
   spinner: false,
   text: 'Backlog',
-  color: 'text-gray-400',
+  colorVar: '--status-queued-color',
   clickable: false,
 }
 
@@ -38,28 +38,28 @@ const statusConfigMap = new Map<string, StatusConfig>([
     icon: null,
     spinner: true,
     text: 'Running...',
-    color: 'text-blue-500',
+    colorVar: '--status-running-color',
     clickable: false,
   }],
   ['completed', {
     icon: 'pi pi-check-circle',
     spinner: false,
     text: null,
-    color: 'text-green-500',
+    colorVar: '--status-done-color',
     clickable: false,
   }],
   ['paused', {
     icon: 'pi pi-pause-circle',
     spinner: false,
     text: 'Paused',
-    color: 'text-yellow-500',
+    colorVar: '--status-gate-color',
     clickable: false,
   }],
   ['failed', {
     icon: 'pi pi-times-circle',
     spinner: false,
     text: 'Failed',
-    color: 'text-red-500',
+    colorVar: '--status-failed-color',
     clickable: true,
   }],
   ['backlog', backlogConfig],
@@ -93,7 +93,8 @@ function handleClick() {
     />
     <i
       v-else-if="config.icon"
-      :class="[config.icon, config.color]"
+      :class="config.icon"
+      :style="`color: var(${config.colorVar})`"
       role="img"
       :aria-label="config.text ?? (status ?? 'status')"
       data-testid="run-status-icon"
@@ -101,14 +102,14 @@ function handleClick() {
 
     <span
       v-if="status === 'completed'"
-      :class="config.color"
+      :style="`color: var(${config.colorVar})`"
       data-testid="run-status-text"
     >
       {{ relativeTime }}
     </span>
     <span
       v-else-if="config.text"
-      :class="config.color"
+      :style="`color: var(${config.colorVar})`"
       data-testid="run-status-text"
     >
       {{ config.text }}

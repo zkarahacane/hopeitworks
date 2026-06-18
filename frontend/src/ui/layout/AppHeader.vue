@@ -5,6 +5,7 @@ import Button from 'primevue/button'
 import Menu from 'primevue/menu'
 import type { MenuItem } from 'primevue/menuitem'
 import { useAuthStore } from '@/stores/auth'
+import { useTheme, type ThemeMode } from '@/composables/useTheme'
 
 defineProps<{
   showHamburger: boolean
@@ -18,6 +19,16 @@ const router = useRouter()
 const authStore = useAuthStore()
 const userMenu = ref<InstanceType<typeof Menu> | null>(null)
 
+// 3-state theme control — cycles Auto → Dark → Light. Persisted via useTheme.
+const { mode, cycle } = useTheme()
+const THEME_META: Record<ThemeMode, { icon: string; label: string }> = {
+  auto: { icon: 'pi pi-desktop', label: 'Theme: Auto (follows page)' },
+  dark: { icon: 'pi pi-moon', label: 'Theme: Dark' },
+  light: { icon: 'pi pi-sun', label: 'Theme: Light' },
+}
+const themeIcon = computed(() => THEME_META[mode.value].icon)
+const themeLabel = computed(() => THEME_META[mode.value].label)
+
 const menuItems = computed<MenuItem[]>(() => [
   {
     label: authStore.user?.name ?? 'User',
@@ -27,7 +38,7 @@ const menuItems = computed<MenuItem[]>(() => [
   {
     label: authStore.user?.email ?? '',
     disabled: true,
-    class: 'text-surface-500 text-sm',
+    class: 'text-sm',
   },
   { separator: true },
   {
@@ -52,7 +63,11 @@ function toggleUserMenu(event: Event) {
 
 <template>
   <header
-    class="flex h-12 items-center justify-between border-b border-surface-200 bg-surface-0 px-4"
+    class="flex h-12 items-center justify-between px-4"
+    :style="{
+      borderBottom: '1px solid var(--surface-border)',
+      background: 'var(--surface-raised)',
+    }"
   >
     <div class="flex items-center gap-2">
       <Button
@@ -63,9 +78,20 @@ function toggleUserMenu(event: Event) {
         aria-label="Toggle sidebar"
         @click="emit('toggle-sidebar')"
       />
-      <span class="text-lg font-semibold text-surface-700">Hope</span>
+      <span class="text-lg" style="font-family: var(--font-sans)">
+        <span class="font-semibold" style="color: var(--p-text-color)">hope</span><span class="font-normal" style="color: var(--p-text-muted-color)">it</span><span class="font-semibold" style="color: var(--p-text-color)">works</span>
+      </span>
     </div>
     <div class="flex items-center gap-2">
+      <Button
+        :icon="themeIcon"
+        text
+        rounded
+        :aria-label="themeLabel"
+        :title="themeLabel"
+        data-testid="theme-toggle"
+        @click="cycle"
+      />
       <Button
         icon="pi pi-user"
         text

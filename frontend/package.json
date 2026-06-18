@@ -21,6 +21,8 @@
     "generate-api": "openapi-typescript ../api/openapi.yaml -o src/api/schema.d.ts"
   },
   "dependencies": {
+    "@fontsource/jetbrains-mono": "^5.2.8",
+    "@fontsource/space-grotesk": "^5.2.10",
     "@guolao/vue-monaco-editor": "^1.6.0",
     "@primevue/themes": "^4.5.4",
     "@vee-validate/zod": "^4.15.1",

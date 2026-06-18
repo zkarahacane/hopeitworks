@@ -224,6 +224,7 @@ watch(
         class="flex-1 min-h-0"
         :stories="storiesStore.items"
         :selected-id="selectedStoryId"
+        :project-id="projectId"
         @select="selectStory"
       />
     </template>

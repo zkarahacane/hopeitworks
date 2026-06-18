@@ -64,7 +64,10 @@ function onUserUpdated() {
 <template>
   <div class="flex flex-col gap-4 p-6">
     <div class="flex items-center justify-between">
-      <h1 class="text-2xl font-bold">User Management</h1>
+      <div>
+        <h1 class="text-2xl font-bold" style="font-family: var(--font-sans)">User management</h1>
+        <p class="mt-1 text-sm" style="color: var(--p-text-muted-color)">Manage workspace members, roles, and access.</p>
+      </div>
       <Button label="Create User" icon="pi pi-plus" @click="showCreateDialog = true" />
     </div>
 

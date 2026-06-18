@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './fixtures'
 
 const mockSteps = [
   {
@@ -95,10 +95,10 @@ test.describe('Pipeline Configuration Page', () => {
     test('displays pipeline steps as an ordered list', async ({ page }) => {
       await page.goto('/projects/proj-1/pipeline')
 
-      await expect(page.getByRole('heading', { name: 'Pipeline Configuration' })).toBeVisible()
-      await expect(page.locator('.font-semibold').filter({ hasText: 'implement' })).toBeVisible()
-      await expect(page.locator('.font-semibold').filter({ hasText: 'review' })).toBeVisible()
-      await expect(page.locator('.font-semibold').filter({ hasText: 'merge' })).toBeVisible()
+      await expect(page.getByRole('heading', { name: 'Pipeline' })).toBeVisible()
+      await expect(page.getByTestId('step-name').filter({ hasText: 'implement' })).toBeVisible()
+      await expect(page.getByTestId('step-name').filter({ hasText: 'review' })).toBeVisible()
+      await expect(page.getByTestId('step-name').filter({ hasText: 'merge' })).toBeVisible()
     })
 
     test('shows admin controls: Add Step and Save buttons', async ({ page }) => {
@@ -226,10 +226,10 @@ test.describe('Pipeline Configuration Page', () => {
     test('displays pipeline steps in read-only mode', async ({ page }) => {
       await page.goto('/projects/proj-1/pipeline')
 
-      await expect(page.getByRole('heading', { name: 'Pipeline Configuration' })).toBeVisible()
-      await expect(page.locator('.font-semibold').filter({ hasText: 'implement' })).toBeVisible()
-      await expect(page.locator('.font-semibold').filter({ hasText: 'review' })).toBeVisible()
-      await expect(page.locator('.font-semibold').filter({ hasText: 'merge' })).toBeVisible()
+      await expect(page.getByRole('heading', { name: 'Pipeline' })).toBeVisible()
+      await expect(page.getByTestId('step-name').filter({ hasText: 'implement' })).toBeVisible()
+      await expect(page.getByTestId('step-name').filter({ hasText: 'review' })).toBeVisible()
+      await expect(page.getByTestId('step-name').filter({ hasText: 'merge' })).toBeVisible()
     })
 
     test('does not show admin controls', async ({ page }) => {
@@ -308,7 +308,7 @@ test.describe('Pipeline Configuration Page', () => {
       await expect(page.getByTestId('loading-skeleton')).toBeVisible()
 
       // Then steps should appear
-      await expect(page.locator('.font-semibold').filter({ hasText: 'implement' })).toBeVisible()
+      await expect(page.getByTestId('step-name').filter({ hasText: 'implement' })).toBeVisible()
     })
   })
 })

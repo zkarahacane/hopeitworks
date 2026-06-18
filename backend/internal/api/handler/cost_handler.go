@@ -232,3 +232,31 @@ func (h *CostHandler) GetRunCosts(w http.ResponseWriter, r *http.Request, projec
 
 	writeJSON(w, http.StatusOK, resp)
 }
+
+// GetRunCostsByRole handles GET /projects/{projectId}/runs/{runId}/costs/by-role.
+func (h *CostHandler) GetRunCostsByRole(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, runID RunIdPath) {
+	detail, err := h.service.GetRunCostsByRole(r.Context(), projectID, runID)
+	if err != nil {
+		writeErrorResponse(w, err)
+		return
+	}
+
+	resp := RunCostByRole{
+		RunId:             detail.RunID,
+		TotalCost:         detail.TotalCost,
+		TotalTokensInput:  detail.TotalInput,
+		TotalTokensOutput: detail.TotalOutput,
+		Roles:             make([]RoleCostBreakdown, len(detail.Roles)),
+	}
+
+	for i, role := range detail.Roles {
+		resp.Roles[i] = RoleCostBreakdown{
+			Role:         role.Role,
+			TokensInput:  role.TokensInput,
+			TokensOutput: role.TokensOutput,
+			CostUsd:      role.CostUSD,
+		}
+	}
+
+	writeJSON(w, http.StatusOK, resp)
+}

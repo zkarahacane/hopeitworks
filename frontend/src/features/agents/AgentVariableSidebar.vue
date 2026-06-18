@@ -33,18 +33,20 @@ function handleVariableClick(variableName: string) {
 
 <template>
   <div class="flex flex-col gap-1 p-3">
-    <h3 class="mb-2 text-sm font-semibold text-surface-500">Context Variables</h3>
+    <h3 class="mb-2 text-sm font-semibold" :style="{ color: 'var(--p-text-muted-color)' }">Context Variables</h3>
     <button
       v-for="variable in variables"
       :key="variable.name"
-      class="cursor-pointer rounded-md p-2 text-left transition-colors hover:bg-surface-100 dark:hover:bg-surface-700"
+      class="cursor-pointer rounded-md p-2 text-left transition-colors"
+      @mouseenter="($event.currentTarget as HTMLElement).style.backgroundColor = 'var(--surface-overlay)'"
+      @mouseleave="($event.currentTarget as HTMLElement).style.backgroundColor = 'transparent'"
       :title="variable.description"
       @click="handleVariableClick(variable.name)"
     >
       <div class="text-sm font-mono font-medium text-primary-600 dark:text-primary-400">
         {{ formatPlaceholder(variable.name) }}
       </div>
-      <div class="text-xs text-surface-500">{{ variable.description }}</div>
+      <div class="text-xs" :style="{ color: 'var(--p-text-muted-color)' }">{{ variable.description }}</div>
     </button>
   </div>
 </template>

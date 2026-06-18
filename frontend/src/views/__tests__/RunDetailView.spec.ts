@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { ref, computed, h, defineComponent, type Ref } from 'vue'
+import { ref, h, defineComponent } from 'vue'
 import { mount, type VueWrapper, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import PrimeVue from 'primevue/config'
 import ToastService from 'primevue/toastservice'
 import RunDetailView from '../RunDetailView.vue'
-import type { RunWithSteps, RunStep } from '@/features/runs/composables/useRunDetail'
+import type { RunWithSteps } from '@/features/runs/composables/useRunDetail'
 
 const mockRunId = ref('run-1')
 const mockProjectId = ref('proj-1')
@@ -21,6 +21,7 @@ vi.mock('vue-router', async (importOriginal) => {
   }
 })
 
+// ── Composable mocks ────────────────────────────────────────────────────────────
 const mockRun = ref<RunWithSteps | null>(null)
 const mockIsLoading = ref(false)
 const mockError = ref<Error | null>(null)
@@ -36,9 +37,8 @@ vi.mock('@/features/runs/composables/useRunDetail', () => ({
   }),
 }))
 
-const mockCostDetail = ref(null)
+const mockCostDetail = ref<unknown>(null)
 const mockCostLoading = ref(false)
-
 vi.mock('@/features/runs/composables/useRunCosts', () => ({
   useRunCosts: () => ({
     costDetail: mockCostDetail,
@@ -47,6 +47,41 @@ vi.mock('@/features/runs/composables/useRunCosts', () => ({
   }),
 }))
 
+// SSE + step logs touch EventSource — stub them out entirely.
+vi.mock('@/composables/useSSE', () => ({
+  useSSE: () => ({ status: ref('open'), close: vi.fn() }),
+}))
+vi.mock('@/features/runs/composables/useStepLogs', () => ({
+  useStepLogs: () => ({
+    lines: ref([]),
+    sseStatus: ref('open'),
+    clearLogs: vi.fn(),
+  }),
+}))
+
+// HITL gate wiring — control gate visibility + capture handler calls.
+const mockGateStep = ref<unknown>(null)
+const mockHitlRequest = ref<unknown>(null)
+const mockIsAtGate = ref(false)
+const mockApprove = vi.fn().mockResolvedValue(undefined)
+const mockReject = vi.fn().mockResolvedValue(undefined)
+const mockRequestChanges = vi.fn().mockResolvedValue(undefined)
+vi.mock('@/features/runs/composables/useRunHitl', () => ({
+  useRunHitl: () => ({
+    hitlRequest: mockHitlRequest,
+    gateStep: mockGateStep,
+    isAtGate: mockIsAtGate,
+    busy: ref(false),
+    pendingAction: ref(null),
+    actionError: ref(null),
+    approve: mockApprove,
+    reject: mockReject,
+    requestChanges: mockRequestChanges,
+    refreshGate: vi.fn(),
+  }),
+}))
+
+// ── Child component stubs ─────────────────────────────────────────────────────
 const RunPipelineViewStub = defineComponent({
   name: 'RunPipelineView',
   props: ['run', 'steps'],
@@ -68,7 +103,6 @@ const RunPipelineViewStub = defineComponent({
       })
   },
 })
-
 const RunStepLogPanelStub = defineComponent({
   name: 'RunStepLogPanel',
   props: ['step', 'runId', 'projectId', 'visible', 'retryLoading'],
@@ -82,17 +116,25 @@ const RunStepLogPanelStub = defineComponent({
       })
   },
 })
-
 const RunCancelConfirmDialogStub = defineComponent({
   name: 'RunCancelConfirmDialog',
   props: ['visible', 'loading'],
   emits: ['confirm', 'cancel', 'update:visible'],
   setup(props) {
+    return () => h('div', { 'data-testid': 'cancel-dialog', 'data-visible': String(props.visible) })
+  },
+})
+const HitlGateCardStub = defineComponent({
+  name: 'HitlGateCard',
+  props: ['storyKey', 'stepName', 'prUrl', 'pendingSince', 'busy', 'pendingAction', 'animated'],
+  emits: ['approve', 'requestChanges', 'reject'],
+  setup(_, { emit }) {
     return () =>
-      h('div', {
-        'data-testid': 'cancel-dialog',
-        'data-visible': String(props.visible),
-      })
+      h('div', { 'data-testid': 'run-hitl-gate' }, [
+        h('button', { 'data-testid': 'gate-approve', onClick: () => emit('approve') }),
+        h('button', { 'data-testid': 'gate-request-changes', onClick: () => emit('requestChanges') }),
+        h('button', { 'data-testid': 'gate-reject', onClick: () => emit('reject') }),
+      ])
   },
 })
 
@@ -101,7 +143,7 @@ let wrapper: VueWrapper<any>
 
 function makeRun(overrides?: Partial<RunWithSteps>): RunWithSteps {
   return {
-    id: 'run-1',
+    id: '0a807b61-aaaa-bbbb-cccc-000000000000',
     project_id: 'proj-1',
     story_id: 'story-1',
     status: 'running',
@@ -110,7 +152,7 @@ function makeRun(overrides?: Partial<RunWithSteps>): RunWithSteps {
     steps: [
       {
         id: 'step-1',
-        run_id: 'run-1',
+        run_id: '0a807b61-aaaa-bbbb-cccc-000000000000',
         step_name: 'dev-story',
         step_order: 0,
         action: 'agent_run',
@@ -119,7 +161,7 @@ function makeRun(overrides?: Partial<RunWithSteps>): RunWithSteps {
       },
       {
         id: 'step-2',
-        run_id: 'run-1',
+        run_id: '0a807b61-aaaa-bbbb-cccc-000000000000',
         step_name: 'code-review',
         step_order: 1,
         action: 'agent_run',
@@ -139,9 +181,13 @@ function mountView() {
         RunPipelineView: RunPipelineViewStub,
         RunStepLogPanel: RunStepLogPanelStub,
         RunCancelConfirmDialog: RunCancelConfirmDialogStub,
+        HitlGateCard: HitlGateCardStub,
+        RunCostByRole: true,
+        StepTimeline: true,
+        LogStreamPanel: true,
+        LiveProgress: true,
         Toast: true,
         Skeleton: true,
-        ProgressBar: true,
       },
     },
   })
@@ -156,29 +202,47 @@ describe('RunDetailView', () => {
     mockError.value = null
     mockCostDetail.value = null
     mockCostLoading.value = false
+    mockGateStep.value = null
+    mockHitlRequest.value = null
+    mockIsAtGate.value = false
     mockFetchRun.mockReset()
+    mockApprove.mockClear()
+    mockReject.mockClear()
+    mockRequestChanges.mockClear()
   })
 
   afterEach(() => {
     wrapper?.unmount()
   })
 
-  it('renders page header with "Run Detail" title', () => {
+  it('renders the run breadcrumb with the short run id (mono)', () => {
     mockRun.value = makeRun()
     mountView()
-    expect(wrapper.text()).toContain('Run Detail')
+    const breadcrumb = wrapper.find('[data-testid="run-breadcrumb"]')
+    expect(breadcrumb.exists()).toBe(true)
+    expect(breadcrumb.text()).toContain('run·0a807b61')
   })
 
-  it('displays run ID when run is loaded', () => {
+  it('renders the mono run id in the header', () => {
     mockRun.value = makeRun()
     mountView()
-    expect(wrapper.text()).toContain('run-1')
+    expect(wrapper.find('[data-testid="run-id-mono"]').text()).toContain('run·0a807b61')
   })
 
-  it('displays run status Tag', () => {
+  it('renders the run status via StatusBadge (single derived status)', () => {
     mockRun.value = makeRun({ status: 'running' })
     mountView()
-    expect(wrapper.text()).toContain('running')
+    const badge = wrapper.find('[data-testid="run-status-badge"]')
+    expect(badge.exists()).toBe(true)
+    expect(badge.attributes('data-family')).toBe('running')
+  })
+
+  it('renders the live ELAPSED ticker', () => {
+    mockRun.value = makeRun()
+    mountView()
+    const elapsed = wrapper.find('[data-testid="run-elapsed-value"]')
+    expect(elapsed.exists()).toBe(true)
+    expect(elapsed.text()).toMatch(/^\d{2}:\d{2}$/)
   })
 
   it('renders RunPipelineView when run is loaded', () => {
@@ -187,7 +251,7 @@ describe('RunDetailView', () => {
     expect(wrapper.find('[data-testid="run-pipeline-view"]').exists()).toBe(true)
   })
 
-  it('does NOT render old RunTimeline component', () => {
+  it('does NOT render the old RunTimeline component', () => {
     mockRun.value = makeRun()
     mountView()
     expect(wrapper.findComponent({ name: 'RunTimeline' }).exists()).toBe(false)
@@ -202,58 +266,43 @@ describe('RunDetailView', () => {
   it('panel is initially not visible', () => {
     mockRun.value = makeRun()
     mountView()
-    const panel = wrapper.find('[data-testid="step-log-panel"]')
-    expect(panel.attributes('data-visible')).toBe('false')
+    expect(wrapper.find('[data-testid="step-log-panel"]').attributes('data-visible')).toBe('false')
   })
 
-  it('opens step log panel when step is selected from pipeline view', async () => {
+  it('opens step log panel when a step is selected from the pipeline', async () => {
     mockRun.value = makeRun()
     mountView()
-
     await wrapper.find('[data-testid="run-pipeline-view"]').trigger('click')
     await flushPromises()
-
     const panel = wrapper.find('[data-testid="step-log-panel"]')
     expect(panel.attributes('data-visible')).toBe('true')
     expect(panel.attributes('data-step-id')).toBe('step-1')
   })
 
-  it('closes step log panel on close event', async () => {
+  it('closes the step log panel on close event', async () => {
     mockRun.value = makeRun()
     mountView()
-
-    // Open panel first
     await wrapper.find('[data-testid="run-pipeline-view"]').trigger('click')
     await flushPromises()
-
-    // Close via event
-    const panel = wrapper.findComponent(RunStepLogPanelStub)
-    panel.vm.$emit('close')
+    wrapper.findComponent(RunStepLogPanelStub).vm.$emit('close')
     await wrapper.vm.$nextTick()
-
-    const panelEl = wrapper.find('[data-testid="step-log-panel"]')
-    expect(panelEl.attributes('data-visible')).toBe('false')
+    expect(wrapper.find('[data-testid="step-log-panel"]').attributes('data-visible')).toBe('false')
   })
 
-  it('renders cancel button when run is in progress', () => {
+  it('renders cancel/pause buttons when running', () => {
     mockRun.value = makeRun({ status: 'running' })
     mountView()
     expect(wrapper.find('[data-testid="cancel-run-btn"]').exists()).toBe(true)
-  })
-
-  it('renders pause button when run is running', () => {
-    mockRun.value = makeRun({ status: 'running' })
-    mountView()
     expect(wrapper.find('[data-testid="pause-run-btn"]').exists()).toBe(true)
   })
 
-  it('renders resume button when run is paused', () => {
+  it('renders resume button when paused', () => {
     mockRun.value = makeRun({ status: 'paused' })
     mountView()
     expect(wrapper.find('[data-testid="resume-run-btn"]').exists()).toBe(true)
   })
 
-  it('does not render cancel/pause/resume buttons when run is completed', () => {
+  it('does not render lifecycle buttons when completed', () => {
     mockRun.value = makeRun({ status: 'completed' })
     mountView()
     expect(wrapper.find('[data-testid="cancel-run-btn"]').exists()).toBe(false)
@@ -261,7 +310,7 @@ describe('RunDetailView', () => {
     expect(wrapper.find('[data-testid="resume-run-btn"]').exists()).toBe(false)
   })
 
-  it('renders cancel dialog component', () => {
+  it('renders the cancel dialog component', () => {
     mockRun.value = makeRun()
     mountView()
     expect(wrapper.find('[data-testid="cancel-dialog"]').exists()).toBe(true)
@@ -274,10 +323,60 @@ describe('RunDetailView', () => {
     expect(wrapper.find('[data-testid="run-pipeline-view"]').exists()).toBe(false)
   })
 
-  it('shows error message when error occurs', () => {
+  it('shows error message when an error occurs', () => {
     mockError.value = new Error('Failed to load run')
     mountView()
     expect(wrapper.text()).toContain('Failed to load run')
+  })
+
+  // ── HITL gate wiring ──────────────────────────────────────────────────────────
+  it('does not render the gate card when not at a gate', () => {
+    mockRun.value = makeRun()
+    mockIsAtGate.value = false
+    mountView()
+    expect(wrapper.find('[data-testid="run-hitl-gate"]').exists()).toBe(false)
+  })
+
+  it('renders the gate card when at a human gate', () => {
+    mockRun.value = makeRun({ status: 'paused' })
+    mockIsAtGate.value = true
+    mockGateStep.value = { id: 'step-3', step_name: 'Approval gate', action: 'human', status: 'running' }
+    mockHitlRequest.value = { id: 'hitl-1', status: 'pending', story_key: 'S-02', story_title: 'Setup CI' }
+    mountView()
+    expect(wrapper.find('[data-testid="run-hitl-gate"]').exists()).toBe(true)
+  })
+
+  it('wires the gate Approve emit to the real approve action', async () => {
+    mockRun.value = makeRun({ status: 'paused' })
+    mockIsAtGate.value = true
+    mockGateStep.value = { id: 'step-3', step_name: 'Approval gate', action: 'human', status: 'running' }
+    mockHitlRequest.value = { id: 'hitl-1', status: 'pending' }
+    mountView()
+    await wrapper.find('[data-testid="gate-approve"]').trigger('click')
+    await flushPromises()
+    expect(mockApprove).toHaveBeenCalledTimes(1)
+  })
+
+  it('wires the gate Request changes emit to requestChanges', async () => {
+    mockRun.value = makeRun({ status: 'paused' })
+    mockIsAtGate.value = true
+    mockGateStep.value = { id: 'step-3', step_name: 'Approval gate', action: 'human', status: 'running' }
+    mockHitlRequest.value = { id: 'hitl-1', status: 'pending' }
+    mountView()
+    await wrapper.find('[data-testid="gate-request-changes"]').trigger('click')
+    await flushPromises()
+    expect(mockRequestChanges).toHaveBeenCalledTimes(1)
+  })
+
+  it('wires the gate Reject emit to the real reject action', async () => {
+    mockRun.value = makeRun({ status: 'paused' })
+    mockIsAtGate.value = true
+    mockGateStep.value = { id: 'step-3', step_name: 'Approval gate', action: 'human', status: 'running' }
+    mockHitlRequest.value = { id: 'hitl-1', status: 'pending' }
+    mountView()
+    await wrapper.find('[data-testid="gate-reject"]').trigger('click')
+    await flushPromises()
+    expect(mockReject).toHaveBeenCalledTimes(1)
   })
 
   it('passes run and steps to RunPipelineView', () => {
