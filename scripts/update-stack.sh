@@ -38,14 +38,26 @@ log "Rebuilding and restarting docker-compose stack..."
 docker compose -f "$COMPOSE_FILE" up --build -d
 
 log "Waiting for API to be ready..."
+# Use /healthz (a GET liveness endpoint) — hitting the POST-only /auth/login with
+# GET returns 405, which `curl -f` treats as a failure.
 for i in $(seq 1 60); do
-  if curl -sf http://localhost:8080/api/v1/auth/login > /dev/null 2>&1; then
+  if curl -sf http://localhost:8080/healthz > /dev/null 2>&1; then
     break
   fi
   sleep 1
 done
-curl -sf http://localhost:8080/api/v1/auth/login > /dev/null 2>&1 || fail "API not responding after 60s"
+curl -sf http://localhost:8080/healthz > /dev/null 2>&1 || fail "API not responding after 60s"
 log "API ready"
+
+log "Waiting for frontend (nginx) to be ready..."
+for i in $(seq 1 60); do
+  if curl -sf "http://localhost:${FRONTEND_HOST_PORT:-5173}/" > /dev/null 2>&1; then
+    break
+  fi
+  sleep 1
+done
+curl -sf "http://localhost:${FRONTEND_HOST_PORT:-5173}/" > /dev/null 2>&1 || fail "Frontend not responding after 60s"
+log "Frontend ready"
 
 # ─── Optional reset ──────────────────────────────────────────────────────────
 if $DO_RESET; then

@@ -1,0 +1,14 @@
+node_modules
+dist
+.vite
+coverage
+e2e/real-results
+e2e/test-results
+playwright-report
+test-results
+*.log
+.git
+.gitignore
+Dockerfile
+.dockerignore
+README.md
