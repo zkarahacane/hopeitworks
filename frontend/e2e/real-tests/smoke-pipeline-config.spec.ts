@@ -61,10 +61,12 @@ test.describe('Pipeline config smoke tests (real backend)', () => {
 
     const body = await response.json()
 
-    // The response must include project_id and steps fields per the OpenAPI spec
+    // The response must include project_id and groups fields per the OpenAPI spec
+    // Groups contain the step hierarchy: groups[].steps[]
     expect(body, 'Response should contain project_id').toHaveProperty('project_id')
-    expect(body, 'Response should contain steps').toHaveProperty('steps')
-    expect(Array.isArray(body.steps), 'steps field should be an array').toBe(true)
-    expect(body.steps.length, 'steps array should have at least one entry').toBeGreaterThan(0)
+    expect(body, 'Response should contain groups').toHaveProperty('groups')
+    expect(Array.isArray(body.groups), 'groups field should be an array').toBe(true)
+    expect(body.groups.length, 'groups array should have at least one entry').toBeGreaterThan(0)
+    expect(Array.isArray(body.groups[0].steps), 'steps within group should be an array').toBe(true)
   })
 })

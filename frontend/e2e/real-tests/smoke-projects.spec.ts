@@ -34,9 +34,9 @@ test.describe('Projects smoke tests (real backend)', () => {
     await loginViaUI(page, 'admin')
     await page.goto('/projects')
 
-    // Wait for the project list to render — use row-scoped selectors to avoid strict mode violations
-    await expect(page.getByRole('row', { name: /Todo App/i }).first()).toBeVisible({ timeout: 10000 })
-    await expect(page.getByRole('row', { name: /E-commerce API/i }).first()).toBeVisible({ timeout: 5000 })
+    // Wait for the project list to render — projects are rendered as card buttons with aria-label
+    await expect(page.getByRole('button', { name: /Project: Todo App/i }).first()).toBeVisible({ timeout: 10000 })
+    await expect(page.getByRole('button', { name: /Project: E-commerce API/i }).first()).toBeVisible({ timeout: 5000 })
   })
 
   test('click project navigates to project detail', async ({ page }) => {

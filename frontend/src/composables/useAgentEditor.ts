@@ -21,6 +21,21 @@ const sampleContext = {
   repo_url: 'https://github.com/user/repo',
 }
 
+/** Default starter template for new agents */
+const DEFAULT_AGENT_TEMPLATE = `# Agent Instructions
+
+You are an AI agent. Describe this agent's role, responsibilities, and constraints here.
+
+## Context
+Explain what context this agent receives and how it should use it.
+
+## Task
+Describe step by step what this agent should do.
+
+## Output
+Describe the expected output format.
+`
+
 /**
  * Composable for agent editor state and actions.
  * Handles fetching, saving, and previewing agents.
@@ -40,9 +55,22 @@ export function useAgentEditor(projectId: string, agentId: string) {
   const previewError = ref<string | null>(null)
   const previewContent = ref('')
   const originalContent = ref('')
+  const originalName = ref('')
+  const originalModel = ref('claude-sonnet-4-6')
+  const originalImage = ref('')
+  const originalScope = ref<AgentScope>('project')
+  const originalProvider = ref('claude')
 
   const isNewAgent = computed(() => agentId === 'new')
-  const isDirty = computed(() => content.value !== originalContent.value)
+  const isDirty = computed(
+    () =>
+      content.value !== originalContent.value ||
+      name.value !== originalName.value ||
+      model.value !== originalModel.value ||
+      image.value !== originalImage.value ||
+      scope.value !== originalScope.value ||
+      provider.value !== originalProvider.value,
+  )
   const canSave = computed(
     () =>
       isDirty.value &&
@@ -71,10 +99,15 @@ export function useAgentEditor(projectId: string, agentId: string) {
       content.value = a.template_content
       originalContent.value = a.template_content
       name.value = a.name
+      originalName.value = a.name
       model.value = a.model
+      originalModel.value = a.model
       image.value = a.image
+      originalImage.value = a.image
       scope.value = a.scope
+      originalScope.value = a.scope
       provider.value = a.provider ?? 'claude'
+      originalProvider.value = a.provider ?? 'claude'
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Failed to load agent'
     } finally {
@@ -132,6 +165,11 @@ export function useAgentEditor(projectId: string, agentId: string) {
         }
       }
       originalContent.value = content.value
+      originalName.value = name.value
+      originalModel.value = model.value
+      originalImage.value = image.value
+      originalScope.value = scope.value
+      originalProvider.value = provider.value
       return true
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Failed to save agent'
@@ -156,7 +194,10 @@ export function useAgentEditor(projectId: string, agentId: string) {
   }
 
   onMounted(() => {
-    if (!isNewAgent.value) {
+    if (isNewAgent.value) {
+      // Initialize new agent with starter template, keep originalContent empty so editor is dirty
+      content.value = DEFAULT_AGENT_TEMPLATE
+    } else {
       fetchAgent()
     }
   })

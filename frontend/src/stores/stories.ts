@@ -168,8 +168,35 @@ export const useStoriesStore = defineStore('stories', () => {
         {
           params: {
             path: { projectId },
-            // epic_id is not in the OpenAPI query params for listStories; pass as extra query
-            query: { epic_id: epicId } as Record<string, string>,
+          },
+        },
+      )
+      if (apiError) {
+        error.value = 'Failed to load stories'
+        return
+      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const responseData = data as any
+      const allStories = responseData?.data ?? []
+      // Filter by epic_id since the API doesn't support epic_id as a query param
+      items.value = allStories.filter((s: Story) => s.epic_id === epicId)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to load stories'
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  /** Fetch all stories for a project (across all epics) from the API */
+  async function fetchAllStories(projectId: string) {
+    isLoading.value = true
+    error.value = null
+    try {
+      const { data, error: apiError } = await apiClient.GET(
+        '/projects/{projectId}/stories',
+        {
+          params: {
+            path: { projectId },
           },
         },
       )
@@ -373,6 +400,7 @@ export const useStoriesStore = defineStore('stories', () => {
     filteredStories,
     selectedStory,
     fetchStoriesByEpic,
+    fetchAllStories,
     updateStory,
     createStory,
     setSelectedStory,

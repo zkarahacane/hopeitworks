@@ -96,8 +96,9 @@ const editorRef = ref<InstanceType<typeof MonacoEditorWrapper> | null>(null)
       :style="{ borderBottom: '1px solid var(--surface-border)' }"
     >
       <div class="flex min-w-[200px] flex-1 flex-col gap-1">
-        <label class="text-xs font-medium" :style="{ color: 'var(--p-text-muted-color)' }">Agent Name</label>
+        <label for="agent-name" class="text-xs font-medium" :style="{ color: 'var(--p-text-muted-color)' }">Agent Name</label>
         <InputText
+          id="agent-name"
           :value="agentName"
           placeholder="e.g. Default Implement Agent"
           size="small"
@@ -107,8 +108,9 @@ const editorRef = ref<InstanceType<typeof MonacoEditorWrapper> | null>(null)
         />
       </div>
       <div class="flex flex-col gap-1">
-        <label class="text-xs font-medium" :style="{ color: 'var(--p-text-muted-color)' }">Model</label>
+        <label for="agent-model" class="text-xs font-medium" :style="{ color: 'var(--p-text-muted-color)' }">Model</label>
         <AutoComplete
+          inputId="agent-model"
           :model-value="agentModel"
           :suggestions="filteredModels"
           dropdown
@@ -120,8 +122,9 @@ const editorRef = ref<InstanceType<typeof MonacoEditorWrapper> | null>(null)
         />
       </div>
       <div class="flex flex-col gap-1">
-        <label class="text-xs font-medium" :style="{ color: 'var(--p-text-muted-color)' }">Provider</label>
+        <label for="agent-provider" class="text-xs font-medium" :style="{ color: 'var(--p-text-muted-color)' }">Provider</label>
         <Select
+          inputId="agent-provider"
           :model-value="agentProvider"
           :options="providerOptions"
           option-label="label"
@@ -133,8 +136,9 @@ const editorRef = ref<InstanceType<typeof MonacoEditorWrapper> | null>(null)
         />
       </div>
       <div class="flex min-w-[200px] flex-1 flex-col gap-1">
-        <label class="text-xs font-medium" :style="{ color: 'var(--p-text-muted-color)' }">Docker Image</label>
+        <label for="agent-image" class="text-xs font-medium" :style="{ color: 'var(--p-text-muted-color)' }">Docker Image</label>
         <InputText
+          id="agent-image"
           :value="agentImage"
           placeholder="ghcr.io/org/agent-name:latest"
           size="small"
@@ -144,8 +148,9 @@ const editorRef = ref<InstanceType<typeof MonacoEditorWrapper> | null>(null)
         />
       </div>
       <div class="flex flex-col gap-1">
-        <label class="text-xs font-medium" :style="{ color: 'var(--p-text-muted-color)' }">Scope</label>
+        <label for="agent-scope" class="text-xs font-medium" :style="{ color: 'var(--p-text-muted-color)' }">Scope</label>
         <Select
+          inputId="agent-scope"
           :model-value="agentScope"
           :options="scopeOptions"
           option-label="label"

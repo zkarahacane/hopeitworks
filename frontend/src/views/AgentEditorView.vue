@@ -56,9 +56,8 @@ async function handleSave() {
       detail: isNewAgent.value ? 'Agent created successfully' : 'Agent saved successfully',
       life: 3000,
     })
-    if (isNewAgent.value) {
-      router.push({ name: 'project-agents', params: { id: projectId.value } })
-    }
+    // Return to the agents list after a successful save (consistent for create and edit)
+    router.push({ name: 'project-agents', params: { id: projectId.value } })
   } else {
     toast.add({
       severity: 'error',
