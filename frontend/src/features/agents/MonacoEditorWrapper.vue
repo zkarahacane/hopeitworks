@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, onBeforeUnmount, shallowRef } from 'vue'
+import { ref, watch, onMounted, onBeforeUnmount, shallowRef, computed } from 'vue'
 import * as monaco from 'monaco-editor'
+import { useTheme } from '@/composables/useTheme'
 import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
 import jsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker'
 import cssWorker from 'monaco-editor/esm/vs/language/css/css.worker?worker'
@@ -35,6 +36,9 @@ const emit = defineEmits<{
 
 const container = ref<HTMLDivElement | null>(null)
 const editorInstance = shallowRef<monaco.editor.IStandaloneCodeEditor | null>(null)
+const { resolvedScheme } = useTheme()
+
+const editorTheme = computed(() => (resolvedScheme.value === 'dark' ? 'vs-dark' : 'vs'))
 
 /**
  * Guard flag to prevent emit loops.
@@ -49,7 +53,7 @@ onMounted(() => {
   const editor = monaco.editor.create(container.value, {
     value: props.modelValue ?? '',
     language: props.language,
-    theme: 'vs-dark',
+    theme: editorTheme.value,
     readOnly: props.readonly,
     minimap: { enabled: false },
     wordWrap: 'on',
@@ -105,6 +109,17 @@ watch(
     const model = editorInstance.value?.getModel()
     if (model && language) {
       monaco.editor.setModelLanguage(model, language)
+    }
+  },
+)
+
+/** React to theme changes: update Monaco editor theme */
+watch(
+  () => editorTheme.value,
+  (theme) => {
+    const editor = editorInstance.value
+    if (editor) {
+      editor.updateOptions({ theme })
     }
   },
 )

@@ -373,7 +373,7 @@ func TestGitBranchAction_Execute_GitProviderFailure(t *testing.T) {
 	projectID := uuid.New()
 	gitProvider := &gbMockGitProvider{
 		createRemoteBranchFn: func(_ context.Context, _, _, _ string) error {
-			return fmt.Errorf("git API failed: branch already exists")
+			return fmt.Errorf("git API failed: generic error")
 		},
 	}
 	factory := &gbMockGitProviderFactory{provider: gitProvider}
@@ -392,7 +392,7 @@ func TestGitBranchAction_Execute_GitProviderFailure(t *testing.T) {
 
 	err := a.Execute(context.Background(), runCtx)
 	if err == nil {
-		t.Fatal("expected error when CreateRemoteBranch fails")
+		t.Fatal("expected error when CreateRemoteBranch fails with non-idempotent error")
 	}
 	if !strings.Contains(err.Error(), "create branch") {
 		t.Fatalf("expected error containing %q, got %q", "create branch", err.Error())
@@ -401,6 +401,42 @@ func TestGitBranchAction_Execute_GitProviderFailure(t *testing.T) {
 	// Verify metadata was NOT set
 	if _, exists := runCtx.Metadata["branch_name"]; exists {
 		t.Fatal("expected branch_name metadata to NOT be set on failure")
+	}
+}
+
+func TestGitBranchAction_Execute_BranchAlreadyExists_Idempotent(t *testing.T) {
+	projectID := uuid.New()
+	gitProvider := &gbMockGitProvider{
+		createRemoteBranchFn: func(_ context.Context, _, _, _ string) error {
+			return fmt.Errorf("API returned status 409: branch already exists")
+		},
+	}
+	factory := &gbMockGitProviderFactory{provider: gitProvider}
+	storyRepo := &gbMockStoryRepo{
+		getByIDFn: func(_ context.Context, id uuid.UUID) (*model.Story, error) {
+			return &model.Story{ID: id, Key: "S-02", Title: "Idempotent test"}, nil
+		},
+	}
+	projectRepo := gbDefaultProjectRepo(projectID)
+
+	a := action.NewGitBranchAction(factory, storyRepo, projectRepo, testLogger())
+
+	cfg := map[string]string{}
+	runCtx := gbRunCtx(cfg, map[string]any{})
+	runCtx.ProjectID = projectID
+
+	err := a.Execute(context.Background(), runCtx)
+	if err != nil {
+		t.Fatalf("expected nil error when branch already exists (idempotent), got %v", err)
+	}
+
+	// Verify metadata WAS set (idempotent success)
+	branchName, exists := runCtx.Metadata["branch_name"].(string)
+	if !exists {
+		t.Fatal("expected branch_name metadata to be set on 409 (already exists)")
+	}
+	if !strings.Contains(branchName, "S-02") {
+		t.Fatalf("expected branch_name to contain story key, got %q", branchName)
 	}
 }
 

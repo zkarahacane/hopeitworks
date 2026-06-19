@@ -142,6 +142,29 @@ func (s *StoryService) ListByStatus(ctx context.Context, projectID uuid.UUID, st
 	}, nil
 }
 
+// ListByEpic retrieves a paginated list of stories for an epic.
+func (s *StoryService) ListByEpic(ctx context.Context, epicID uuid.UUID, page, perPage int) (*StoryListResult, error) {
+	limit, offset := paginationToLimitOffset(page, perPage)
+
+	stories, err := s.repo.ListByEpic(ctx, epicID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+
+	// Count stories for the epic by grouping by status
+	counts, err := s.repo.CountByEpicGroupedByStatus(ctx, epicID)
+	if err != nil {
+		return nil, err
+	}
+
+	total := int64(counts.Backlog + counts.Running + counts.Done + counts.Failed)
+
+	return &StoryListResult{
+		Stories: stories,
+		Total:   total,
+	}, nil
+}
+
 // UpdateStoryParams holds parameters for updating a story.
 type UpdateStoryParams struct {
 	ID                 uuid.UUID

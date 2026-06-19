@@ -27,7 +27,7 @@ func NewStoryHandler(svc *service.StoryService, runRepo port.RunRepository) *Sto
 }
 
 // ListStories handles GET /projects/{projectId}/stories.
-// Supports status filtering (?status=backlog,running) and key lookup (?key=S-14).
+// Supports epic_id filtering (?epic_id=...), status filtering (?status=backlog,running), and key lookup (?key=S-14).
 func (h *StoryHandler) ListStories(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, params ListStoriesParams) {
 	// Key lookup: return single story
 	if params.Key != nil && *params.Key != "" {
@@ -41,6 +41,18 @@ func (h *StoryHandler) ListStories(w http.ResponseWriter, r *http.Request, proje
 	}
 
 	page, perPage := paginationDefaults(params.Page, params.PerPage)
+
+	// Epic filtering
+	if params.EpicId != nil {
+		epicID := uuid.UUID(*params.EpicId)
+		result, err := h.service.ListByEpic(r.Context(), epicID, page, perPage)
+		if err != nil {
+			writeErrorResponse(w, err)
+			return
+		}
+		h.writeStoryListResponse(r.Context(), w, result, page, perPage)
+		return
+	}
 
 	// Status filtering
 	if params.Status != nil && *params.Status != "" {

@@ -58,13 +58,8 @@ function toggleTheme() {
 // ── Live header indicator ─────────────────────────────────────────────────────
 const runningCount = computed(() => summary.value.running)
 
-function retryNode(key: string) {
-  toast.add({
-    severity: 'info',
-    summary: 'Retry requested',
-    detail: `Re-running ${key}`,
-    life: 3000,
-  })
+function retryNode() {
+  // Retry not yet implemented — backend API endpoint pending
 }
 
 function handleLaunchClick() {

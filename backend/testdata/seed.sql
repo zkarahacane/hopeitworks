@@ -35,7 +35,7 @@ ON CONFLICT (email) DO UPDATE SET
     role = EXCLUDED.role;
 
 -- ---------------------------------------------------------------------------
--- Project: Todo App  (Gitea local)
+-- Project: Todo App  (GitHub public)
 -- ---------------------------------------------------------------------------
 
 INSERT INTO projects (id, name, description, owner_id, repo_url, git_provider, git_token_env, default_model)
@@ -44,9 +44,9 @@ VALUES (
     'Todo App',
     'Simple todo application — Go backend + Vue 3 frontend. Used as test project for pipeline validation.',
     '00000000-0000-0000-0000-000000000001',
-    'http://localhost:3030/devops/todo-app',
-    'gitea',
-    'GITEA_TOKEN',
+    'https://github.com/zkarahacane/todo-app',
+    'github',
+    'GITHUB_TOKEN',
     'claude-sonnet-4-6'
 ) ON CONFLICT (name) DO UPDATE SET
     description = EXCLUDED.description,
@@ -62,9 +62,9 @@ VALUES (
     'E-commerce API',
     'REST API for an e-commerce backend',
     '00000000-0000-0000-0000-000000000001',
-    'http://localhost:3030/devops/todo-app',
-    'gitea',
-    'GITEA_TOKEN',
+    'https://github.com/zkarahacane/ecommerce-api',
+    'github',
+    'GITHUB_TOKEN',
     'claude-sonnet-4-6'
 ) ON CONFLICT (name) DO UPDATE SET
     description = EXCLUDED.description,
@@ -193,7 +193,7 @@ VALUES (
     'Implement task CRUD endpoints',
     'Create REST endpoints to create, read, update, and delete tasks.',
     'backend',
-    'completed',
+    'done',
     '[]',
     'POST/GET/PUT/DELETE /tasks all return correct status codes and persist to the database.'
 ) ON CONFLICT (project_id, key) DO UPDATE SET
@@ -344,6 +344,7 @@ VALUES (
       - id: 10000000-0000-0000-0000-000000000002
         name: Implement Story
         action_type: agent_run
+        agent_id: 00000000-0000-0000-0000-000000000903
         model: claude-sonnet-4-6
         auto_approve: false
         config:
@@ -358,6 +359,7 @@ VALUES (
       - id: 10000000-0000-0000-0000-000000000003
         name: Code Review
         action_type: agent_run
+        agent_id: 00000000-0000-0000-0000-000000000902
         model: claude-sonnet-4-6
         auto_approve: true
         config:
