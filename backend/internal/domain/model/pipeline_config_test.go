@@ -237,6 +237,71 @@ func TestFlatSteps_EmptyGroups(t *testing.T) {
 	}
 }
 
+func TestFlatStepsWithStage_PreservesGroupIdentity(t *testing.T) {
+	cfg := &PipelineConfigYAML{
+		Groups: []PipelineGroup{
+			{ID: "dev", Name: "Dev", Steps: []PipelineStep{
+				{Name: "branch", ActionType: "git_branch"},
+				{Name: "code", ActionType: "agent_run"},
+			}},
+			{ID: "review", Name: "Review", Steps: []PipelineStep{
+				{Name: "pr", ActionType: "git_pr"},
+			}},
+		},
+	}
+
+	withStage := cfg.FlatStepsWithStage()
+	if len(withStage) != 3 {
+		t.Fatalf("expected 3 steps, got %d", len(withStage))
+	}
+	// Order matches FlatSteps; each step carries its originating group identity.
+	wantStage := []struct{ name, gid, gname string }{
+		{"branch", "dev", "Dev"},
+		{"code", "dev", "Dev"},
+		{"pr", "review", "Review"},
+	}
+	for i, w := range wantStage {
+		if withStage[i].Step.Name != w.name {
+			t.Errorf("step[%d]: expected name %q, got %q", i, w.name, withStage[i].Step.Name)
+		}
+		if withStage[i].GroupID != w.gid {
+			t.Errorf("step[%d]: expected group id %q, got %q", i, w.gid, withStage[i].GroupID)
+		}
+		if withStage[i].GroupName != w.gname {
+			t.Errorf("step[%d]: expected group name %q, got %q", i, w.gname, withStage[i].GroupName)
+		}
+	}
+}
+
+func TestParsePipelineConfigYAML_TransitionDefaultsToAuto(t *testing.T) {
+	yaml := []byte(`
+groups:
+  - id: dev
+    name: Dev
+    steps:
+      - id: s1
+        name: code
+        action_type: agent_run
+  - id: review
+    name: Review
+    transition: gate
+    steps:
+      - id: s2
+        name: pr
+        action_type: git_pr
+`)
+	cfg, err := ParsePipelineConfigYAML(yaml)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Groups[0].Transition != TransitionAuto {
+		t.Errorf("group with no transition: expected %q, got %q", TransitionAuto, cfg.Groups[0].Transition)
+	}
+	if cfg.Groups[1].Transition != TransitionGate {
+		t.Errorf("group with explicit gate: expected %q, got %q", TransitionGate, cfg.Groups[1].Transition)
+	}
+}
+
 func TestValidActionTypes_NewTypes(t *testing.T) {
 	newTypes := []string{"agent_run", "git_branch", "git_pr", "notification", "human", "ci_poll", "hitl_gate"}
 	for _, at := range newTypes {

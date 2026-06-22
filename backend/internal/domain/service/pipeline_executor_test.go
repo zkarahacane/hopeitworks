@@ -109,7 +109,7 @@ type stepStatusCall struct {
 // mockStoryRepoForExecutor implements port.StoryRepository for PipelineExecutor testing.
 type mockStoryRepoForExecutor struct {
 	getByIDFn            func(ctx context.Context, id uuid.UUID) (*model.Story, error)
-	updateFn            func(ctx context.Context, story *model.Story) (*model.Story, error)
+	updateFn             func(ctx context.Context, story *model.Story) (*model.Story, error)
 	updateCurrentStageFn func(ctx context.Context, id uuid.UUID, currentStage *string) (*model.Story, error)
 }
 
@@ -380,17 +380,20 @@ func TestExecuteRun_EventsPublishedInOrder(t *testing.T) {
 
 	events := f.eventPub.getEvents()
 
-	// Expected event order:
-	// run.started, story.status_updated(running),
+	// Expected event order (both fixture steps share the empty default stage, so
+	// there is exactly one stage.entered at the start and one stage.exited at the end):
+	// run.started, story.status_updated(running), stage.entered,
 	// step.started(0), step.completed(0), step.started(1), step.completed(1),
-	// run.completed, story.status_updated(done)
+	// stage.exited, run.completed, story.status_updated(done)
 	expectedEvents := []string{
 		"run.started",
 		"story.status_updated",
+		"stage.entered",
 		"step.started",
 		"step.completed",
 		"step.started",
 		"step.completed",
+		"stage.exited",
 		"run.completed",
 		"story.status_updated",
 	}
@@ -418,9 +421,21 @@ func TestExecuteRun_EventsPublishedInOrder(t *testing.T) {
 		t.Errorf("run.started payload: expected status running, got %v", startedPayload["status"])
 	}
 
-	// Verify step events include step_id and step_name (now at index 2, after story.status_updated)
+	// Verify stage.entered payload carries stage and story identity (index 2).
+	var enteredPayload map[string]any
+	if err := json.Unmarshal(events[2].Event.Payload, &enteredPayload); err != nil {
+		t.Fatalf("failed to unmarshal stage.entered payload: %v", err)
+	}
+	if _, ok := enteredPayload["stage_id"]; !ok {
+		t.Error("stage.entered payload: missing stage_id")
+	}
+	if enteredPayload["story_id"] != f.storyID.String() {
+		t.Errorf("stage.entered payload: expected story_id %s, got %v", f.storyID, enteredPayload["story_id"])
+	}
+
+	// Verify step events include step_id and step_name (now at index 3, after stage.entered)
 	var stepPayload map[string]any
-	if err := json.Unmarshal(events[2].Event.Payload, &stepPayload); err != nil {
+	if err := json.Unmarshal(events[3].Event.Payload, &stepPayload); err != nil {
 		t.Fatalf("failed to unmarshal step.started payload: %v", err)
 	}
 	if _, ok := stepPayload["step_id"]; !ok {
@@ -430,13 +445,74 @@ func TestExecuteRun_EventsPublishedInOrder(t *testing.T) {
 		t.Error("step.started payload: missing step_name")
 	}
 
-	// Verify run.completed event payload (at index 6, before final story.status_updated)
+	// Verify run.completed event payload (at index 8, before final story.status_updated)
 	var completedPayload map[string]any
-	if err := json.Unmarshal(events[6].Event.Payload, &completedPayload); err != nil {
+	if err := json.Unmarshal(events[8].Event.Payload, &completedPayload); err != nil {
 		t.Fatalf("failed to unmarshal run.completed payload: %v", err)
 	}
 	if completedPayload["run_id"] != f.runID.String() {
 		t.Errorf("run.completed payload: expected run_id %s, got %v", f.runID, completedPayload["run_id"])
+	}
+}
+
+// TestExecuteRun_StageBoundaries verifies that crossing from one stage to another
+// emits stage.exited for the old stage and stage.entered for the new one, advances
+// stories.current_stage to each stage name in turn, and clears current_stage at the
+// end of the run.
+func TestExecuteRun_StageBoundaries(t *testing.T) {
+	f := newExecutorTestFixture(3)
+	f.registerSuccessActions()
+
+	// steps 0,1 in stage "dev"; step 2 in stage "review".
+	f.steps[0].StageID, f.steps[0].StageName = "dev", "Dev"
+	f.steps[1].StageID, f.steps[1].StageName = "dev", "Dev"
+	f.steps[2].StageID, f.steps[2].StageName = "review", "Review"
+
+	var stageUpdates []string // names, with "<nil>" for clear
+	f.storyRepo.updateCurrentStageFn = func(_ context.Context, id uuid.UUID, currentStage *string) (*model.Story, error) {
+		if currentStage == nil {
+			stageUpdates = append(stageUpdates, "<nil>")
+		} else {
+			stageUpdates = append(stageUpdates, *currentStage)
+		}
+		return &model.Story{ID: id, CurrentStage: currentStage}, nil
+	}
+
+	if err := f.executor.ExecuteRun(context.Background(), f.runID); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	// current_stage advances Dev -> Review -> cleared.
+	wantUpdates := []string{"Dev", "Review", "<nil>"}
+	if len(stageUpdates) != len(wantUpdates) {
+		t.Fatalf("expected current_stage updates %v, got %v", wantUpdates, stageUpdates)
+	}
+	for i, want := range wantUpdates {
+		if stageUpdates[i] != want {
+			t.Errorf("current_stage update %d: expected %q, got %q", i, want, stageUpdates[i])
+		}
+	}
+
+	// stage events: entered(dev), exited(dev)+entered(review), exited(review).
+	var stageSeq []string
+	for _, e := range f.eventPub.getEvents() {
+		if e.Event.EntityType != "stage" {
+			continue
+		}
+		var payload map[string]any
+		if err := json.Unmarshal(e.Event.Payload, &payload); err != nil {
+			t.Fatalf("failed to unmarshal stage payload: %v", err)
+		}
+		stageSeq = append(stageSeq, fmt.Sprintf("%s:%v", e.Event.Action, payload["stage_id"]))
+	}
+	wantSeq := []string{"entered:dev", "exited:dev", "entered:review", "exited:review"}
+	if len(stageSeq) != len(wantSeq) {
+		t.Fatalf("expected stage event sequence %v, got %v", wantSeq, stageSeq)
+	}
+	for i, want := range wantSeq {
+		if stageSeq[i] != want {
+			t.Errorf("stage event %d: expected %q, got %q", i, want, stageSeq[i])
+		}
 	}
 }
 
@@ -857,13 +933,16 @@ func TestExecuteRun_FailureEventOrder(t *testing.T) {
 
 	events := f.eventPub.getEvents()
 
-	// Expected event order:
-	// run.started, story.status_updated(running),
+	// Expected event order (all three steps share the empty default stage, so one
+	// stage.entered fires before the first step; failure returns before completion,
+	// so no stage.exited is emitted):
+	// run.started, story.status_updated(running), stage.entered,
 	// step.started(0), step.completed(0), step.started(1), step.failed(1),
 	// run.failed, story.status_updated(failed)
 	expectedEvents := []string{
 		"run.started",
 		"story.status_updated",
+		"stage.entered",
 		"step.started",
 		"step.completed",
 		"step.started",

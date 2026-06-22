@@ -127,6 +127,12 @@ func (e *PipelineExecutor) ExecuteRun(ctx context.Context, runID uuid.UUID) erro
 		metadata[k] = v
 	}
 
+	// curStage tracks the stage the card is currently in. It is nil until the first
+	// step is entered. On resume (skipped completed steps) it stays nil until the
+	// first not-yet-completed step runs, which re-establishes current_stage even if
+	// the orchestrator pod restarted mid-run.
+	var curStage *stageRef
+
 	for i := range steps {
 		step := steps[i]
 
@@ -152,6 +158,17 @@ func (e *PipelineExecutor) ExecuteRun(ctx context.Context, runID uuid.UUID) erro
 			return ErrRunPaused
 		}
 
+		// Stage boundary: entering this step's stage (the first step enters its
+		// stage; a step whose stage differs from the current one crosses a boundary).
+		// On a boundary we exit the previous stage and enter the new one, advancing
+		// stories.current_stage and emitting stage.exited/stage.entered events.
+		if !curStage.matches(step.StageID) {
+			next := newStageRef(step)
+			e.exitStage(ctx, run, curStage, next)
+			e.enterStage(ctx, run, next)
+			curStage = next
+		}
+
 		if err := e.executeStep(ctx, run, step, metadata); err != nil {
 			if errors.Is(err, errStepSuspended) {
 				e.logger.Info("pipeline step suspended for approval",
@@ -169,7 +186,13 @@ func (e *PipelineExecutor) ExecuteRun(ctx context.Context, runID uuid.UUID) erro
 		}
 	}
 
-	// 5. All steps completed — mark run as completed
+	// 5. All steps completed — exit the final stage and clear current_stage.
+	if curStage != nil {
+		e.exitStage(ctx, run, curStage, nil)
+		e.clearStoryCurrentStage(ctx, run)
+	}
+
+	// Mark run as completed
 	completedAt := time.Now()
 	if _, err := e.runRepo.UpdateRunStatus(ctx, runID, model.RunStatusCompleted, nil, &completedAt, nil, nil); err != nil {
 		return err
@@ -441,6 +464,83 @@ func (e *PipelineExecutor) updateStoryStatus(ctx context.Context, run *model.Run
 		"run_id":   run.ID.String(),
 		"status":   status,
 	})
+}
+
+// stageRef is the in-memory identity of the stage a run is currently in.
+type stageRef struct {
+	id   string
+	name string
+}
+
+// newStageRef builds a stageRef from a run step's stamped stage identity.
+func newStageRef(step *model.RunStep) *stageRef {
+	return &stageRef{id: step.StageID, name: step.StageName}
+}
+
+// matches reports whether the receiver represents the same stage as stageID.
+// A nil receiver (no stage entered yet) matches nothing, so the first step always
+// crosses a boundary into its stage.
+func (s *stageRef) matches(stageID string) bool {
+	return s != nil && s.id == stageID
+}
+
+// stageEntityID derives a stable UUID for a (run, stage) pair so stage events
+// carry a consistent entity_id across entered/exited without a real stage row.
+func stageEntityID(runID uuid.UUID, stageID string) uuid.UUID {
+	return uuid.NewSHA1(runID, []byte("stage:"+stageID))
+}
+
+// enterStage advances stories.current_stage to the stage's name and emits a
+// stage.entered event. Best-effort: failures are logged, never fatal.
+func (e *PipelineExecutor) enterStage(ctx context.Context, run *model.Run, stage *stageRef) {
+	if stage == nil {
+		return
+	}
+	if run.StoryID != uuid.Nil {
+		name := stage.name
+		if _, err := e.storyRepo.UpdateStoryCurrentStage(ctx, run.StoryID, &name); err != nil {
+			e.logger.Error("failed to advance story current_stage",
+				"story_id", run.StoryID, "run_id", run.ID, "stage_id", stage.id, "error", err)
+		}
+	}
+	e.publishEvent(ctx, run.ProjectID, "stage", stageEntityID(run.ID, stage.id), "entered", map[string]any{
+		"stage_id":   stage.id,
+		"stage_name": stage.name,
+		"story_id":   run.StoryID.String(),
+		"run_id":     run.ID.String(),
+	})
+}
+
+// exitStage emits a stage.exited event for the stage being left. prev is the stage
+// we are leaving (no-op if nil); next is the stage we are entering (nil at run end),
+// included in the payload for board projection. Best-effort.
+func (e *PipelineExecutor) exitStage(ctx context.Context, run *model.Run, prev, next *stageRef) {
+	if prev == nil {
+		return
+	}
+	payload := map[string]any{
+		"stage_id":   prev.id,
+		"stage_name": prev.name,
+		"story_id":   run.StoryID.String(),
+		"run_id":     run.ID.String(),
+	}
+	if next != nil {
+		payload["next_stage_id"] = next.id
+		payload["next_stage_name"] = next.name
+	}
+	e.publishEvent(ctx, run.ProjectID, "stage", stageEntityID(run.ID, prev.id), "exited", payload)
+}
+
+// clearStoryCurrentStage sets stories.current_stage to NULL at run completion.
+// Best-effort: failures are logged, never fatal.
+func (e *PipelineExecutor) clearStoryCurrentStage(ctx context.Context, run *model.Run) {
+	if run.StoryID == uuid.Nil {
+		return
+	}
+	if _, err := e.storyRepo.UpdateStoryCurrentStage(ctx, run.StoryID, nil); err != nil {
+		e.logger.Error("failed to clear story current_stage",
+			"story_id", run.StoryID, "run_id", run.ID, "error", err)
+	}
 }
 
 // publishEvent publishes an event, logging errors without failing execution.
