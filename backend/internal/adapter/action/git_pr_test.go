@@ -104,6 +104,9 @@ func (m *prMockStoryRepo) CountByStatus(_ context.Context, _ uuid.UUID, _ []stri
 func (m *prMockStoryRepo) Update(_ context.Context, _ *model.Story) (*model.Story, error) {
 	return nil, nil
 }
+func (m *prMockStoryRepo) UpdateStoryCurrentStage(_ context.Context, id uuid.UUID, currentStage *string) (*model.Story, error) {
+	return &model.Story{ID: id, CurrentStage: currentStage}, nil
+}
 func (m *prMockStoryRepo) Delete(_ context.Context, _ uuid.UUID) error { return nil }
 
 type prMockProjectRepo struct {

@@ -250,6 +250,9 @@ func (m *hitlMockStoryRepo) CountByStatus(_ context.Context, _ uuid.UUID, _ []st
 func (m *hitlMockStoryRepo) Update(_ context.Context, s *model.Story) (*model.Story, error) {
 	return s, nil
 }
+func (m *hitlMockStoryRepo) UpdateStoryCurrentStage(_ context.Context, id uuid.UUID, currentStage *string) (*model.Story, error) {
+	return &model.Story{ID: id, CurrentStage: currentStage}, nil
+}
 func (m *hitlMockStoryRepo) Delete(_ context.Context, _ uuid.UUID) error { return nil }
 
 // --- Helpers ---

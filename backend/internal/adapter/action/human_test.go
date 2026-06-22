@@ -164,6 +164,9 @@ func (m *humanMockStoryRepo) CountByStatus(_ context.Context, _ uuid.UUID, _ []s
 func (m *humanMockStoryRepo) Update(_ context.Context, s *model.Story) (*model.Story, error) {
 	return s, nil
 }
+func (m *humanMockStoryRepo) UpdateStoryCurrentStage(_ context.Context, id uuid.UUID, currentStage *string) (*model.Story, error) {
+	return &model.Story{ID: id, CurrentStage: currentStage}, nil
+}
 func (m *humanMockStoryRepo) Delete(_ context.Context, _ uuid.UUID) error { return nil }
 
 // --- Helpers ---
