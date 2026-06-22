@@ -125,13 +125,15 @@ func safeName(name string) string {
 	return name
 }
 
-// safeJoin joins rel onto base while guaranteeing the result stays within base (no traversal
-// via ../ or an absolute path).
+// safeJoin joins rel onto base, rejecting any path that would escape base via an absolute
+// path or ../ traversal.
 func safeJoin(base, rel string) (string, error) {
-	// Rooting then cleaning collapses any ../ escapes before we join under base.
-	cleaned := filepath.Clean("/" + rel)
-	dest := filepath.Join(base, cleaned)
-	if dest != base && !strings.HasPrefix(dest, base+string(os.PathSeparator)) {
+	if filepath.IsAbs(rel) {
+		return "", fmt.Errorf("absolute skill file path %q", rel)
+	}
+	dest := filepath.Join(base, rel)
+	within, err := filepath.Rel(base, dest)
+	if err != nil || within == ".." || strings.HasPrefix(within, ".."+string(os.PathSeparator)) {
 		return "", fmt.Errorf("unsafe skill file path %q", rel)
 	}
 	return dest, nil

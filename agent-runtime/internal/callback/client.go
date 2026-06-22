@@ -133,7 +133,7 @@ func (c *Client) FetchBundle(ctx context.Context) (*Bundle, error) {
 		}
 
 		if resp.StatusCode == http.StatusNotFound {
-			io.Copy(io.Discard, resp.Body)
+			_, _ = io.Copy(io.Discard, resp.Body)
 			resp.Body.Close()
 			return nil, nil // older API without the bundle endpoint: behave as no-bundle
 		}
@@ -148,7 +148,7 @@ func (c *Client) FetchBundle(ctx context.Context) (*Bundle, error) {
 			return &bundle, nil
 		}
 
-		io.Copy(io.Discard, resp.Body)
+		_, _ = io.Copy(io.Discard, resp.Body)
 		resp.Body.Close()
 
 		// Non-retryable client error (4xx except 429)
@@ -216,7 +216,7 @@ func (c *Client) postJSON(ctx context.Context, url string, payload any) error {
 			continue
 		}
 		// Drain and close body to allow connection reuse
-		io.Copy(io.Discard, resp.Body)
+		_, _ = io.Copy(io.Discard, resp.Body)
 		resp.Body.Close()
 
 		// Success
