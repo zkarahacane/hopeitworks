@@ -44,6 +44,7 @@ func (r *AgentRepo) CreateAgent(ctx context.Context, agent *model.Agent) (*model
 		Name:            agent.Name,
 		Model:           textFromString(agent.Model),
 		Image:           textFromString(agent.Image),
+		StackID:         uuidFromPtr(agent.StackRef),
 		RuntimeKind:     runtimeKind,
 		TemplateContent: agent.TemplateContent,
 		Type:            agentType,
@@ -132,6 +133,7 @@ func (r *AgentRepo) UpdateAgent(ctx context.Context, agent *model.Agent) (*model
 		Name:            agent.Name,
 		Model:           textFromString(agent.Model),
 		Image:           textFromString(agent.Image),
+		StackID:         uuidFromPtr(agent.StackRef),
 		RuntimeKind:     runtimeKind,
 		TemplateContent: agent.TemplateContent,
 		Provider:        provider,
@@ -185,6 +187,8 @@ func toDomainAgent(a Agent) *model.Agent {
 	if a.Image.Valid {
 		agent.Image = a.Image.String
 	}
+
+	agent.StackRef = pgtypeToUUIDPtr(a.StackID)
 
 	// Default provider to "claude" for existing agents migrated without an explicit value.
 	if agent.Provider == "" {

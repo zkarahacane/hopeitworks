@@ -101,6 +101,7 @@ func (h *AgentHandler) CreateAgent(w http.ResponseWriter, r *http.Request, proje
 		Name:            req.Name,
 		Model:           req.Model,
 		Image:           req.Image,
+		StackRef:        req.StackRef,
 		TemplateContent: req.TemplateContent,
 		Scope:           scope,
 		Provider:        provider,
@@ -149,6 +150,7 @@ func (h *AgentHandler) UpdateAgent(w http.ResponseWriter, r *http.Request, _ Pro
 		Name:            req.Name,
 		Model:           req.Model,
 		Image:           req.Image,
+		StackRef:        req.StackRef,
 		TemplateContent: req.TemplateContent,
 		Provider:        provider,
 	}
@@ -184,6 +186,7 @@ func toAPIAgent(a *model.Agent) Agent {
 		Name:            a.Name,
 		Model:           a.Model,
 		Image:           a.Image,
+		StackRef:        a.StackRef,
 		TemplateContent: a.TemplateContent,
 		Scope:           AgentScope(a.Scope),
 		Provider:        AgentProvider(a.Provider),

@@ -71,6 +71,7 @@ type Agent struct {
 	Image           pgtype.Text `json:"image"`
 	Provider        string      `json:"provider"`
 	RuntimeKind     string      `json:"runtime_kind"`
+	StackID         pgtype.UUID `json:"stack_id"`
 }
 
 type AgentCapability struct {

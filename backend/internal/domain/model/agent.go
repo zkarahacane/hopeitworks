@@ -40,10 +40,15 @@ func RuntimeKindFromProvider(provider string) string {
 // Agent represents an AI agent definition with its runtime configuration and prompt template.
 // Agents can be scoped globally (available to all projects) or to a specific project.
 type Agent struct {
-	ID              uuid.UUID  `json:"id"`
-	Name            string     `json:"name"`
-	Model           string     `json:"model"`
-	Image           string     `json:"image"`
+	ID    uuid.UUID `json:"id"`
+	Name  string    `json:"name"`
+	Model string    `json:"model"`
+	// Image is the free-form runtime image. It stays the fallback when StackRef is
+	// nil — an image-only agent resolves exactly as before.
+	Image string `json:"image"`
+	// StackRef optionally points at a catalogued stack (stacks.id). When set, the
+	// effective launch image is resolved from the stack's image_ref instead of Image.
+	StackRef        *uuid.UUID `json:"stack_ref"`
 	RuntimeKind     string     `json:"runtime_kind"` // "claude_code", "opencode" or "cma"
 	TemplateContent string     `json:"template_content"`
 	Type            string     `json:"type"`     // "implement", "review", "merge", "retry", "custom"
