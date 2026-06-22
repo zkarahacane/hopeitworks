@@ -10,13 +10,14 @@ ARG MYPY_VERSION=2.1.0
 ARG PYTEST_VERSION=9.1.1
 ARG PYRIGHT_VERSION=1.1.410
 
-# Python 3.12 (Debian bookworm ships 3.11 as python3; install 3.12 explicitly).
+# Debian bookworm ships Python 3.11 as python3 (there is no python3.12 package
+# in the main repos). Use it as the system python; uv (installed below)
+# provisions other versions on demand at runtime, e.g. `uv python install 3.12`.
 # gh comes from agent-base — do not re-install it here.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3.12 python3.12-venv python3-pip pipx \
+    python3 python3-venv python3-pip pipx \
     && rm -rf /var/lib/apt/lists/* \
-    && ln -sf /usr/bin/python3.12 /usr/bin/python3 \
-    && ln -sf /usr/bin/python3.12 /usr/bin/python
+    && ln -sf /usr/bin/python3 /usr/bin/python
 
 # Python dev tools (pinned) + LSP (pyright). pipx isolates each tool;
 # uv, ruff, mypy, pytest, pyright land on PATH at /usr/local/bin.
