@@ -29,6 +29,55 @@ type PipelineStep struct {
 	AutoApprove bool              `yaml:"auto_approve"          json:"auto_approve"`
 	RetryPolicy RetryPolicy       `yaml:"retry_policy"          json:"retry_policy"`
 	Config      map[string]string `yaml:"config,omitempty"      json:"config,omitempty"`
+	// Guards are step-level safety probes (INC 4a). Step guards extend the stage
+	// guards of the group this step belongs to. Optional.
+	Guards []Guard `yaml:"guards,omitempty" json:"guards,omitempty"`
+}
+
+// Guard probe kinds (INC 4a, board-side — no runtime change). They consume
+// signals the runtime already emits today.
+const (
+	// GuardLogSilence breaches when no log.emitted event has been seen for a
+	// step within Threshold seconds (a heartbeat-via-logs liveness check).
+	GuardLogSilence = "log_silence"
+	// GuardWallclock breaches when a step has been running longer than Max seconds.
+	GuardWallclock = "wallclock"
+	// GuardCostBatch breaches when the cumulative cost of the run exceeds Max USD.
+	GuardCostBatch = "cost_batch"
+)
+
+// Guard on_fail action values. halt-gate is the default: pause the run at its
+// durable stage and raise a probe_halt HITL the human can resolve.
+const (
+	GuardOnFailHaltGate = "halt-gate"
+	GuardOnFailFail     = "fail"
+	GuardOnFailRetry    = "retry"
+)
+
+// Guard is a single safety probe attached to a stage (group) or step. A guard
+// observes a running step and, on breach, applies OnFail. INC 4a covers the
+// board-side probes (log_silence, wallclock, cost_batch) that need no runtime
+// change. The semantic probes (blast-radius, loop) are INC 4b.
+type Guard struct {
+	// Kind is the probe kind: log_silence | wallclock | cost_batch.
+	Kind string `yaml:"kind" json:"kind"`
+	// Threshold is the breach threshold in seconds for time-based probes
+	// (log_silence). Either Threshold or Max applies depending on the kind.
+	Threshold int `yaml:"threshold,omitempty" json:"threshold,omitempty"`
+	// Max is the breach ceiling: seconds for wallclock, USD for cost_batch.
+	Max float64 `yaml:"max,omitempty" json:"max,omitempty"`
+	// OnFail is the action to take on breach: halt-gate (default) | fail | retry.
+	OnFail string `yaml:"on_fail,omitempty" json:"on_fail,omitempty"`
+}
+
+// normalizeGuards defaults an empty OnFail to halt-gate (the conservative
+// "park with a reason" default from the safety model).
+func normalizeGuards(guards []Guard) {
+	for i := range guards {
+		if guards[i].OnFail == "" {
+			guards[i].OnFail = GuardOnFailHaltGate
+		}
+	}
 }
 
 // RetryPolicy defines retry behavior for a pipeline step.
@@ -55,6 +104,9 @@ type PipelineGroup struct {
 	// Transition is the stage's exit policy: auto | manual | gate. Defaults to
 	// "auto" when empty. Carried end-to-end but NOT enforced in INC 1.
 	Transition string `yaml:"transition,omitempty" json:"transition,omitempty"`
+	// Guards are stage-level safety probes (INC 4a). Every step in the group is
+	// observed against these guards while it runs. Optional.
+	Guards []Guard `yaml:"guards,omitempty" json:"guards,omitempty"`
 }
 
 // StepWithStage is a pipeline step paired with the identity of the group (stage)
@@ -102,13 +154,39 @@ func ParsePipelineConfigYAML(data []byte) (*PipelineConfigYAML, error) {
 
 	// Normalize the transition policy: an unset transition defaults to "auto"
 	// (the current, always-advancing behaviour). Carried only in INC 1.
+	// Normalize guard on_fail (defaults to halt-gate) at both stage and step level.
 	for i := range cfg.Groups {
 		if cfg.Groups[i].Transition == "" {
 			cfg.Groups[i].Transition = TransitionAuto
 		}
+		normalizeGuards(cfg.Groups[i].Guards)
+		for j := range cfg.Groups[i].Steps {
+			normalizeGuards(cfg.Groups[i].Steps[j].Guards)
+		}
 	}
 
 	return cfg, nil
+}
+
+// GuardsForStep returns the effective guards observing the given step ID: the
+// step's own guards followed by the guards of the stage (group) it belongs to.
+// Step guards take precedence implicitly by appearing first. Returns nil when no
+// guards apply. Used by the watchdog to evaluate a running step.
+func (c *PipelineConfigYAML) GuardsForStep(stepID string) []Guard {
+	for _, g := range c.Groups {
+		for _, s := range g.Steps {
+			if s.ID == stepID {
+				if len(s.Guards) == 0 && len(g.Guards) == 0 {
+					return nil
+				}
+				guards := make([]Guard, 0, len(s.Guards)+len(g.Guards))
+				guards = append(guards, s.Guards...)
+				guards = append(guards, g.Guards...)
+				return guards
+			}
+		}
+	}
+	return nil
 }
 
 // FlatSteps returns all steps across all groups in order.
