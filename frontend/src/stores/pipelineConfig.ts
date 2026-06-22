@@ -66,6 +66,7 @@ export const usePipelineConfigStore = defineStore('pipelineConfig', () => {
     const newGroup: PipelineGroup = {
       id: crypto.randomUUID(),
       name,
+      transition: 'auto',
       steps: [],
     }
     config.value = {
@@ -170,7 +171,7 @@ export const usePipelineConfigStore = defineStore('pipelineConfig', () => {
     if (!config.value) return
     const currentGroups = [...config.value.groups]
     if (currentGroups.length === 0) {
-      currentGroups.push({ id: 'default', name: 'Default', steps: [] })
+      currentGroups.push({ id: 'default', name: 'Default', transition: 'auto', steps: [] })
     }
     const lastGroup = currentGroups[currentGroups.length - 1]!
     currentGroups[currentGroups.length - 1] = {
