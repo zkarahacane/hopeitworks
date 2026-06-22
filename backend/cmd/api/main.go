@@ -152,8 +152,10 @@ func run() error {
 
 	// Stack catalogue (P2a): read-only catalogue of pinned runtime images. RunService
 	// uses the repo to resolve an agent's effective launch image when it references a
-	// stack.
+	// stack; the service + handler back the read API for the agent editor.
 	stackRepo := pgadapter.NewStackRepo(queries)
+	stackService := service.NewStackService(stackRepo)
+	stackHandler := handler.NewStackHandler(stackService)
 
 	// Template renderer (Handlebars engine for prompt templates)
 	handlebarsRenderer := hbadapter.NewRenderer()
@@ -364,7 +366,7 @@ func run() error {
 	epicRunService := service.NewEpicRunService(epicRunRepo, storyRepo, epicRepo, schedulerService, parallelGroupExecutor, eventRepo, logger)
 	epicRunHandler := handler.NewEpicRunHandler(epicRunService)
 
-	server := handler.NewServer(authHandler, projectHandler, userHandler, profileHandler, epicHandler, storyHandler, agentHandler, runHandler, pipelineConfigHandler, hitlHandler, costHandler, notificationHandler, epicRunHandler)
+	server := handler.NewServer(authHandler, projectHandler, userHandler, profileHandler, epicHandler, storyHandler, agentHandler, stackHandler, runHandler, pipelineConfigHandler, hitlHandler, costHandler, notificationHandler, epicRunHandler)
 
 	// Project user handler
 	projectUserHandler := handler.NewProjectUserHandler(projectUserService)
