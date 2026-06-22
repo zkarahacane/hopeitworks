@@ -254,6 +254,14 @@ type RunStep struct {
 	ParentStepID pgtype.UUID        `json:"parent_step_id"`
 }
 
+type Stack struct {
+	ID        uuid.UUID `json:"id"`
+	Key       string    `json:"key"`
+	ImageRef  string    `json:"image_ref"`
+	Toolchain []byte    `json:"toolchain"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 type Story struct {
 	ID                 uuid.UUID   `json:"id"`
 	ProjectID          uuid.UUID   `json:"project_id"`

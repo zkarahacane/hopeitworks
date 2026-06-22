@@ -6,9 +6,9 @@ import (
 	"github.com/google/uuid"
 )
 
-// NOTE: This file is P0 scaffolding. The `stacks` table, multi-arch pinned
-// images and the agent StackRef foreign key land in P2. The free-form
-// `agents.image` column is kept until then; nothing here is persisted or wired yet.
+// The `stacks` table and the read-side catalogue land in P2a (migration 000034).
+// Agents reference a stack by FK (Agent.StackRef); the free-form `agents.image`
+// column is kept as the fallback, so an agent with only `image` resolves as before.
 
 // Stack keys for the catalogued runtime images.
 const (
