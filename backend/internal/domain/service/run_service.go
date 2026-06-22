@@ -328,6 +328,10 @@ func (s *RunService) LaunchRun(ctx context.Context, projectID, storyID, userID u
 			Message:  "pipeline config has no steps",
 		}
 	}
+	// Stage-aware view of the same steps, in the same order. Used only to stamp
+	// stage_id/stage_name onto each created run_step; agent/image/stack resolution
+	// below stays driven by flatSteps and is untouched.
+	stepsWithStage := parsed.FlatStepsWithStage()
 
 	// 6. Snapshot config as JSON for the run record
 	snapshotJSON, err := json.Marshal(parsed)
@@ -427,6 +431,8 @@ func (s *RunService) LaunchRun(ctx context.Context, projectID, storyID, userID u
 			StepOrder: i,
 			Action:    stepCfg.ActionType,
 			Status:    model.StepStatusPending,
+			StageID:   stepsWithStage[i].GroupID,
+			StageName: stepsWithStage[i].GroupName,
 		}
 		createdStep, err := s.runRepo.CreateRunStep(ctx, step)
 		if err != nil {
