@@ -53,5 +53,12 @@ SET title = COALESCE(sqlc.narg('title'), title),
 WHERE id = @id
 RETURNING *;
 
+-- name: UpdateStoryCurrentStage :one
+UPDATE stories
+SET current_stage = sqlc.narg('current_stage'),
+    updated_at = now()
+WHERE id = @id
+RETURNING *;
+
 -- name: DeleteStory :exec
 DELETE FROM stories WHERE id = $1;

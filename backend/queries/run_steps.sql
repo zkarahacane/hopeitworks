@@ -1,6 +1,6 @@
 -- name: CreateRunStep :one
-INSERT INTO run_steps (run_id, step_name, step_order, action, status)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO run_steps (run_id, step_name, step_order, action, status, stage_id, stage_name)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING *;
 
 -- name: GetRunStep :one

@@ -158,6 +158,9 @@ func (m *mockStoryRepoForRun) Update(ctx context.Context, story *model.Story) (*
 	}
 	return story, nil
 }
+func (m *mockStoryRepoForRun) UpdateStoryCurrentStage(_ context.Context, id uuid.UUID, currentStage *string) (*model.Story, error) {
+	return &model.Story{ID: id, CurrentStage: currentStage}, nil
+}
 func (m *mockStoryRepoForRun) Delete(_ context.Context, _ uuid.UUID) error {
 	return nil
 }

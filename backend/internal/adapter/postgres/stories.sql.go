@@ -74,7 +74,7 @@ func (q *Queries) CountStoriesByStatus(ctx context.Context, arg CountStoriesBySt
 const createStory = `-- name: CreateStory :one
 INSERT INTO stories (project_id, epic_id, key, title, objective, target_files, depends_on, scope, status, acceptance_criteria)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-RETURNING id, project_id, epic_id, key, title, objective, target_files, depends_on, scope, status, acceptance_criteria, created_at, updated_at
+RETURNING id, project_id, epic_id, key, title, objective, target_files, depends_on, scope, status, acceptance_criteria, created_at, updated_at, current_stage
 `
 
 type CreateStoryParams struct {
@@ -118,6 +118,7 @@ func (q *Queries) CreateStory(ctx context.Context, arg CreateStoryParams) (Story
 		&i.AcceptanceCriteria,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CurrentStage,
 	)
 	return i, err
 }
@@ -132,7 +133,7 @@ func (q *Queries) DeleteStory(ctx context.Context, id uuid.UUID) error {
 }
 
 const getStory = `-- name: GetStory :one
-SELECT id, project_id, epic_id, key, title, objective, target_files, depends_on, scope, status, acceptance_criteria, created_at, updated_at FROM stories WHERE id = $1
+SELECT id, project_id, epic_id, key, title, objective, target_files, depends_on, scope, status, acceptance_criteria, created_at, updated_at, current_stage FROM stories WHERE id = $1
 `
 
 func (q *Queries) GetStory(ctx context.Context, id uuid.UUID) (Story, error) {
@@ -152,12 +153,13 @@ func (q *Queries) GetStory(ctx context.Context, id uuid.UUID) (Story, error) {
 		&i.AcceptanceCriteria,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CurrentStage,
 	)
 	return i, err
 }
 
 const getStoryByKey = `-- name: GetStoryByKey :one
-SELECT id, project_id, epic_id, key, title, objective, target_files, depends_on, scope, status, acceptance_criteria, created_at, updated_at FROM stories WHERE project_id = $1 AND key = $2
+SELECT id, project_id, epic_id, key, title, objective, target_files, depends_on, scope, status, acceptance_criteria, created_at, updated_at, current_stage FROM stories WHERE project_id = $1 AND key = $2
 `
 
 type GetStoryByKeyParams struct {
@@ -182,12 +184,13 @@ func (q *Queries) GetStoryByKey(ctx context.Context, arg GetStoryByKeyParams) (S
 		&i.AcceptanceCriteria,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CurrentStage,
 	)
 	return i, err
 }
 
 const listStoriesByEpic = `-- name: ListStoriesByEpic :many
-SELECT id, project_id, epic_id, key, title, objective, target_files, depends_on, scope, status, acceptance_criteria, created_at, updated_at FROM stories
+SELECT id, project_id, epic_id, key, title, objective, target_files, depends_on, scope, status, acceptance_criteria, created_at, updated_at, current_stage FROM stories
 WHERE epic_id = $1
 ORDER BY created_at DESC
 LIMIT $2 OFFSET $3
@@ -222,6 +225,7 @@ func (q *Queries) ListStoriesByEpic(ctx context.Context, arg ListStoriesByEpicPa
 			&i.AcceptanceCriteria,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.CurrentStage,
 		); err != nil {
 			return nil, err
 		}
@@ -234,7 +238,7 @@ func (q *Queries) ListStoriesByEpic(ctx context.Context, arg ListStoriesByEpicPa
 }
 
 const listStoriesByProject = `-- name: ListStoriesByProject :many
-SELECT id, project_id, epic_id, key, title, objective, target_files, depends_on, scope, status, acceptance_criteria, created_at, updated_at FROM stories
+SELECT id, project_id, epic_id, key, title, objective, target_files, depends_on, scope, status, acceptance_criteria, created_at, updated_at, current_stage FROM stories
 WHERE project_id = $1
 ORDER BY created_at DESC
 LIMIT $2 OFFSET $3
@@ -269,6 +273,7 @@ func (q *Queries) ListStoriesByProject(ctx context.Context, arg ListStoriesByPro
 			&i.AcceptanceCriteria,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.CurrentStage,
 		); err != nil {
 			return nil, err
 		}
@@ -281,7 +286,7 @@ func (q *Queries) ListStoriesByProject(ctx context.Context, arg ListStoriesByPro
 }
 
 const listStoriesByStatus = `-- name: ListStoriesByStatus :many
-SELECT id, project_id, epic_id, key, title, objective, target_files, depends_on, scope, status, acceptance_criteria, created_at, updated_at FROM stories
+SELECT id, project_id, epic_id, key, title, objective, target_files, depends_on, scope, status, acceptance_criteria, created_at, updated_at, current_stage FROM stories
 WHERE project_id = $1 AND status = ANY($2::text[])
 ORDER BY created_at DESC
 LIMIT $3 OFFSET $4
@@ -322,6 +327,7 @@ func (q *Queries) ListStoriesByStatus(ctx context.Context, arg ListStoriesByStat
 			&i.AcceptanceCriteria,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.CurrentStage,
 		); err != nil {
 			return nil, err
 		}
@@ -345,7 +351,7 @@ SET title = COALESCE($1, title),
     epic_id = COALESCE($8, epic_id),
     updated_at = now()
 WHERE id = $9
-RETURNING id, project_id, epic_id, key, title, objective, target_files, depends_on, scope, status, acceptance_criteria, created_at, updated_at
+RETURNING id, project_id, epic_id, key, title, objective, target_files, depends_on, scope, status, acceptance_criteria, created_at, updated_at, current_stage
 `
 
 type UpdateStoryParams struct {
@@ -387,6 +393,42 @@ func (q *Queries) UpdateStory(ctx context.Context, arg UpdateStoryParams) (Story
 		&i.AcceptanceCriteria,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CurrentStage,
+	)
+	return i, err
+}
+
+const updateStoryCurrentStage = `-- name: UpdateStoryCurrentStage :one
+UPDATE stories
+SET current_stage = $1,
+    updated_at = now()
+WHERE id = $2
+RETURNING id, project_id, epic_id, key, title, objective, target_files, depends_on, scope, status, acceptance_criteria, created_at, updated_at, current_stage
+`
+
+type UpdateStoryCurrentStageParams struct {
+	CurrentStage pgtype.Text `json:"current_stage"`
+	ID           uuid.UUID   `json:"id"`
+}
+
+func (q *Queries) UpdateStoryCurrentStage(ctx context.Context, arg UpdateStoryCurrentStageParams) (Story, error) {
+	row := q.db.QueryRow(ctx, updateStoryCurrentStage, arg.CurrentStage, arg.ID)
+	var i Story
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.EpicID,
+		&i.Key,
+		&i.Title,
+		&i.Objective,
+		&i.TargetFiles,
+		&i.DependsOn,
+		&i.Scope,
+		&i.Status,
+		&i.AcceptanceCriteria,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.CurrentStage,
 	)
 	return i, err
 }

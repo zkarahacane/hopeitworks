@@ -108,8 +108,9 @@ type stepStatusCall struct {
 
 // mockStoryRepoForExecutor implements port.StoryRepository for PipelineExecutor testing.
 type mockStoryRepoForExecutor struct {
-	getByIDFn func(ctx context.Context, id uuid.UUID) (*model.Story, error)
-	updateFn  func(ctx context.Context, story *model.Story) (*model.Story, error)
+	getByIDFn            func(ctx context.Context, id uuid.UUID) (*model.Story, error)
+	updateFn            func(ctx context.Context, story *model.Story) (*model.Story, error)
+	updateCurrentStageFn func(ctx context.Context, id uuid.UUID, currentStage *string) (*model.Story, error)
 }
 
 func (m *mockStoryRepoForExecutor) Create(_ context.Context, story *model.Story) (*model.Story, error) {
@@ -144,6 +145,12 @@ func (m *mockStoryRepoForExecutor) Update(ctx context.Context, story *model.Stor
 		return m.updateFn(ctx, story)
 	}
 	return story, nil
+}
+func (m *mockStoryRepoForExecutor) UpdateStoryCurrentStage(ctx context.Context, id uuid.UUID, currentStage *string) (*model.Story, error) {
+	if m.updateCurrentStageFn != nil {
+		return m.updateCurrentStageFn(ctx, id, currentStage)
+	}
+	return &model.Story{ID: id, CurrentStage: currentStage}, nil
 }
 func (m *mockStoryRepoForExecutor) Delete(_ context.Context, _ uuid.UUID) error {
 	return nil

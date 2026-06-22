@@ -272,6 +272,8 @@ func (r *RunRepo) CreateRunStep(ctx context.Context, step *model.RunStep) (*mode
 		StepOrder: int32(step.StepOrder),
 		Action:    step.Action,
 		Status:    string(step.Status),
+		StageID:   pgtype.Text{String: step.StageID, Valid: step.StageID != ""},
+		StageName: pgtype.Text{String: step.StageName, Valid: step.StageName != ""},
 	}
 
 	row, err := r.queries.CreateRunStep(ctx, params)
@@ -455,6 +457,12 @@ func toDomainRunStep(s RunStep) *model.RunStep {
 		Status:     model.StepStatus(s.Status),
 		RetryCount: int(s.RetryCount),
 		CreatedAt:  s.CreatedAt,
+	}
+	if s.StageID.Valid {
+		step.StageID = s.StageID.String
+	}
+	if s.StageName.Valid {
+		step.StageName = s.StageName.String
 	}
 	if s.StartedAt.Valid {
 		step.StartedAt = &s.StartedAt.Time

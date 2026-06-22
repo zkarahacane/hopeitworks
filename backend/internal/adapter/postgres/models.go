@@ -253,6 +253,8 @@ type RunStep struct {
 	RetryCount   int32              `json:"retry_count"`
 	RetryType    pgtype.Text        `json:"retry_type"`
 	ParentStepID pgtype.UUID        `json:"parent_step_id"`
+	StageID      pgtype.Text        `json:"stage_id"`
+	StageName    pgtype.Text        `json:"stage_name"`
 }
 
 type Stack struct {
@@ -277,6 +279,7 @@ type Story struct {
 	AcceptanceCriteria pgtype.Text `json:"acceptance_criteria"`
 	CreatedAt          time.Time   `json:"created_at"`
 	UpdatedAt          time.Time   `json:"updated_at"`
+	CurrentStage       pgtype.Text `json:"current_stage"`
 }
 
 type User struct {
