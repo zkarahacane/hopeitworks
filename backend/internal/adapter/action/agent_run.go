@@ -316,9 +316,16 @@ func (a *AgentRunAction) createContainer(
 			}
 		}
 
-		// Generate a short-lived container token for callback auth
+		// Generate a short-lived container token for callback auth. The token is bound
+		// to the agent so the fetch-at-startup bundle endpoint can resolve this agent's
+		// capabilities server-side. agentID is uuid.Nil when no agent is bound, which
+		// yields an empty bundle (back-compat: behaves exactly as before).
 		if a.tokenStore != nil {
-			token, tokenErr := a.tokenStore.Create(ctx, runCtx.Run.ID, runCtx.RunStep.ID, 2*time.Hour)
+			agentID := uuid.Nil
+			if id := extractAgentID(runCtx); id != nil {
+				agentID = *id
+			}
+			token, tokenErr := a.tokenStore.Create(ctx, runCtx.Run.ID, runCtx.RunStep.ID, agentID, 2*time.Hour)
 			if tokenErr != nil {
 				return "", fmt.Errorf("create container token: %w", tokenErr)
 			}

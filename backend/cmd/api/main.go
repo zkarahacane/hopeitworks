@@ -167,6 +167,15 @@ func run() error {
 	apiKeySvc := service.NewAPIKeyService(apiKeyRepo, encryptionKey)
 	apiKeyHandler := handler.NewAPIKeyHandler(apiKeySvc)
 
+	// Capabilities + credentials + fetch-at-startup bundle (P1 runtime/capabilities rework).
+	// Credentials are encrypted at rest with the same AES-256 key as user API keys. The
+	// bundle endpoint is served on the internal container-token channel (see below).
+	capabilityRepo := pgadapter.NewCapabilityRepository(queries)
+	credentialRepo := pgadapter.NewCredentialRepository(queries)
+	credentialSvc := service.NewCredentialService(credentialRepo, encryptionKey)
+	bundleSvc := service.NewBundleService(capabilityRepo, credentialSvc, agentRepo, logger)
+	agentBundleHandler := handler.NewAgentBundleHandler(bundleSvc, logger)
+
 	// Application-wide context for background services
 	appCtx, appCancel := context.WithCancel(ctx)
 	defer appCancel()
@@ -397,6 +406,8 @@ func run() error {
 		r.Post("/runs/{runId}/steps/{stepId}/logs", agentCallbackHandler.HandleLogs)
 		r.Post("/runs/{runId}/steps/{stepId}/cost", agentCallbackHandler.HandleCost)
 		r.Post("/runs/{runId}/steps/{stepId}/status", agentCallbackHandler.HandleStatus)
+		// Fetch-at-startup capability bundle; the agent is resolved from the token.
+		r.Get("/bundle", agentBundleHandler.HandleBundle)
 	})
 
 	// Create HTTP server
