@@ -17,9 +17,11 @@ CREATE TABLE stacks (
 -- Seed the four catalogued stacks with the current ghcr image refs. The toolchain jsonb
 -- mirrors what the agent-images actually carry today (Go 1.23 / Node 22 / Python 3.12 +
 -- the claude/opencode CLIs + dev tools). LSP entries are intentionally omitted until the
--- images ship them (P2b). Idempotent on key so a re-run — or a later digest pin via
--- image_ref — is safe. Agents are NOT repointed here: existing agents keep their
--- free-form image and behave exactly as before.
+-- images ship them (P2b). ON CONFLICT (key) DO NOTHING keeps a re-run on a seeded DB
+-- error-free; it does NOT update image_ref on existing rows, so pinning these refs to
+-- P2b digests must ship as a separate UPDATE migration, never as an edit to this one.
+-- Agents are NOT repointed here: existing agents keep their free-form image and behave
+-- exactly as before.
 INSERT INTO stacks (key, image_ref, toolchain) VALUES
     ('go',      'ghcr.io/zkarahacane/hopeitworks/agent-go:latest',
         '{"go": "1.23", "node": "22", "cli": ["claude", "opencode"], "tools": ["sqlc", "oapi-codegen", "wire", "golangci-lint", "gh"]}'::jsonb),

@@ -380,7 +380,10 @@ func (s *RunService) LaunchRun(ctx context.Context, projectID, storyID, userID u
 			if agent.StackRef != nil && s.stackRepo != nil {
 				stack, stackErr := s.stackRepo.GetByID(ctx, *agent.StackRef)
 				if stackErr != nil {
-					return nil, errors.NewInternal("resolve agent stack", stackErr)
+					// GetByID already returns a categorised DomainError (NotFound when
+					// the referenced stack is gone). Propagate it as-is so the caller
+					// sees a 404 rather than an opaque 500.
+					return nil, stackErr
 				}
 				effectiveImage = stack.ImageRef
 			}
