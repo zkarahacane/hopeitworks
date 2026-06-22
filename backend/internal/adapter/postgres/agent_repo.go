@@ -35,11 +35,16 @@ func (r *AgentRepo) CreateAgent(ctx context.Context, agent *model.Agent) (*model
 	if provider == "" {
 		provider = model.ProviderClaude
 	}
+	runtimeKind := agent.RuntimeKind
+	if runtimeKind == "" {
+		runtimeKind = model.RuntimeKindFromProvider(provider)
+	}
 	params := CreateAgentParams{
 		ID:              agent.ID,
 		Name:            agent.Name,
 		Model:           textFromString(agent.Model),
 		Image:           textFromString(agent.Image),
+		RuntimeKind:     runtimeKind,
 		TemplateContent: agent.TemplateContent,
 		Type:            agentType,
 		Scope:           agent.Scope,
@@ -118,11 +123,16 @@ func (r *AgentRepo) UpdateAgent(ctx context.Context, agent *model.Agent) (*model
 	if provider == "" {
 		provider = model.ProviderClaude
 	}
+	runtimeKind := agent.RuntimeKind
+	if runtimeKind == "" {
+		runtimeKind = model.RuntimeKindFromProvider(provider)
+	}
 	params := UpdateAgentParams{
 		ID:              agent.ID,
 		Name:            agent.Name,
 		Model:           textFromString(agent.Model),
 		Image:           textFromString(agent.Image),
+		RuntimeKind:     runtimeKind,
 		TemplateContent: agent.TemplateContent,
 		Provider:        provider,
 	}
@@ -154,6 +164,7 @@ func toDomainAgent(a Agent) *model.Agent {
 	agent := &model.Agent{
 		ID:              a.ID,
 		Name:            a.Name,
+		RuntimeKind:     a.RuntimeKind,
 		TemplateContent: a.TemplateContent,
 		Type:            a.Type,
 		Scope:           a.Scope,
@@ -178,6 +189,11 @@ func toDomainAgent(a Agent) *model.Agent {
 	// Default provider to "claude" for existing agents migrated without an explicit value.
 	if agent.Provider == "" {
 		agent.Provider = model.ProviderClaude
+	}
+
+	// Default runtime_kind from the provider for rows predating the column.
+	if agent.RuntimeKind == "" {
+		agent.RuntimeKind = model.RuntimeKindFromProvider(agent.Provider)
 	}
 
 	return agent

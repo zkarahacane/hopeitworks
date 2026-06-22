@@ -70,6 +70,7 @@ type Agent struct {
 	Model           pgtype.Text `json:"model"`
 	Image           pgtype.Text `json:"image"`
 	Provider        string      `json:"provider"`
+	RuntimeKind     string      `json:"runtime_kind"`
 }
 
 type CostRecord struct {
