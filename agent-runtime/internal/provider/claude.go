@@ -38,16 +38,31 @@ type claudeStreamLine struct {
 
 // Run executes the Claude Code CLI in workDir with the given prompt.
 // It streams NDJSON output and emits events for logs, cost, and the final result.
-func (c *ClaudeProvider) Run(ctx context.Context, workDir string, prompt string, model string) (<-chan Event, error) {
-	cmd := exec.CommandContext(ctx,
-		"claude",
+func (c *ClaudeProvider) Run(ctx context.Context, workDir string, prompt string, model string, opts RunOptions) (<-chan Event, error) {
+	// Base args. Capability flags are inserted before the positional prompt; when opts
+	// is the zero value, the command is byte-for-byte what it was before capabilities.
+	args := []string{
 		"--print",
 		"--output-format", "stream-json",
 		"--model", model,
 		"--dangerously-skip-permissions",
 		"--verbose",
-		prompt,
-	)
+	}
+	if opts.MCPConfigPath != "" {
+		args = append(args, "--mcp-config", opts.MCPConfigPath)
+	}
+	if opts.SystemPromptAppend != "" {
+		args = append(args, "--append-system-prompt", opts.SystemPromptAppend)
+	}
+	if len(opts.AllowedTools) > 0 {
+		args = append(args, "--allowedTools", strings.Join(opts.AllowedTools, ","))
+	}
+	if len(opts.DisallowedTools) > 0 {
+		args = append(args, "--disallowedTools", strings.Join(opts.DisallowedTools, ","))
+	}
+	args = append(args, prompt)
+
+	cmd := exec.CommandContext(ctx, "claude", args...)
 	cmd.Dir = workDir
 	// Route the credential to the right auth env based on its type:
 	//   - OAuth tokens (sk-ant-oat...) authenticate Claude Code against a
@@ -58,6 +73,9 @@ func (c *ClaudeProvider) Run(ctx context.Context, workDir string, prompt string,
 		authEnv = "CLAUDE_CODE_OAUTH_TOKEN=" + c.apiKey
 	}
 	cmd.Env = append(cmd.Environ(), authEnv)
+	// Resolved secrets are injected into the harness child env only (never the container
+	// env), so the harness can expand ${KEY} references (e.g. in .mcp.json headers).
+	cmd.Env = append(cmd.Env, opts.ExtraEnv...)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {

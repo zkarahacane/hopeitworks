@@ -58,6 +58,109 @@ type statusPayload struct {
 	Error    string `json:"error"`
 }
 
+// Bundle is the fetch-at-startup capability bundle returned by the API. It mirrors the
+// backend's model.RuntimeBundle JSON contract. An agent with no capabilities receives a
+// zero-value bundle (IsEmpty), in which case the runtime materialises nothing and behaves
+// exactly as it did before the capabilities layer existed.
+type Bundle struct {
+	SystemPrompt string            `json:"system_prompt"`
+	Skills       []BundleSkill     `json:"skills"`
+	MCP          BundleMCP         `json:"mcp"`
+	ToolPolicy   *BundleToolPolicy `json:"tool_policy"`
+	Credentials  map[string]string `json:"credentials"`
+}
+
+// BundleSkill is a skill rendered as files keyed by relative path (e.g. SKILL.md).
+type BundleSkill struct {
+	Name  string            `json:"name"`
+	Files map[string]string `json:"files"`
+}
+
+// BundleMCP is the .mcp.json projection: server name -> opaque connection entry. The
+// entries are passed through verbatim so the runtime can write a valid .mcp.json without
+// re-modelling every transport detail.
+type BundleMCP struct {
+	MCPServers map[string]json.RawMessage `json:"mcpServers"`
+}
+
+// BundleToolPolicy is an allow/deny tool list.
+type BundleToolPolicy struct {
+	Allow []string `json:"allow"`
+	Deny  []string `json:"deny"`
+}
+
+// IsEmpty reports whether the bundle carries nothing to materialise.
+func (b *Bundle) IsEmpty() bool {
+	if b == nil {
+		return true
+	}
+	return b.SystemPrompt == "" &&
+		len(b.Skills) == 0 &&
+		len(b.MCP.MCPServers) == 0 &&
+		b.ToolPolicy == nil &&
+		len(b.Credentials) == 0
+}
+
+// FetchBundle GETs the agent's capability bundle from the API at startup, authenticated
+// by the same container token as the callbacks. The agent is resolved server-side from
+// the token. A 404 (older API without the endpoint) is treated as "no bundle" and returns
+// (nil, nil) so the runtime stays back-compatible. The caller treats any error as an empty
+// bundle and proceeds — capability provisioning must never block the run.
+func (c *Client) FetchBundle(ctx context.Context) (*Bundle, error) {
+	url := fmt.Sprintf("%s/internal/agent/callback/bundle", c.baseURL)
+
+	var lastErr error
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		if attempt > 0 {
+			backoff := time.Duration(1<<uint(attempt-1)) * time.Second
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(backoff):
+			}
+		}
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		if err != nil {
+			return nil, fmt.Errorf("create bundle request: %w", err)
+		}
+		req.Header.Set("Authorization", "Bearer "+c.authToken)
+
+		resp, err := c.client.Do(req)
+		if err != nil {
+			lastErr = fmt.Errorf("bundle request failed: %w", err)
+			continue
+		}
+
+		if resp.StatusCode == http.StatusNotFound {
+			io.Copy(io.Discard, resp.Body)
+			resp.Body.Close()
+			return nil, nil // older API without the bundle endpoint: behave as no-bundle
+		}
+
+		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+			var bundle Bundle
+			decErr := json.NewDecoder(resp.Body).Decode(&bundle)
+			resp.Body.Close()
+			if decErr != nil {
+				return nil, fmt.Errorf("decode bundle: %w", decErr)
+			}
+			return &bundle, nil
+		}
+
+		io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+
+		// Non-retryable client error (4xx except 429)
+		if resp.StatusCode >= 400 && resp.StatusCode < 500 && resp.StatusCode != http.StatusTooManyRequests {
+			return nil, fmt.Errorf("bundle returned non-retryable status %d", resp.StatusCode)
+		}
+		lastErr = fmt.Errorf("bundle returned retryable status %d", resp.StatusCode)
+	}
+
+	return nil, fmt.Errorf("bundle fetch failed after %d attempts: %w", maxRetries, lastErr)
+}
+
 // SendLog posts a log event to the API server.
 func (c *Client) SendLog(ctx context.Context, message string) error {
 	url := fmt.Sprintf("%s/internal/agent/callback/runs/%s/steps/%s/logs", c.baseURL, c.runID, c.stepID)
