@@ -1963,6 +1963,65 @@ paths:
         "409":
           $ref: "#/components/responses/Conflict"
 
+  /hitl-requests/{hitlRequestId}/resolve:
+    post:
+      operationId: resolveHITLRequest
+      summary: Resolve a probe_halt gate with an enriched action
+      description: >-
+        Close a probe_halt halt-gate with one of resume/override/send_back/skip/
+        abort. Applies only to probe_halt gates; review gates use approve/reject.
+      tags: [hitl]
+      parameters:
+        - $ref: "#/components/parameters/HITLRequestIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResolveHITLRequest"
+      responses:
+        "200":
+          description: HITL request resolved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HITLRequest"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /probe-halts:
+    get:
+      operationId: listProbeHalts
+      summary: List pending probe_halt gates (batch triage inbox)
+      description: >-
+        Pending probe_halt gates across the platform, enriched with the structured
+        halt reason so the UI can group by reason and act in bulk. Optionally
+        scoped to a project.
+      tags: [hitl]
+      parameters:
+        - name: project_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+          description: Restrict to a single project.
+      responses:
+        "200":
+          description: Pending probe halts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProbeHaltList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
 # ── Components ──────────────────────────────────────────────────────────
 components:
   securitySchemes:
@@ -3270,6 +3329,43 @@ components:
           additionalProperties:
             type: string
           description: Optional per-action-type configuration key-value pairs
+        guards:
+          type: array
+          description: Step-level safety probes (INC 4a). Extend the stage guards.
+          items:
+            $ref: "#/components/schemas/Guard"
+
+    Guard:
+      type: object
+      description: >-
+        A board-side safety probe attached to a stage or step. On breach it
+        applies on_fail (halt-gate by default: park the run with a reason).
+      required:
+        - kind
+      properties:
+        kind:
+          type: string
+          enum: [log_silence, wallclock, cost_batch]
+          description: >-
+            Probe kind. log_silence = no agent output for `threshold` seconds;
+            wallclock = step running longer than `max` seconds; cost_batch =
+            cumulative run cost over `max` USD.
+          example: log_silence
+        threshold:
+          type: integer
+          minimum: 1
+          description: Breach threshold in seconds for time-based probes (log_silence).
+          example: 120
+        max:
+          type: number
+          format: double
+          description: Breach ceiling — seconds for wallclock, USD for cost_batch.
+          example: 1800
+        on_fail:
+          type: string
+          enum: [halt-gate, fail, retry]
+          default: halt-gate
+          description: Action on breach. halt-gate parks the run and raises a probe_halt gate.
 
     PipelineGroup:
       type: object
@@ -3291,6 +3387,11 @@ components:
           description: >-
             Stage exit policy: how the card leaves this stage. Carried end-to-end;
             enforcement of manual/gate is a later increment (currently treated as auto).
+        guards:
+          type: array
+          description: Stage-level safety probes (INC 4a). Observe every step in the stage.
+          items:
+            $ref: "#/components/schemas/Guard"
         steps:
           type: array
           items:
@@ -3740,11 +3841,19 @@ components:
           format: uuid
         gate_type:
           type: string
+          description: "approval/human are review gates; probe_halt is a watchdog-raised halt-gate."
           example: approval
         status:
           type: string
-          enum: [pending, approved, rejected]
+          enum: [pending, approved, rejected, resolved]
           example: pending
+        halt_reason:
+          $ref: "#/components/schemas/HaltReason"
+        resolution_action:
+          type: string
+          enum: [resume, override, send_back, skip, abort]
+          nullable: true
+          description: Enriched halt-gate action taken; null for plain approve/reject.
         story_key:
           type: string
           example: S-01
@@ -3798,6 +3907,101 @@ components:
           type: string
           minLength: 10
           description: Reason for rejecting the HITL request
+
+    HaltReason:
+      type: object
+      nullable: true
+      description: Structured reason a probe halted the run; null for review gates.
+      properties:
+        probe:
+          type: string
+          enum: [log_silence, wallclock, cost_batch]
+          description: The guard kind that breached.
+        on_fail:
+          type: string
+          description: The configured on_fail for the breached guard (halt-gate here).
+        observed:
+          type: number
+          format: double
+          description: Measured value at breach (seconds of silence/runtime, or USD).
+        threshold:
+          type: number
+          format: double
+          description: Configured limit that was exceeded.
+        unit:
+          type: string
+          description: Unit of observed/threshold — "seconds" or "usd".
+        detail:
+          type: string
+          description: Optional human-readable summary.
+
+    ResolveHITLRequest:
+      type: object
+      required:
+        - action
+      properties:
+        action:
+          type: string
+          enum: [resume, override, send_back, skip, abort]
+          description: >-
+            Halt-gate resolution action. resume = retry the step fresh; override =
+            accept partial and advance; skip = advance past; send_back = return to
+            an earlier stage; abort = fail the card.
+        reason:
+          type: string
+          description: Optional note recorded with the resolution.
+
+    ProbeHalt:
+      type: object
+      required:
+        - id
+        - run_step_id
+        - run_id
+        - project_id
+        - story_key
+        - story_title
+        - step_name
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        run_step_id:
+          type: string
+          format: uuid
+        run_id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        story_key:
+          type: string
+          example: S-01
+        story_title:
+          type: string
+        step_name:
+          type: string
+        stage_name:
+          type: string
+        halt_reason:
+          $ref: "#/components/schemas/HaltReason"
+        created_at:
+          type: string
+          format: date-time
+
+    ProbeHaltList:
+      type: object
+      required:
+        - data
+        - total
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProbeHalt"
+        total:
+          type: integer
 
 
     # ── Costs ──────────────────────────────────────────────────────────

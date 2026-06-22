@@ -18,6 +18,10 @@ type HITLRepository interface {
 	GetByRunStepID(ctx context.Context, runStepID uuid.UUID) (*model.HITLRequest, error)
 	// UpdateStatus transitions the HITL request to approved or rejected.
 	UpdateStatus(ctx context.Context, id uuid.UUID, status model.HITLStatus, resolvedBy *uuid.UUID, rejectionReason *string, resolvedAt time.Time) (*model.HITLRequest, error)
+	// UpdateResolution transitions a probe_halt HITL request to a terminal status
+	// and records the enriched resolution action taken (resume/override/send_back/
+	// skip/abort) alongside the resolving human.
+	UpdateResolution(ctx context.Context, id uuid.UUID, status model.HITLStatus, resolvedBy *uuid.UUID, action string, resolvedAt time.Time) (*model.HITLRequest, error)
 	// ListPendingByProject returns all pending HITL requests for a project with denormalized context.
 	ListPendingByProject(ctx context.Context, projectID uuid.UUID) ([]*model.PendingHITLRequest, error)
 	// CountPendingByProject returns the count of pending HITL requests for a project.
@@ -26,4 +30,7 @@ type HITLRepository interface {
 	ListFiltered(ctx context.Context, status *string, limit, offset int32) ([]*model.HITLRequest, error)
 	// CountFiltered returns the count of HITL requests optionally filtered by status.
 	CountFiltered(ctx context.Context, status *string) (int64, error)
+	// ListProbeHalts returns pending probe_halt gates for batch triage, enriched
+	// with story/run context. A nil projectID lists across all projects.
+	ListProbeHalts(ctx context.Context, projectID *uuid.UUID) ([]*model.ProbeHalt, error)
 }

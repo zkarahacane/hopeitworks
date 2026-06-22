@@ -317,6 +317,16 @@ func (s *Server) RejectHITLRequest(w http.ResponseWriter, r *http.Request, hitlR
 	s.hitl.RejectHITLRequest(w, r, hitlRequestID)
 }
 
+// ResolveHITLRequest delegates to HITLHandler.
+func (s *Server) ResolveHITLRequest(w http.ResponseWriter, r *http.Request, hitlRequestID HITLRequestIdPath) {
+	s.hitl.ResolveHITLRequest(w, r, hitlRequestID)
+}
+
+// ListProbeHalts delegates to HITLHandler.
+func (s *Server) ListProbeHalts(w http.ResponseWriter, r *http.Request, params ListProbeHaltsParams) {
+	s.hitl.ListProbeHalts(w, r, params)
+}
+
 // GetProjectCosts delegates to CostHandler.
 func (s *Server) GetProjectCosts(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, params GetProjectCostsParams) {
 	s.costs.GetProjectCosts(w, r, projectID, params)

@@ -45,6 +45,14 @@ func (m *hitlMockHITLRepo) UpdateStatus(_ context.Context, _ uuid.UUID, _ model.
 	return nil, nil
 }
 
+func (m *hitlMockHITLRepo) UpdateResolution(_ context.Context, _ uuid.UUID, _ model.HITLStatus, _ *uuid.UUID, _ string, _ time.Time) (*model.HITLRequest, error) {
+	return nil, nil
+}
+
+func (m *hitlMockHITLRepo) ListProbeHalts(_ context.Context, _ *uuid.UUID) ([]*model.ProbeHalt, error) {
+	return nil, nil
+}
+
 func (m *hitlMockHITLRepo) ListPendingByProject(_ context.Context, _ uuid.UUID) ([]*model.PendingHITLRequest, error) {
 	return nil, nil
 }

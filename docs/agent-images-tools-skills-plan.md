@@ -1,0 +1,294 @@
+# Agent Images, Tools & Skills — Plan
+
+> Scope: the runtime that runs role-based AI coding agents (dev, review, fix) in Docker containers for hopeitworks.
+> Grounded in: `agent-images/`, `agent-runtime/internal/provider/claude.go`, `agent-runtime/internal/runner/runner.go`, `agent-runtime/internal/config/config.go`, `backend/internal/adapter/action/agent_run.go`.
+
+---
+
+## 1. Executive summary
+
+Three gaps dominate, in priority order:
+
+1. **Blanket `--dangerously-skip-permissions` with zero tool scoping.** Every agent — including the read-only `review` role — runs with the full default toolset and all permission gates bypassed (`agent-runtime/internal/provider/claude.go:47`). A reviewer can `git commit`, `rm -rf`, or `curl | bash` exactly like an implementer. We have container isolation, so bypass mode is *defensible*, but the absence of any per-role allow/deny means we get none of the cheap, deterministic guardrails (read-only review, denied secret reads, denied destructive Bash) that the permission system gives for free. This is the single highest-leverage, lowest-cost fix.
+
+2. **No LSP / semantic diagnostics.** No `gopls`, `typescript-language-server`, `pyright`, or `ruff` LSP in any image; no MCP bridge; no post-edit diagnostics loop. Agents navigate and self-correct entirely via grep + file reads. On a large repo a `find_references` via LSP costs <500 tokens vs 35k–60k via grep (claudefa.st, mindstudio) — and without diagnostics the agent only learns a type error exists when it runs the build at the very end, instead of right after the edit that caused it.
+
+3. **No per-role Agent Skills; all role logic lives in `buildClaudeMD`.** Role behavior is a Go string switch in `backend/internal/adapter/action/agent_run.go:194` (`buildClaudeMD`), rebuilt and re-injected as `/workspace/repo/.claude/CLAUDE.md` on every run. This is the wrong primitive: it is a *procedure* (a workflow + checklist) stuffed into a *facts* file, it pays full token cost every turn, it cannot bundle scripts or reference rubrics, and it cannot scope tools. These belong in versioned `SKILL.md` files baked into the images.
+
+Secondary but real: unpinned `@latest`/`HEAD` everything (non-reproducible builds), `agent-go-node` is a byte-identical duplicate of `agent-go`, amd64-only (no Apple Silicon / ARM), thin Python stack (no `uv`/`ruff`/`mypy`), and the generated CLAUDE.md never includes the repo's *own* `backend/CLAUDE.md` / `frontend/CLAUDE.md` so agents don't know the project's actual conventions.
+
+---
+
+## 2. Current state
+
+### Images (`agent-images/`)
+
+```
+debian:bookworm-slim  ← (multi-stage: golang:1.23-bookworm builds agent-runtime)
+  └── hopeitworks/agent-base        base/Dockerfile
+        ├── hopeitworks/agent-go        stacks/go/Dockerfile
+        ├── hopeitworks/agent-node      stacks/node/Dockerfile
+        ├── hopeitworks/agent-go-node   stacks/go-node/Dockerfile  (== agent-go, duplicate)
+        └── hopeitworks/agent-python    stacks/python/Dockerfile
+```
+
+| Image | Bakes in | Notes |
+|---|---|---|
+| `agent-base` (`base/Dockerfile`) | `git curl jq ca-certificates openssh-client`; Node 22 (bin-copied from `node:22-slim`); `@anthropic-ai/claude-code` + `opencode-ai` (npm global, unpinned); `agent-runtime` Go binary; non-root `agent`; `WORKDIR /workspace`; `ENTRYPOINT ["agent-runtime"]` | No `gh`, no `ripgrep`, no LSP, no `HEALTHCHECK`, no `sudo` |
+| `agent-go` (`stacks/go/Dockerfile`) | Go 1.23 (copied from `golang:1.23-bookworm`); `sqlc`, `oapi-codegen` v2, `wire` (`@latest`); `golangci-lint` (`@HEAD` install script); `gh` | No `gopls`, no `govulncheck` |
+| `agent-node` (`stacks/node/Dockerfile`) | `typescript prettier eslint` (npm global, unpinned); `gh` | No `typescript-language-server`, no `pnpm`/`yarn`, no `vitest` |
+| `agent-go-node` (`stacks/go-node/Dockerfile`) | Byte-identical to `agent-go` — Go + Go tools + `gh`, **no** Node extras | Name implies full-stack; delivers nothing beyond `agent-go` |
+| `agent-python` (`stacks/python/Dockerfile`) | `python3 python3-pip python3-venv` (Debian 3.11, not 3.12); `gh` | No `uv`, `ruff`, `mypy`, `pytest`, `pyright` |
+
+Build/publish: `agent-images/Makefile` (`make base` → `make stacks`); registry `ghcr.io/zkarahacane/hopeitworks/agent-*`; tags `latest` + git ref; trigger on `v*` tags / `workflow_dispatch`; amd64-only (no `platforms:`); GHA cache per scope.
+
+### Tool / skill provisioning
+
+- **CLI invocation** (`claude.go:42-50`): `claude --print --output-format stream-json --model <MODEL> --dangerously-skip-permissions --verbose <PROMPT>`. **No** `--allowedTools`, `--disallowedTools`, `--append-system-prompt`, `--mcp-config`, `--settings`, `--permission-mode`.
+- **Tools available:** full default set (Bash, Read, Edit, Write, Glob, Grep, Task, Web*, Todo*). No MCP servers. No Agent Skills anywhere in image or workspace.
+- **Context injected** (`runner.go:48-59` writes `CLAUDE_MD_CONTENT` → `/workspace/repo/.claude/CLAUDE.md`): generated by `buildClaudeMD` (`agent_run.go:194`), role from `RunStep.Config["role"]` (`resolveRole`, `agent_run.go:247`). `review`/`reviewer` → reviewer checklist framing; everything else → implementer + DoD framing. A `## Previous attempt FAILED` block is appended on retries (`priorFailureContext`).
+- **Not provisioned:** no `settings.json`, no `.mcp.json`, no `SKILL.md`, no `~/.claude/` bootstrap, no `--append-system-prompt`, no scoping. The generated CLAUDE.md carries only project metadata (name/description/repo URL) + generic conventions — **not** the repo's real `backend/CLAUDE.md`.
+- **Runtime env surface** (`config.go`): `PROVIDER` (`claude`|`opencode`), `MODEL`, `API_KEY`, `CLAUDE_MD_CONTENT` (optional), etc. No env var today carries role, permission profile, or skill selection beyond what's baked into the CLAUDE.md string.
+
+---
+
+## 3. Target image architecture
+
+Keep the base → per-stack hierarchy (validated by OpenHands, Docker sandbox templates, SWE-bench — Source 3), but restructure into **four functional layers** and add a dedicated **skills layer** and a **fast-moving CLI layer** so we can update the agent CLI without rebuilding toolchains (Andrew Lock pattern).
+
+```
+ubuntu:24.04 @sha256:<pinned>                       Layer 0 — OS, non-root agent (uid 1001), scoped sudo→apt
+  └── hopeitworks/agent-runtime-bin (builder)       Layer 0b — golang builder → agent-runtime binary (multi-stage)
+  └── hopeitworks/agent-base                         Layer 1 — git, gh, curl, jq, ripgrep, ca-certs, build-essential
+        ├── hopeitworks/agent-go                     Layer 2 — Go toolchain + gopls + golangci-lint + govulncheck
+        ├── hopeitworks/agent-node                   Layer 2 — Node 22 + pnpm + typescript-language-server + eslint + prettier
+        ├── hopeitworks/agent-python                 Layer 2 — Python 3.12 + uv + ruff + mypy + pyright + pytest
+        └── hopeitworks/agent-go-node                Layer 2 — REAL union: Go layer + Node layer (delete duplicate)
+              └── + skills layer (COPY skills/)      Layer 3 — /home/agent/.claude/skills/<role>/SKILL.md (user-scoped)
+                    └── + CLI layer (claude-code)    Layer 4 — npm i -g @anthropic-ai/claude-code@<pinned>, isolated stage
+```
+
+### What each layer bakes in
+
+**Layer 0 — OS base.** Switch `debian:bookworm-slim` → `ubuntu:24.04`, **pinned by digest** (`ubuntu:24.04@sha256:...`), Renovate/Digestabot to advance it (Chainguard). Non-root `agent` user uid 1001 (align with Docker templates). Scoped sudo only for package install: `agent ALL=(root) NOPASSWD: /usr/bin/apt-get`. Multi-platform: `platforms: linux/amd64,linux/arm64` so agents run on Apple Silicon and ARM nodes.
+
+**Layer 0b — runtime builder.** Keep the existing two-stage pattern from `base/Dockerfile:1-4` (`golang:1.23-bookworm` builds the stripped static `agent-runtime`, copied into the final stage). Pin the builder digest too.
+
+**Layer 1 — `agent-base`.** Add what's missing and language-agnostic:
+- `git`, `curl`, `wget`, `jq`, **`ripgrep`** (Claude Code uses it natively — currently absent), `ca-certificates`, `build-essential`, `openssh-client`.
+- **`gh` moves down into base** (today every stack re-installs it identically in `stacks/*/Dockerfile` — DRY it).
+- **Drop `opencode-ai` from the universal base.** Today base ships *both* `claude-code` and `opencode-ai` regardless of `PROVIDER`. Split: bake `claude-code` in the Claude CLI layer (Layer 4), and only build `opencode` into an `agent-base-opencode` variant if/when opencode runs are actually scheduled. This trims ~200–300 MB off every Claude image.
+- `HEALTHCHECK` + keep `/bin/bash` available for `docker exec` debugging.
+
+**Layer 2 — per-stack toolchain + language servers + linters/formatters/test-runners.** Bake the LSP binary into each stack (headless agents don't need full IDE servers, but they *do* benefit from the LSP server binary fronted by an MCP bridge — Source 4 §5):
+
+| Stack (`agent-images/stacks/<x>/Dockerfile`) | Toolchain | Language server | Linters / formatters / test-runners |
+|---|---|---|---|
+| `agent-go` | Go 1.23 (pin to `1.23.x`) | **`gopls`** | `golangci-lint` (pin tag, not `@HEAD`), `govulncheck` |
+| `agent-node` | Node 22, **`pnpm`** | **`typescript-language-server` + `typescript`** | `eslint`, `prettier`, `vitest` |
+| `agent-python` | **Python 3.12 (explicit, not Debian apt 3.11)**, **`uv`** | **`pyright`** | **`ruff`**, **`mypy`**, **`pytest`**, `coverage` |
+| `agent-go-node` | **Real union**: inherit Go + Node tooling (build via shared `ARG`/include, not a copy-paste of `agent-go`) | `gopls` + `typescript-language-server` | both stacks' linters |
+
+All Go tool installs move from `@latest` to **pinned versions**; `golangci-lint` from `@HEAD` to a release tag; npm globals from floating to pinned (`typescript@x.y.z`).
+
+**Layer 3 — skills layer.** A single `COPY skills/ /home/agent/.claude/skills/` (user-scoped → available regardless of which repo is cloned into `/workspace/repo`). This is where the per-role `SKILL.md` packages live (Section 5). Also drop a baked default `~/.claude/settings.json` here carrying the org-wide deny rules (Section 4) and the LSP MCP config (`.mcp.json` / `cclsp.json`). Skills + settings carry ~100 tokens/skill at Level-1 disclosure and zero cost otherwise (Source 5) — cheap to bake everywhere.
+
+**Layer 4 — Claude CLI layer (isolated for fast updates).** `RUN npm install -g @anthropic-ai/claude-code@<pinned>` in its own stage so `--no-cache-filter=agent-cli` rebuilds only the CLI when a new Claude Code drops, without re-running the Go/Node/Python toolchain layers (Andrew Lock).
+
+### Pinning, size, reproducibility
+
+- **Pin everything by digest/version:** OS (`@sha256`), builder, all `go install` targets, all npm globals, `golangci-lint` release tag. Renovate/Digestabot PRs keep them fresh without going stale. Today nothing is pinned → builds are not reproducible.
+- **Size targets** (Source 3 §5): base < 250 MB; single stack 400–700 MB; `agent-go-node` union < 1.3 GB. Dropping `opencode-ai` from Claude images and `--no-install-recommends` + apt-list cleanup (already done) keeps this honest. LSP servers add ~50–200 MB/stack — justified here because we wire them into a real diagnostics loop (Section 4), unlike a generic headless agent.
+- **Multi-platform** via `docker buildx` `--platform linux/amd64,linux/arm64`.
+- **Never bake:** project source (cloned at runtime by `runner.go` → `/workspace/repo`), secrets/API keys (injected via env per `config.go`), project deps (`go mod download` / `pnpm install` / `uv sync` at runtime).
+
+### Real paths to touch
+`agent-images/base/Dockerfile`, `agent-images/stacks/{go,node,python,go-node}/Dockerfile`, `agent-images/Makefile`, `agent-images/skills/` (new), the GHA workflow that builds/pushes these (add `platforms`, digest pins, `--no-cache-filter` CLI layer).
+
+---
+
+## 4. Tools
+
+### Tool set to provision
+
+Built-in subset that matters for autonomous coding (Source 4 §1): `Read, Edit, Write, Glob, Grep, Bash, Task, TodoWrite` as the inner loop; `WebFetch/WebSearch` for docs. **Add via MCP** (the correct extension mechanism, Source 4 §6): an **LSP bridge** (`cclsp` or `lsp-mcp-server`) for `get_diagnostics` / `find_references` / `find_definition`, and optionally a **GitHub MCP** for PR/issue/CI context instead of shelling `gh` through Bash.
+
+### Replace blanket `--dangerously-skip-permissions` with per-role profiles
+
+`claude.go:47` currently hardcodes bypass. Replace with a **per-role permission profile** selected from `RunStep.Config["role"]` (the role we already resolve in `resolveRole`, `agent_run.go:247`). Two viable mechanisms:
+
+- **Preferred:** drop `--dangerously-skip-permissions`, pass `--permission-mode` + a `--settings` file (or `--allowedTools`/`--disallowedTools`) chosen by role. We keep container isolation as the safety net but gain deterministic, free guardrails.
+- Keep bypass *only* as the fallback for a future "trusted autonomous" profile.
+
+Concrete per-role config (rule order `deny → ask → allow`; deny is absolute — Source 4 §2):
+
+```jsonc
+// review role — READ-ONLY. Baked as skills layer settings OR injected via --settings.
+{
+  "permissions": {
+    "defaultMode": "plan",
+    "deny": ["Write(**)", "Edit(**)", "Bash(git commit*)", "Bash(git push*)",
+             "Bash(rm *)", "Bash(curl * | bash)", "Read(./.env*)", "Read(./secrets/**)"],
+    "allow": ["Read(**)", "Grep(**)", "Glob(**)", "Bash(git diff*)", "Bash(git log*)"]
+  }
+}
+```
+
+```jsonc
+// dev / fix role — write-enabled, but commit/push owned by agent-runtime, not the agent.
+{
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "deny": ["Bash(git commit*)", "Bash(git push*)", "Bash(curl * | bash)",
+             "Bash(rm -rf *)", "Read(./.env*)", "Read(./secrets/**)"],
+    "allow": ["Read(**)", "Write(**)", "Edit(**)", "Glob(**)", "Grep(**)",
+              "Bash(go test*)", "Bash(go build*)", "Bash(golangci-lint run*)",
+              "Bash(npm test*)", "Bash(pnpm*)", "Bash(uv*)", "Bash(pytest*)", "Bash(git diff*)"]
+  }
+}
+```
+
+Note: `runner.go:84-93` already does the commit/push *after* the agent exits — so denying `git commit`/`git push` *to the agent* is correct and doesn't break the pipeline; the runtime still commits the working tree.
+
+### LSP / diagnostics wiring
+
+Bake the LSP MCP config into the skills layer (`/home/agent/.claude/skills/` neighbors a baked `.mcp.json`), pointing at the per-stack language server (`gopls`, `typescript-language-server`, `pyright`):
+
+```jsonc
+// .mcp.json (baked per stack, or merged into the universal go-node image)
+{ "mcpServers": {
+    "cclsp": { "command": "npx", "args": ["cclsp"], "env": { "CCLSP_CONFIG": "/home/agent/.claude/cclsp.json" } }
+}}
+```
+
+Add the **mandatory CLAUDE.md rule** so the agent prefers LSP over grep for symbol queries (Source 4 §5 — without it Claude defaults to grep even when LSP is available):
+
+> Symbol queries (definitions, callers, references) MUST use the LSP MCP tools. Do NOT grep for these.
+
+Wire a **`PostToolUse` hook on `Edit|Write`** that calls `cclsp.get_diagnostics` on the changed file and injects the result as `additionalContext` — the self-correction loop that turns "build fails at the end" into "type error surfaced one turn after the edit."
+
+### MCP as extension, not core
+
+MCP servers cover everything outside the built-in tools: LSP (above), GitHub PR/CI context, Postgres for DB-touching stories. Scope each with `mcp__<server>__<tool>` allow/deny rules. The Go change is small: `claude.go` gains `--mcp-config <path>` and `--settings <path>` (or `--permission-mode`) args; `config.go` gains an `AgentRole` / `PermissionProfile` env var so the backend can drive the profile per step. The backend already sets per-step env in `agent_run.go:281-298` — add the role/profile there.
+
+---
+
+## 5. Agent Skills
+
+Move role behavior out of the `buildClaudeMD` string switch (`agent_run.go:194`) and into versioned `SKILL.md` packages baked into the skills layer (Section 3). Rationale (Source 5): role logic is a *procedure + checklist + rubric*, which is exactly what a Skill is for — progressive disclosure (~100 tokens at Level 1, full body only when triggered), bundled scripts/rubrics, and per-skill `allowed-tools` scoping. CLAUDE.md keeps only always-true *facts*.
+
+### What stays in CLAUDE.md vs moves to Skills
+
+| Stays in `buildClaudeMD` (facts) | Moves to a `SKILL.md` (procedure) |
+|---|---|
+| Project name, description, repo URL | Implementer DoD checklist (build → test → fix loop) |
+| "Never commit secrets" invariant | Reviewer checklist + severity taxonomy + output template |
+| The repo's own `backend/CLAUDE.md` conventions (today **missing** — add it) | Fix-findings surgical-edit workflow + priority order |
+| LSP-over-grep mandatory rule | `## Previous attempt FAILED` retry guidance (could become a skill section) |
+
+So `buildClaudeMD` shrinks to project facts + invariants + (new) inlined repo CLAUDE.md, and the role-specific *prose currently in its `switch` arms* becomes the bodies of the three skills below.
+
+### Per-role Skills (baked as `agent-images/skills/<role>/SKILL.md`)
+
+**`implementing-feature`** (role `dev`/`implement`/default):
+```yaml
+---
+name: implementing-feature
+description: |
+  Implements a story end-to-end: writes production code and tests for the task
+  in the prompt. Use when asked to implement a feature, story, or ticket.
+  Do NOT trigger for reviews or for fixing review findings.
+argument-hint: "[story-key]"
+disable-model-invocation: false
+allowed-tools: Read, Write, Edit, Glob, Grep, Bash(go test*), Bash(go build*), Bash(golangci-lint run*), Bash(npm test*), Bash(pnpm*), Bash(uv*), Bash(pytest*), Bash(git diff*)
+model: sonnet
+effort: high
+---
+```
+Body = today's implementer `switch` arm (`agent_run.go:228-240`): scope to story, follow repo conventions, **DoD: build passes → tests pass → fix until green**. Excludes `git commit`/`git push` (owned by `runner.go`). Bundle `scripts/run_affected_tests.sh`.
+
+**`reviewing-pr`** (role `review`/`reviewer`):
+```yaml
+---
+name: reviewing-pr
+description: |
+  Reviews the diff for a story against acceptance criteria, security, and
+  conventions. Use when asked to review a PR or audit a diff.
+  Do NOT trigger for implementing or fixing.
+argument-hint: "[story-key]"
+disable-model-invocation: false
+allowed-tools: Read, Grep, Glob, Bash(git diff*), Bash(git log*)
+model: opus
+effort: max
+context: fork
+agent: Explore
+---
+```
+Body = today's reviewer `switch` arm (`agent_run.go:212-225`): inspect `git diff origin/main...HEAD`, the 5-point checklist, severity taxonomy (Critical/Warning/Suggestion), structured findings output. **Read-only `allowed-tools`** — this is the guardrail the current bypass-mode review entirely lacks. Bundle `REVIEW-RUBRIC.md`.
+
+**`fixing-review-findings`** (new role `fix`):
+```yaml
+---
+name: fixing-review-findings
+description: |
+  Applies fixes for code-review findings: prioritizes Critical/Warning,
+  makes surgical edits, reruns affected tests. Use when asked to address
+  review comments or resolve findings. Do NOT trigger for new features or reviews.
+argument-hint: "[findings file or inline]"
+disable-model-invocation: false
+allowed-tools: Read, Write, Edit, Glob, Grep, Bash(go test*), Bash(golangci-lint run*), Bash(npm test*), Bash(pytest*), Bash(git diff*)
+model: sonnet
+effort: high
+---
+```
+Body: parse findings → priority Critical→Warning→Suggestion → per-finding (locate → minimal surgical edit → rerun affected test → verify) → addressed-summary. Explicit anti-pattern: "no wholesale file rewrites." This formalizes today's ad-hoc `priorFailureContext` retry path into a first-class role.
+
+### Discovery & packaging
+
+User-scoped discovery: `COPY skills/ /home/agent/.claude/skills/` in the skills layer → Claude Code finds them every session regardless of which repo is in `/workspace`. Alternatively package the three as one **plugin** (`.claude-plugin/plugin.json` + `skills/`) and `claude plugin install` in the entrypoint — gives namespacing (`/hopeitworks:reviewing-pr`) and lets us ship hooks (the LSP `PostToolUse` diagnostics hook) and default `settings.json` in the same artifact. Test before baking with `claude --plugin-dir ./agent-images/skills`.
+
+The backend's job shrinks: instead of building a long role-specific CLAUDE.md, `agent_run.go` just sets the role env var and lets the baked skill carry the procedure. `buildClaudeMD` keeps only facts + invariants + the inlined repo CLAUDE.md.
+
+---
+
+## 6. Prioritized roadmap
+
+### P0 — guardrails + correctness loop (highest leverage, low cost)
+
+1. **Per-role permission profiles instead of blanket bypass.**
+   - `agent-runtime/internal/provider/claude.go:42-50` — drop `--dangerously-skip-permissions`; add `--settings <profile.json>` or `--permission-mode` + `--allowedTools`/`--disallowedTools`, selected by role.
+   - `agent-runtime/internal/config/config.go` — add `AgentRole` / `PermissionProfile` env field.
+   - `backend/internal/adapter/action/agent_run.go:281-298` — set the role/profile env (role already resolved at `:279`).
+   - Ship review-read-only + dev/fix-write profiles (Section 4). Deny `git commit`/`git push` to the agent (safe: `runner.go:84-93` commits post-run).
+2. **Inline the repo's own CLAUDE.md into the generated context.** `buildClaudeMD` (`agent_run.go:194`) — pull `backend/CLAUDE.md`/`frontend/CLAUDE.md` (or root) into the injected context so agents actually know the project's conventions.
+3. **Add `ripgrep` + `gh` to `agent-base`.** `agent-images/base/Dockerfile` — add `ripgrep`; move the duplicated `gh` install up from the four stack Dockerfiles into base.
+
+### P1 — LSP + Skills + image hygiene
+
+4. **Bake language servers + diagnostics loop.**
+   - `stacks/go` → `gopls` + `govulncheck`; `stacks/node` → `typescript-language-server`; `stacks/python` → `pyright` + `ruff` + `mypy` + `uv` + explicit Python 3.12.
+   - Add baked `.mcp.json` + `cclsp.json` (LSP MCP bridge) in the skills layer; add `--mcp-config` to `claude.go`.
+   - Add `PostToolUse` `Edit|Write` → `get_diagnostics` hook; add the LSP-over-grep rule to CLAUDE.md.
+5. **Per-role Skills.** Create `agent-images/skills/{implementing-feature,reviewing-pr,fixing-review-findings}/SKILL.md` (Section 5); `COPY skills/ /home/agent/.claude/skills/` in the skills layer; thin `buildClaudeMD` to facts-only; add the `fix` role to `resolveRole` handling.
+6. **Fix `agent-go-node` + drop `opencode-ai` from Claude base.** `stacks/go-node/Dockerfile` — make it a real Go+Node union (currently a duplicate of `agent-go`). Remove `opencode-ai` from `base/Dockerfile:19`; move `claude-code` into an isolated CLI stage (`--no-cache-filter`).
+
+### P2 — reproducibility + portability
+
+7. **Pin everything.** OS `@sha256` (`base/Dockerfile:6` → `ubuntu:24.04@sha256:...`), builder digest, all `go install` versions, `golangci-lint` release tag (replace `@HEAD` at `stacks/go/Dockerfile:14`), npm globals. Wire Renovate/Digestabot.
+8. **Multi-platform builds.** Add `platforms: linux/amd64,linux/arm64` to the GHA build/push workflow + `agent-images/Makefile` (buildx).
+9. **OS base → Ubuntu 24.04, scoped sudo, `HEALTHCHECK`.** `base/Dockerfile` — `debian:bookworm-slim` → `ubuntu:24.04`, uid-1001 `agent`, `sudo` scoped to `apt-get`, add `HEALTHCHECK`.
+10. **Distribute Skills as a plugin** (`.claude-plugin/plugin.json` + `skills/` + `hooks/` + `settings.json`) for namespacing and single-artifact shipping of skills + LSP hook + permission settings.
+
+---
+
+### Sources
+- Docker Sandboxes / templates: https://www.docker.com/blog/docker-sandboxes-run-agents-in-yolo-mode-safely/ · https://docs.docker.com/ai/sandboxes/customize/templates/
+- OpenHands sandbox: https://docs.openhands.dev/openhands/usage/advanced/custom-sandbox-guide
+- SWE-bench Docker: https://www.swebench.com/SWE-bench/guides/docker_setup/
+- Andrew Lock (CLI layer / `--no-cache-filter`): https://andrewlock.net/running-ai-agents-with-customized-templates-in-docker-sandbox/
+- Digest pinning: https://edu.chainguard.dev/chainguard/chainguard-images/how-to-use/container-image-digests/
+- Claude Code permissions / modes: https://code.claude.com/docs/en/settings · https://code.claude.com/docs/en/permission-modes
+- Claude Code hooks: https://code.claude.com/docs/en/hooks
+- LSP MCP (`cclsp`): https://github.com/ktnyt/cclsp · https://claudefa.st/blog/tools/mcp-extensions/lsp-mcp-server · https://www.mindstudio.ai/blog/language-server-protocol-lsp-claude-code-large-codebases
+- Agent Skills: https://code.claude.com/docs/en/skills · https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices · https://www.anthropic.com/engineering/equipping-agents-for-the-real-world-with-agent-skills
+- Plugins: https://code.claude.com/docs/en/plugins

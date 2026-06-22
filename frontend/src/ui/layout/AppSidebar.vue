@@ -6,6 +6,7 @@ import Badge from 'primevue/badge'
 import Divider from 'primevue/divider'
 import { useAuthStore } from '@/stores/auth'
 import { useHITLStore } from '@/stores/hitl'
+import { useProbeHaltsStore } from '@/stores/probeHalts'
 
 const props = defineProps<{
   collapsed: boolean
@@ -20,6 +21,7 @@ const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
 const hitlStore = useHITLStore()
+const probeHaltsStore = useProbeHaltsStore()
 
 const isAdmin = computed(() => authStore.user?.role === 'admin')
 
@@ -34,6 +36,7 @@ const navItems = [
   { label: 'Projects', icon: 'pi pi-folder', route: '/projects' },
   { label: 'Runs', icon: 'pi pi-play', route: '/runs' },
   { label: 'Approvals', icon: 'pi pi-bell', route: '/approvals' },
+  { label: 'Halts', icon: 'pi pi-exclamation-triangle', route: '/halts' },
   { label: 'Settings', icon: 'pi pi-cog', route: '/profile' },
 ]
 
@@ -116,6 +119,12 @@ function navigate(route: string) {
           v-if="item.route === '/approvals' && hitlStore.pendingCount > 0"
           :value="hitlStore.pendingCount"
           severity="danger"
+          class="absolute -right-1 -top-1"
+        />
+        <Badge
+          v-if="item.route === '/halts' && probeHaltsStore.count > 0"
+          :value="probeHaltsStore.count"
+          severity="warn"
           class="absolute -right-1 -top-1"
         />
       </div>
