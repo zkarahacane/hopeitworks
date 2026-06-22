@@ -30,6 +30,7 @@ const {
   stories,
   isLoadingStories,
   storiesError,
+  stages,
 } = useBoard(projectId)
 
 const selectedEpicName = computed(() => {
@@ -249,6 +250,7 @@ async function handleConfirm() {
           :stories="stories"
           :selected-id="selectedStoryId"
           :project-id="projectId"
+          :stages="stages"
           @select="handleSelectStory"
         />
       </div>

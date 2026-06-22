@@ -1,8 +1,10 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useEpicsStore } from '@/stores/epics'
 import { useStoriesStore } from '@/stores/stories'
+import { usePipelineConfigStore } from '@/stores/pipelineConfig'
 import { useRuntimeStream } from '@/stores/runtimeStream'
 import { useSSE } from '@/composables/useSSE'
+import type { BoardStage } from '@/features/board/KanbanBoard.vue'
 
 /**
  * Board composable — wires epics, stories, SSE, and the runtimeStream for the
@@ -15,7 +17,19 @@ import { useSSE } from '@/composables/useSSE'
 export function useBoard(projectId: string) {
   const epicsStore = useEpicsStore()
   const storiesStore = useStoriesStore()
+  const pipelineStore = usePipelineConfigStore()
   const stream = useRuntimeStream()
+
+  // ── Pipeline stages ───────────────────────────────────────────────────────────
+  // The détail board derives its columns from the project's pipeline groups
+  // (id / name / transition), in pipeline order.
+  const stages = computed<BoardStage[]>(() =>
+    pipelineStore.groups.map((g) => ({
+      id: g.id,
+      name: g.name,
+      transition: g.transition,
+    })),
+  )
 
   // ── Epic selector ───────────────────────────────────────────────────────────
   const selectedEpicId = ref<string | null>(null)
@@ -50,6 +64,9 @@ export function useBoard(projectId: string) {
   let tickInterval: ReturnType<typeof setInterval> | null = null
 
   onMounted(async () => {
+    // Fetch the project pipeline so the détail board can render stage columns.
+    // Non-blocking relative to epics/stories; failures are surfaced by the store.
+    pipelineStore.fetchConfig(projectId)
     // Load epics and auto-select the first one to show the board immediately.
     await epicsStore.fetchEpics(projectId)
     if (epics.value.length > 0 && !selectedEpicId.value) {
@@ -77,6 +94,8 @@ export function useBoard(projectId: string) {
     stories,
     isLoadingStories,
     storiesError,
+    // Pipeline stages (for the détail board columns)
+    stages,
     // Live signals
     stream,
   }
