@@ -1,9 +1,12 @@
 # syntax=docker/dockerfile:1
-# Builder: pinned by digest (multi-arch manifest list) for reproducibility.
-FROM golang:1.23-bookworm@sha256:167053a2bb901972bf2c1611f8f52c44d5fe7e762e5cab213708d82c421614db AS builder
+# Builder: runs on the BUILD platform (no QEMU) and cross-compiles agent-runtime to
+# the target arch. Pinned by digest (multi-arch manifest list) for reproducibility.
+FROM --platform=$BUILDPLATFORM golang:1.23-bookworm@sha256:167053a2bb901972bf2c1611f8f52c44d5fe7e762e5cab213708d82c421614db AS builder
+ARG TARGETOS
+ARG TARGETARCH
 WORKDIR /build
 COPY agent-runtime/ ./
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /agent-runtime .
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags="-s -w" -o /agent-runtime .
 
 # Base runtime: pinned by digest (multi-arch manifest list).
 FROM debian:bookworm-slim@sha256:96e378d7e6531ac9a15ad505478fcc2e69f371b10f5cdf87857c4b8188404716
