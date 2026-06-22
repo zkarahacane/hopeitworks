@@ -8,6 +8,7 @@ import ProjectDetailView from '@/views/ProjectDetailView.vue'
 import RunDetailView from '@/views/RunDetailView.vue'
 import StoryDetailView from '@/views/StoryDetailView.vue'
 import ApprovalsView from '@/views/ApprovalsView.vue'
+import ProbeHaltsView from '@/views/ProbeHaltsView.vue'
 import RunsView from '@/views/RunsView.vue'
 import PipelineConfigView from '@/views/PipelineConfigView.vue'
 import AgentListView from '@/views/AgentListView.vue'
@@ -147,6 +148,12 @@ const router = createRouter({
       path: '/approvals',
       name: 'approvals',
       component: ApprovalsView,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/halts',
+      name: 'halts',
+      component: ProbeHaltsView,
       meta: { requiresAuth: true },
     },
     {

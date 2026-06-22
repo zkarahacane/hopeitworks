@@ -60,6 +60,7 @@ export function useSSE(
     'hitl_gate.pending',
     'hitl_gate.approved',
     'hitl_gate.rejected',
+    'hitl_gate.resolved',
     'story.status_updated',
     'epic_run.started',
     'epic_run.group.started',
