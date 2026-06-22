@@ -277,6 +277,13 @@ func (e *PipelineExecutor) executeStep(ctx context.Context, run *model.Run, step
 		delete(runCtx.Metadata, "agent_image")
 	}
 
+	runtimeKindKey := fmt.Sprintf("step_%d_runtime_kind", step.StepOrder)
+	if runtimeKind, ok := runCtx.Metadata[runtimeKindKey].(string); ok && runtimeKind != "" {
+		runCtx.Metadata["runtime_kind"] = runtimeKind
+	} else {
+		delete(runCtx.Metadata, "runtime_kind")
+	}
+
 	// Execute action
 	if err := action.Execute(ctx, runCtx); err != nil {
 		return err

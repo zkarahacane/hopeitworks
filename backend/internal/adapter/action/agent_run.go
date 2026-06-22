@@ -28,10 +28,10 @@ type AgentConfig struct {
 	LogTailLines int
 }
 
-// AgentRunAction implements model.Action for running Claude Code agents in containers.
-// It supports two execution modes:
-//   - Callback mode: for hopeitworks/agent-* images, uses HTTP callbacks for logs/cost/status
-//   - Legacy mode: for other images, uses Docker log streaming and exit code detection
+// AgentRunAction implements model.Action for running coding agents in containers.
+// It supports two execution modes, selected by the agent's runtime kind:
+//   - Callback mode: claude_code/opencode/cma runtimes use HTTP callbacks for logs/cost/status
+//   - Legacy mode: no runtime kind (older images) uses Docker log streaming and exit code detection
 type AgentRunAction struct {
 	containerMgr port.ContainerManager
 	logStreamer  port.LogStreamer
@@ -51,7 +51,7 @@ type AgentRunAction struct {
 
 // NewAgentRunAction creates a new agent run action.
 // The apiKeySvc, tokenStore, statusStore, and callbackURL parameters enable callback mode
-// for hopeitworks/agent-* container images. Pass nil/empty to disable callback mode.
+// for the claude_code/opencode/cma runtimes. Pass nil/empty to disable callback mode.
 func NewAgentRunAction(
 	containerMgr port.ContainerManager,
 	logStreamer port.LogStreamer,
@@ -147,8 +147,9 @@ func (a *AgentRunAction) Execute(ctx context.Context, runCtx *model.RunContext) 
 		return fmt.Errorf("agent_image is required in run metadata but was not set")
 	}
 
-	// 5. Detect execution mode: callback for hopeitworks/agent-* images, legacy otherwise
-	isCallbackMode := a.isCallbackMode(agentImage)
+	// 5. Detect execution mode from the agent's runtime kind (not the image string).
+	runtimeKind, _ := runCtx.Metadata["runtime_kind"].(string)
+	isCallbackMode := a.isCallbackMode(runtimeKind, agentImage)
 
 	// 6. Create container
 	containerID, err := a.createContainer(ctx, runCtx, project, story, agentImage, prompt, branchName)
@@ -254,7 +255,7 @@ func resolveRole(runCtx *model.RunContext) string {
 }
 
 // createContainer builds ContainerOpts and creates the container.
-// For callback mode (hopeitworks/agent-* images), it injects CALLBACK_URL, AUTH_TOKEN,
+// In callback mode (claude_code/opencode/cma runtimes), it injects CALLBACK_URL, AUTH_TOKEN,
 // API_KEY, PROVIDER, MODEL, RUN_ID, and STEP_ID env vars instead of CLAUDE_CODE_OAUTH_TOKEN.
 func (a *AgentRunAction) createContainer(
 	ctx context.Context,
@@ -297,7 +298,8 @@ func (a *AgentRunAction) createContainer(
 		"CLAUDE_MD_CONTENT=" + buildClaudeMD(project, role, story) + a.priorFailureContext(ctx, story.ID, runCtx.Run.ID),
 	}
 
-	isCallback := a.isCallbackMode(agentImage)
+	runtimeKind, _ := runCtx.Metadata["runtime_kind"].(string)
+	isCallback := a.isCallbackMode(runtimeKind, agentImage)
 
 	if isCallback {
 		// Callback mode: use per-user API key and container token auth
@@ -527,10 +529,29 @@ func extractAgentID(runCtx *model.RunContext) *uuid.UUID {
 	return nil
 }
 
-// isCallbackMode returns true if the agent image is a hopeitworks/agent-* image
-// that supports HTTP callback mode for logs, cost, and status reporting.
-func (a *AgentRunAction) isCallbackMode(agentImage string) bool {
-	return a.statusStore != nil && strings.Contains(agentImage, "hopeitworks/agent-")
+// isCallbackMode returns true when the run should use HTTP callback mode for
+// logs, cost, and status reporting.
+//
+// The primary signal is the agent's runtime kind: claude_code, opencode and cma
+// all execute via the agent-runtime binary and report over the callback channel.
+// Callback mode also requires a configured statusStore.
+//
+// Back-compat: when runtimeKind is empty — runs launched before the runtime_kind
+// migration and resumed after deploy carry no runtime_kind in their persisted
+// metadata — we fall back to the legacy image-substring heuristic one last time.
+// New runs always thread runtime_kind, so this fallback fades out on its own.
+func (a *AgentRunAction) isCallbackMode(runtimeKind, agentImage string) bool {
+	if a.statusStore == nil {
+		return false
+	}
+	switch runtimeKind {
+	case model.RuntimeKindClaudeCode, model.RuntimeKindOpenCode, model.RuntimeKindCMA:
+		return true
+	case "":
+		return strings.Contains(agentImage, "hopeitworks/agent-")
+	default:
+		return false
+	}
 }
 
 // waitForCallback waits for the agent container to report its exit status via

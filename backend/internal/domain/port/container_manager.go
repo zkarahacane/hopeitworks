@@ -15,6 +15,13 @@ type ContainerInfo struct {
 }
 
 // ContainerManager abstracts Docker container lifecycle operations.
+//
+// As of the runtime rework this is no longer the domain's agent-execution port —
+// AgentRuntime is (see agent_runtime.go). ContainerManager is being reclassified
+// into an internal dependency of the Docker substrate adapter: a low-level
+// container CRUD that AgentRuntime adapters build on, not an agent abstraction.
+// It is kept here (not removed) because the live agent_run flow still drives it
+// directly until the AgentRuntime adapter takes over in a later phase.
 type ContainerManager interface {
 	// Create creates a container with the specified options.
 	// Returns the container ID on success.
