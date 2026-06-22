@@ -2764,6 +2764,10 @@ components:
           $ref: "#/components/schemas/StoryStatus"
         acceptance_criteria:
           type: string
+        current_stage:
+          type: string
+          nullable: true
+          description: Name of the stage the card currently sits in, advanced by the executor at stage boundaries. Null when no stage (backlog before first run, or after completion).
         latest_run:
           $ref: "#/components/schemas/LatestRun"
           nullable: true
@@ -3249,6 +3253,13 @@ components:
         name:
           type: string
           description: Human-readable name for the group (e.g. "Setup", "Development")
+        transition:
+          type: string
+          enum: [auto, manual, gate]
+          default: auto
+          description: >-
+            Stage exit policy: how the card leaves this stage. Carried end-to-end;
+            enforcement of manual/gate is a later increment (currently treated as auto).
         steps:
           type: array
           items:
@@ -3381,6 +3392,12 @@ components:
           type: string
           enum: [pending, running, completed, failed, cancelled, waiting_approval]
           example: pending
+        stage_id:
+          type: string
+          description: Identifier of the stage (pipeline group) this step belongs to.
+        stage_name:
+          type: string
+          description: Human-readable name of the stage (pipeline group) this step belongs to.
         started_at:
           type: string
           format: date-time
