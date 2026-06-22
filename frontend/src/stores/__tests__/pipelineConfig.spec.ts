@@ -171,7 +171,7 @@ describe('usePipelineConfigStore', () => {
       const store = usePipelineConfigStore()
       await store.fetchConfig('proj-1')
 
-      const newGroups = [{ id: 'new', name: 'New Group', steps: [makeStep({ id: 'new1', name: 'only-step' })] }]
+      const newGroups = [{ id: 'new', name: 'New Group', transition: 'auto' as const, steps: [makeStep({ id: 'new1', name: 'only-step' })] }]
       store.updateGroups(newGroups)
 
       expect(store.groups).toHaveLength(1)

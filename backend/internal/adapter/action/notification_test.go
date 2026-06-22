@@ -55,6 +55,10 @@ func (m *notificationMockStoryRepo) Update(_ context.Context, _ *model.Story) (*
 	return nil, nil
 }
 
+func (m *notificationMockStoryRepo) UpdateStoryCurrentStage(_ context.Context, id uuid.UUID, currentStage *string) (*model.Story, error) {
+	return &model.Story{ID: id, CurrentStage: currentStage}, nil
+}
+
 func (m *notificationMockStoryRepo) Delete(_ context.Context, _ uuid.UUID) error {
 	return nil
 }

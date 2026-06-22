@@ -35,7 +35,7 @@ INSERT INTO run_steps (
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8, $9
 )
-RETURNING id, run_id, step_name, step_order, action, status, started_at, completed_at, error_message, container_id, log_tail, created_at, retry_count, retry_type, parent_step_id
+RETURNING id, run_id, step_name, step_order, action, status, started_at, completed_at, error_message, container_id, log_tail, created_at, retry_count, retry_type, parent_step_id, stage_id, stage_name
 `
 
 type CreateRetryRunStepParams struct {
@@ -79,22 +79,26 @@ func (q *Queries) CreateRetryRunStep(ctx context.Context, arg CreateRetryRunStep
 		&i.RetryCount,
 		&i.RetryType,
 		&i.ParentStepID,
+		&i.StageID,
+		&i.StageName,
 	)
 	return i, err
 }
 
 const createRunStep = `-- name: CreateRunStep :one
-INSERT INTO run_steps (run_id, step_name, step_order, action, status)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id, run_id, step_name, step_order, action, status, started_at, completed_at, error_message, container_id, log_tail, created_at, retry_count, retry_type, parent_step_id
+INSERT INTO run_steps (run_id, step_name, step_order, action, status, stage_id, stage_name)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id, run_id, step_name, step_order, action, status, started_at, completed_at, error_message, container_id, log_tail, created_at, retry_count, retry_type, parent_step_id, stage_id, stage_name
 `
 
 type CreateRunStepParams struct {
-	RunID     uuid.UUID `json:"run_id"`
-	StepName  string    `json:"step_name"`
-	StepOrder int32     `json:"step_order"`
-	Action    string    `json:"action"`
-	Status    string    `json:"status"`
+	RunID     uuid.UUID   `json:"run_id"`
+	StepName  string      `json:"step_name"`
+	StepOrder int32       `json:"step_order"`
+	Action    string      `json:"action"`
+	Status    string      `json:"status"`
+	StageID   pgtype.Text `json:"stage_id"`
+	StageName pgtype.Text `json:"stage_name"`
 }
 
 func (q *Queries) CreateRunStep(ctx context.Context, arg CreateRunStepParams) (RunStep, error) {
@@ -104,6 +108,8 @@ func (q *Queries) CreateRunStep(ctx context.Context, arg CreateRunStepParams) (R
 		arg.StepOrder,
 		arg.Action,
 		arg.Status,
+		arg.StageID,
+		arg.StageName,
 	)
 	var i RunStep
 	err := row.Scan(
@@ -122,12 +128,14 @@ func (q *Queries) CreateRunStep(ctx context.Context, arg CreateRunStepParams) (R
 		&i.RetryCount,
 		&i.RetryType,
 		&i.ParentStepID,
+		&i.StageID,
+		&i.StageName,
 	)
 	return i, err
 }
 
 const getRunStep = `-- name: GetRunStep :one
-SELECT id, run_id, step_name, step_order, action, status, started_at, completed_at, error_message, container_id, log_tail, created_at, retry_count, retry_type, parent_step_id FROM run_steps WHERE id = $1
+SELECT id, run_id, step_name, step_order, action, status, started_at, completed_at, error_message, container_id, log_tail, created_at, retry_count, retry_type, parent_step_id, stage_id, stage_name FROM run_steps WHERE id = $1
 `
 
 func (q *Queries) GetRunStep(ctx context.Context, id uuid.UUID) (RunStep, error) {
@@ -149,12 +157,14 @@ func (q *Queries) GetRunStep(ctx context.Context, id uuid.UUID) (RunStep, error)
 		&i.RetryCount,
 		&i.RetryType,
 		&i.ParentStepID,
+		&i.StageID,
+		&i.StageName,
 	)
 	return i, err
 }
 
 const listRetryStepsByParent = `-- name: ListRetryStepsByParent :many
-SELECT id, run_id, step_name, step_order, action, status, started_at, completed_at, error_message, container_id, log_tail, created_at, retry_count, retry_type, parent_step_id FROM run_steps
+SELECT id, run_id, step_name, step_order, action, status, started_at, completed_at, error_message, container_id, log_tail, created_at, retry_count, retry_type, parent_step_id, stage_id, stage_name FROM run_steps
 WHERE parent_step_id = $1
 ORDER BY retry_count ASC
 `
@@ -184,6 +194,8 @@ func (q *Queries) ListRetryStepsByParent(ctx context.Context, parentStepID pgtyp
 			&i.RetryCount,
 			&i.RetryType,
 			&i.ParentStepID,
+			&i.StageID,
+			&i.StageName,
 		); err != nil {
 			return nil, err
 		}
@@ -196,7 +208,7 @@ func (q *Queries) ListRetryStepsByParent(ctx context.Context, parentStepID pgtyp
 }
 
 const listRunStepsByRun = `-- name: ListRunStepsByRun :many
-SELECT id, run_id, step_name, step_order, action, status, started_at, completed_at, error_message, container_id, log_tail, created_at, retry_count, retry_type, parent_step_id FROM run_steps
+SELECT id, run_id, step_name, step_order, action, status, started_at, completed_at, error_message, container_id, log_tail, created_at, retry_count, retry_type, parent_step_id, stage_id, stage_name FROM run_steps
 WHERE run_id = $1
 ORDER BY step_order ASC
 `
@@ -226,6 +238,8 @@ func (q *Queries) ListRunStepsByRun(ctx context.Context, runID uuid.UUID) ([]Run
 			&i.RetryCount,
 			&i.RetryType,
 			&i.ParentStepID,
+			&i.StageID,
+			&i.StageName,
 		); err != nil {
 			return nil, err
 		}
@@ -242,7 +256,7 @@ UPDATE run_steps
 SET container_id = COALESCE($2, container_id),
     log_tail = COALESCE($3, log_tail)
 WHERE id = $1
-RETURNING id, run_id, step_name, step_order, action, status, started_at, completed_at, error_message, container_id, log_tail, created_at, retry_count, retry_type, parent_step_id
+RETURNING id, run_id, step_name, step_order, action, status, started_at, completed_at, error_message, container_id, log_tail, created_at, retry_count, retry_type, parent_step_id, stage_id, stage_name
 `
 
 type UpdateRunStepContainerInfoParams struct {
@@ -270,6 +284,8 @@ func (q *Queries) UpdateRunStepContainerInfo(ctx context.Context, arg UpdateRunS
 		&i.RetryCount,
 		&i.RetryType,
 		&i.ParentStepID,
+		&i.StageID,
+		&i.StageName,
 	)
 	return i, err
 }
@@ -283,7 +299,7 @@ SET status = $2,
     container_id = COALESCE($6, container_id),
     log_tail = COALESCE($7, log_tail)
 WHERE id = $1
-RETURNING id, run_id, step_name, step_order, action, status, started_at, completed_at, error_message, container_id, log_tail, created_at, retry_count, retry_type, parent_step_id
+RETURNING id, run_id, step_name, step_order, action, status, started_at, completed_at, error_message, container_id, log_tail, created_at, retry_count, retry_type, parent_step_id, stage_id, stage_name
 `
 
 type UpdateRunStepStatusParams struct {
@@ -323,6 +339,8 @@ func (q *Queries) UpdateRunStepStatus(ctx context.Context, arg UpdateRunStepStat
 		&i.RetryCount,
 		&i.RetryType,
 		&i.ParentStepID,
+		&i.StageID,
+		&i.StageName,
 	)
 	return i, err
 }

@@ -24,6 +24,24 @@ var ErrRunPaused = fmt.Errorf("run paused")
 // stop processing further steps without marking the run as failed.
 var errStepSuspended = errors.New("step suspended for approval")
 
+// errStageSuspended is returned at a stage boundary when the run is parked by a
+// transition policy (a not-yet-started manual stage, or an unapproved gate). Like
+// errStepSuspended it is NOT a failure — the executor stops cleanly without marking
+// the run failed; a manual "Go" or a gate approval re-enqueues it.
+var errStageSuspended = errors.New("stage suspended pending transition")
+
+// metaStageStartedPrefix keys, in run metadata, the manual stages that have already
+// been triggered ("Go"). Suffixed with the stage id: stage_started_<stageID> = true.
+const metaStageStartedPrefix = "stage_started_"
+
+// pausedReasonManualStart is recorded in run metadata ("paused_reason") when the run
+// is parked at the entry of a not-yet-started manual stage. It lets the resume path
+// (stage/start) distinguish a manual-start pause from a generic user pause.
+const pausedReasonManualStart = "awaiting_manual_start"
+
+// stageStartedKey is the run-metadata key recording that a manual stage was started.
+func stageStartedKey(stageID string) string { return metaStageStartedPrefix + stageID }
+
 // PipelineExecutor orchestrates sequential execution of pipeline steps.
 type PipelineExecutor struct {
 	runRepo        port.RunRepository
@@ -31,6 +49,7 @@ type PipelineExecutor struct {
 	actionReg      port.ActionRegistry
 	eventPub       port.EventPublisher
 	circuitBreaker *CircuitBreakerService
+	hitlRepo       port.HITLRepository
 	logger         *slog.Logger
 }
 
@@ -54,6 +73,13 @@ func NewPipelineExecutor(
 // SetCircuitBreaker configures the circuit breaker service for the executor.
 func (e *PipelineExecutor) SetCircuitBreaker(cb *CircuitBreakerService) {
 	e.circuitBreaker = cb
+}
+
+// SetHITLRepo configures the HITL repository used to enforce gate-transition stages.
+// Optional: when unset, a stage's "gate" transition degrades to "auto" (no approval
+// gate is raised at the boundary). All non-gate behaviour is unaffected.
+func (e *PipelineExecutor) SetHITLRepo(repo port.HITLRepository) {
+	e.hitlRepo = repo
 }
 
 // ExecuteRun executes all steps of a run sequentially.
@@ -127,6 +153,20 @@ func (e *PipelineExecutor) ExecuteRun(ctx context.Context, runID uuid.UUID) erro
 		metadata[k] = v
 	}
 
+	// Parse the run's config snapshot once so stage-boundary transition policies
+	// (manual/gate) can be resolved by stage id. A nil parse degrades every stage
+	// to "auto", preserving the pre-INC-3 always-advancing behaviour.
+	policy := e.parseTransitionPolicy(run)
+
+	// curStage tracks the stage the card is currently in. It is nil until the first
+	// step is entered. On resume (skipped completed steps) it stays nil until the
+	// first not-yet-completed step runs, which re-establishes current_stage even if
+	// the orchestrator pod restarted mid-run.
+	var curStage *stageRef
+	// prevStep is the last step processed in curStage; it anchors a gate HITL raised
+	// when that stage's segment completes. nil until the first step runs.
+	var prevStep *model.RunStep
+
 	for i := range steps {
 		step := steps[i]
 
@@ -152,6 +192,34 @@ func (e *PipelineExecutor) ExecuteRun(ctx context.Context, runID uuid.UUID) erro
 			return ErrRunPaused
 		}
 
+		// Stage boundary: entering this step's stage (the first step enters its
+		// stage; a step whose stage differs from the current one crosses a boundary).
+		// On a boundary we exit the previous stage and enter the new one, advancing
+		// stories.current_stage and emitting stage.exited/stage.entered events. The
+		// transition policy of both stages is enforced here: a "gate" on the stage we
+		// are leaving parks the run for approval; a not-yet-started "manual" on the
+		// stage we are entering parks the run for a "Go".
+		if !curStage.matches(step.StageID) {
+			next := newStageRef(step)
+			// Enforce the exiting stage's gate before advancing.
+			if susErr := e.enforceGateOnExit(ctx, run, curStage, policy, prevStep); susErr != nil {
+				if errors.Is(susErr, errStageSuspended) {
+					return nil
+				}
+				return susErr
+			}
+			// Enforce the entering stage's manual policy before running its segment.
+			if susErr := e.enforceManualOnEnter(ctx, run, next, policy, metadata); susErr != nil {
+				if errors.Is(susErr, errStageSuspended) {
+					return nil
+				}
+				return susErr
+			}
+			e.exitStage(ctx, run, curStage, next)
+			e.enterStage(ctx, run, next)
+			curStage = next
+		}
+
 		if err := e.executeStep(ctx, run, step, metadata); err != nil {
 			if errors.Is(err, errStepSuspended) {
 				e.logger.Info("pipeline step suspended for approval",
@@ -167,9 +235,24 @@ func (e *PipelineExecutor) ExecuteRun(ctx context.Context, runID uuid.UUID) erro
 			}
 			return err
 		}
+		prevStep = step
 	}
 
-	// 5. All steps completed — mark run as completed
+	// 5. All steps completed — enforce the final stage's gate, then exit it and
+	// clear current_stage. A gate on the last stage parks the run for approval
+	// before it is marked completed.
+	if curStage != nil {
+		if susErr := e.enforceGateOnExit(ctx, run, curStage, policy, prevStep); susErr != nil {
+			if errors.Is(susErr, errStageSuspended) {
+				return nil
+			}
+			return susErr
+		}
+		e.exitStage(ctx, run, curStage, nil)
+		e.clearStoryCurrentStage(ctx, run)
+	}
+
+	// Mark run as completed
 	completedAt := time.Now()
 	if _, err := e.runRepo.UpdateRunStatus(ctx, runID, model.RunStatusCompleted, nil, &completedAt, nil, nil); err != nil {
 		return err
@@ -441,6 +524,224 @@ func (e *PipelineExecutor) updateStoryStatus(ctx context.Context, run *model.Run
 		"run_id":   run.ID.String(),
 		"status":   status,
 	})
+}
+
+// stageRef is the in-memory identity of the stage a run is currently in.
+type stageRef struct {
+	id   string
+	name string
+}
+
+// newStageRef builds a stageRef from a run step's stamped stage identity.
+func newStageRef(step *model.RunStep) *stageRef {
+	return &stageRef{id: step.StageID, name: step.StageName}
+}
+
+// matches reports whether the receiver represents the same stage as stageID.
+// A nil receiver (no stage entered yet) matches nothing, so the first step always
+// crosses a boundary into its stage.
+func (s *stageRef) matches(stageID string) bool {
+	return s != nil && s.id == stageID
+}
+
+// stageEntityID derives a stable UUID for a (run, stage) pair so stage events
+// carry a consistent entity_id across entered/exited without a real stage row.
+func stageEntityID(runID uuid.UUID, stageID string) uuid.UUID {
+	return uuid.NewSHA1(runID, []byte("stage:"+stageID))
+}
+
+// enterStage advances stories.current_stage to the stage's name and emits a
+// stage.entered event. Best-effort: failures are logged, never fatal.
+func (e *PipelineExecutor) enterStage(ctx context.Context, run *model.Run, stage *stageRef) {
+	if stage == nil {
+		return
+	}
+	if run.StoryID != uuid.Nil {
+		name := stage.name
+		if _, err := e.storyRepo.UpdateStoryCurrentStage(ctx, run.StoryID, &name); err != nil {
+			e.logger.Error("failed to advance story current_stage",
+				"story_id", run.StoryID, "run_id", run.ID, "stage_id", stage.id, "error", err)
+		}
+	}
+	e.publishEvent(ctx, run.ProjectID, "stage", stageEntityID(run.ID, stage.id), "entered", map[string]any{
+		"stage_id":   stage.id,
+		"stage_name": stage.name,
+		"story_id":   run.StoryID.String(),
+		"run_id":     run.ID.String(),
+	})
+}
+
+// exitStage emits a stage.exited event for the stage being left. prev is the stage
+// we are leaving (no-op if nil); next is the stage we are entering (nil at run end),
+// included in the payload for board projection. Best-effort.
+func (e *PipelineExecutor) exitStage(ctx context.Context, run *model.Run, prev, next *stageRef) {
+	if prev == nil {
+		return
+	}
+	payload := map[string]any{
+		"stage_id":   prev.id,
+		"stage_name": prev.name,
+		"story_id":   run.StoryID.String(),
+		"run_id":     run.ID.String(),
+	}
+	if next != nil {
+		payload["next_stage_id"] = next.id
+		payload["next_stage_name"] = next.name
+	}
+	e.publishEvent(ctx, run.ProjectID, "stage", stageEntityID(run.ID, prev.id), "exited", payload)
+}
+
+// clearStoryCurrentStage sets stories.current_stage to NULL at run completion.
+// Best-effort: failures are logged, never fatal.
+func (e *PipelineExecutor) clearStoryCurrentStage(ctx context.Context, run *model.Run) {
+	if run.StoryID == uuid.Nil {
+		return
+	}
+	if _, err := e.storyRepo.UpdateStoryCurrentStage(ctx, run.StoryID, nil); err != nil {
+		e.logger.Error("failed to clear story current_stage",
+			"story_id", run.StoryID, "run_id", run.ID, "error", err)
+	}
+}
+
+// parseTransitionPolicy parses the run's config snapshot into a stage-transition
+// resolver. Returns nil when the snapshot is empty or unparseable, in which case
+// callers treat every stage as "auto" (the pre-INC-3 behaviour).
+func (e *PipelineExecutor) parseTransitionPolicy(run *model.Run) *model.PipelineConfigYAML {
+	if len(run.PipelineConfigSnapshot) == 0 {
+		return nil
+	}
+	var parsed model.PipelineConfigYAML
+	if err := json.Unmarshal(run.PipelineConfigSnapshot, &parsed); err != nil {
+		e.logger.Warn("failed to parse config snapshot for transition policy; treating stages as auto",
+			"run_id", run.ID, "error", err)
+		return nil
+	}
+	return &parsed
+}
+
+// transitionFor resolves a stage's exit policy, defaulting to "auto" when the
+// policy is nil (unparseable snapshot) or the stage is unknown.
+func transitionFor(policy *model.PipelineConfigYAML, stageID string) string {
+	if policy == nil {
+		return model.TransitionAuto
+	}
+	return policy.TransitionForStage(stageID)
+}
+
+// enforceManualOnEnter parks the run before entering a "manual" stage that has not
+// yet been triggered by a "Go" (its stage_started_<id> metadata flag is unset).
+// Returns errStageSuspended when the run is parked; nil to proceed. The run is paused
+// via the existing pause mechanism — NOT a HITL request — and the paused reason is
+// recorded in metadata so the stage/start path knows to set the flag and resume.
+func (e *PipelineExecutor) enforceManualOnEnter(
+	ctx context.Context, run *model.Run, next *stageRef,
+	policy *model.PipelineConfigYAML, metadata map[string]any,
+) error {
+	if next == nil || transitionFor(policy, next.id) != model.TransitionManual {
+		return nil
+	}
+	if started, ok := metadata[stageStartedKey(next.id)].(bool); ok && started {
+		// Already triggered (this is a resume after "Go") — proceed into the segment.
+		return nil
+	}
+
+	// Record the awaiting-manual-start reason in run metadata so the resume path can
+	// distinguish a manual-start pause from a generic pause, and so the board can show
+	// why the card is parked. Best-effort: a failed write still parks the run.
+	metadata["paused_reason"] = pausedReasonManualStart
+	metadata["paused_stage_id"] = next.id
+	metadata["paused_stage_name"] = next.name
+	if persistErr := e.runRepo.UpdateRunMetadata(ctx, run.ID, metadata); persistErr != nil {
+		e.logger.Warn("failed to persist manual-start pause reason",
+			"run_id", run.ID, "stage_id", next.id, "error", persistErr)
+	}
+
+	now := time.Now()
+	if _, err := e.runRepo.UpdateRunStatus(ctx, run.ID, model.RunStatusPaused, nil, nil, &now, nil); err != nil {
+		return fmt.Errorf("pause run for manual stage %q: %w", next.id, err)
+	}
+
+	// Advance current_stage so the card visibly sits idle IN the manual stage (the
+	// Kanban intuition: card is in the column, work not started).
+	if run.StoryID != uuid.Nil {
+		name := next.name
+		if _, err := e.storyRepo.UpdateStoryCurrentStage(ctx, run.StoryID, &name); err != nil {
+			e.logger.Error("failed to advance story current_stage for manual stage",
+				"story_id", run.StoryID, "run_id", run.ID, "stage_id", next.id, "error", err)
+		}
+	}
+
+	e.publishEvent(ctx, run.ProjectID, "stage", stageEntityID(run.ID, next.id), "awaiting_start", map[string]any{
+		"stage_id":   next.id,
+		"stage_name": next.name,
+		"story_id":   run.StoryID.String(),
+		"run_id":     run.ID.String(),
+		"transition": model.TransitionManual,
+	})
+	e.logger.Info("run parked awaiting manual stage start",
+		"run_id", run.ID, "stage_id", next.id, "stage_name", next.name)
+	return errStageSuspended
+}
+
+// enforceGateOnExit parks the run for human approval when the stage being left has a
+// "gate" transition and its segment has just completed. It reuses the existing HITL
+// approval gate: a HITL request is anchored to the stage's last step, the step is set
+// to waiting_approval, and the run is paused — exactly the state hitl_service.Approve
+// expects, so approval resumes the run unchanged. Returns errStageSuspended when the
+// run is parked; nil to proceed (auto/manual stages, an already-approved gate, or no
+// HITL repository wired).
+func (e *PipelineExecutor) enforceGateOnExit(
+	ctx context.Context, run *model.Run, leaving *stageRef,
+	policy *model.PipelineConfigYAML, anchor *model.RunStep,
+) error {
+	if leaving == nil || transitionFor(policy, leaving.id) != model.TransitionGate {
+		return nil
+	}
+	if e.hitlRepo == nil || anchor == nil {
+		// Without a HITL repo (or an anchor step) a gate cannot be raised; degrade to
+		// auto so the pipeline still advances rather than wedging.
+		return nil
+	}
+
+	// Idempotency across resume: if a HITL already exists for the anchor step, the gate
+	// has been raised before. Approved → proceed; otherwise the run stays parked.
+	if existing, err := e.hitlRepo.GetByRunStepID(ctx, anchor.ID); err == nil && existing != nil {
+		if existing.Status == model.HITLStatusApproved {
+			return nil
+		}
+		return errStageSuspended
+	}
+
+	req := &model.HITLRequest{
+		ID:        uuid.New(),
+		RunStepID: anchor.ID,
+		GateType:  "approval",
+		Status:    model.HITLStatusPending,
+		CreatedAt: time.Now(),
+	}
+	if _, err := e.hitlRepo.Create(ctx, req); err != nil {
+		return fmt.Errorf("create gate HITL request for stage %q: %w", leaving.id, err)
+	}
+
+	now := time.Now()
+	if _, err := e.runRepo.UpdateRunStepStatus(ctx, anchor.ID, model.StepStatusWaitingApproval, &now, nil, nil); err != nil {
+		return fmt.Errorf("set anchor step waiting_approval for gate stage %q: %w", leaving.id, err)
+	}
+	if _, err := e.runRepo.UpdateRunStatus(ctx, run.ID, model.RunStatusPaused, nil, nil, &now, nil); err != nil {
+		return fmt.Errorf("pause run for gate stage %q: %w", leaving.id, err)
+	}
+
+	e.publishEvent(ctx, run.ProjectID, "hitl_gate", req.ID, "pending", map[string]any{
+		"run_id":          run.ID.String(),
+		"story_id":        run.StoryID.String(),
+		"step_id":         anchor.ID.String(),
+		"hitl_request_id": req.ID.String(),
+		"stage_id":        leaving.id,
+		"stage_name":      leaving.name,
+	})
+	e.logger.Info("run parked at gate awaiting approval",
+		"run_id", run.ID, "stage_id", leaving.id, "hitl_request_id", req.ID)
+	return errStageSuspended
 }
 
 // publishEvent publishes an event, logging errors without failing execution.

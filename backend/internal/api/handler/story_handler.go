@@ -276,6 +276,9 @@ func toAPIStory(s *model.Story, latest *model.LatestRun) Story {
 	if s.AcceptanceCriteria != nil {
 		story.AcceptanceCriteria = s.AcceptanceCriteria
 	}
+	if s.CurrentStage != nil {
+		story.CurrentStage = s.CurrentStage
+	}
 	if s.TargetFiles != nil {
 		story.TargetFiles = &s.TargetFiles
 	}

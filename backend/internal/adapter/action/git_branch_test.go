@@ -110,6 +110,9 @@ func (m *gbMockStoryRepo) CountByStatus(_ context.Context, _ uuid.UUID, _ []stri
 func (m *gbMockStoryRepo) Update(_ context.Context, s *model.Story) (*model.Story, error) {
 	return s, nil
 }
+func (m *gbMockStoryRepo) UpdateStoryCurrentStage(_ context.Context, id uuid.UUID, currentStage *string) (*model.Story, error) {
+	return &model.Story{ID: id, CurrentStage: currentStage}, nil
+}
 func (m *gbMockStoryRepo) Delete(_ context.Context, _ uuid.UUID) error { return nil }
 
 type gbMockProjectRepo struct {

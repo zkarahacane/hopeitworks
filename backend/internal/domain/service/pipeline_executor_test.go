@@ -18,6 +18,17 @@ import (
 // eventRunCancelled is the event name asserted across cancellation tests.
 const eventRunCancelled = "run.cancelled"
 
+// Stage identity literals shared across executor stage/transition tests. Declared as
+// constants to keep goconst happy (the strings recur across many table entries).
+const (
+	stageIDDev    = "dev"
+	stageNameDev  = "Dev"
+	stageIDReview = "review"
+	stageNameRev  = "Review"
+	stageIDQA     = "qa"
+	stageNameQA   = "QA"
+)
+
 // testLogger creates a logger for tests using slog directly to avoid stdout noise.
 func testLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -108,8 +119,9 @@ type stepStatusCall struct {
 
 // mockStoryRepoForExecutor implements port.StoryRepository for PipelineExecutor testing.
 type mockStoryRepoForExecutor struct {
-	getByIDFn func(ctx context.Context, id uuid.UUID) (*model.Story, error)
-	updateFn  func(ctx context.Context, story *model.Story) (*model.Story, error)
+	getByIDFn            func(ctx context.Context, id uuid.UUID) (*model.Story, error)
+	updateFn             func(ctx context.Context, story *model.Story) (*model.Story, error)
+	updateCurrentStageFn func(ctx context.Context, id uuid.UUID, currentStage *string) (*model.Story, error)
 }
 
 func (m *mockStoryRepoForExecutor) Create(_ context.Context, story *model.Story) (*model.Story, error) {
@@ -144,6 +156,12 @@ func (m *mockStoryRepoForExecutor) Update(ctx context.Context, story *model.Stor
 		return m.updateFn(ctx, story)
 	}
 	return story, nil
+}
+func (m *mockStoryRepoForExecutor) UpdateStoryCurrentStage(ctx context.Context, id uuid.UUID, currentStage *string) (*model.Story, error) {
+	if m.updateCurrentStageFn != nil {
+		return m.updateCurrentStageFn(ctx, id, currentStage)
+	}
+	return &model.Story{ID: id, CurrentStage: currentStage}, nil
 }
 func (m *mockStoryRepoForExecutor) Delete(_ context.Context, _ uuid.UUID) error {
 	return nil
@@ -373,17 +391,20 @@ func TestExecuteRun_EventsPublishedInOrder(t *testing.T) {
 
 	events := f.eventPub.getEvents()
 
-	// Expected event order:
-	// run.started, story.status_updated(running),
+	// Expected event order (both fixture steps share the empty default stage, so
+	// there is exactly one stage.entered at the start and one stage.exited at the end):
+	// run.started, story.status_updated(running), stage.entered,
 	// step.started(0), step.completed(0), step.started(1), step.completed(1),
-	// run.completed, story.status_updated(done)
+	// stage.exited, run.completed, story.status_updated(done)
 	expectedEvents := []string{
 		"run.started",
 		"story.status_updated",
+		"stage.entered",
 		"step.started",
 		"step.completed",
 		"step.started",
 		"step.completed",
+		"stage.exited",
 		"run.completed",
 		"story.status_updated",
 	}
@@ -411,9 +432,21 @@ func TestExecuteRun_EventsPublishedInOrder(t *testing.T) {
 		t.Errorf("run.started payload: expected status running, got %v", startedPayload["status"])
 	}
 
-	// Verify step events include step_id and step_name (now at index 2, after story.status_updated)
+	// Verify stage.entered payload carries stage and story identity (index 2).
+	var enteredPayload map[string]any
+	if err := json.Unmarshal(events[2].Event.Payload, &enteredPayload); err != nil {
+		t.Fatalf("failed to unmarshal stage.entered payload: %v", err)
+	}
+	if _, ok := enteredPayload["stage_id"]; !ok {
+		t.Error("stage.entered payload: missing stage_id")
+	}
+	if enteredPayload["story_id"] != f.storyID.String() {
+		t.Errorf("stage.entered payload: expected story_id %s, got %v", f.storyID, enteredPayload["story_id"])
+	}
+
+	// Verify step events include step_id and step_name (now at index 3, after stage.entered)
 	var stepPayload map[string]any
-	if err := json.Unmarshal(events[2].Event.Payload, &stepPayload); err != nil {
+	if err := json.Unmarshal(events[3].Event.Payload, &stepPayload); err != nil {
 		t.Fatalf("failed to unmarshal step.started payload: %v", err)
 	}
 	if _, ok := stepPayload["step_id"]; !ok {
@@ -423,13 +456,74 @@ func TestExecuteRun_EventsPublishedInOrder(t *testing.T) {
 		t.Error("step.started payload: missing step_name")
 	}
 
-	// Verify run.completed event payload (at index 6, before final story.status_updated)
+	// Verify run.completed event payload (at index 8, before final story.status_updated)
 	var completedPayload map[string]any
-	if err := json.Unmarshal(events[6].Event.Payload, &completedPayload); err != nil {
+	if err := json.Unmarshal(events[8].Event.Payload, &completedPayload); err != nil {
 		t.Fatalf("failed to unmarshal run.completed payload: %v", err)
 	}
 	if completedPayload["run_id"] != f.runID.String() {
 		t.Errorf("run.completed payload: expected run_id %s, got %v", f.runID, completedPayload["run_id"])
+	}
+}
+
+// TestExecuteRun_StageBoundaries verifies that crossing from one stage to another
+// emits stage.exited for the old stage and stage.entered for the new one, advances
+// stories.current_stage to each stage name in turn, and clears current_stage at the
+// end of the run.
+func TestExecuteRun_StageBoundaries(t *testing.T) {
+	f := newExecutorTestFixture(3)
+	f.registerSuccessActions()
+
+	// steps 0,1 in stage stageIDDev; step 2 in stage stageIDReview.
+	f.steps[0].StageID, f.steps[0].StageName = stageIDDev, stageNameDev
+	f.steps[1].StageID, f.steps[1].StageName = stageIDDev, stageNameDev
+	f.steps[2].StageID, f.steps[2].StageName = stageIDReview, stageNameRev
+
+	var stageUpdates []string // names, with "<nil>" for clear
+	f.storyRepo.updateCurrentStageFn = func(_ context.Context, id uuid.UUID, currentStage *string) (*model.Story, error) {
+		if currentStage == nil {
+			stageUpdates = append(stageUpdates, "<nil>")
+		} else {
+			stageUpdates = append(stageUpdates, *currentStage)
+		}
+		return &model.Story{ID: id, CurrentStage: currentStage}, nil
+	}
+
+	if err := f.executor.ExecuteRun(context.Background(), f.runID); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	// current_stage advances Dev -> Review -> cleared.
+	wantUpdates := []string{stageNameDev, stageNameRev, "<nil>"}
+	if len(stageUpdates) != len(wantUpdates) {
+		t.Fatalf("expected current_stage updates %v, got %v", wantUpdates, stageUpdates)
+	}
+	for i, want := range wantUpdates {
+		if stageUpdates[i] != want {
+			t.Errorf("current_stage update %d: expected %q, got %q", i, want, stageUpdates[i])
+		}
+	}
+
+	// stage events: entered(dev), exited(dev)+entered(review), exited(review).
+	var stageSeq []string
+	for _, e := range f.eventPub.getEvents() {
+		if e.Event.EntityType != "stage" {
+			continue
+		}
+		var payload map[string]any
+		if err := json.Unmarshal(e.Event.Payload, &payload); err != nil {
+			t.Fatalf("failed to unmarshal stage payload: %v", err)
+		}
+		stageSeq = append(stageSeq, fmt.Sprintf("%s:%v", e.Event.Action, payload["stage_id"]))
+	}
+	wantSeq := []string{"entered:dev", "exited:dev", "entered:review", "exited:review"}
+	if len(stageSeq) != len(wantSeq) {
+		t.Fatalf("expected stage event sequence %v, got %v", wantSeq, stageSeq)
+	}
+	for i, want := range wantSeq {
+		if stageSeq[i] != want {
+			t.Errorf("stage event %d: expected %q, got %q", i, want, stageSeq[i])
+		}
 	}
 }
 
@@ -850,13 +944,16 @@ func TestExecuteRun_FailureEventOrder(t *testing.T) {
 
 	events := f.eventPub.getEvents()
 
-	// Expected event order:
-	// run.started, story.status_updated(running),
+	// Expected event order (all three steps share the empty default stage, so one
+	// stage.entered fires before the first step; failure returns before completion,
+	// so no stage.exited is emitted):
+	// run.started, story.status_updated(running), stage.entered,
 	// step.started(0), step.completed(0), step.started(1), step.failed(1),
 	// run.failed, story.status_updated(failed)
 	expectedEvents := []string{
 		"run.started",
 		"story.status_updated",
+		"stage.entered",
 		"step.started",
 		"step.completed",
 		"step.started",
@@ -1329,4 +1426,252 @@ func TestExecuteRun_ModelInjectedPerStep(t *testing.T) {
 
 func (m *mockStoryRepoForExecutor) CountByEpicGroupedByStatus(_ context.Context, _ uuid.UUID) (model.StoryCounts, error) {
 	return model.StoryCounts{}, nil
+}
+
+// stageGroup is a minimal stage spec for buildTransitionSnapshot.
+type stageGroup struct {
+	id, name, transition string
+	steps                int
+}
+
+// buildTransitionSnapshot marshals a PipelineConfigYAML snapshot with the given
+// stages so the executor's parseTransitionPolicy resolves each stage's transition.
+func buildTransitionSnapshot(t *testing.T, groups []stageGroup) []byte {
+	t.Helper()
+	cfg := model.PipelineConfigYAML{}
+	for _, g := range groups {
+		grp := model.PipelineGroup{ID: g.id, Name: g.name, Transition: g.transition}
+		for i := 0; i < g.steps; i++ {
+			grp.Steps = append(grp.Steps, model.PipelineStep{ActionType: "noop"})
+		}
+		cfg.Groups = append(cfg.Groups, grp)
+	}
+	raw, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatalf("marshal snapshot: %v", err)
+	}
+	return raw
+}
+
+// lastRunStatus returns the status of the most recent UpdateRunStatus call.
+func (f *executorTestFixture) lastRunStatus() model.RunStatus {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.runStatusCalls) == 0 {
+		return ""
+	}
+	return f.runStatusCalls[len(f.runStatusCalls)-1].Status
+}
+
+// stageActionAt returns the (action, stage_id) of the i-th stage event published.
+func (f *executorTestFixture) stageEventSeq(t *testing.T) []string {
+	t.Helper()
+	var seq []string
+	for _, e := range f.eventPub.getEvents() {
+		if e.Event.EntityType != "stage" {
+			continue
+		}
+		var payload map[string]any
+		if err := json.Unmarshal(e.Event.Payload, &payload); err != nil {
+			t.Fatalf("unmarshal stage payload: %v", err)
+		}
+		seq = append(seq, fmt.Sprintf("%s:%v", e.Event.Action, payload["stage_id"]))
+	}
+	return seq
+}
+
+// TestExecuteRun_ManualStageParks verifies a not-yet-started manual stage parks the
+// run idle (paused) at the manual stage's entry, without running its segment, and
+// records the awaiting-manual-start reason in run metadata.
+func TestExecuteRun_ManualStageParks(t *testing.T) {
+	f := newExecutorTestFixture(2)
+	// step 0 in auto stageIDDev; step 1 in manual stageIDReview.
+	f.steps[0].StageID, f.steps[0].StageName = stageIDDev, stageNameDev
+	f.steps[1].StageID, f.steps[1].StageName = stageIDReview, stageNameRev
+	f.run.PipelineConfigSnapshot = buildTransitionSnapshot(t, []stageGroup{
+		{id: stageIDDev, name: stageNameDev, transition: model.TransitionAuto, steps: 1},
+		{id: stageIDReview, name: stageNameRev, transition: model.TransitionManual, steps: 1},
+	})
+
+	var step1Ran bool
+	f.actionReg.Register(&mockAction{name: f.steps[0].Action})
+	f.actionReg.Register(&mockAction{name: f.steps[1].Action, executeFn: func(_ context.Context, _ *model.RunContext) error {
+		step1Ran = true
+		return nil
+	}})
+
+	var savedMeta map[string]any
+	f.runRepo.updateRunMetadataFn = func(_ context.Context, _ uuid.UUID, m map[string]interface{}) error {
+		savedMeta = m
+		return nil
+	}
+
+	if err := f.executor.ExecuteRun(context.Background(), f.runID); err != nil {
+		t.Fatalf("expected nil (parked, not failed), got %v", err)
+	}
+	if step1Ran {
+		t.Error("manual stage segment must not run before a Go")
+	}
+	if got := f.lastRunStatus(); got != model.RunStatusPaused {
+		t.Errorf("expected run paused at manual stage, last status was %s", got)
+	}
+	if savedMeta == nil || savedMeta["paused_reason"] != pausedReasonManualStart {
+		t.Errorf("expected paused_reason=%q in metadata, got %v", pausedReasonManualStart, savedMeta)
+	}
+	if savedMeta["paused_stage_id"] != stageIDReview {
+		t.Errorf("expected paused_stage_id=review, got %v", savedMeta["paused_stage_id"])
+	}
+	// An awaiting_start event is emitted for the manual stage.
+	seq := f.stageEventSeq(t)
+	foundAwaiting := false
+	for _, s := range seq {
+		if s == "awaiting_start:review" {
+			foundAwaiting = true
+		}
+	}
+	if !foundAwaiting {
+		t.Errorf("expected awaiting_start:review stage event, got %v", seq)
+	}
+}
+
+// TestExecuteRun_ManualStageStartedAdvances verifies that once a manual stage is
+// flagged started in run metadata, the executor runs its segment and continues.
+func TestExecuteRun_ManualStageStartedAdvances(t *testing.T) {
+	f := newExecutorTestFixture(2)
+	f.steps[0].StageID, f.steps[0].StageName = stageIDDev, stageNameDev
+	f.steps[1].StageID, f.steps[1].StageName = stageIDReview, stageNameRev
+	f.run.PipelineConfigSnapshot = buildTransitionSnapshot(t, []stageGroup{
+		{id: stageIDDev, name: stageNameDev, transition: model.TransitionAuto, steps: 1},
+		{id: stageIDReview, name: stageNameRev, transition: model.TransitionManual, steps: 1},
+	})
+	// Simulate the "Go": the manual stage has been started.
+	f.run.Metadata = map[string]interface{}{stageStartedKey(stageIDReview): true}
+
+	var step1Ran bool
+	f.actionReg.Register(&mockAction{name: f.steps[0].Action})
+	f.actionReg.Register(&mockAction{name: f.steps[1].Action, executeFn: func(_ context.Context, _ *model.RunContext) error {
+		step1Ran = true
+		return nil
+	}})
+
+	if err := f.executor.ExecuteRun(context.Background(), f.runID); err != nil {
+		t.Fatalf("expected nil, got %v", err)
+	}
+	if !step1Ran {
+		t.Error("started manual stage segment should run")
+	}
+	if got := f.lastRunStatus(); got != model.RunStatusCompleted {
+		t.Errorf("expected run completed after started manual stage, got %s", got)
+	}
+}
+
+// TestExecuteRun_GateStageRaisesHITL verifies a gate stage parks the run for approval
+// after its segment completes, reusing the HITL approval gate (request + paused run +
+// anchor step waiting_approval).
+func TestExecuteRun_GateStageRaisesHITL(t *testing.T) {
+	f := newExecutorTestFixture(2)
+	f.steps[0].StageID, f.steps[0].StageName = stageIDDev, stageNameDev
+	f.steps[1].StageID, f.steps[1].StageName = stageIDReview, stageNameRev
+	f.run.PipelineConfigSnapshot = buildTransitionSnapshot(t, []stageGroup{
+		{id: stageIDDev, name: stageNameDev, transition: model.TransitionGate, steps: 1},
+		{id: stageIDReview, name: stageNameRev, transition: model.TransitionAuto, steps: 1},
+	})
+
+	var step1Ran bool
+	f.actionReg.Register(&mockAction{name: f.steps[0].Action})
+	f.actionReg.Register(&mockAction{name: f.steps[1].Action, executeFn: func(_ context.Context, _ *model.RunContext) error {
+		step1Ran = true
+		return nil
+	}})
+
+	hitlRepo := newMockHITLRepo()
+	f.executor.SetHITLRepo(hitlRepo)
+
+	if err := f.executor.ExecuteRun(context.Background(), f.runID); err != nil {
+		t.Fatalf("expected nil (parked at gate), got %v", err)
+	}
+	if step1Ran {
+		t.Error("steps after a gate stage must not run before approval")
+	}
+	if got := f.lastRunStatus(); got != model.RunStatusPaused {
+		t.Errorf("expected run paused at gate, got %s", got)
+	}
+	// A HITL request was created, anchored to the gate stage's last step (step 0).
+	req, err := hitlRepo.GetByRunStepID(context.Background(), f.steps[0].ID)
+	if err != nil || req == nil {
+		t.Fatalf("expected a HITL request anchored to the gate's last step, got err=%v req=%v", err, req)
+	}
+	if req.Status != model.HITLStatusPending {
+		t.Errorf("expected pending HITL request, got %s", req.Status)
+	}
+	// The anchor step was set to waiting_approval.
+	var anchorWaiting bool
+	f.mu.Lock()
+	for _, c := range f.stepStatusCalls {
+		if c.ID == f.steps[0].ID && c.Status == model.StepStatusWaitingApproval {
+			anchorWaiting = true
+		}
+	}
+	f.mu.Unlock()
+	if !anchorWaiting {
+		t.Error("expected gate anchor step to be set waiting_approval")
+	}
+}
+
+// TestExecuteRun_GateApprovedAdvances verifies that on resume after approval (HITL
+// approved for the anchor step) the gate no longer parks the run; it advances.
+func TestExecuteRun_GateApprovedAdvances(t *testing.T) {
+	f := newExecutorTestFixture(2)
+	f.steps[0].StageID, f.steps[0].StageName = stageIDDev, stageNameDev
+	f.steps[0].Status = model.StepStatusCompleted // gate step completed by Approve
+	f.steps[1].StageID, f.steps[1].StageName = stageIDReview, stageNameRev
+	f.run.PipelineConfigSnapshot = buildTransitionSnapshot(t, []stageGroup{
+		{id: stageIDDev, name: stageNameDev, transition: model.TransitionGate, steps: 1},
+		{id: stageIDReview, name: stageNameRev, transition: model.TransitionAuto, steps: 1},
+	})
+
+	var step1Ran bool
+	f.actionReg.Register(&mockAction{name: f.steps[0].Action})
+	f.actionReg.Register(&mockAction{name: f.steps[1].Action, executeFn: func(_ context.Context, _ *model.RunContext) error {
+		step1Ran = true
+		return nil
+	}})
+
+	hitlRepo := newMockHITLRepo()
+	approved := &model.HITLRequest{ID: uuid.New(), RunStepID: f.steps[0].ID, Status: model.HITLStatusApproved}
+	hitlRepo.requests[approved.ID] = approved
+	f.executor.SetHITLRepo(hitlRepo)
+
+	if err := f.executor.ExecuteRun(context.Background(), f.runID); err != nil {
+		t.Fatalf("expected nil, got %v", err)
+	}
+	if !step1Ran {
+		t.Error("after gate approval the next stage segment should run")
+	}
+	if got := f.lastRunStatus(); got != model.RunStatusCompleted {
+		t.Errorf("expected run completed after approved gate, got %s", got)
+	}
+}
+
+// TestExecuteRun_AllAutoRunsToCompletion verifies an all-auto multi-stage pipeline
+// runs end-to-end from a single launch (no parking).
+func TestExecuteRun_AllAutoRunsToCompletion(t *testing.T) {
+	f := newExecutorTestFixture(3)
+	f.steps[0].StageID, f.steps[0].StageName = stageIDDev, stageNameDev
+	f.steps[1].StageID, f.steps[1].StageName = stageIDReview, stageNameRev
+	f.steps[2].StageID, f.steps[2].StageName = stageIDQA, stageNameQA
+	f.run.PipelineConfigSnapshot = buildTransitionSnapshot(t, []stageGroup{
+		{id: stageIDDev, name: stageNameDev, transition: model.TransitionAuto, steps: 1},
+		{id: stageIDReview, name: stageNameRev, transition: model.TransitionAuto, steps: 1},
+		{id: stageIDQA, name: stageNameQA, transition: model.TransitionAuto, steps: 1},
+	})
+	f.registerSuccessActions()
+	f.executor.SetHITLRepo(newMockHITLRepo())
+
+	if err := f.executor.ExecuteRun(context.Background(), f.runID); err != nil {
+		t.Fatalf("expected nil, got %v", err)
+	}
+	if got := f.lastRunStatus(); got != model.RunStatusCompleted {
+		t.Errorf("expected all-auto pipeline to complete, got %s", got)
+	}
 }

@@ -80,6 +80,12 @@ type RunStep struct {
 	ErrorMessage *string
 	ContainerID  *string
 	LogTail      *string
+	// StageID and StageName identify the stage (pipeline group) this step belongs
+	// to. Stamped at run creation from the originating PipelineGroup; the durable
+	// record of which stage a step ran in. Empty for pre-INC-1 steps (backfilled to
+	// the "default"/"Default" stage at the DB level).
+	StageID   string
+	StageName string
 	// RetryCount is the number of retries attempted from this step.
 	RetryCount int
 	// RetryType is "incremental" or "full"; nil for original (non-retry) steps.

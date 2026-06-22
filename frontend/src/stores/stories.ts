@@ -39,16 +39,27 @@ export interface Story {
   target_files?: string[]
   depends_on?: string[]
   scope?: 'backend' | 'frontend' | 'shared'
+  /**
+   * Name of the stage the card currently sits in, advanced by the executor at
+   * stage boundaries. Null/undefined when the story has no live stage (backlog
+   * before its first run, or after completion). Matches a PipelineGroup `name`.
+   */
+  current_stage?: string | null
   latest_run?: LatestRun | null
   created_at: string
   updated_at: string
 }
 
-/** Kanban column a story belongs to, derived from its live state. */
+/** Kanban column a story belongs to, derived from its live state (macro / lifecycle view). */
 export type KanbanColumn = 'backlog' | 'in_progress' | 'blocked' | 'done' | 'failed'
 
+/** Sentinel column keys for the stage (détail) view's terminal lanes. */
+export const STAGE_DONE_COLUMN = '__done__'
+export const STAGE_FAILED_COLUMN = '__failed__'
+export const STAGE_BACKLOG_COLUMN = '__backlog__'
+
 /**
- * Pure function — derives the kanban column for a story.
+ * Pure function — derives the macro (lifecycle) kanban column for a story.
  * - done  → "done"
  * - failed → "failed"
  * - running + current_step.status === "waiting_approval" → "blocked"
@@ -63,6 +74,25 @@ export function boardColumn(story: Story): KanbanColumn {
     return 'in_progress'
   }
   return 'backlog'
+}
+
+/**
+ * Pure function — derives the stage (détail) column key for a story.
+ *
+ * Terminal lifecycle states win over the live stage: a done/failed story sits in
+ * its terminal lane regardless of any stale `current_stage`. Otherwise the story
+ * is placed in its `current_stage` (a PipelineGroup name). A story with no live
+ * stage (no run yet, or stage cleared at completion) falls back to the backlog
+ * entry lane.
+ *
+ * The returned key is either a stage name (matched against the pipeline's stage
+ * names by the board) or one of the STAGE_* sentinels.
+ */
+export function stageColumn(story: Story): string {
+  if (story.status === 'done') return STAGE_DONE_COLUMN
+  if (story.status === 'failed') return STAGE_FAILED_COLUMN
+  if (story.current_stage) return story.current_stage
+  return STAGE_BACKLOG_COLUMN
 }
 
 /** Fields for updating an existing story */
@@ -122,6 +152,13 @@ interface StepEventPayload {
 interface HitlGatePayload {
   story_id?: string
   run_id?: string
+}
+
+interface StageEventPayload {
+  story_id?: string
+  run_id?: string
+  stage_id?: string
+  stage_name?: string
 }
 
 /**
@@ -376,6 +413,40 @@ export const useStoriesStore = defineStore('stories', () => {
           latest_run: story.latest_run
             ? { ...story.latest_run, current_step: updatedStep }
             : { id: payload.run_id ?? '', status: 'running', current_step: updatedStep },
+        }
+        break
+      }
+
+      case 'stage.entered': {
+        // The executor advances stories.current_stage to the stage name at each
+        // stage boundary. Mirror it onto the card so the stage (détail) board
+        // moves the card into its new stage column live.
+        const payload = data as StageEventPayload
+        if (!payload.story_id || !payload.stage_name) return
+        const idx = items.value.findIndex((s) => s.id === payload.story_id)
+        if (idx === -1) return
+        items.value[idx] = { ...items.value[idx]!, current_stage: payload.stage_name }
+        break
+      }
+
+      case 'stage.awaiting_start': {
+        // The card has parked idle at the entry of a not-yet-started manual stage:
+        // advance current_stage and mark the run paused so the board surfaces the
+        // "Go · start stage" affordance (the executor pauses without a HITL gate).
+        const payload = data as StageEventPayload
+        if (!payload.story_id || !payload.stage_name) return
+        const idx = items.value.findIndex((s) => s.id === payload.story_id)
+        if (idx === -1) return
+        const story = items.value[idx]!
+        const currentRun = story.latest_run
+        items.value[idx] = {
+          ...story,
+          current_stage: payload.stage_name,
+          latest_run: {
+            id: payload.run_id ?? currentRun?.id ?? '',
+            status: 'paused',
+            current_step: null,
+          },
         }
         break
       }

@@ -25,6 +25,7 @@ function makeGroup(overrides: Partial<PipelineGroup> = {}): PipelineGroup {
   return {
     id: crypto.randomUUID(),
     name: 'Group',
+    transition: 'auto',
     steps: [makeStep()],
     ...overrides,
   }

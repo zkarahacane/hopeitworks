@@ -907,6 +907,37 @@ paths:
         "409":
           $ref: "#/components/responses/Conflict"
 
+  /projects/{projectId}/stories/{storyId}/stage/start:
+    post:
+      operationId: startStage
+      summary: Start the current manual stage of a story
+      description: >
+        Triggers the "Go" affordance for a card sitting idle in a manual stage:
+        resumes the story's run that is parked awaiting a manual start so its segment
+        executes and then auto-advances through subsequent auto stages until the next
+        manual or gate. This is a pause/resume, not a HITL approval. Returns 404 if the
+        story or its active run is not found, 409 if the run is not paused awaiting a
+        manual stage start.
+      tags: [runs]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/StoryIdPath"
+      responses:
+        "200":
+          description: Manual stage started, run resumed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Run"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
   /stories/{storyId}/runs:
     get:
       operationId: listRunsByStory
@@ -2764,6 +2795,10 @@ components:
           $ref: "#/components/schemas/StoryStatus"
         acceptance_criteria:
           type: string
+        current_stage:
+          type: string
+          nullable: true
+          description: Name of the stage the card currently sits in, advanced by the executor at stage boundaries. Null when no stage (backlog before first run, or after completion).
         latest_run:
           $ref: "#/components/schemas/LatestRun"
           nullable: true
@@ -3249,6 +3284,13 @@ components:
         name:
           type: string
           description: Human-readable name for the group (e.g. "Setup", "Development")
+        transition:
+          type: string
+          enum: [auto, manual, gate]
+          default: auto
+          description: >-
+            Stage exit policy: how the card leaves this stage. Carried end-to-end;
+            enforcement of manual/gate is a later increment (currently treated as auto).
         steps:
           type: array
           items:
@@ -3381,6 +3423,12 @@ components:
           type: string
           enum: [pending, running, completed, failed, cancelled, waiting_approval]
           example: pending
+        stage_id:
+          type: string
+          description: Identifier of the stage (pipeline group) this step belongs to.
+        stage_name:
+          type: string
+          description: Human-readable name of the stage (pipeline group) this step belongs to.
         started_at:
           type: string
           format: date-time

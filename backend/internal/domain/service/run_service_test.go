@@ -28,6 +28,7 @@ type mockRunRepo struct {
 	updateRunStepStatusFn    func(ctx context.Context, id uuid.UUID, status model.StepStatus, startedAt, completedAt *time.Time, errorMsg *string) (*model.RunStep, error)
 	createRetryRunStepFn     func(ctx context.Context, step *model.RunStep) (*model.RunStep, error)
 	listRetryStepsByParentFn func(ctx context.Context, parentStepID uuid.UUID) ([]*model.RunStep, error)
+	updateRunMetadataFn      func(ctx context.Context, runID uuid.UUID, metadata map[string]interface{}) error
 }
 
 func (m *mockRunRepo) CreateRun(ctx context.Context, run *model.Run) (*model.Run, error) {
@@ -157,6 +158,9 @@ func (m *mockStoryRepoForRun) Update(ctx context.Context, story *model.Story) (*
 		return m.updateFn(ctx, story)
 	}
 	return story, nil
+}
+func (m *mockStoryRepoForRun) UpdateStoryCurrentStage(_ context.Context, id uuid.UUID, currentStage *string) (*model.Story, error) {
+	return &model.Story{ID: id, CurrentStage: currentStage}, nil
 }
 func (m *mockStoryRepoForRun) Delete(_ context.Context, _ uuid.UUID) error {
 	return nil
@@ -2144,10 +2148,108 @@ func (m *mockRunRepo) GetDAGNodeRunInfoByStories(_ context.Context, _ []uuid.UUI
 	return map[uuid.UUID]model.DAGNodeRunInfo{}, nil
 }
 
-func (m *mockRunRepo) UpdateRunMetadata(_ context.Context, _ uuid.UUID, _ map[string]interface{}) error {
+func (m *mockRunRepo) UpdateRunMetadata(ctx context.Context, runID uuid.UUID, metadata map[string]interface{}) error {
+	if m.updateRunMetadataFn != nil {
+		return m.updateRunMetadataFn(ctx, runID, metadata)
+	}
 	return nil
 }
 
 func (m *mockRunRepo) AppendStepLogTail(_ context.Context, _ uuid.UUID, _ string) error {
 	return nil
+}
+
+// TestRunService_StartStage_ResumesParkedManualRun verifies StartStage flags the
+// parked stage started, clears the manual-start reason, transitions the run back to
+// running and re-enqueues it.
+func TestRunService_StartStage_ResumesParkedManualRun(t *testing.T) {
+	projectID := uuid.New()
+	storyID := uuid.New()
+	runID := uuid.New()
+
+	parkedRun := &model.Run{
+		ID:        runID,
+		ProjectID: projectID,
+		StoryID:   storyID,
+		Status:    model.RunStatusPaused,
+		Metadata: map[string]interface{}{
+			"paused_reason":     pausedReasonManualStart,
+			"paused_stage_id":   "review",
+			"paused_stage_name": "Review",
+		},
+	}
+
+	var savedMeta map[string]interface{}
+	var enqueued bool
+	var resumedStatus model.RunStatus
+	runRepo := &mockRunRepo{
+		getActiveRunByStoryFn: func(_ context.Context, _ uuid.UUID) (*model.Run, error) {
+			return parkedRun, nil
+		},
+		updateRunMetadataFn: func(_ context.Context, _ uuid.UUID, m map[string]interface{}) error {
+			savedMeta = m
+			return nil
+		},
+		updateRunStatusFn: func(_ context.Context, id uuid.UUID, status model.RunStatus, _, _, _ *time.Time, _ *string) (*model.Run, error) {
+			resumedStatus = status
+			return &model.Run{ID: id, ProjectID: projectID, StoryID: storyID, Status: status}, nil
+		},
+	}
+	storyRepo := &mockStoryRepoForRun{
+		getByIDFn: func(_ context.Context, id uuid.UUID) (*model.Story, error) {
+			return &model.Story{ID: id, ProjectID: projectID, Key: "S-01", Status: model.StoryStatusRunning}, nil
+		},
+	}
+	jobQueue := &mockJobQueue{enqueueExecuteRunFn: func(_ context.Context, _ uuid.UUID) error {
+		enqueued = true
+		return nil
+	}}
+
+	svc := NewRunService(runRepo, newMockProjectRepoForService(), storyRepo, nil, jobQueue)
+
+	updated, err := svc.StartStage(context.Background(), projectID, storyID)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if updated.Status != model.RunStatusRunning || resumedStatus != model.RunStatusRunning {
+		t.Errorf("expected run resumed to running, got %s", updated.Status)
+	}
+	if !enqueued {
+		t.Error("expected run to be re-enqueued for execution")
+	}
+	if started, ok := savedMeta[stageStartedKey("review")].(bool); !ok || !started {
+		t.Errorf("expected stage_started_review=true in metadata, got %v", savedMeta)
+	}
+	if _, exists := savedMeta["paused_reason"]; exists {
+		t.Error("expected paused_reason to be cleared from metadata")
+	}
+}
+
+// TestRunService_StartStage_RejectsRunningRun verifies StartStage 409s when the run
+// is not paused awaiting a manual start.
+func TestRunService_StartStage_RejectsRunningRun(t *testing.T) {
+	projectID := uuid.New()
+	storyID := uuid.New()
+
+	runRepo := &mockRunRepo{
+		getActiveRunByStoryFn: func(_ context.Context, _ uuid.UUID) (*model.Run, error) {
+			return &model.Run{ID: uuid.New(), ProjectID: projectID, StoryID: storyID, Status: model.RunStatusRunning}, nil
+		},
+	}
+	storyRepo := &mockStoryRepoForRun{
+		getByIDFn: func(_ context.Context, id uuid.UUID) (*model.Story, error) {
+			return &model.Story{ID: id, ProjectID: projectID, Key: "S-01", Status: model.StoryStatusRunning}, nil
+		},
+	}
+
+	svc := NewRunService(runRepo, newMockProjectRepoForService(), storyRepo, nil, &mockJobQueue{})
+
+	_, err := svc.StartStage(context.Background(), projectID, storyID)
+	if err == nil {
+		t.Fatal("expected conflict error, got nil")
+	}
+	domErr, ok := err.(*errors.DomainError)
+	if !ok || domErr.Category != errors.CategoryConflict {
+		t.Errorf("expected conflict DomainError, got %v", err)
+	}
 }

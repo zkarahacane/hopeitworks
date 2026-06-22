@@ -21,5 +21,8 @@ type StoryRepository interface {
 	// in a single GROUP BY query.
 	CountByEpicGroupedByStatus(ctx context.Context, epicID uuid.UUID) (model.StoryCounts, error)
 	Update(ctx context.Context, story *model.Story) (*model.Story, error)
+	// UpdateStoryCurrentStage sets the story's current_stage. A nil currentStage
+	// clears the stage (NULL). Advanced by the executor at stage boundaries.
+	UpdateStoryCurrentStage(ctx context.Context, id uuid.UUID, currentStage *string) (*model.Story, error)
 	Delete(ctx context.Context, id uuid.UUID) error
 }
