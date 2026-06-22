@@ -236,6 +236,14 @@ func toAPIRunStep(s *model.RunStep) RunStep {
 		Status:    RunStepStatus(s.Status),
 		CreatedAt: s.CreatedAt,
 	}
+	if s.StageID != "" {
+		stageID := s.StageID
+		step.StageId = &stageID
+	}
+	if s.StageName != "" {
+		stageName := s.StageName
+		step.StageName = &stageName
+	}
 	if s.StartedAt != nil {
 		step.StartedAt = s.StartedAt
 	}
