@@ -27,14 +27,15 @@ func NewContainerTokenStore(ctx context.Context) *ContainerTokenStore {
 	return s
 }
 
-// Create generates and stores a new token for a run step.
+// Create generates and stores a new token for a run step bound to an agent.
 // Returns the token string.
-func (s *ContainerTokenStore) Create(_ context.Context, runID, stepID uuid.UUID, ttl time.Duration) (string, error) {
+func (s *ContainerTokenStore) Create(_ context.Context, runID, stepID, agentID uuid.UUID, ttl time.Duration) (string, error) {
 	token := uuid.New().String()
 	ct := &model.ContainerToken{
 		Token:     token,
 		RunID:     runID,
 		StepID:    stepID,
+		AgentID:   agentID,
 		ExpiresAt: time.Now().Add(ttl),
 	}
 	s.tokens.Store(token, ct)

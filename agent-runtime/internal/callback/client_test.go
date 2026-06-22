@@ -17,7 +17,7 @@ func TestSendLog(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authHeader = r.Header.Get("Authorization")
 		body, _ := io.ReadAll(r.Body)
-		json.Unmarshal(body, &received)
+		_ = json.Unmarshal(body, &received)
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer srv.Close()
@@ -43,7 +43,7 @@ func TestSendCost(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		reqPath = r.URL.Path
 		body, _ := io.ReadAll(r.Body)
-		json.Unmarshal(body, &received)
+		_ = json.Unmarshal(body, &received)
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer srv.Close()
@@ -79,7 +79,7 @@ func TestSendStatus(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		contentType = r.Header.Get("Content-Type")
 		body, _ := io.ReadAll(r.Body)
-		json.Unmarshal(body, &received)
+		_ = json.Unmarshal(body, &received)
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer srv.Close()

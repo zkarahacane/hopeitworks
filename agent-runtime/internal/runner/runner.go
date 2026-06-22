@@ -58,8 +58,12 @@ func (r *Runner) Run(ctx context.Context) error {
 		}
 	}
 
+	// 2b. Provision capabilities (skills / MCP / tool policy / secrets) from the bundle.
+	// Fail-soft and a no-op for capability-less agents — see provisionCapabilities.
+	runOpts := r.provisionCapabilities(ctx, workDir)
+
 	// 3. Run provider
-	events, err := r.provider.Run(ctx, workDir, r.cfg.Prompt, r.cfg.Model)
+	events, err := r.provider.Run(ctx, workDir, r.cfg.Prompt, r.cfg.Model, runOpts)
 	if err != nil {
 		_ = r.callback.SendStatus(ctx, 1, fmt.Sprintf("provider start failed: %v", err))
 		return err

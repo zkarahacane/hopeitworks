@@ -73,6 +73,22 @@ type Agent struct {
 	RuntimeKind     string      `json:"runtime_kind"`
 }
 
+type AgentCapability struct {
+	AgentID      uuid.UUID `json:"agent_id"`
+	CapabilityID uuid.UUID `json:"capability_id"`
+}
+
+type Capability struct {
+	ID        uuid.UUID   `json:"id"`
+	Kind      string      `json:"kind"`
+	Name      string      `json:"name"`
+	Version   int32       `json:"version"`
+	Scope     string      `json:"scope"`
+	ProjectID pgtype.UUID `json:"project_id"`
+	Spec      []byte      `json:"spec"`
+	CreatedAt time.Time   `json:"created_at"`
+}
+
 type CostRecord struct {
 	ID           uuid.UUID      `json:"id"`
 	RunStepID    uuid.UUID      `json:"run_step_id"`
@@ -83,6 +99,16 @@ type CostRecord struct {
 	Model        string         `json:"model"`
 	CreatedAt    time.Time      `json:"created_at"`
 	AgentID      pgtype.UUID    `json:"agent_id"`
+}
+
+type Credential struct {
+	ID             uuid.UUID   `json:"id"`
+	Name           string      `json:"name"`
+	Scope          string      `json:"scope"`
+	ProjectID      pgtype.UUID `json:"project_id"`
+	EncryptedValue []byte      `json:"encrypted_value"`
+	CreatedAt      time.Time   `json:"created_at"`
+	UpdatedAt      time.Time   `json:"updated_at"`
 }
 
 type Epic struct {

@@ -34,7 +34,7 @@ type openCodeResult struct {
 
 // Run executes the OpenCode CLI in workDir with the given prompt.
 // It parses the JSON output and emits log, cost, and result events.
-func (o *OpenCodeProvider) Run(ctx context.Context, workDir string, prompt string, model string) (<-chan Event, error) {
+func (o *OpenCodeProvider) Run(ctx context.Context, workDir string, prompt string, model string, opts RunOptions) (<-chan Event, error) {
 	cmd := exec.CommandContext(ctx,
 		"opencode", "run",
 		"--format", "json",
@@ -45,6 +45,12 @@ func (o *OpenCodeProvider) Run(ctx context.Context, workDir string, prompt strin
 
 	envKey := apiKeyEnvVar(model)
 	cmd.Env = append(cmd.Environ(), envKey+"="+o.apiKey)
+	// Resolved secrets are injected into the harness child env only. opencode reads MCP
+	// servers from the materialised .mcp.json in workDir and expands ${KEY} from the env.
+	// The system-prompt / tool-policy flags have no stable opencode equivalent yet, so
+	// those capabilities are warn+skipped here (per the capability × runtime matrix);
+	// MCP-over-env still works through ExtraEnv.
+	cmd.Env = append(cmd.Env, opts.ExtraEnv...)
 
 	events := make(chan Event, 16)
 
