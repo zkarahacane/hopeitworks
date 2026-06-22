@@ -367,6 +367,13 @@ func (s *RunService) LaunchRun(ctx context.Context, projectID, storyID, userID u
 			if agent.Image != "" {
 				runMetadata[fmt.Sprintf("step_%d_agent_image", i)] = agent.Image
 			}
+			// runtime_kind drives the execution-mode dispatch (callback vs legacy),
+			// replacing the old image-substring heuristic. Default from provider when unset.
+			runtimeKind := agent.RuntimeKind
+			if runtimeKind == "" {
+				runtimeKind = model.RuntimeKindFromProvider(agent.Provider)
+			}
+			runMetadata[fmt.Sprintf("step_%d_runtime_kind", i)] = runtimeKind
 			if agent.TemplateContent != "" {
 				runMetadata[fmt.Sprintf("step_%d_template_content", i)] = agent.TemplateContent
 			}
