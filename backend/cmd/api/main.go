@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -30,6 +31,7 @@ import (
 	"github.com/zakari/hopeitworks/backend/internal/domain/port"
 	"github.com/zakari/hopeitworks/backend/internal/domain/service"
 	"github.com/zakari/hopeitworks/backend/migrations"
+	pkgconfig "github.com/zakari/hopeitworks/backend/pkg/config"
 	pkgexec "github.com/zakari/hopeitworks/backend/pkg/exec"
 	pkglog "github.com/zakari/hopeitworks/backend/pkg/log"
 )
@@ -156,6 +158,14 @@ func run() error {
 	stackRepo := pgadapter.NewStackRepo(queries)
 	stackService := service.NewStackService(stackRepo)
 	stackHandler := handler.NewStackHandler(stackService)
+
+	// Seed the stack catalogue from versioned config (source of truth). Idempotent
+	// UPSERT on every boot, so image digests can change without a migration. An empty
+	// catalogue is a no-op fallback to the migration-inlined seed (000034); a seed
+	// error is logged but does not abort boot (the read path still works on existing rows).
+	if err := service.SeedStacks(ctx, stackRepo, stackCatalogueFromConfig(cfg.Stacks, logger), logger); err != nil {
+		logger.Error("failed to seed stack catalogue from config", "error", err)
+	}
 
 	// Environment persistence (P2c1): one execution composition per project (stacks +
 	// sidecar services + config source + commands). Instantiated at boot so it is ready
@@ -476,6 +486,34 @@ func getEnvOrDefault(key, defaultVal string) string {
 		return val
 	}
 	return defaultVal
+}
+
+// stackCatalogueFromConfig converts the YAML stack catalogue into domain stacks,
+// marshalling each toolchain map into the jsonb bytes the model carries. Entries
+// with an empty key or image_ref are skipped (logged); a toolchain that fails to
+// marshal is skipped rather than aborting boot. Returns nil for an empty catalogue.
+func stackCatalogueFromConfig(entries []pkgconfig.StackConfig, logger *slog.Logger) []model.Stack {
+	if len(entries) == 0 {
+		return nil
+	}
+	out := make([]model.Stack, 0, len(entries))
+	for _, e := range entries {
+		if e.Key == "" || e.ImageRef == "" {
+			logger.Warn("skipping stack catalogue entry with empty key or image_ref", "key", e.Key, "image_ref", e.ImageRef)
+			continue
+		}
+		toolchain := []byte("{}")
+		if len(e.Toolchain) > 0 {
+			b, err := json.Marshal(e.Toolchain)
+			if err != nil {
+				logger.Warn("skipping stack catalogue entry with invalid toolchain", "key", e.Key, "error", err)
+				continue
+			}
+			toolchain = b
+		}
+		out = append(out, model.Stack{Key: e.Key, ImageRef: e.ImageRef, Toolchain: toolchain})
+	}
+	return out
 }
 
 // startTokenCleanup launches a goroutine that periodically purges expired revoked tokens.
