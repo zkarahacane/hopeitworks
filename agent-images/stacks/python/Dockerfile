@@ -1,17 +1,32 @@
+# syntax=docker/dockerfile:1
 FROM hopeitworks/agent-base:latest
 
 USER root
 
-# Python 3.12
+# Pinned Python tooling versions.
+ARG UV_VERSION=0.11.23
+ARG RUFF_VERSION=0.15.18
+ARG MYPY_VERSION=2.1.0
+ARG PYTEST_VERSION=9.1.1
+ARG PYRIGHT_VERSION=1.1.410
+
+# Debian bookworm ships Python 3.11 as python3 (there is no python3.12 package
+# in the main repos). Use it as the system python; uv (installed below)
+# provisions other versions on demand at runtime, e.g. `uv python install 3.12`.
+# gh comes from agent-base — do not re-install it here.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 python3-pip python3-venv \
+    python3 python3-venv python3-pip pipx \
     && rm -rf /var/lib/apt/lists/* \
     && ln -sf /usr/bin/python3 /usr/bin/python
 
-# GitHub CLI
-RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg -o /usr/share/keyrings/githubcli-archive-keyring.gpg \
-    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list \
-    && apt-get update && apt-get install -y --no-install-recommends gh \
-    && rm -rf /var/lib/apt/lists/*
+# Python dev tools (pinned) + LSP (pyright). pipx isolates each tool;
+# uv, ruff, mypy, pytest, pyright land on PATH at /usr/local/bin.
+ENV PIPX_HOME=/opt/pipx
+ENV PIPX_BIN_DIR=/usr/local/bin
+RUN pipx install uv==${UV_VERSION} \
+    && pipx install ruff==${RUFF_VERSION} \
+    && pipx install mypy==${MYPY_VERSION} \
+    && pipx install pytest==${PYTEST_VERSION} \
+    && pipx install pyright==${PYRIGHT_VERSION}
 
 USER agent
