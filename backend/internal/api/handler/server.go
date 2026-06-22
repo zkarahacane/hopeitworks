@@ -242,6 +242,11 @@ func (s *Server) LaunchRun(w http.ResponseWriter, r *http.Request, projectID Pro
 	s.runs.LaunchRun(w, r, projectID, storyID)
 }
 
+// StartStage delegates to RunHandler.
+func (s *Server) StartStage(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, storyID StoryIdPath) {
+	s.runs.StartStage(w, r, projectID, storyID)
+}
+
 // ListRunsByStory delegates to RunHandler.
 func (s *Server) ListRunsByStory(w http.ResponseWriter, r *http.Request, storyID StoryIdPath, params ListRunsByStoryParams) {
 	s.runs.ListRunsByStory(w, r, storyID, params)

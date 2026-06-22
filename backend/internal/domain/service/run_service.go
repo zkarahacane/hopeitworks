@@ -529,6 +529,93 @@ func (s *RunService) ResumeRun(ctx context.Context, projectID, runID uuid.UUID) 
 	return updated, nil
 }
 
+// StartStage triggers the current manual stage of a story by resuming the run that
+// is parked awaiting a manual start (the "Go" affordance for a card idle in a manual
+// stage). It marks the parked stage as started in run metadata so the executor advances
+// past the manual gate on resume, clears the manual-start pause reason, transitions the
+// run back to running, and re-enqueues it. This is a pause/resume — NOT a HITL approval.
+func (s *RunService) StartStage(ctx context.Context, projectID, storyID uuid.UUID) (*model.Run, error) {
+	// 1. Verify story exists and belongs to project.
+	story, err := s.storyRepo.GetByID(ctx, storyID)
+	if err != nil {
+		return nil, err
+	}
+	if story.ProjectID != projectID {
+		return nil, errors.NewNotFound("story", storyID)
+	}
+
+	// 2. Find the active run for the story. GetActiveRunByStory returns the most
+	// recent pending/running/paused run; a manual-start park leaves it paused.
+	run, err := s.runRepo.GetActiveRunByStory(ctx, storyID)
+	if err != nil {
+		return nil, err
+	}
+	if run == nil {
+		return nil, &errors.DomainError{
+			Category: errors.CategoryNotFound,
+			Code:     "NO_ACTIVE_RUN",
+			Message:  fmt.Sprintf("story %s has no active run to start", story.Key),
+		}
+	}
+
+	// 3. The run must be paused awaiting a manual start. Any other state is a conflict
+	// (a running run is already in its segment; a completed/failed run is terminal).
+	if run.Status != model.RunStatusPaused {
+		return nil, &errors.DomainError{
+			Category: errors.CategoryConflict,
+			Code:     "STAGE_NOT_STARTABLE",
+			Message:  fmt.Sprintf("run %s is %s, not paused awaiting a manual stage start", run.ID, run.Status),
+		}
+	}
+	reason, _ := run.Metadata["paused_reason"].(string)
+	if reason != pausedReasonManualStart {
+		return nil, &errors.DomainError{
+			Category: errors.CategoryConflict,
+			Code:     "STAGE_NOT_STARTABLE",
+			Message:  fmt.Sprintf("run %s is paused but not awaiting a manual stage start", run.ID),
+		}
+	}
+
+	// 4. Flag the parked stage as started so the executor advances past it, and clear
+	// the manual-start pause reason. Persist before resuming so a pod restart between
+	// the metadata write and the re-enqueue still sees the started flag.
+	stageID, _ := run.Metadata["paused_stage_id"].(string)
+	if run.Metadata == nil {
+		run.Metadata = map[string]interface{}{}
+	}
+	if stageID != "" {
+		run.Metadata[stageStartedKey(stageID)] = true
+	}
+	delete(run.Metadata, "paused_reason")
+	delete(run.Metadata, "paused_stage_id")
+	delete(run.Metadata, "paused_stage_name")
+	if err := s.runRepo.UpdateRunMetadata(ctx, run.ID, run.Metadata); err != nil {
+		return nil, errors.NewInternal("persist stage-started metadata", err)
+	}
+
+	// 5. Resume: transition back to running and re-enqueue execution.
+	updated, err := s.runRepo.UpdateRunStatus(ctx, run.ID, model.RunStatusRunning, nil, nil, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	s.publishRunEvent(ctx, updated.ProjectID, updated.ID, "resumed", map[string]any{
+		"run_id":   updated.ID.String(),
+		"story_id": updated.StoryID.String(),
+		"status":   string(model.RunStatusRunning),
+		"stage_id": stageID,
+		"trigger":  "manual_start",
+	})
+
+	if s.jobQueue != nil {
+		if err := s.jobQueue.EnqueueExecuteRun(ctx, updated.ID); err != nil {
+			return nil, errors.NewInternal("enqueue execute_run job for stage start", err)
+		}
+	}
+
+	return updated, nil
+}
+
 // PauseEpicRun pauses an epic run. This is a placeholder that operates on the run
 // identified by the epicId/runId combination. When story 7-2 implements the epic run
 // model with parent/child relationships, this method will also pause pending child runs.

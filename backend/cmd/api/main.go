@@ -293,6 +293,8 @@ func run() error {
 	// Pipeline executor: wired with the real action registry and event publisher
 	pipelineExecutor := service.NewPipelineExecutor(runRepo, storyRepo, actionReg, eventRepo, logger)
 	pipelineExecutor.SetCircuitBreaker(circuitBreakerService)
+	// HITL repo enables gate-transition enforcement at stage boundaries (INC 3).
+	pipelineExecutor.SetHITLRepo(hitlRepo)
 
 	// River job queue for async pipeline execution
 	workers := river.NewWorkers()
