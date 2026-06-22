@@ -907,6 +907,37 @@ paths:
         "409":
           $ref: "#/components/responses/Conflict"
 
+  /projects/{projectId}/stories/{storyId}/stage/start:
+    post:
+      operationId: startStage
+      summary: Start the current manual stage of a story
+      description: >
+        Triggers the "Go" affordance for a card sitting idle in a manual stage:
+        resumes the story's run that is parked awaiting a manual start so its segment
+        executes and then auto-advances through subsequent auto stages until the next
+        manual or gate. This is a pause/resume, not a HITL approval. Returns 404 if the
+        story or its active run is not found, 409 if the run is not paused awaiting a
+        manual stage start.
+      tags: [runs]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - $ref: "#/components/parameters/StoryIdPath"
+      responses:
+        "200":
+          description: Manual stage started, run resumed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Run"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
   /stories/{storyId}/runs:
     get:
       operationId: listRunsByStory
