@@ -29,3 +29,37 @@ smtp:
   username: ""
   password: ""
   frontend_url: http://localhost:5173
+
+# Stack catalogue: SOURCE OF TRUTH for the catalogued runtime images. Re-applied
+# as an idempotent UPSERT on every API boot (see SeedStacks), so the digests below
+# can change at every image rebuild without a migration churn. To PIN a stack to a
+# new digest, edit image_ref here (prefer `@sha256:...` over `:latest`) and restart.
+# The migration-inlined seed (000034) stays only as a first-boot fallback.
+stacks:
+  - key: go
+    image_ref: ghcr.io/zkarahacane/hopeitworks/agent-go:latest
+    toolchain:
+      go: "1.23"
+      node: "22"
+      cli: ["claude", "opencode"]
+      tools: ["sqlc", "oapi-codegen", "wire", "golangci-lint", "gh"]
+  - key: node
+    image_ref: ghcr.io/zkarahacane/hopeitworks/agent-node:latest
+    toolchain:
+      node: "22"
+      cli: ["claude", "opencode"]
+      tools: ["typescript", "prettier", "eslint", "gh"]
+  - key: python
+    image_ref: ghcr.io/zkarahacane/hopeitworks/agent-python:latest
+    toolchain:
+      python: "3.12"
+      node: "22"
+      cli: ["claude", "opencode"]
+      tools: ["gh"]
+  - key: go-node
+    image_ref: ghcr.io/zkarahacane/hopeitworks/agent-go-node:latest
+    toolchain:
+      go: "1.23"
+      node: "22"
+      cli: ["claude", "opencode"]
+      tools: ["sqlc", "oapi-codegen", "wire", "golangci-lint", "gh"]
