@@ -37,11 +37,33 @@ type RetryPolicy struct {
 	RetryType  string `yaml:"retry_type"  json:"retry_type"` // none, on-failure, always
 }
 
+// Stage transition policy values. A group's Transition controls how a card
+// leaves the stage. INC 1 carries the field only (default "auto"); enforcement
+// of manual/gate is a later increment.
+const (
+	TransitionAuto   = "auto"
+	TransitionManual = "manual"
+	TransitionGate   = "gate"
+)
+
 // PipelineGroup represents a named group of steps in the pipeline YAML.
+// A group is the durable unit the board treats as a "stage".
 type PipelineGroup struct {
 	ID    string         `yaml:"id"    json:"id"`
 	Name  string         `yaml:"name"  json:"name"`
 	Steps []PipelineStep `yaml:"steps" json:"steps"`
+	// Transition is the stage's exit policy: auto | manual | gate. Defaults to
+	// "auto" when empty. Carried end-to-end but NOT enforced in INC 1.
+	Transition string `yaml:"transition,omitempty" json:"transition,omitempty"`
+}
+
+// StepWithStage is a pipeline step paired with the identity of the group (stage)
+// it originates from. Produced by FlatStepsWithStage so step creation can stamp
+// stage_id/stage_name on each run_step instead of discarding the group identity.
+type StepWithStage struct {
+	Step      PipelineStep
+	GroupID   string
+	GroupName string
 }
 
 // PipelineConfigYAML represents the parsed YAML structure.
@@ -78,6 +100,14 @@ func ParsePipelineConfigYAML(data []byte) (*PipelineConfigYAML, error) {
 		}
 	}
 
+	// Normalize the transition policy: an unset transition defaults to "auto"
+	// (the current, always-advancing behaviour). Carried only in INC 1.
+	for i := range cfg.Groups {
+		if cfg.Groups[i].Transition == "" {
+			cfg.Groups[i].Transition = TransitionAuto
+		}
+	}
+
 	return cfg, nil
 }
 
@@ -86,6 +116,24 @@ func (c *PipelineConfigYAML) FlatSteps() []PipelineStep {
 	var steps []PipelineStep
 	for _, g := range c.Groups {
 		steps = append(steps, g.Steps...)
+	}
+	return steps
+}
+
+// FlatStepsWithStage returns all steps across all groups in order, each paired
+// with the identity (ID, Name) of the group it came from. Unlike FlatSteps it
+// preserves stage identity so the executor can stamp stage_id/stage_name on each
+// run_step. Step ordering matches FlatSteps exactly.
+func (c *PipelineConfigYAML) FlatStepsWithStage() []StepWithStage {
+	var steps []StepWithStage
+	for _, g := range c.Groups {
+		for _, s := range g.Steps {
+			steps = append(steps, StepWithStage{
+				Step:      s,
+				GroupID:   g.ID,
+				GroupName: g.Name,
+			})
+		}
 	}
 	return steps
 }
