@@ -111,6 +111,22 @@ func ParsePipelineConfigYAML(data []byte) (*PipelineConfigYAML, error) {
 	return cfg, nil
 }
 
+// TransitionForStage returns the exit transition policy (auto|manual|gate) of the
+// group whose ID matches stageID. It defaults to "auto" when the stage is unknown
+// or its transition is unset, matching ParsePipelineConfigYAML's normalization. The
+// executor uses this to enforce manual/gate policies at stage boundaries.
+func (c *PipelineConfigYAML) TransitionForStage(stageID string) string {
+	for _, g := range c.Groups {
+		if g.ID == stageID {
+			if g.Transition == "" {
+				return TransitionAuto
+			}
+			return g.Transition
+		}
+	}
+	return TransitionAuto
+}
+
 // FlatSteps returns all steps across all groups in order.
 func (c *PipelineConfigYAML) FlatSteps() []PipelineStep {
 	var steps []PipelineStep
