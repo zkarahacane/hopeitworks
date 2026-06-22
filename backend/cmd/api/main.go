@@ -150,6 +150,11 @@ func run() error {
 	agentService := service.NewAgentService(agentRepo)
 	agentHandler := handler.NewAgentHandler(agentService)
 
+	// Stack catalogue (P2a): read-only catalogue of pinned runtime images. RunService
+	// uses the repo to resolve an agent's effective launch image when it references a
+	// stack.
+	stackRepo := pgadapter.NewStackRepo(queries)
+
 	// Template renderer (Handlebars engine for prompt templates)
 	handlebarsRenderer := hbadapter.NewRenderer()
 
@@ -308,6 +313,7 @@ func run() error {
 		runService.SetContainerManager(containerMgr)
 	}
 	runService.SetAgentRepo(agentRepo)
+	runService.SetStackRepo(stackRepo)
 	runHandler := handler.NewRunHandler(runService)
 
 	// Orphan cleanup and timeout enforcement (requires Docker)
