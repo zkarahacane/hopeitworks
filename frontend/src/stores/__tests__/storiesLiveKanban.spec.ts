@@ -322,6 +322,38 @@ describe('useStoriesStore.handleSSEEvent()', () => {
     })
   })
 
+  // ── stage.awaiting_start ──────────────────────────────────────────────────
+
+  describe('stage.awaiting_start', () => {
+    it('advances current_stage and marks the run paused (manual idle)', () => {
+      const store = storeWithStories([
+        makeStory({
+          id: 's1',
+          status: 'running',
+          current_stage: 'Dev',
+          latest_run: { id: 'r1', status: 'running', current_step: null },
+        }),
+      ])
+      store.handleSSEEvent('stage.awaiting_start', {
+        story_id: 's1',
+        run_id: 'r1',
+        stage_id: 'review',
+        stage_name: 'Review',
+      })
+      const story = store.items[0]!
+      expect(story.current_stage).toBe('Review')
+      expect(story.latest_run!.status).toBe('paused')
+      expect(story.latest_run!.current_step).toBeNull()
+    })
+
+    it('ignores event if stage_name missing', () => {
+      const store = storeWithStories([makeStory({ id: 's1' })])
+      const before = JSON.stringify(store.items)
+      store.handleSSEEvent('stage.awaiting_start', { story_id: 's1', run_id: 'r1' })
+      expect(JSON.stringify(store.items)).toBe(before)
+    })
+  })
+
   // ── unknown events ────────────────────────────────────────────────────────
 
   describe('unknown event names', () => {

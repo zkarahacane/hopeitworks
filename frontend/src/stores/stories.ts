@@ -429,6 +429,28 @@ export const useStoriesStore = defineStore('stories', () => {
         break
       }
 
+      case 'stage.awaiting_start': {
+        // The card has parked idle at the entry of a not-yet-started manual stage:
+        // advance current_stage and mark the run paused so the board surfaces the
+        // "Go · start stage" affordance (the executor pauses without a HITL gate).
+        const payload = data as StageEventPayload
+        if (!payload.story_id || !payload.stage_name) return
+        const idx = items.value.findIndex((s) => s.id === payload.story_id)
+        if (idx === -1) return
+        const story = items.value[idx]!
+        const currentRun = story.latest_run
+        items.value[idx] = {
+          ...story,
+          current_stage: payload.stage_name,
+          latest_run: {
+            id: payload.run_id ?? currentRun?.id ?? '',
+            status: 'paused',
+            current_step: null,
+          },
+        }
+        break
+      }
+
       case 'hitl_gate.pending': {
         // Mark the current step as waiting_approval so boardColumn() routes to "blocked"
         const payload = data as HitlGatePayload

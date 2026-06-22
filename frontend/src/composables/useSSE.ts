@@ -54,6 +54,8 @@ export function useSSE(
     // stage boundary events — move the card between stage columns on the board
     'stage.entered',
     'stage.exited',
+    // emitted when a card parks idle at the entry of a not-yet-started manual stage
+    'stage.awaiting_start',
     'log.emitted',
     // legacy hitl.* aliases (kept for existing consumers)
     'hitl.pending',
