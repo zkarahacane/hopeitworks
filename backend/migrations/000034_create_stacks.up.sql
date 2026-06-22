@@ -6,6 +6,11 @@
 --
 -- image_ref holds a digest-pinned ref when one is known, otherwise a tag. The platform
 -- owns these refs so pulls are deterministic.
+--
+-- NOTE: the catalogue is now driven by versioned config (backend/config.yaml `stacks:`),
+-- re-applied as an idempotent UPSERT on every API boot (service.SeedStacks). That config
+-- is the source of truth for image_ref/toolchain; the inline seed below is a first-boot
+-- fallback only. Do NOT add UPDATE migrations to re-pin digests — edit the config instead.
 CREATE TABLE stacks (
     id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     key        VARCHAR(32) NOT NULL UNIQUE CHECK (key IN ('go', 'node', 'python', 'go-node')),

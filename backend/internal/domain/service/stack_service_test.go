@@ -11,8 +11,10 @@ import (
 
 // mockStackRepo is a hand-written port.StackRepository for service/run tests.
 type mockStackRepo struct {
-	stacks map[uuid.UUID]*model.Stack
-	listFn func() ([]*model.Stack, error)
+	stacks    map[uuid.UUID]*model.Stack
+	listFn    func() ([]*model.Stack, error)
+	upsertFn  func(s *model.Stack) (*model.Stack, error)
+	upsertLog []model.Stack
 }
 
 func newMockStackRepo() *mockStackRepo {
@@ -44,6 +46,18 @@ func (m *mockStackRepo) GetByKey(_ context.Context, key string) (*model.Stack, e
 		}
 	}
 	return nil, errors.NewNotFound("stack", key)
+}
+
+func (m *mockStackRepo) Upsert(_ context.Context, s *model.Stack) (*model.Stack, error) {
+	m.upsertLog = append(m.upsertLog, *s)
+	if m.upsertFn != nil {
+		return m.upsertFn(s)
+	}
+	out := *s
+	if out.ID == uuid.Nil {
+		out.ID = uuid.New()
+	}
+	return &out, nil
 }
 
 func TestStackService_List(t *testing.T) {
