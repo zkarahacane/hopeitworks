@@ -10,6 +10,18 @@ type Config struct {
 	Log      LogConfig      `yaml:"logging"`
 	SMTP     SMTPConfig     `yaml:"smtp"`
 	Security SecurityConfig `yaml:"security"`
+	Stacks   []StackConfig  `yaml:"stacks"`
+}
+
+// StackConfig is one entry of the stack catalogue: a catalogued runtime image
+// (key -> image_ref + toolchain). This versioned config is the source of truth
+// for the catalogue; it is re-applied as an idempotent UPSERT on every API boot,
+// so pinning a stack to a new digest means editing this config, not a migration.
+// The migration-inlined seed (000034) remains a bootstrap fallback only.
+type StackConfig struct {
+	Key       string         `yaml:"key"`
+	ImageRef  string         `yaml:"image_ref"`
+	Toolchain map[string]any `yaml:"toolchain"`
 }
 
 // SMTPConfig holds outbound email relay settings.

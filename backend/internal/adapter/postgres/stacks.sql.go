@@ -74,3 +74,28 @@ func (q *Queries) ListStacks(ctx context.Context) ([]Stack, error) {
 	}
 	return items, nil
 }
+
+const upsertStack = `-- name: UpsertStack :one
+INSERT INTO stacks (key, image_ref, toolchain) VALUES ($1, $2, $3)
+ON CONFLICT (key) DO UPDATE SET image_ref = EXCLUDED.image_ref, toolchain = EXCLUDED.toolchain
+RETURNING id, key, image_ref, toolchain, created_at
+`
+
+type UpsertStackParams struct {
+	Key       string `json:"key"`
+	ImageRef  string `json:"image_ref"`
+	Toolchain []byte `json:"toolchain"`
+}
+
+func (q *Queries) UpsertStack(ctx context.Context, arg UpsertStackParams) (Stack, error) {
+	row := q.db.QueryRow(ctx, upsertStack, arg.Key, arg.ImageRef, arg.Toolchain)
+	var i Stack
+	err := row.Scan(
+		&i.ID,
+		&i.Key,
+		&i.ImageRef,
+		&i.Toolchain,
+		&i.CreatedAt,
+	)
+	return i, err
+}

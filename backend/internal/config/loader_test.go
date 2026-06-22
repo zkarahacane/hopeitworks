@@ -147,3 +147,81 @@ func TestLoad_FileNotFound(t *testing.T) {
 		t.Fatal("Load() should have returned an error for missing file")
 	}
 }
+
+func TestLoad_StacksCatalogue(t *testing.T) {
+	yaml := `
+database:
+  host: localhost
+  port: 5432
+  name: testdb
+  user: testuser
+  password: testpass
+  sslmode: disable
+
+logging:
+  level: info
+
+stacks:
+  - key: go
+    image_ref: ghcr.io/x/agent-go:latest
+    toolchain:
+      go: "1.23"
+      cli: ["claude", "opencode"]
+  - key: node
+    image_ref: ghcr.io/x/agent-node:latest
+    toolchain:
+      node: "22"
+`
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yaml")
+	if err := os.WriteFile(path, []byte(yaml), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+
+	if len(cfg.Stacks) != 2 {
+		t.Fatalf("Stacks len = %d, want 2", len(cfg.Stacks))
+	}
+	if cfg.Stacks[0].Key != "go" || cfg.Stacks[0].ImageRef != "ghcr.io/x/agent-go:latest" {
+		t.Errorf("Stacks[0] = %+v, unexpected key/image_ref", cfg.Stacks[0])
+	}
+	if cfg.Stacks[0].Toolchain["go"] != "1.23" {
+		t.Errorf("Stacks[0].Toolchain[go] = %v, want 1.23", cfg.Stacks[0].Toolchain["go"])
+	}
+	cli, ok := cfg.Stacks[0].Toolchain["cli"].([]any)
+	if !ok || len(cli) != 2 {
+		t.Errorf("Stacks[0].Toolchain[cli] = %v, want 2-element list", cfg.Stacks[0].Toolchain["cli"])
+	}
+}
+
+func TestLoad_NoStacksSection(t *testing.T) {
+	yaml := `
+database:
+  host: localhost
+  port: 5432
+  name: testdb
+  user: testuser
+  password: testpass
+  sslmode: disable
+
+logging:
+  level: info
+`
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yaml")
+	if err := os.WriteFile(path, []byte(yaml), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if len(cfg.Stacks) != 0 {
+		t.Errorf("Stacks len = %d, want 0 when section absent", len(cfg.Stacks))
+	}
+}
