@@ -71,6 +71,22 @@ func (m *mockHITLRepo) UpdateStatus(ctx context.Context, id uuid.UUID, status mo
 	return req, nil
 }
 
+func (m *mockHITLRepo) UpdateResolution(_ context.Context, id uuid.UUID, status model.HITLStatus, resolvedBy *uuid.UUID, action string, at time.Time) (*model.HITLRequest, error) {
+	req, ok := m.requests[id]
+	if !ok {
+		return nil, apperrors.NewNotFound("hitl_request", id)
+	}
+	req.Status = status
+	req.ResolvedBy = resolvedBy
+	req.ResolutionAction = &action
+	req.ResolvedAt = &at
+	return req, nil
+}
+
+func (m *mockHITLRepo) ListProbeHalts(_ context.Context, _ *uuid.UUID) ([]*model.ProbeHalt, error) {
+	return nil, nil
+}
+
 func (m *mockHITLRepo) ListPendingByProject(_ context.Context, _ uuid.UUID) ([]*model.PendingHITLRequest, error) {
 	return m.pending, nil
 }
@@ -649,4 +665,91 @@ func (m *mockRunRepoForHITL) UpdateRunMetadata(_ context.Context, _ uuid.UUID, _
 
 func (m *mockRunRepoForHITL) AppendStepLogTail(_ context.Context, _ uuid.UUID, _ string) error {
 	return nil
+}
+
+func TestHITLService_Resolve(t *testing.T) {
+	tests := []struct {
+		name        string
+		action      string
+		wantStep    model.StepStatus
+		wantRun     model.RunStatus
+		wantEnqueue bool
+	}{
+		{name: "resume re-enqueues run", action: model.HITLActionResume, wantStep: model.StepStatusRunning, wantRun: model.RunStatusRunning, wantEnqueue: true},
+		{name: "override completes step and advances", action: model.HITLActionOverride, wantStep: model.StepStatusCompleted, wantRun: model.RunStatusRunning, wantEnqueue: true},
+		{name: "skip completes step and advances", action: model.HITLActionSkip, wantStep: model.StepStatusCompleted, wantRun: model.RunStatusRunning, wantEnqueue: true},
+		{name: "send_back cancels step, run stays paused", action: model.HITLActionSendBack, wantStep: model.StepStatusCancelled, wantRun: model.RunStatusPaused, wantEnqueue: false},
+		{name: "abort fails step and run", action: model.HITLActionAbort, wantStep: model.StepStatusFailed, wantRun: model.RunStatusFailed, wantEnqueue: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hitlID := uuid.New()
+			stepID := uuid.New()
+			runID := uuid.New()
+			projectID := uuid.New()
+			userID := uuid.New()
+
+			hitlRepo := newMockHITLRepo()
+			hitlRepo.requests[hitlID] = &model.HITLRequest{
+				ID:        hitlID,
+				RunStepID: stepID,
+				GateType:  model.HITLGateProbeHalt,
+				Status:    model.HITLStatusPending,
+			}
+			runRepo := newMockRunRepoForHITL()
+			runRepo.steps[stepID] = &model.RunStep{ID: stepID, RunID: runID, Status: model.StepStatusRunning}
+			runRepo.runs[runID] = &model.Run{ID: runID, ProjectID: projectID, Status: model.RunStatusPaused}
+
+			eventPub := &mockEventPubForHITL{}
+			jobQueue := &mockJobQueueForHITL{}
+			svc := NewHITLService(hitlRepo, runRepo, jobQueue, eventPub, hitlTestLogger())
+
+			result, err := svc.Resolve(context.Background(), hitlID, userID, tt.action)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if result.Status != model.HITLStatusResolved {
+				t.Errorf("expected status resolved, got %s", result.Status)
+			}
+			if result.ResolutionAction == nil || *result.ResolutionAction != tt.action {
+				t.Errorf("expected resolution_action %q, got %v", tt.action, result.ResolutionAction)
+			}
+			if step := runRepo.steps[stepID]; step.Status != tt.wantStep {
+				t.Errorf("expected step %s, got %s", tt.wantStep, step.Status)
+			}
+			if run := runRepo.runs[runID]; run.Status != tt.wantRun {
+				t.Errorf("expected run %s, got %s", tt.wantRun, run.Status)
+			}
+			if tt.wantEnqueue && len(jobQueue.enqueued) == 0 {
+				t.Error("expected run to be re-enqueued")
+			}
+			if !tt.wantEnqueue && len(jobQueue.enqueued) != 0 {
+				t.Errorf("expected no enqueue, got %v", jobQueue.enqueued)
+			}
+		})
+	}
+}
+
+func TestHITLService_Resolve_RejectsReviewGate(t *testing.T) {
+	hitlID := uuid.New()
+	hitlRepo := newMockHITLRepo()
+	hitlRepo.requests[hitlID] = &model.HITLRequest{
+		ID:       hitlID,
+		GateType: model.HITLGateApproval, // a review gate, not probe_halt
+		Status:   model.HITLStatusPending,
+	}
+	svc := NewHITLService(hitlRepo, newMockRunRepoForHITL(), &mockJobQueueForHITL{}, &mockEventPubForHITL{}, hitlTestLogger())
+
+	_, err := svc.Resolve(context.Background(), hitlID, uuid.New(), model.HITLActionResume)
+	if err == nil {
+		t.Fatal("expected error resolving a review gate with a halt-gate action")
+	}
+}
+
+func TestHITLService_Resolve_InvalidAction(t *testing.T) {
+	svc := NewHITLService(newMockHITLRepo(), newMockRunRepoForHITL(), &mockJobQueueForHITL{}, &mockEventPubForHITL{}, hitlTestLogger())
+	_, err := svc.Resolve(context.Background(), uuid.New(), uuid.New(), "bogus")
+	if err == nil {
+		t.Fatal("expected validation error for unknown action")
+	}
 }
