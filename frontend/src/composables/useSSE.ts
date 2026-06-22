@@ -51,6 +51,9 @@ export function useSSE(
     'step.completed',
     'step.failed',
     'step.cancelled',
+    // stage boundary events — move the card between stage columns on the board
+    'stage.entered',
+    'stage.exited',
     'log.emitted',
     // legacy hitl.* aliases (kept for existing consumers)
     'hitl.pending',

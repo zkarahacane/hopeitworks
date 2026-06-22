@@ -1,6 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
-import { useStoriesStore } from '../stories'
+import {
+  useStoriesStore,
+  stageColumn,
+  STAGE_BACKLOG_COLUMN,
+  STAGE_DONE_COLUMN,
+  STAGE_FAILED_COLUMN,
+  type Story,
+} from '../stories'
 
 const mockGet = vi.fn()
 const mockPut = vi.fn()
@@ -368,5 +375,88 @@ describe('useStoriesStore', () => {
       expect(result).toBeNull()
       expect(store.error).toBe('Network error')
     })
+  })
+
+  describe('handleSSEEvent: stage.entered', () => {
+    function seedRunningStory(): Story {
+      const story: Story = {
+        id: 's-stage',
+        epic_id: 'e1',
+        project_id: 'p1',
+        key: 'S-09',
+        title: 'Stage card',
+        status: 'running',
+        current_stage: 'Setup',
+        created_at: '2026-01-20T10:00:00Z',
+        updated_at: '2026-01-20T10:00:00Z',
+      }
+      const store = useStoriesStore()
+      store.items = [story]
+      return story
+    }
+
+    it('advances current_stage to the entered stage name', () => {
+      seedRunningStory()
+      const store = useStoriesStore()
+      store.handleSSEEvent('stage.entered', {
+        story_id: 's-stage',
+        stage_id: 'g2',
+        stage_name: 'Development',
+      })
+      expect(store.items[0]!.current_stage).toBe('Development')
+    })
+
+    it('ignores events for unknown stories', () => {
+      seedRunningStory()
+      const store = useStoriesStore()
+      store.handleSSEEvent('stage.entered', {
+        story_id: 'does-not-exist',
+        stage_name: 'Development',
+      })
+      expect(store.items[0]!.current_stage).toBe('Setup')
+    })
+
+    it('ignores events missing a stage_name', () => {
+      seedRunningStory()
+      const store = useStoriesStore()
+      store.handleSSEEvent('stage.entered', { story_id: 's-stage' })
+      expect(store.items[0]!.current_stage).toBe('Setup')
+    })
+  })
+})
+
+describe('stageColumn', () => {
+  function makeStory(overrides: Partial<Story>): Story {
+    return {
+      id: 's',
+      epic_id: 'e1',
+      project_id: 'p1',
+      key: 'S-01',
+      title: 'Story',
+      status: 'backlog',
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+      ...overrides,
+    }
+  }
+
+  it('places a story in its current_stage', () => {
+    expect(stageColumn(makeStory({ status: 'running', current_stage: 'In Dev' }))).toBe('In Dev')
+  })
+
+  it('falls back to the backlog lane when no stage is set', () => {
+    expect(stageColumn(makeStory({ status: 'backlog' }))).toBe(STAGE_BACKLOG_COLUMN)
+  })
+
+  it('sends done stories to the done lane regardless of stage', () => {
+    expect(stageColumn(makeStory({ status: 'done', current_stage: 'In Dev' }))).toBe(
+      STAGE_DONE_COLUMN,
+    )
+  })
+
+  it('sends failed stories to the failed lane regardless of stage', () => {
+    expect(stageColumn(makeStory({ status: 'failed', current_stage: 'In Dev' }))).toBe(
+      STAGE_FAILED_COLUMN,
+    )
   })
 })
