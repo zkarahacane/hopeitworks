@@ -15,6 +15,8 @@ import { useToast } from 'primevue/usetoast'
 import Toast from 'primevue/toast'
 import RunLaunchConfirmDialog from '@/features/runs/RunLaunchConfirmDialog.vue'
 import { useRunLauncher, ALREADY_RUNNING_ERROR } from '@/composables/useRunLauncher'
+import { useStageStarter, STAGE_NOT_STARTABLE_ERROR } from '@/composables/useStageStarter'
+import type { Story } from '@/stores/stories'
 
 const route = useRoute()
 const projectId = route.params.id as string
@@ -127,6 +129,51 @@ async function handleConfirm() {
     life: 5000,
   })
   dialogVisible.value = false
+}
+
+// ── Go button (board card) ──────────────────────────────────────────────────────
+// A Backlog card launches via the existing confirm dialog; a card idle in a manual
+// stage starts that stage directly (a low-friction resume, no confirm needed).
+const { error: startStageError, startStage } = useStageStarter()
+
+function handleGo(payload: { story: Story; action: 'launch' | 'start-stage' }) {
+  if (payload.action === 'launch') {
+    storiesStore.setSelectedStory(payload.story.id)
+    dialogVisible.value = true
+    return
+  }
+  void handleStartStage(payload.story)
+}
+
+async function handleStartStage(story: Story) {
+  const result = await startStage(projectId, story.id)
+
+  if (result !== null) {
+    toast.add({
+      severity: 'success',
+      summary: 'Stage started',
+      detail: `Started the current stage for ${story.key}`,
+      life: 3000,
+    })
+    return
+  }
+
+  if (startStageError.value?.message === STAGE_NOT_STARTABLE_ERROR) {
+    toast.add({
+      severity: 'warn',
+      summary: 'Not startable',
+      detail: 'This stage is not waiting to be started',
+      life: 5000,
+    })
+    return
+  }
+
+  toast.add({
+    severity: 'error',
+    summary: 'Start failed',
+    detail: startStageError.value?.message ?? 'An unexpected error occurred',
+    life: 5000,
+  })
 }
 </script>
 
@@ -252,6 +299,7 @@ async function handleConfirm() {
           :project-id="projectId"
           :stages="stages"
           @select="handleSelectStory"
+          @go="handleGo"
         />
       </div>
 

@@ -39,6 +39,12 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   select: [storyId: string]
+  /**
+   * Request to "Go" a story. The card already knows whether this launches a fresh
+   * run (Backlog) or starts the parked manual stage (idle in a manual stage), so it
+   * passes an explicit action and the parent just dispatches it.
+   */
+  go: [payload: { story: Story; action: 'launch' | 'start-stage' }]
 }>()
 
 const router = useRouter()
@@ -57,15 +63,59 @@ const stages = computed<BoardStage[]>(() => props.stages ?? [])
 // ── Card visual variant ───────────────────────────────────────────────────────
 // Independent of column layout: derived from the story's live lifecycle so a card
 // looks the same in macro and détail views.
-type CardVariant = 'backlog' | 'running' | 'gate' | 'done' | 'failed'
+type CardVariant = 'backlog' | 'manual_idle' | 'running' | 'gate' | 'done' | 'failed'
+
+/** Transition policy of the stage whose name matches the card's current_stage. */
+function currentStageTransition(story: Story): 'auto' | 'manual' | 'gate' | undefined {
+  if (!story.current_stage) return undefined
+  return stages.value.find((s) => s.name === story.current_stage)?.transition
+}
+
+/**
+ * True when the card sits idle in a manual stage not yet started: its run is paused
+ * and the current stage's policy is manual. The executor parks the run on entering a
+ * not-yet-started manual stage (no waiting_approval step), so it is distinct from a
+ * gate (which suspends a step pending review).
+ */
+function isManualIdle(story: Story): boolean {
+  return (
+    story.latest_run?.status === 'paused' &&
+    story.latest_run?.current_step?.status !== 'waiting_approval' &&
+    currentStageTransition(story) === 'manual'
+  )
+}
 
 function cardVariant(story: Story): CardVariant {
+  if (isManualIdle(story)) return 'manual_idle'
   const col = boardColumn(story)
   if (col === 'in_progress') return 'running'
   if (col === 'blocked') return 'gate'
   if (col === 'done') return 'done'
   if (col === 'failed') return 'failed'
   return 'backlog'
+}
+
+/**
+ * Whether the "Go" affordance is shown: a card in Backlog (→ launches its run) or a
+ * card idle in a manual stage (→ starts that stage). Never while a segment runs nor
+ * at a gate (those have their own CTAs).
+ */
+function showGo(story: Story): boolean {
+  const v = cardVariant(story)
+  return v === 'backlog' || v === 'manual_idle'
+}
+
+/** Label for the Go button: launch from backlog, or start the parked manual stage. */
+function goLabel(story: Story): string {
+  return cardVariant(story) === 'manual_idle' ? 'Go · start stage' : 'Go'
+}
+
+/** Emit the Go request with the action the card's variant implies. */
+function handleGo(story: Story) {
+  emit('go', {
+    story,
+    action: cardVariant(story) === 'manual_idle' ? 'start-stage' : 'launch',
+  })
 }
 
 // ── Card style helpers ───────────────────────────────────────────────────────
@@ -189,6 +239,7 @@ function badgeStatus(story: Story): string {
     : variant === 'gate' ? 'blocked'
     : variant === 'done' ? 'done'
     : variant === 'failed' ? 'failed'
+    : variant === 'manual_idle' ? 'pending'
     : 'backlog'
 }
 
@@ -339,6 +390,20 @@ function columnSeverity(severityKey: string) {
             >
               {{ story.latest_run?.error_message ?? 'exit 1' }}
             </span>
+
+            <!-- ── GO: launch (Backlog) or start the manual stage (idle) ───────── -->
+            <div v-if="showGo(story)" class="flex items-start">
+              <Button
+                :label="goLabel(story)"
+                icon="pi pi-play"
+                severity="success"
+                size="small"
+                :aria-label="`Go: ${story.key}`"
+                data-testid="board-go-button"
+                style="font-size: 0.75rem"
+                @click.stop="handleGo(story)"
+              />
+            </div>
           </div>
 
           <!-- Empty column state -->
