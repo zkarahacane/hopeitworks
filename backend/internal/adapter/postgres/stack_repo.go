@@ -61,6 +61,24 @@ func (r *StackRepo) GetByKey(ctx context.Context, key string) (*model.Stack, err
 	return toDomainStack(row), nil
 }
 
+// Upsert inserts a stack or, on key conflict, updates its image_ref and toolchain.
+// Idempotent: backs the boot-time seeder that re-applies the versioned config catalogue.
+func (r *StackRepo) Upsert(ctx context.Context, s *model.Stack) (*model.Stack, error) {
+	toolchain := s.Toolchain
+	if toolchain == nil {
+		toolchain = []byte("{}")
+	}
+	row, err := r.queries.UpsertStack(ctx, UpsertStackParams{
+		Key:       s.Key,
+		ImageRef:  s.ImageRef,
+		Toolchain: toolchain,
+	})
+	if err != nil {
+		return nil, apperrors.NewInternal("failed to upsert stack", err)
+	}
+	return toDomainStack(row), nil
+}
+
 // toDomainStack maps a sqlc-generated Stack to the domain model.
 func toDomainStack(s Stack) *model.Stack {
 	return &model.Stack{
