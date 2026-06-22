@@ -37,27 +37,27 @@ smtp:
 # The migration-inlined seed (000034) stays only as a first-boot fallback.
 stacks:
   - key: go
-    image_ref: ghcr.io/zkarahacane/hopeitworks/agent-go:latest
+    image_ref: ghcr.io/zkarahacane/hopeitworks/agent-go@sha256:a9169e9d8dc0ae71ba7a4729f8892a5461195b2d2d113b85efc660fc01cc486d
     toolchain:
       go: "1.23"
       node: "22"
       cli: ["claude", "opencode"]
       tools: ["sqlc", "oapi-codegen", "wire", "golangci-lint", "gh"]
   - key: node
-    image_ref: ghcr.io/zkarahacane/hopeitworks/agent-node:latest
+    image_ref: ghcr.io/zkarahacane/hopeitworks/agent-node@sha256:c30ed2bc1e758c8c7aa34de51d8e20b857d670b655c02b6318fb4b324cec9d97
     toolchain:
       node: "22"
       cli: ["claude", "opencode"]
       tools: ["typescript", "prettier", "eslint", "gh"]
   - key: python
-    image_ref: ghcr.io/zkarahacane/hopeitworks/agent-python:latest
+    image_ref: ghcr.io/zkarahacane/hopeitworks/agent-python@sha256:c63b0460429f70f73325f2043114ce94788afb0507e91064872f5e69d0b5432a
     toolchain:
       python: "3.12"
       node: "22"
       cli: ["claude", "opencode"]
       tools: ["gh"]
   - key: go-node
-    image_ref: ghcr.io/zkarahacane/hopeitworks/agent-go-node:latest
+    image_ref: ghcr.io/zkarahacane/hopeitworks/agent-go-node@sha256:8e87a10611e1be943cf28ebd818215f62e1401d9b46efce2dcfcf0e873e23276
     toolchain:
       go: "1.23"
       node: "22"
