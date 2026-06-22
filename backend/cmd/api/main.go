@@ -157,6 +157,13 @@ func run() error {
 	stackService := service.NewStackService(stackRepo)
 	stackHandler := handler.NewStackHandler(stackService)
 
+	// Environment persistence (P2c1): one execution composition per project (stacks +
+	// sidecar services + config source + commands). Instantiated at boot so it is ready
+	// for the service/handler + run-path wiring that lands in P2c2. The blank assignment
+	// keeps it constructed without an API surface yet.
+	environmentRepo := pgadapter.NewEnvironmentRepo(queries)
+	_ = environmentRepo
+
 	// Template renderer (Handlebars engine for prompt templates)
 	handlebarsRenderer := hbadapter.NewRenderer()
 

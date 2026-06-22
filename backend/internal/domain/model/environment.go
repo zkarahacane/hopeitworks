@@ -6,11 +6,11 @@ import (
 	"github.com/google/uuid"
 )
 
-// NOTE: This file is P0 scaffolding. The `environments` table, sidecar
-// orchestration on a per-run isolated network, conn-string injection and golden
-// images land in P2. The invariant is portability: an Environment must stay
-// K8s-Pod-expressible (services are sidecars-in-Pod, never DinD). Nothing here
-// is persisted or wired yet.
+// P2c1 persists the Environment (table `environments`, migration 000036) behind a
+// repository: data model + storage only, still additive. Sidecar orchestration on a
+// per-run isolated network, conn-string injection and golden images land in P2c2.
+// The invariant is portability: an Environment must stay K8s-Pod-expressible
+// (services are sidecars-in-Pod, never DinD).
 
 // Environment sources — where the run composition is derived from. The repo's
 // own files win when present; otherwise the stack + services are declared in UI.
@@ -32,6 +32,7 @@ type Environment struct {
 	Source    string               `json:"source"`   // EnvironmentSource*
 	Commands  map[string]string    `json:"commands"` // {test:"make test", migrate:"…", seed:"…"}
 	CreatedAt time.Time            `json:"created_at"`
+	UpdatedAt time.Time            `json:"updated_at"`
 }
 
 // EnvironmentService is a sidecar brought up alongside the agent on a per-run
