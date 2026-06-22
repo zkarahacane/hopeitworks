@@ -341,6 +341,21 @@ func run() error {
 	hitlService := service.NewHITLService(hitlRepo, runRepo, jobQueue, eventRepo, logger)
 	hitlHandler := handler.NewHITLHandler(hitlService)
 
+	// Guard watchdog (INC 4a): out-of-band ticker that scans running steps and
+	// evaluates the board-side probes (log_silence/wallclock/cost_batch). On a
+	// halt-gate breach it raises a probe_halt HITL via the HITL service. Runs
+	// independently of the executor (no Docker dependency) so it always supervises.
+	watchdogRepo := pgadapter.NewWatchdogRepo(queries)
+	watchdog := service.NewWatchdog(
+		watchdogRepo, pipelineConfigRepo, costRepo, runRepo, hitlService, logger,
+		30*time.Second, // scan interval
+	)
+	go func() {
+		if err := watchdog.Start(appCtx); err != nil && err != context.Canceled {
+			logger.Error("guard watchdog failed", "error", err)
+		}
+	}()
+
 	// Notifier adapters
 	notifiers := map[string]port.Notifier{
 		model.ChannelTypeDiscord: discordadapter.NewNotifier(),

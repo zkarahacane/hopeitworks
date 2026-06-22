@@ -65,6 +65,22 @@ func (m *mockHITLRepoForHandler) UpdateStatus(_ context.Context, id uuid.UUID, s
 	return req, nil
 }
 
+func (m *mockHITLRepoForHandler) UpdateResolution(_ context.Context, id uuid.UUID, status model.HITLStatus, resolvedBy *uuid.UUID, action string, at time.Time) (*model.HITLRequest, error) {
+	req, ok := m.requests[id]
+	if !ok {
+		return nil, apperrors.NewNotFound("hitl_request", id)
+	}
+	req.Status = status
+	req.ResolvedBy = resolvedBy
+	req.ResolutionAction = &action
+	req.ResolvedAt = &at
+	return req, nil
+}
+
+func (m *mockHITLRepoForHandler) ListProbeHalts(_ context.Context, _ *uuid.UUID) ([]*model.ProbeHalt, error) {
+	return nil, nil
+}
+
 func (m *mockHITLRepoForHandler) ListPendingByProject(_ context.Context, _ uuid.UUID) ([]*model.PendingHITLRequest, error) {
 	return m.pending, nil
 }
