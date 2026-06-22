@@ -23,6 +23,7 @@ type RunService struct {
 	eventPub           port.EventPublisher
 	containerMgr       port.ContainerManager
 	agentRepo          port.AgentRepository
+	stackRepo          port.StackRepository
 }
 
 // NewRunService creates a new RunService.
@@ -55,6 +56,13 @@ func (s *RunService) SetContainerManager(cm port.ContainerManager) {
 // SetAgentRepo configures the agent repository for agent resolution at run launch.
 func (s *RunService) SetAgentRepo(repo port.AgentRepository) {
 	s.agentRepo = repo
+}
+
+// SetStackRepo configures the stack catalogue repository used to resolve an agent's
+// effective launch image when the agent references a stack (StackRef). Optional: when
+// unset, image resolution falls back to the agent's free-form image.
+func (s *RunService) SetStackRepo(repo port.StackRepository) {
+	s.stackRepo = repo
 }
 
 // PipelineStepConfig represents a step in a pipeline configuration.
@@ -364,8 +372,23 @@ func (s *RunService) LaunchRun(ctx context.Context, projectID, storyID, userID u
 			if agent.Provider != "" {
 				runMetadata[fmt.Sprintf("step_%d_provider", i)] = agent.Provider
 			}
-			if agent.Image != "" {
-				runMetadata[fmt.Sprintf("step_%d_agent_image", i)] = agent.Image
+			// Resolve the effective launch image. A stack reference wins: it points at
+			// a catalogued, platform-owned image (resolved from stacks.image_ref). With
+			// no stack — or no stack repository wired — fall back to the agent's
+			// free-form image, i.e. exactly the previous behaviour.
+			effectiveImage := agent.Image
+			if agent.StackRef != nil && s.stackRepo != nil {
+				stack, stackErr := s.stackRepo.GetByID(ctx, *agent.StackRef)
+				if stackErr != nil {
+					// GetByID already returns a categorised DomainError (NotFound when
+					// the referenced stack is gone). Propagate it as-is so the caller
+					// sees a 404 rather than an opaque 500.
+					return nil, stackErr
+				}
+				effectiveImage = stack.ImageRef
+			}
+			if effectiveImage != "" {
+				runMetadata[fmt.Sprintf("step_%d_agent_image", i)] = effectiveImage
 			}
 			// runtime_kind drives the execution-mode dispatch (callback vs legacy),
 			// replacing the old image-substring heuristic. Default from provider when unset.

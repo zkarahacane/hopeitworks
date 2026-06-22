@@ -13,6 +13,7 @@ type Server struct {
 	epics          *EpicHandler
 	stories        *StoryHandler
 	agents         *AgentHandler
+	stacks         *StackHandler
 	runs           *RunHandler
 	pipelineConfig *PipelineConfigHandler
 	hitl           *HITLHandler
@@ -22,8 +23,8 @@ type Server struct {
 }
 
 // NewServer creates a new Server with the given handlers.
-func NewServer(auth *AuthHandler, projects *ProjectHandler, users *UserHandler, profile *ProfileHandler, epics *EpicHandler, stories *StoryHandler, agents *AgentHandler, runs *RunHandler, pipelineConfig *PipelineConfigHandler, hitl *HITLHandler, costs *CostHandler, notifications *NotificationHandler, epicRuns *EpicRunHandler) *Server {
-	return &Server{auth: auth, projects: projects, users: users, profile: profile, epics: epics, stories: stories, agents: agents, runs: runs, pipelineConfig: pipelineConfig, hitl: hitl, costs: costs, notifications: notifications, epicRuns: epicRuns}
+func NewServer(auth *AuthHandler, projects *ProjectHandler, users *UserHandler, profile *ProfileHandler, epics *EpicHandler, stories *StoryHandler, agents *AgentHandler, stacks *StackHandler, runs *RunHandler, pipelineConfig *PipelineConfigHandler, hitl *HITLHandler, costs *CostHandler, notifications *NotificationHandler, epicRuns *EpicRunHandler) *Server {
+	return &Server{auth: auth, projects: projects, users: users, profile: profile, epics: epics, stories: stories, agents: agents, stacks: stacks, runs: runs, pipelineConfig: pipelineConfig, hitl: hitl, costs: costs, notifications: notifications, epicRuns: epicRuns}
 }
 
 // RegisterUser delegates to AuthHandler.
@@ -214,6 +215,11 @@ func (s *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, projectID P
 // DeleteAgent delegates to AgentHandler.
 func (s *Server) DeleteAgent(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, agentID AgentIdPath) {
 	s.agents.DeleteAgent(w, r, projectID, agentID)
+}
+
+// ListStacks delegates to StackHandler.
+func (s *Server) ListStacks(w http.ResponseWriter, r *http.Request) {
+	s.stacks.ListStacks(w, r)
 }
 
 // ListRunsByProject delegates to RunHandler.

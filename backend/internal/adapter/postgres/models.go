@@ -71,6 +71,7 @@ type Agent struct {
 	Image           pgtype.Text `json:"image"`
 	Provider        string      `json:"provider"`
 	RuntimeKind     string      `json:"runtime_kind"`
+	StackID         pgtype.UUID `json:"stack_id"`
 }
 
 type AgentCapability struct {
@@ -252,6 +253,14 @@ type RunStep struct {
 	RetryCount   int32              `json:"retry_count"`
 	RetryType    pgtype.Text        `json:"retry_type"`
 	ParentStepID pgtype.UUID        `json:"parent_step_id"`
+}
+
+type Stack struct {
+	ID        uuid.UUID `json:"id"`
+	Key       string    `json:"key"`
+	ImageRef  string    `json:"image_ref"`
+	Toolchain []byte    `json:"toolchain"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 type Story struct {

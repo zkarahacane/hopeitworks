@@ -850,6 +850,105 @@ func TestLaunchRun_NoModelWhenEmpty(t *testing.T) {
 	}
 }
 
+// stackPipelineYAML is a single implement step bound to testAgentIDImplement.
+const stackPipelineYAML = `steps:
+  - id: "step-1"
+    name: "implement"
+    action_type: "implement"
+    agent_id: "00000000-0000-0000-0000-000000000001"
+    auto_approve: false
+    retry_policy:
+      max_retries: 0
+      retry_type: "none"
+`
+
+// launchRunCapture runs LaunchRun with a single-step pipeline bound to the given
+// agent, optionally wiring a stack repo, and returns the captured run metadata.
+func launchRunCapture(t *testing.T, agent *model.Agent, stackRepo *mockStackRepo) map[string]interface{} {
+	t.Helper()
+	projectID := uuid.New()
+	storyID := uuid.New()
+
+	storyRepo := &mockStoryRepoForRun{
+		getByIDFn: func(_ context.Context, id uuid.UUID) (*model.Story, error) {
+			return &model.Story{ID: id, ProjectID: projectID, Key: "S-01", Status: model.StoryStatusBacklog}, nil
+		},
+	}
+	pipelineConfigRepo := &mockPipelineConfigRepoForRun{
+		getByProjectIDFn: func(_ context.Context, _ uuid.UUID) (*model.PipelineConfig, error) {
+			return &model.PipelineConfig{ID: uuid.New(), ProjectID: projectID, ConfigYAML: stackPipelineYAML, Version: 1}, nil
+		},
+	}
+	var capturedRun *model.Run
+	runRepo := &mockRunRepo{
+		createRunFn: func(_ context.Context, run *model.Run) (*model.Run, error) {
+			run.ID = uuid.New()
+			capturedRun = run
+			return run, nil
+		},
+		createRunStepFn: func(_ context.Context, step *model.RunStep) (*model.RunStep, error) {
+			step.ID = uuid.New()
+			return step, nil
+		},
+	}
+
+	agentRepo := newMockAgentRepo()
+	agentRepo.agents[testAgentIDImplement] = agent
+
+	svc := NewRunService(runRepo, newMockProjectRepoForService(), storyRepo, pipelineConfigRepo, &mockJobQueue{})
+	svc.SetAgentRepo(agentRepo)
+	if stackRepo != nil {
+		svc.SetStackRepo(stackRepo)
+	}
+	if _, err := svc.LaunchRun(context.Background(), projectID, storyID, uuid.Nil); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	return capturedRun.Metadata
+}
+
+// TestLaunchRun_ImageOnly_BackCompat proves the hard invariant: an agent with only a
+// free-form image (no StackRef) threads that image as step_0_agent_image — even when a
+// stack repo is wired, it is not consulted.
+func TestLaunchRun_ImageOnly_BackCompat(t *testing.T) {
+	agent := &model.Agent{ID: testAgentIDImplement, Model: "claude-opus-4-6", Image: "hopeitworks/agent-go-node:latest"}
+	stackRepo := newMockStackRepo() // wired but must stay untouched (agent has no StackRef)
+
+	meta := launchRunCapture(t, agent, stackRepo)
+
+	img, ok := meta["step_0_agent_image"].(string)
+	if !ok {
+		t.Fatal("expected step_0_agent_image in metadata")
+	}
+	if img != "hopeitworks/agent-go-node:latest" {
+		t.Errorf("expected free-form image to be threaded unchanged, got %q", img)
+	}
+}
+
+// TestLaunchRun_StackRef_ResolvesImage proves a stack-referencing agent resolves its
+// launch image from the catalogue (stacks.image_ref), overriding the free-form image.
+func TestLaunchRun_StackRef_ResolvesImage(t *testing.T) {
+	stackID := uuid.New()
+	stackRepo := newMockStackRepo()
+	stackRepo.stacks[stackID] = &model.Stack{ID: stackID, Key: model.StackKeyGo, ImageRef: "ghcr.io/zkarahacane/hopeitworks/agent-go:pinned"}
+
+	agent := &model.Agent{
+		ID:       testAgentIDImplement,
+		Model:    "claude-opus-4-6",
+		Image:    "should-be-ignored:latest",
+		StackRef: &stackID,
+	}
+
+	meta := launchRunCapture(t, agent, stackRepo)
+
+	img, ok := meta["step_0_agent_image"].(string)
+	if !ok {
+		t.Fatal("expected step_0_agent_image in metadata")
+	}
+	if img != "ghcr.io/zkarahacane/hopeitworks/agent-go:pinned" {
+		t.Errorf("expected stack image_ref to be resolved, got %q", img)
+	}
+}
+
 func TestLaunchRun_StoryNotFound(t *testing.T) {
 	projectID := uuid.New()
 	storyID := uuid.New()

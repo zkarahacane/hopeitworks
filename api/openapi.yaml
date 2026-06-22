@@ -1253,6 +1253,29 @@ paths:
           $ref: "#/components/responses/NotFound"
 
   # ── Agents ───────────────────────────────────────────────────────────
+  /stacks:
+    get:
+      operationId: listStacks
+      summary: List the catalogue of runtime stacks
+      description: >
+        Returns the curated, platform-owned stacks an agent can reference instead of a
+        free-form image. Read-only; the catalogue is seeded server-side.
+      tags: [stacks]
+      responses:
+        "200":
+          description: The stack catalogue
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Stack"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
   /agents:
     get:
       operationId: listGlobalAgents
@@ -3025,6 +3048,33 @@ components:
           $ref: "#/components/schemas/Pagination"
 
     # ── Agent ────────────────────────────────────────────────────────
+    Stack:
+      type: object
+      required:
+        - id
+        - key
+        - image_ref
+        - toolchain
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        key:
+          type: string
+          enum: [go, node, python, go-node]
+          description: Stable catalogue key the agent references
+        image_ref:
+          type: string
+          description: Pinned, multi-arch image reference (digest when known, else tag)
+        toolchain:
+          type: object
+          additionalProperties: true
+          description: Toolchain, runtime CLI and tooling carried by the image
+        created_at:
+          type: string
+          format: date-time
+
     Agent:
       type: object
       required:
@@ -3050,7 +3100,16 @@ components:
           description: LLM model identifier (e.g. "claude-opus-4-6", "claude-sonnet-4-6")
         image:
           type: string
-          description: Docker image reference for the agent runtime container
+          description: >
+            Free-form Docker image reference. Used as the launch image when
+            stack_ref is null (back-compat fallback).
+        stack_ref:
+          type: string
+          format: uuid
+          nullable: true
+          description: >
+            Optional reference to a catalogued stack (see GET /stacks). When set,
+            the effective launch image is resolved from the stack instead of image.
         template_content:
           type: string
           description: Handlebars prompt template content
@@ -3095,6 +3154,11 @@ components:
           type: string
         image:
           type: string
+        stack_ref:
+          type: string
+          format: uuid
+          nullable: true
+          description: Optional reference to a catalogued stack (see GET /stacks).
         template_content:
           type: string
         scope:
@@ -3118,6 +3182,11 @@ components:
           type: string
         image:
           type: string
+        stack_ref:
+          type: string
+          format: uuid
+          nullable: true
+          description: Optional reference to a catalogued stack (see GET /stacks).
         template_content:
           type: string
         provider:

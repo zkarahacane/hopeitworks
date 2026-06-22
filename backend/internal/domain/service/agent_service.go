@@ -25,6 +25,7 @@ type CreateAgentParams struct {
 	Name            string
 	Model           string
 	Image           string
+	StackRef        *uuid.UUID
 	TemplateContent string
 	Scope           string
 	Provider        string
@@ -67,6 +68,7 @@ func (s *AgentService) Create(ctx context.Context, params CreateAgentParams) (*m
 		Name:            params.Name,
 		Model:           params.Model,
 		Image:           params.Image,
+		StackRef:        params.StackRef,
 		TemplateContent: params.TemplateContent,
 		Scope:           scope,
 		Provider:        provider,
@@ -120,6 +122,7 @@ type UpdateAgentParams struct {
 	Name            *string
 	Model           *string
 	Image           *string
+	StackRef        *uuid.UUID
 	TemplateContent *string
 	Provider        *string
 }
@@ -145,6 +148,12 @@ func (s *AgentService) Update(ctx context.Context, params UpdateAgentParams) (*m
 	}
 	if params.Image != nil {
 		existing.Image = *params.Image
+	}
+	// A non-nil StackRef repoints the agent at a catalogued stack. Clearing back to
+	// an image-only agent is a follow-up (would need a tri-state to distinguish
+	// "unchanged" from "clear"); P2a only needs to set a stack.
+	if params.StackRef != nil {
+		existing.StackRef = params.StackRef
 	}
 	if params.TemplateContent != nil {
 		if *params.TemplateContent == "" {
