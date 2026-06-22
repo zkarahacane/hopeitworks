@@ -112,6 +112,17 @@ type Credential struct {
 	UpdatedAt      time.Time   `json:"updated_at"`
 }
 
+type Environment struct {
+	ID        uuid.UUID `json:"id"`
+	ProjectID uuid.UUID `json:"project_id"`
+	Stacks    []string  `json:"stacks"`
+	Services  []byte    `json:"services"`
+	Source    string    `json:"source"`
+	Commands  []byte    `json:"commands"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
 type Epic struct {
 	ID          uuid.UUID   `json:"id"`
 	ProjectID   uuid.UUID   `json:"project_id"`
