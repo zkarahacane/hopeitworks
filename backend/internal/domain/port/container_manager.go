@@ -42,4 +42,21 @@ type ContainerManager interface {
 	// ListContainers lists all containers matching the specified labels.
 	// labels is a map of key-value pairs for filtering (e.g., managed_by=hopeitworks).
 	ListContainers(ctx context.Context, labels map[string]string) ([]ContainerInfo, error)
+
+	// CreateNetwork creates a Docker network with the given name and labels and
+	// returns its ID. It is idempotent: if a network with the same name already
+	// exists, the existing network's ID is returned instead of erroring.
+	CreateNetwork(ctx context.Context, name string, labels map[string]string) (string, error)
+
+	// RemoveNetwork removes a Docker network by name or ID. It is idempotent: a
+	// network that does not exist is treated as success (returns nil).
+	RemoveNetwork(ctx context.Context, nameOrID string) error
+
+	// ConnectContainer attaches an existing container to a network, optionally
+	// registering DNS aliases for it on that network. aliases may be nil/empty.
+	ConnectContainer(ctx context.Context, networkNameOrID, containerID string, aliases []string) error
+
+	// ListNetworks lists managed Docker networks matching the given label
+	// filter (e.g. managed_by=hopeitworks). An empty/nil filter lists all.
+	ListNetworks(ctx context.Context, labelFilter map[string]string) ([]model.NetworkInfo, error)
 }

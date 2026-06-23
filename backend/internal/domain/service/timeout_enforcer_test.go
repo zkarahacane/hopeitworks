@@ -75,6 +75,22 @@ func (m *mockContainerManager) Wait(ctx context.Context, containerID string) (in
 	return 0, nil
 }
 
+func (m *mockContainerManager) CreateNetwork(_ context.Context, _ string, _ map[string]string) (string, error) {
+	return "", nil
+}
+
+func (m *mockContainerManager) RemoveNetwork(_ context.Context, _ string) error {
+	return nil
+}
+
+func (m *mockContainerManager) ConnectContainer(_ context.Context, _, _ string, _ []string) error {
+	return nil
+}
+
+func (m *mockContainerManager) ListNetworks(_ context.Context, _ map[string]string) ([]model.NetworkInfo, error) {
+	return nil, nil
+}
+
 func (m *mockContainerManager) getStopCalls() []string {
 	m.mu.Lock()
 	defer m.mu.Unlock()

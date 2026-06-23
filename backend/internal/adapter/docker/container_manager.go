@@ -26,6 +26,11 @@ type dockerClient interface {
 	ContainerRemove(ctx context.Context, containerID string, options dockercontainer.RemoveOptions) error
 	ContainerWait(ctx context.Context, containerID string, condition dockercontainer.WaitCondition) (<-chan dockercontainer.WaitResponse, <-chan error)
 	ContainerList(ctx context.Context, options dockercontainer.ListOptions) ([]dockercontainer.Summary, error)
+	ContainerInspect(ctx context.Context, containerID string) (dockercontainer.InspectResponse, error)
+	NetworkCreate(ctx context.Context, name string, options network.CreateOptions) (network.CreateResponse, error)
+	NetworkRemove(ctx context.Context, networkID string) error
+	NetworkConnect(ctx context.Context, networkID, containerID string, config *network.EndpointSettings) error
+	NetworkList(ctx context.Context, options network.ListOptions) ([]network.Summary, error)
 }
 
 // Ensure ContainerManager implements port.ContainerManager at compile time.
@@ -68,6 +73,15 @@ func (m *ContainerManager) Create(ctx context.Context, opts model.ContainerOpts)
 		Env:    opts.Env,
 		Labels: opts.Labels,
 	}
+	if opts.Healthcheck != nil {
+		config.Healthcheck = &dockercontainer.HealthConfig{
+			Test:        opts.Healthcheck.Test,
+			Interval:    opts.Healthcheck.Interval,
+			Timeout:     opts.Healthcheck.Timeout,
+			Retries:     opts.Healthcheck.Retries,
+			StartPeriod: opts.Healthcheck.StartPeriod,
+		}
+	}
 
 	resources := dockercontainer.Resources{}
 	if opts.Memory > 0 {
@@ -104,6 +118,18 @@ func (m *ContainerManager) Create(ctx context.Context, opts model.ContainerOpts)
 		slog.String("container_id", resp.ID),
 		slog.String("image", opts.Image),
 	)
+
+	// Attach to any additional networks. Empty/nil ExtraNetworks leaves the
+	// current single-network behaviour untouched.
+	for _, netName := range opts.ExtraNetworks {
+		var aliases []string
+		if alias, ok := opts.Aliases[netName]; ok && alias != "" {
+			aliases = []string{alias}
+		}
+		if err := m.ConnectContainer(ctx, netName, resp.ID, aliases); err != nil {
+			return "", err
+		}
+	}
 
 	return resp.ID, nil
 }
@@ -210,5 +236,116 @@ func (m *ContainerManager) ListContainers(ctx context.Context, labels map[string
 		slog.Int("count", len(result)),
 	)
 
+	return result, nil
+}
+
+// CreateNetwork creates a Docker network and returns its ID. It is idempotent:
+// if a network with the same name already exists, its ID is returned instead of
+// erroring.
+func (m *ContainerManager) CreateNetwork(ctx context.Context, name string, labels map[string]string) (string, error) {
+	// Idempotency: return the existing network's ID if one already has this name.
+	nameFilter := filters.NewArgs()
+	nameFilter.Add("name", name)
+	existing, err := m.client.NetworkList(ctx, network.ListOptions{Filters: nameFilter})
+	if err != nil {
+		return "", apperrors.NewContainerError(
+			fmt.Sprintf("failed to list networks for %s: %v", name, err),
+			err,
+		)
+	}
+	for _, n := range existing {
+		// The name filter matches substrings; require an exact name match.
+		if n.Name == name {
+			m.logger.Debug("network already exists",
+				slog.String("network", name),
+				slog.String("network_id", n.ID),
+			)
+			return n.ID, nil
+		}
+	}
+
+	resp, err := m.client.NetworkCreate(ctx, name, network.CreateOptions{
+		Driver: "bridge",
+		Labels: labels,
+	})
+	if err != nil {
+		return "", apperrors.NewContainerError(
+			fmt.Sprintf("failed to create network %s: %v", name, err),
+			err,
+		)
+	}
+
+	m.logger.Debug("network created",
+		slog.String("network", name),
+		slog.String("network_id", resp.ID),
+	)
+	return resp.ID, nil
+}
+
+// RemoveNetwork removes a Docker network by name or ID. It is idempotent: a
+// network that does not exist is treated as success.
+func (m *ContainerManager) RemoveNetwork(ctx context.Context, nameOrID string) error {
+	if err := m.client.NetworkRemove(ctx, nameOrID); err != nil {
+		if client.IsErrNotFound(err) {
+			m.logger.Debug("network already absent", slog.String("network", nameOrID))
+			return nil
+		}
+		return apperrors.NewContainerError(
+			fmt.Sprintf("failed to remove network %s: %v", nameOrID, err),
+			err,
+		)
+	}
+
+	m.logger.Debug("network removed", slog.String("network", nameOrID))
+	return nil
+}
+
+// ConnectContainer attaches a container to a network, optionally registering DNS
+// aliases for it on that network.
+func (m *ContainerManager) ConnectContainer(ctx context.Context, networkNameOrID, containerID string, aliases []string) error {
+	var cfg *network.EndpointSettings
+	if len(aliases) > 0 {
+		cfg = &network.EndpointSettings{Aliases: aliases}
+	}
+	if err := m.client.NetworkConnect(ctx, networkNameOrID, containerID, cfg); err != nil {
+		return apperrors.NewContainerError(
+			fmt.Sprintf("failed to connect container %s to network %s: %v", containerID, networkNameOrID, err),
+			err,
+		)
+	}
+
+	m.logger.Debug("container connected to network",
+		slog.String("container_id", containerID),
+		slog.String("network", networkNameOrID),
+	)
+	return nil
+}
+
+// ListNetworks lists Docker networks matching the given label filter.
+func (m *ContainerManager) ListNetworks(ctx context.Context, labelFilter map[string]string) ([]model.NetworkInfo, error) {
+	filterArgs := filters.NewArgs()
+	for key, value := range labelFilter {
+		filterArgs.Add("label", key+"="+value)
+	}
+
+	networks, err := m.client.NetworkList(ctx, network.ListOptions{Filters: filterArgs})
+	if err != nil {
+		return nil, apperrors.NewContainerError(
+			fmt.Sprintf("failed to list networks: %v", err),
+			err,
+		)
+	}
+
+	result := make([]model.NetworkInfo, 0, len(networks))
+	for _, n := range networks {
+		result = append(result, model.NetworkInfo{
+			ID:        n.ID,
+			Name:      n.Name,
+			Labels:    n.Labels,
+			CreatedAt: n.Created,
+		})
+	}
+
+	m.logger.Debug("networks listed", slog.Int("count", len(result)))
 	return result, nil
 }
