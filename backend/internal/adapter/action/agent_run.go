@@ -209,7 +209,7 @@ func (a *AgentRunAction) Execute(ctx context.Context, runCtx *model.RunContext) 
 	// env==nil or env.Commands is empty (no ephemeral container is created). On
 	// failure we return immediately: the deferred sidecar Cleanup runs and no
 	// agent container is ever created.
-	if err := a.runEnvironmentCommands(ctx, env, sidecarCtx, project, branchName, agentImage, extraEnv); err != nil {
+	if err := a.runEnvironmentCommands(ctx, env, sidecarCtx, project, runCtx.Run.ID, branchName, agentImage, extraEnv); err != nil {
 		return fmt.Errorf("run environment commands: %w", err)
 	}
 
@@ -424,10 +424,10 @@ func (a *AgentRunAction) createContainer(
 		CPUs:        a.config.DefaultCPUs,
 		Env:         env,
 		Labels: map[string]string{
-			labelManagedBy: labelValueManaged,
-			labelRunID:     runCtx.Run.ID.String(),
-			"step_id":      runCtx.RunStep.ID.String(),
-			"story_key":    story.Key,
+			model.LabelManagedBy: model.LabelManagedByValue,
+			model.LabelRunID:     runCtx.Run.ID.String(),
+			"step_id":            runCtx.RunStep.ID.String(),
+			"story_key":          story.Key,
 		},
 	}
 

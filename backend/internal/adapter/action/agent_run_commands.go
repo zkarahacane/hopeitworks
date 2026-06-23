@@ -2,14 +2,18 @@ package action
 
 import (
 	"context"
+	stderrors "errors"
 	"fmt"
 	"net/url"
 	"os"
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/zakari/hopeitworks/backend/internal/domain/model"
 	"github.com/zakari/hopeitworks/backend/internal/domain/port"
+	apperrors "github.com/zakari/hopeitworks/backend/pkg/errors"
 )
 
 // Environment command keys, run in this FIXED conventional order (never the
@@ -42,11 +46,11 @@ const (
 	envPrefixGitProvider = "GIT_PROVIDER="
 	envPrefixGitHubToken = "GITHUB_TOKEN="
 
-	labelManagedBy    = "managed_by"
-	labelValueManaged = "hopeitworks"
-	labelRunID        = "run_id"
-
 	defaultGitTokenEnv = "GITHUB_TOKEN"
+
+	// cloneURLEnv is the env var carrying the authenticated clone URL into the
+	// ephemeral command container, keeping the token out of the command argv.
+	cloneURLEnv = "HOPEITWORKS_CLONE_URL"
 )
 
 // cmdShell is the shell used to drive the clone-then-run one-liner.
@@ -80,6 +84,7 @@ func (a *AgentRunAction) runEnvironmentCommands(
 	env *model.Environment,
 	sidecarCtx *port.SidecarContext,
 	project *model.Project,
+	runID uuid.UUID,
 	branchName, agentImage string,
 	extraEnv []string,
 ) error {
@@ -98,59 +103,89 @@ func (a *AgentRunAction) runEnvironmentCommands(
 		return fmt.Errorf("build authenticated repo url: %w", err)
 	}
 
+	spec := commandSpec{
+		image:      image,
+		cloneURL:   cloneURL,
+		branchName: branchName,
+		gitEnv:     gitEnv,
+		extraEnv:   extraEnv,
+		runID:      runID,
+		sidecarCtx: sidecarCtx,
+	}
 	for _, key := range commandOrder {
 		command, ok := env.Commands[key]
 		if !ok || strings.TrimSpace(command) == "" {
 			continue // optional command: skip when absent or blank
 		}
-		if err := a.runOneCommand(ctx, key, command, image, cloneURL, branchName, gitEnv, extraEnv, sidecarCtx); err != nil {
+		if err := a.runOneCommand(ctx, key, command, spec); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
+// commandSpec carries the invariant inputs shared by every ephemeral command
+// container in a run, so runOneCommand keeps a small signature.
+type commandSpec struct {
+	image      string
+	cloneURL   string
+	branchName string
+	gitEnv     []string
+	extraEnv   []string
+	runID      uuid.UUID
+	sidecarCtx *port.SidecarContext
+}
+
 // runOneCommand launches a single ephemeral container that clones the repo and
 // runs command, waits for it, and removes the container. A non-zero exit code is
-// returned as an error (fail-fast) with the last log lines for diagnosis.
-func (a *AgentRunAction) runOneCommand(
-	ctx context.Context,
-	key, command, image, cloneURL, branchName string,
-	gitEnv, extraEnv []string,
-	sidecarCtx *port.SidecarContext,
-) error {
+// returned as a fail-fast error.
+//
+// SECURITY: the returned error carries ONLY the command key and exit code —
+// never the container's stdout/stderr. That error propagates through Execute to
+// the pipeline executor, which persists it to run.error_message AND broadcasts
+// it over SSE; a command that dumps its env (printenv / set -x / CI tooling)
+// would otherwise leak the git token and DB passwords into a persisted, public
+// channel. The log tail is emitted server-side via slog only.
+func (a *AgentRunAction) runOneCommand(ctx context.Context, key, command string, spec commandSpec) error {
 	cctx, cancel := context.WithTimeout(ctx, commandRunTimeout)
 	defer cancel()
 
 	// Clone the repo (replicating the agent-runtime clone) then run the command
-	// from the workdir. The authenticated URL is passed via an env var so it
-	// never appears in the container's argv / process list.
-	script := "git clone --depth 1 --branch \"$BRANCH_NAME\" \"$HOPEITWORKS_CLONE_URL\" " + ephemeralWorkdir +
-		" || git clone --depth 1 \"$HOPEITWORKS_CLONE_URL\" " + ephemeralWorkdir +
-		"; cd " + ephemeralWorkdir + " && " + command
+	// from the workdir. STRICT semantics: `set -e` makes the clone failure abort
+	// the script, so a clone error (network/auth/missing branch) NEVER silently
+	// falls back to the default branch — migrate/seed must run against the exact
+	// requested branch or not at all. The authenticated URL is passed via an env
+	// var so it never appears in the container's argv / process list.
+	script := "set -e; git clone --depth 1 --branch \"$BRANCH_NAME\" \"$" + cloneURLEnv + "\" " + ephemeralWorkdir +
+		"; cd " + ephemeralWorkdir + "; " + command
 
-	cmdEnv := make([]string, 0, len(gitEnv)+len(extraEnv)+2)
-	cmdEnv = append(cmdEnv, gitEnv...)
-	cmdEnv = append(cmdEnv, extraEnv...)
-	cmdEnv = append(cmdEnv, "BRANCH_NAME="+branchName)
-	cmdEnv = append(cmdEnv, "HOPEITWORKS_CLONE_URL="+cloneURL)
+	cmdEnv := make([]string, 0, len(spec.gitEnv)+len(spec.extraEnv)+2)
+	cmdEnv = append(cmdEnv, spec.gitEnv...)
+	cmdEnv = append(cmdEnv, spec.extraEnv...)
+	cmdEnv = append(cmdEnv, envPrefixBranchName+spec.branchName)
+	cmdEnv = append(cmdEnv, cloneURLEnv+"="+spec.cloneURL)
 
 	opts := model.ContainerOpts{
-		Image:  image,
+		Image:  spec.image,
 		Env:    cmdEnv,
 		Memory: a.config.DefaultMemory,
 		CPUs:   a.config.DefaultCPUs,
-		Cmd:    append(append([]string(nil), cmdShell...), script),
-		Labels: a.commandLabels(sidecarCtx, key),
+		// Override BOTH entrypoint and command: stack/agent images bake
+		// ENTRYPOINT ["agent-runtime"], so setting only Cmd would run
+		// `agent-runtime sh -lc <script>` and never execute the shell. Setting
+		// Entrypoint to the shell replaces the image entrypoint entirely.
+		Entrypoint: append([]string(nil), cmdShell...),
+		Cmd:        []string{script},
+		Labels:     a.commandLabels(spec.runID, key),
 	}
 	// Attach the ephemeral container to the run network so it reaches the
 	// sidecars by their DNS alias, exactly like the agent container does.
-	if sidecarCtx != nil && sidecarCtx.NetworkName != "" {
-		opts.NetworkName = sidecarCtx.NetworkName
+	if spec.sidecarCtx != nil && spec.sidecarCtx.NetworkName != "" {
+		opts.NetworkName = spec.sidecarCtx.NetworkName
 	}
 
 	a.logger.Info("running environment command",
-		"command_key", key, "image", image, "network", opts.NetworkName)
+		"command_key", key, "image", spec.image, "network", opts.NetworkName)
 
 	containerID, err := a.containerMgr.Create(cctx, opts)
 	if err != nil {
@@ -167,8 +202,10 @@ func (a *AgentRunAction) runOneCommand(
 		return fmt.Errorf("wait %s command container: %w", key, err)
 	}
 	if exitCode != 0 {
-		return fmt.Errorf("environment command %q failed with exit code %d%s",
-			key, exitCode, a.commandLogTail(containerID))
+		// Server-side diagnostic ONLY: the tail goes to slog (scrubbed by the
+		// ScrubHandler), never into the returned/propagated error.
+		a.logCommandTail(containerID, key, exitCode)
+		return fmt.Errorf("environment command %q failed with exit code %d", key, exitCode)
 	}
 
 	a.logger.Info("environment command succeeded", "command_key", key)
@@ -176,27 +213,30 @@ func (a *AgentRunAction) runOneCommand(
 }
 
 // commandLabels builds the labels for an ephemeral command container so it is
-// attributable to the run and never mistaken for a sidecar or the agent.
-func (a *AgentRunAction) commandLabels(sidecarCtx *port.SidecarContext, key string) map[string]string {
-	labels := map[string]string{
-		labelManagedBy: labelValueManaged,
-		"role":         "env_command",
-		"command_key":  key,
+// attributable to the run and reapable by GC. run_id is ALWAYS stamped — a
+// project with commands but no sidecar services still reaches this path, and an
+// unlabelled container would be invisible to the GC reaper.
+func (a *AgentRunAction) commandLabels(runID uuid.UUID, key string) map[string]string {
+	return map[string]string{
+		model.LabelManagedBy:  model.LabelManagedByValue,
+		model.LabelRole:       model.RoleEnvCommand,
+		model.LabelCommandKey: key,
+		model.LabelRunID:      runID.String(),
 	}
-	if sidecarCtx != nil {
-		labels[labelRunID] = sidecarCtx.RunID.String()
-	}
-	return labels
 }
 
-// commandLogTail returns a best-effort, scrubbed tail of the ephemeral
-// container's logs for inclusion in a fail-fast error. It returns "" when logs
-// cannot be retrieved so the error message stays clean.
-func (a *AgentRunAction) commandLogTail(containerID string) string {
-	logCh, doneCh, err := a.logStreamer.StreamLogs(
-		context.Background(), containerID, "", "")
+// logCommandTail emits a best-effort tail of the ephemeral container's logs to
+// slog for SERVER-SIDE diagnosis only. It is never returned to the caller, so it
+// cannot reach run.error_message / SSE. slog's ScrubHandler additionally redacts
+// token/secret/password-shaped fields. Bounded by its own short timeout so a
+// stuck log stream never blocks the fail-fast path.
+func (a *AgentRunAction) logCommandTail(containerID, key string, exitCode int) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	logCh, doneCh, err := a.logStreamer.StreamLogs(ctx, containerID, "", "")
 	if err != nil {
-		return ""
+		return
 	}
 	const maxLines = 20
 	tail := make([]string, 0, maxLines)
@@ -213,9 +253,12 @@ func (a *AgentRunAction) commandLogTail(containerID string) string {
 	default:
 	}
 	if len(tail) == 0 {
-		return ""
+		return
 	}
-	return ": " + strings.Join(tail, " | ")
+	a.logger.Warn("environment command failed",
+		"command_key", key,
+		"exit_code", exitCode,
+		"log_tail", strings.Join(tail, "\n"))
 }
 
 // removeEphemeral stops and removes an ephemeral command container on a bounded,
@@ -236,23 +279,37 @@ func (a *AgentRunAction) removeEphemeral(containerID string) {
 // resolveCommandImage resolves the image that runs the Environment commands.
 // Preference: the Environment's first Stack (env.Stacks[0]) via the stack
 // catalogue. Fallback: the agent's effective image (the same image the run's
-// agent container uses) when no stack is declared or the stack repo is absent.
-// The fallback guarantees the command image always carries a usable toolchain.
+// agent container uses) when no stack is declared OR the declared stack key is
+// not catalogued (typo / not seeded). The fallback guarantees the command image
+// always carries a usable toolchain.
+//
+// A NotFound from the stack repo is NOT fatal — it degrades to the agent image
+// fallback (with a Warn). Any other repo error (transient DB failure, etc.) is
+// propagated and fails the run, so a flaky lookup is not silently masked.
 func (a *AgentRunAction) resolveCommandImage(ctx context.Context, env *model.Environment, agentImage string) (string, error) {
 	if len(env.Stacks) > 0 && a.stackRepo != nil {
 		key := env.Stacks[0]
 		stack, err := a.stackRepo.GetByKey(ctx, key)
-		if err != nil {
-			return "", fmt.Errorf("lookup stack %q: %w", key, err)
-		}
-		if stack != nil && stack.ImageRef != "" {
+		switch {
+		case err == nil && stack != nil && stack.ImageRef != "":
 			return stack.ImageRef, nil
+		case err != nil && isNotFound(err):
+			a.logger.Warn("environment stack not catalogued, falling back to agent image",
+				"stack_key", key)
+		case err != nil:
+			return "", fmt.Errorf("lookup stack %q: %w", key, err)
 		}
 	}
 	if agentImage != "" {
 		return agentImage, nil
 	}
 	return "", fmt.Errorf("no stack declared and no fallback agent image available")
+}
+
+// isNotFound reports whether err is (or wraps) a NotFound DomainError.
+func isNotFound(err error) bool {
+	var de *apperrors.DomainError
+	return stderrors.As(err, &de) && de.Category == apperrors.CategoryNotFound
 }
 
 // gitEnv returns the git-related env entries the agent container also receives,

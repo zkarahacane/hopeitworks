@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/zakari/hopeitworks/backend/internal/domain/model"
 	"github.com/zakari/hopeitworks/backend/internal/domain/port"
+	"github.com/zakari/hopeitworks/backend/pkg/errors"
 )
 
 // Labels and env keys asserted repeatedly across these tests. Declared as
@@ -268,12 +269,38 @@ func TestRunEnvironmentCommands_ConnStringAndGitEnv(t *testing.T) {
 	if opts.NetworkName != runNetwork {
 		t.Errorf("expected command container on run network %q, got %q", runNetwork, opts.NetworkName)
 	}
-	// Has a Cmd override that clones then runs the command.
-	if len(opts.Cmd) < 3 || opts.Cmd[0] != "sh" {
-		t.Fatalf("expected sh -lc Cmd override, got %v", opts.Cmd)
+
+	// BLOCKER #1 regression guard: the ENTRYPOINT must be overridden to the
+	// shell. Stack/agent images bake ENTRYPOINT ["agent-runtime"]; without this
+	// override Docker would run `agent-runtime sh -lc <script>` and the command
+	// would NEVER execute (and agent-runtime would receive the token+conn-strings
+	// in env). The shell goes in Entrypoint, the script in Cmd[0].
+	wantEntrypoint := []string{"sh", "-lc"}
+	if len(opts.Entrypoint) != len(wantEntrypoint) {
+		t.Fatalf("expected Entrypoint %v, got %v", wantEntrypoint, opts.Entrypoint)
 	}
-	if !strings.Contains(opts.Cmd[2], "git clone") || !strings.Contains(opts.Cmd[2], "make migrate") {
-		t.Errorf("expected Cmd to clone then run the command, got %q", opts.Cmd[2])
+	for i := range wantEntrypoint {
+		if opts.Entrypoint[i] != wantEntrypoint[i] {
+			t.Fatalf("expected Entrypoint %v, got %v", wantEntrypoint, opts.Entrypoint)
+		}
+	}
+	if len(opts.Cmd) != 1 {
+		t.Fatalf("expected Cmd to be a single script arg, got %v", opts.Cmd)
+	}
+	script := opts.Cmd[0]
+	if !strings.Contains(script, "git clone") || !strings.Contains(script, "make migrate") {
+		t.Errorf("expected script to clone then run the command, got %q", script)
+	}
+	// STRICT clone (#4): set -e, no silent default-branch fallback.
+	if !strings.HasPrefix(script, "set -e;") {
+		t.Errorf("expected script to start with 'set -e;' (strict clone), got %q", script)
+	}
+	if strings.Contains(script, "|| git clone") {
+		t.Errorf("script must NOT fall back to default branch on clone failure, got %q", script)
+	}
+	// The token must NOT appear in argv: the clone URL is referenced via env var.
+	if !strings.Contains(script, "$HOPEITWORKS_CLONE_URL") {
+		t.Errorf("expected clone URL referenced via env var, got %q", script)
 	}
 }
 
@@ -322,6 +349,167 @@ func TestRunEnvironmentCommands_ImageResolution(t *testing.T) {
 			t.Errorf("expected command image to fall back to agent image %q, got %v", agentImageRef, cmds)
 		}
 	})
+
+	// #3: a declared-but-uncatalogued stack key (typo / not seeded) yields a
+	// NotFound from the stack repo. That must NOT fail the run — it degrades to
+	// the agent image fallback.
+	t.Run("agent image fallback when stack NotFound", func(t *testing.T) {
+		f := newAgentRunFixture(t)
+		env := envWithCommands(f.projectID, map[string]string{cmdBuild(): "make build"}, []string{"typo-stack"})
+		wireEnvironment(f, env)
+		f.stackRepo.getByKeyFn = func(_ context.Context, key string) (*model.Stack, error) {
+			return nil, errors.NewNotFound("stack", key)
+		}
+		f.containerMgr.createFn = func(_ context.Context, opts model.ContainerOpts) (string, error) {
+			return idForCommand(opts), nil
+		}
+
+		runCtx := f.newRunContext()
+		runCtx.Metadata["agent_image"] = agentImageRef
+		if err := f.action.Execute(context.Background(), runCtx); err != nil {
+			t.Fatalf("expected NotFound to fall back, not fail the run, got %v", err)
+		}
+		cmds := commandCreateCalls(f)
+		if len(cmds) != 1 || cmds[0].Image != agentImageRef {
+			t.Errorf("expected fallback to agent image on stack NotFound, got %v", cmds)
+		}
+	})
+
+	// A non-NotFound stack repo error (transient DB failure) MUST fail the run —
+	// it is not masked by the fallback.
+	t.Run("non-NotFound stack error fails the run", func(t *testing.T) {
+		f := newAgentRunFixture(t)
+		env := envWithCommands(f.projectID, map[string]string{cmdBuild(): "make build"}, []string{model.StackKeyGo})
+		wireEnvironment(f, env)
+		f.stackRepo.getByKeyFn = func(_ context.Context, _ string) (*model.Stack, error) {
+			return nil, fmt.Errorf("connection refused")
+		}
+
+		err := f.action.Execute(context.Background(), f.newRunContext())
+		if err == nil {
+			t.Fatal("expected a non-NotFound stack error to fail the run, got nil")
+		}
+		if got := len(commandCreateCalls(f)); got != 0 {
+			t.Errorf("expected no command container when image resolution errors, got %d", got)
+		}
+		if got := len(agentCreateCalls(f)); got != 0 {
+			t.Errorf("expected no agent container when image resolution errors, got %d", got)
+		}
+	})
+}
+
+// TestRunEnvironmentCommands_ErrorOmitsLogTail is the BLOCKER #2 regression
+// guard: when a command fails, the error that PROPAGATES (and is persisted to
+// run.error_message + broadcast over SSE) must contain ONLY the command key and
+// exit code — never the container's stdout/stderr, which could carry a dumped
+// token or DB password.
+func TestRunEnvironmentCommands_ErrorOmitsLogTail(t *testing.T) {
+	f := newAgentRunFixture(t)
+	env := envWithCommands(f.projectID, map[string]string{cmdMigrate(): "make migrate"}, nil)
+	wireEnvironment(f, env)
+
+	f.containerMgr.createFn = func(_ context.Context, opts model.ContainerOpts) (string, error) {
+		return idForCommand(opts), nil
+	}
+	f.containerMgr.waitFn = func(_ context.Context, _ string) (int, error) {
+		return 1, nil // command fails
+	}
+	// The log stream emits a "secret" line that would leak if embedded in the error.
+	const secretLine = "GITHUB_TOKEN=ghp_supersecrettoken_should_never_propagate"
+	f.logStreamer.streamLogsFn = func(_ context.Context, _, _, _ string) (<-chan model.LogEvent, <-chan int, error) {
+		logCh := make(chan model.LogEvent, 1)
+		doneCh := make(chan int, 1)
+		logCh <- model.LogEvent{Message: secretLine}
+		close(logCh)
+		doneCh <- 1
+		return logCh, doneCh, nil
+	}
+
+	err := f.action.Execute(context.Background(), f.newRunContext())
+	if err == nil {
+		t.Fatal("expected fail-fast error, got nil")
+	}
+	if strings.Contains(err.Error(), secretLine) || strings.Contains(err.Error(), "ghp_") {
+		t.Fatalf("error leaked the log tail / secret: %q", err.Error())
+	}
+	// It must still carry the actionable bits.
+	if !strings.Contains(err.Error(), cmdMigrate()) || !strings.Contains(err.Error(), "exit code 1") {
+		t.Errorf("expected error to name the command and exit code, got %q", err.Error())
+	}
+}
+
+// TestRunEnvironmentCommands_RunIDLabelWithoutServices is the #5 regression
+// guard: a project with commands but NO sidecar services still stamps run_id on
+// the ephemeral container so the GC reaper can find it.
+func TestRunEnvironmentCommands_RunIDLabelWithoutServices(t *testing.T) {
+	f := newAgentRunFixture(t)
+	// Environment with a command but ZERO services -> no sidecar launch path.
+	env := &model.Environment{
+		ProjectID: f.projectID,
+		Commands:  map[string]string{cmdBuild(): "make build"},
+	}
+	f.environmentRepo.getByProjectIDFn = func(_ context.Context, _ uuid.UUID) (*model.Environment, error) {
+		return env, nil
+	}
+	f.containerMgr.createFn = func(_ context.Context, opts model.ContainerOpts) (string, error) {
+		return idForCommand(opts), nil
+	}
+
+	if err := f.action.Execute(context.Background(), f.newRunContext()); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	// No sidecar launch (no services), but the command still ran.
+	if got := f.sidecarMgr.getLaunchCalls(); got != 0 {
+		t.Errorf("expected 0 Launch calls (no services), got %d", got)
+	}
+	cmds := commandCreateCalls(f)
+	if len(cmds) != 1 {
+		t.Fatalf("expected 1 command container, got %d", len(cmds))
+	}
+	if got := cmds[0].Labels[model.LabelRunID]; got != f.runID.String() {
+		t.Errorf("expected run_id label %q on ephemeral container, got %q", f.runID.String(), got)
+	}
+	// No run network to attach to: NetworkName stays empty.
+	if cmds[0].NetworkName != "" {
+		t.Errorf("expected no run network without services, got %q", cmds[0].NetworkName)
+	}
+}
+
+// TestRunEnvironmentCommands_WaitError is the #7 guard: a Wait error (timeout /
+// daemon error) fails the run, creates no agent container, removes the ephemeral
+// container, and still tears down the sidecars.
+func TestRunEnvironmentCommands_WaitError(t *testing.T) {
+	f := newAgentRunFixture(t)
+	env := envWithCommands(f.projectID, map[string]string{cmdMigrate(): "make migrate"}, nil)
+	wireEnvironment(f, env)
+
+	f.containerMgr.createFn = func(_ context.Context, opts model.ContainerOpts) (string, error) {
+		return idForCommand(opts), nil
+	}
+	f.containerMgr.waitFn = func(_ context.Context, _ string) (int, error) {
+		return 0, fmt.Errorf("docker wait failed")
+	}
+
+	err := f.action.Execute(context.Background(), f.newRunContext())
+	if err == nil {
+		t.Fatal("expected error from Wait failure, got nil")
+	}
+	// The ephemeral container was removed (defer removeEphemeral -> Stop+Remove).
+	f.containerMgr.mu.Lock()
+	removeCalls := append([]string(nil), f.containerMgr.removeCalls...)
+	f.containerMgr.mu.Unlock()
+	if len(removeCalls) == 0 {
+		t.Error("expected the ephemeral command container to be removed")
+	}
+	// No agent container was created.
+	if got := len(agentCreateCalls(f)); got != 0 {
+		t.Errorf("expected 0 agent containers after a Wait error, got %d", got)
+	}
+	// Sidecars still torn down (deferred Cleanup).
+	if got := f.sidecarMgr.getCleanupCalls(); got != 1 {
+		t.Errorf("expected 1 sidecar Cleanup, got %d", got)
+	}
 }
 
 // hasEnvKey reports whether env has any entry starting with key (a KEY= prefix).
