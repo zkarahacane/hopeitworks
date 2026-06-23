@@ -484,6 +484,41 @@ func TestSidecarGC_Windowed(t *testing.T) {
 	}
 }
 
+// TestSidecarGC_ReapsCommandContainers proves the GC reaper removes ephemeral
+// env-command containers (role=env_command) that are exited and older than the
+// window, while leaving running ones and recently-created ones alone. This is
+// the safety net for an API crash mid-command where the defer removeEphemeral
+// never ran.
+func TestSidecarGC_ReapsCommandContainers(t *testing.T) {
+	now := time.Date(2026, 6, 23, 12, 0, 0, 0, time.UTC)
+	cm := newMockCM()
+	// No networks to reap; focus on command containers.
+	cm.listNetworksFn = func() ([]model.NetworkInfo, error) { return nil, nil }
+	cm.listContainerFn = func() ([]port.ContainerInfo, error) {
+		return []port.ContainerInfo{
+			{ID: "cmd-old-exited", Labels: map[string]string{model.LabelRole: model.RoleEnvCommand}, CreatedAt: now.Add(-2 * time.Hour)},
+			{ID: "cmd-recent-exited", Labels: map[string]string{model.LabelRole: model.RoleEnvCommand}, CreatedAt: now.Add(-1 * time.Minute)},
+			{ID: "cmd-old-running", Labels: map[string]string{model.LabelRole: model.RoleEnvCommand}, CreatedAt: now.Add(-2 * time.Hour)},
+		}, nil
+	}
+	cm.listRunningFn = func() ([]port.ContainerInfo, error) {
+		return []port.ContainerInfo{
+			{ID: "cmd-old-running", Labels: map[string]string{model.LabelRole: model.RoleEnvCommand}},
+		}, nil
+	}
+	s := newTestSidecarManager(cm)
+	s.now = func() time.Time { return now }
+
+	if err := s.GC(context.Background(), 30*time.Minute); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	// Only the old + exited command container is reaped.
+	if len(cm.removedIDs) != 1 || cm.removedIDs[0] != "cmd-old-exited" {
+		t.Errorf("expected only 'cmd-old-exited' removed, got %v", cm.removedIDs)
+	}
+}
+
 func TestSidecarListOrphanNetworks(t *testing.T) {
 	cm := newMockCM()
 	cm.listNetworksFn = func() ([]model.NetworkInfo, error) {
