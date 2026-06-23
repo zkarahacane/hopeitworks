@@ -41,6 +41,7 @@ type AgentRunAction struct {
 	runRepo         port.RunRepository
 	environmentRepo port.EnvironmentRepository
 	sidecarMgr      port.SidecarManager
+	stackRepo       port.StackRepository
 	renderer        port.TemplateRenderer
 	costSvc         *service.CostService
 	config          AgentConfig
@@ -59,6 +60,11 @@ type AgentRunAction struct {
 // Environment with sidecar services, sidecarMgr brings them up on an isolated per-run
 // network and their connection strings are injected into the agent container. Both are
 // nil-safe at the call sites; a project without an Environment behaves exactly as before.
+//
+// stackRepo resolves the image that runs the Environment's setup commands (build/migrate/
+// seed/test): it is keyed by the Environment's first Stack, falling back to the agent
+// image when the Environment declares no stack. It is nil-safe: when there are no commands
+// to run it is never consulted.
 func NewAgentRunAction(
 	containerMgr port.ContainerManager,
 	logStreamer port.LogStreamer,
@@ -68,6 +74,7 @@ func NewAgentRunAction(
 	runRepo port.RunRepository,
 	environmentRepo port.EnvironmentRepository,
 	sidecarMgr port.SidecarManager,
+	stackRepo port.StackRepository,
 	renderer port.TemplateRenderer,
 	costSvc *service.CostService,
 	config AgentConfig,
@@ -86,6 +93,7 @@ func NewAgentRunAction(
 		runRepo:         runRepo,
 		environmentRepo: environmentRepo,
 		sidecarMgr:      sidecarMgr,
+		stackRepo:       stackRepo,
 		renderer:        renderer,
 		costSvc:         costSvc,
 		config:          config,
@@ -195,6 +203,15 @@ func (a *AgentRunAction) Execute(ctx context.Context, runCtx *model.RunContext) 
 	// nil when there is no Environment — extraEnv stays nil and the container env
 	// is byte-for-byte identical to the pre-Environment behaviour.
 	extraEnv := buildConnStrings(env)
+
+	// 6b. Run the Environment's setup commands (build → migrate → seed → test)
+	// against the ready sidecars, BEFORE the agent container starts. No-op when
+	// env==nil or env.Commands is empty (no ephemeral container is created). On
+	// failure we return immediately: the deferred sidecar Cleanup runs and no
+	// agent container is ever created.
+	if err := a.runEnvironmentCommands(ctx, env, sidecarCtx, project, branchName, agentImage, extraEnv); err != nil {
+		return fmt.Errorf("run environment commands: %w", err)
+	}
 
 	// 7. Create container
 	containerID, err := a.createContainer(ctx, runCtx, project, story, agentImage, prompt, branchName, extraEnv, sidecarCtx)
@@ -317,27 +334,23 @@ func (a *AgentRunAction) createContainer(
 	}
 
 	// Resolve git token dynamically from project config
-	tokenEnvName := "GITHUB_TOKEN"
-	if project.GitTokenEnv != nil && *project.GitTokenEnv != "" {
-		tokenEnvName = *project.GitTokenEnv
-	}
-	gitToken := os.Getenv(tokenEnvName)
+	gitToken := os.Getenv(gitTokenEnvName(project))
 
 	// Resolve role from step config and build per-run CLAUDE.md context.
 	role := resolveRole(runCtx)
 
 	env := []string{
-		"REPO_URL=" + repoURL,
-		"BRANCH_NAME=" + branchName,
+		envPrefixRepoURL + repoURL,
+		envPrefixBranchName + branchName,
 		"STORY_KEY=" + story.Key,
 		// PROMPT_CONTENT is consumed by the legacy shell entrypoint (agent/entrypoint.sh).
 		// PROMPT is consumed by the agent-runtime Go binary in callback mode (config.Load).
 		// Inject both so either image variant receives the rendered prompt under the name it reads.
 		"PROMPT_CONTENT=" + prompt,
 		"PROMPT=" + prompt,
-		"GIT_TOKEN=" + gitToken,
-		"GIT_PROVIDER=" + project.GitProvider,
-		"GITHUB_TOKEN=" + gitToken,
+		envPrefixGitToken + gitToken,
+		envPrefixGitProvider + project.GitProvider,
+		envPrefixGitHubToken + gitToken,
 		// CLAUDE_MD_CONTENT is written to /workspace/repo/.claude/CLAUDE.md by the agent-runtime,
 		// giving Claude Code role-aware project context for every run.
 		// priorFailureContext appends a "Previous attempt" block when there is a prior
@@ -411,10 +424,10 @@ func (a *AgentRunAction) createContainer(
 		CPUs:        a.config.DefaultCPUs,
 		Env:         env,
 		Labels: map[string]string{
-			"managed_by": "hopeitworks",
-			"run_id":     runCtx.Run.ID.String(),
-			"step_id":    runCtx.RunStep.ID.String(),
-			"story_key":  story.Key,
+			labelManagedBy: labelValueManaged,
+			labelRunID:     runCtx.Run.ID.String(),
+			"step_id":      runCtx.RunStep.ID.String(),
+			"story_key":    story.Key,
 		},
 	}
 
