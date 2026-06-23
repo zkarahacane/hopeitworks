@@ -1,6 +1,6 @@
 # hopeitworks — Vision Produit
 
-*Maintenu par François. Dernière mise à jour : 2026-02-28.*
+*Maintenu par François. Dernière mise à jour : 2026-06-23.*
 
 ## Vision
 
@@ -58,7 +58,11 @@ Project → Epic → Story → Run → Step
 - Inviter des membres, gérer les permissions par projet
 
 ### Stories et Epics
-- Board de stories avec filtrage par statut
+- Board dont les colonnes sont **dérivées des stages du pipeline** du projet, avec un toggle de vue :
+  - **Macro** : le cycle de vie (Backlog → Running → In Review → Done → Failed)
+  - **Détail** : une colonne par stage du pipeline (dans l'ordre), encadrée par les voies Backlog et Done/Failed
+  - Une carte se place dans son `current_stage`, avancé en temps réel par le runtime
+- Sélecteur d'epic et filtrage des stories
 - Import de stories depuis des fichiers markdown
 - Éditeur de stories (création et édition dans l'UI)
 - Epics avec calcul de DAG et visualisation des dépendances
@@ -66,7 +70,11 @@ Project → Epic → Story → Run → Step
 
 ### Exécution de pipeline
 - Lancement d'une story : container Docker → agent code → branche → PR
-- Pipeline configurable par projet (groupes d'étapes, agents, modèles, prompts)
+- Pipeline configurable par projet (groupes d'étapes = stages, agents, modèles, prompts)
+- **Politique de transition par stage** (configurée dans l'éditeur de pipeline) :
+  - **auto** : la carte avance seule au stage suivant
+  - **manual** : la carte est parquée idle à l'entrée du stage, l'utilisateur la démarre via le bouton **Go** sur le board
+  - **gate** : validation humaine (HITL) avant d'avancer
 - Pause/reprise d'une exécution en cours
 - Annulation d'un run
 - Retry d'un step en échec depuis l'UI
@@ -86,6 +94,11 @@ Project → Epic → Story → Run → Step
 - Pause automatique aux checkpoints configurés
 - Visualisation du diff pour approbation
 - Approuver ou rejeter avec raison
+
+### Probes et halt-gate (sécurité runtime)
+- **Guards** configurables par stage dans l'éditeur de pipeline : un probe (`log_silence` = heartbeat, `wallclock` = timeout, `cost_batch` = budget cumulé), un seuil, et une politique `on_fail` (halt-gate par défaut, sinon fail/retry)
+- En cas de breach, le runtime **parque** la carte sur un **halt-gate** plutôt que de la laisser dériver : le run est suspendu avec une raison structurée (valeur observée vs seuil)
+- Vue **Triage des halt-gates** (`/halts`) : les runs parqués sont listés et **groupés par raison de probe**, chaque carte affichant le contexte (story, stage, mesure) et les actions de résolution — **resume** (relancer le step), **override** (accepter et avancer), **skip** (passer outre), **send back** (revenir à un stage antérieur), **abort** (échouer la carte) — plus un **Resume all** par groupe
 
 ### Suivi des coûts
 - Tracking des tokens et coûts par étape, run, story et agent
