@@ -130,6 +130,14 @@ func (m *mockStoryRepo) Update(_ context.Context, story *model.Story) (*model.St
 	return story, nil
 }
 
+func (m *mockStoryRepo) UpdateStoryCurrentStage(_ context.Context, id uuid.UUID, currentStage *string) (*model.Story, error) {
+	if s, ok := m.stories[id]; ok {
+		s.CurrentStage = currentStage
+		return s, nil
+	}
+	return &model.Story{ID: id, CurrentStage: currentStage}, nil
+}
+
 func (m *mockStoryRepo) Delete(_ context.Context, id uuid.UUID) error {
 	delete(m.stories, id)
 	return nil

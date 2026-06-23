@@ -203,6 +203,201 @@ func (s *HITLService) Reject(ctx context.Context, hitlRequestID uuid.UUID, userI
 	return updated, nil
 }
 
+// ListProbeHalts returns pending probe_halt gates for batch triage. A nil
+// projectID lists across all projects.
+func (s *HITLService) ListProbeHalts(ctx context.Context, projectID *uuid.UUID) ([]*model.ProbeHalt, error) {
+	return s.hitlRepo.ListProbeHalts(ctx, projectID)
+}
+
+// RaiseProbeHalt parks a running step at its durable stage and raises a
+// probe_halt HITL describing the breach. It reuses the exact pause mechanism of
+// the review gate: the run is set to paused, so the executor loop stops at its
+// next iteration (the running container is left to drain), and the gate is
+// recorded so the human can resolve it whenever they like. Idempotent: if a
+// pending HITL already exists for the step, no second gate is raised.
+func (s *HITLService) RaiseProbeHalt(ctx context.Context, stepID uuid.UUID, reason model.HaltReason) (*model.HITLRequest, error) {
+	if existing, err := s.hitlRepo.GetByRunStepID(ctx, stepID); err == nil && existing != nil {
+		if existing.Status == model.HITLStatusPending {
+			return existing, nil // already halted, do not double-raise
+		}
+	}
+
+	step, err := s.runRepo.GetRunStep(ctx, stepID)
+	if err != nil {
+		return nil, fmt.Errorf("fetch step for probe halt: %w", err)
+	}
+	run, err := s.runRepo.GetRun(ctx, step.RunID)
+	if err != nil {
+		return nil, fmt.Errorf("fetch run for probe halt: %w", err)
+	}
+
+	msg := probeHaltMessage(reason)
+	req := &model.HITLRequest{
+		ID:         uuid.New(),
+		RunStepID:  stepID,
+		GateType:   model.HITLGateProbeHalt,
+		Message:    &msg,
+		Status:     model.HITLStatusPending,
+		HaltReason: &reason,
+		CreatedAt:  time.Now(),
+	}
+	created, err := s.hitlRepo.Create(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("create probe_halt HITL: %w", err)
+	}
+
+	// Pause the run at its durable stage. The executor re-reads run status at the
+	// top of each step iteration and returns ErrRunPaused when it sees paused —
+	// the same mechanism the review gate uses. Only running runs can be paused.
+	if run.Status == model.RunStatusRunning {
+		now := time.Now()
+		if _, err := s.runRepo.UpdateRunStatus(ctx, run.ID, model.RunStatusPaused, nil, nil, &now, nil); err != nil {
+			s.logger.Warn("failed to pause run for probe halt",
+				"run_id", run.ID, "step_id", stepID, "error", err)
+		}
+	}
+
+	s.publishProbeHaltEvent(ctx, created, run.ProjectID, run.ID, reason)
+
+	s.logger.Info("probe halt raised",
+		"hitl_request_id", created.ID, "run_id", run.ID, "step_id", stepID,
+		"probe", reason.Probe, "observed", reason.Observed, "threshold", reason.Threshold)
+
+	return created, nil
+}
+
+// Resolve closes a probe_halt gate with one of the enriched halt-gate actions
+// (resume/override/send_back/skip/abort) and records the resolving human + the
+// action for audit. Review gates (approval/human) continue to use Approve/Reject.
+//
+// Action semantics:
+//   - resume:    retry the halted step fresh — re-enqueue the paused run, which
+//     re-runs the step from its current (running/pending) state.
+//   - override:  accept the partial result — mark the step completed and advance.
+//   - skip:      advance past the step — mark it completed and continue.
+//   - send_back: return the card to an earlier stage — mark the step cancelled,
+//     leave the run paused for a human to relaunch from the right stage.
+//   - abort:     fail the card — mark step and run failed.
+func (s *HITLService) Resolve(ctx context.Context, hitlRequestID, userID uuid.UUID, action string) (*model.HITLRequest, error) {
+	if !model.ValidHITLResolutionAction(action) {
+		return nil, errors.NewValidation("action",
+			fmt.Sprintf("unknown halt-gate resolution action: %s", action))
+	}
+
+	req, err := s.hitlRepo.GetByID(ctx, hitlRequestID)
+	if err != nil {
+		return nil, err
+	}
+	if req.GateType != model.HITLGateProbeHalt {
+		return nil, errors.NewValidation("gate_type",
+			"resolution actions apply only to probe_halt gates; use approve/reject for review gates")
+	}
+	if req.Status != model.HITLStatusPending {
+		return nil, errors.NewValidation("status",
+			fmt.Sprintf("HITL request is already %s, cannot resolve", req.Status))
+	}
+
+	now := time.Now()
+	updated, err := s.hitlRepo.UpdateResolution(ctx, hitlRequestID, model.HITLStatusResolved, &userID, action, now)
+	if err != nil {
+		return nil, fmt.Errorf("record HITL resolution: %w", err)
+	}
+
+	switch action {
+	case model.HITLActionResume:
+		// Leave the step in place; re-enqueue the run so the executor retries it.
+		s.resumeRun(ctx, req.RunStepID)
+	case model.HITLActionOverride, model.HITLActionSkip:
+		// Accept partial / skip: mark the step completed so the resumed executor
+		// continues with the next step, then resume.
+		if _, err := s.runRepo.UpdateRunStepStatus(ctx, req.RunStepID, model.StepStatusCompleted, nil, &now, nil); err != nil {
+			s.logger.Warn("failed to complete step on resolution",
+				"hitl_request_id", hitlRequestID, "step_id", req.RunStepID, "action", action, "error", err)
+		}
+		s.resumeRun(ctx, req.RunStepID)
+	case model.HITLActionSendBack:
+		// Return to an earlier stage: cancel the step and leave the run paused for
+		// a human to relaunch from the appropriate entry stage.
+		if _, err := s.runRepo.UpdateRunStepStatus(ctx, req.RunStepID, model.StepStatusCancelled, nil, &now, nil); err != nil {
+			s.logger.Warn("failed to cancel step on send_back",
+				"hitl_request_id", hitlRequestID, "step_id", req.RunStepID, "error", err)
+		}
+	case model.HITLActionAbort:
+		// Fail the card: mark step and run failed.
+		failMsg := "aborted from probe halt"
+		if _, err := s.runRepo.UpdateRunStepStatus(ctx, req.RunStepID, model.StepStatusFailed, nil, &now, &failMsg); err != nil {
+			s.logger.Warn("failed to fail step on abort",
+				"hitl_request_id", hitlRequestID, "step_id", req.RunStepID, "error", err)
+		}
+		s.failRun(ctx, req.RunStepID, failMsg)
+	}
+
+	s.publishEvent(ctx, req, "resolved", userID)
+
+	return updated, nil
+}
+
+// failRun transitions the run owning the given step to failed.
+func (s *HITLService) failRun(ctx context.Context, stepID uuid.UUID, reason string) {
+	step, err := s.runRepo.GetRunStep(ctx, stepID)
+	if err != nil {
+		s.logger.Warn("failed to fetch step for run fail", "step_id", stepID, "error", err)
+		return
+	}
+	now := time.Now()
+	if _, err := s.runRepo.UpdateRunStatus(ctx, step.RunID, model.RunStatusFailed, nil, &now, nil, &reason); err != nil {
+		s.logger.Warn("failed to transition run to failed", "run_id", step.RunID, "error", err)
+	}
+}
+
+// probeHaltMessage renders a short human-readable halt summary for the gate.
+func probeHaltMessage(reason model.HaltReason) string {
+	if reason.Detail != "" {
+		return reason.Detail
+	}
+	switch reason.Probe {
+	case model.GuardLogSilence:
+		return fmt.Sprintf("No agent output for %.0fs (limit %.0fs)", reason.Observed, reason.Threshold)
+	case model.GuardWallclock:
+		return fmt.Sprintf("Step running %.0fs (limit %.0fs)", reason.Observed, reason.Threshold)
+	case model.GuardCostBatch:
+		return fmt.Sprintf("Run cost $%.2f exceeded budget $%.2f", reason.Observed, reason.Threshold)
+	default:
+		return fmt.Sprintf("Guard %q breached", reason.Probe)
+	}
+}
+
+// publishProbeHaltEvent publishes a hitl_gate.pending event for a probe halt so
+// the board reacts the same way it does for review gates (the SSE consumers
+// already handle hitl_gate.pending).
+func (s *HITLService) publishProbeHaltEvent(ctx context.Context, req *model.HITLRequest, projectID, runID uuid.UUID, reason model.HaltReason) {
+	if s.eventPub == nil {
+		return
+	}
+	payload, _ := json.Marshal(map[string]any{
+		"hitl_request_id": req.ID.String(),
+		"run_id":          runID.String(),
+		"step_id":         req.RunStepID.String(),
+		"gate_type":       model.HITLGateProbeHalt,
+		"probe":           reason.Probe,
+		"observed":        reason.Observed,
+		"threshold":       reason.Threshold,
+		"unit":            reason.Unit,
+	})
+	event := model.Event{
+		ID:         uuid.New(),
+		ProjectID:  projectID,
+		EntityType: "hitl_gate",
+		EntityID:   req.ID,
+		Action:     "pending",
+		Payload:    payload,
+		CreatedAt:  time.Now(),
+	}
+	if err := s.eventPub.Publish(ctx, event); err != nil {
+		s.logger.Warn("failed to publish probe_halt event", "event", event.EventName(), "error", err)
+	}
+}
+
 func (s *HITLService) publishEvent(ctx context.Context, req *model.HITLRequest, action string, userID uuid.UUID) {
 	if s.eventPub == nil {
 		return

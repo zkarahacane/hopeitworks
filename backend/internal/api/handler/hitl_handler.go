@@ -99,6 +99,46 @@ func (h *HITLHandler) RejectHITLRequest(w http.ResponseWriter, r *http.Request, 
 	writeJSON(w, http.StatusOK, toAPIHITLRequest(req))
 }
 
+// ResolveHITLRequest handles POST /hitl-requests/{hitlRequestId}/resolve.
+// It closes a probe_halt gate with an enriched action (resume/override/send_back/
+// skip/abort).
+func (h *HITLHandler) ResolveHITLRequest(w http.ResponseWriter, r *http.Request, hitlRequestID HITLRequestIdPath) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		writeErrorResponse(w, errors.NewUnauthorized("authentication required"))
+		return
+	}
+
+	var body ResolveHITLRequestJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeErrorResponse(w, errors.NewValidation("body", "invalid JSON"))
+		return
+	}
+
+	req, err := h.service.Resolve(r.Context(), hitlRequestID, userID, string(body.Action))
+	if err != nil {
+		writeErrorResponse(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toAPIHITLRequest(req))
+}
+
+// ListProbeHalts handles GET /probe-halts — the batch triage inbox of pending
+// probe_halt gates, optionally scoped to a project.
+func (h *HITLHandler) ListProbeHalts(w http.ResponseWriter, r *http.Request, params ListProbeHaltsParams) {
+	halts, err := h.service.ListProbeHalts(r.Context(), params.ProjectId)
+	if err != nil {
+		writeErrorResponse(w, err)
+		return
+	}
+
+	items := make([]ProbeHalt, len(halts))
+	for i, ph := range halts {
+		items[i] = toAPIProbeHalt(ph)
+	}
+	writeJSON(w, http.StatusOK, ProbeHaltList{Data: items, Total: len(items)})
+}
+
 // ListHITLRequests handles GET /hitl-requests with optional status filter and pagination.
 func (h *HITLHandler) ListHITLRequests(w http.ResponseWriter, r *http.Request, params ListHITLRequestsParams) {
 	page, perPage := paginationDefaults(params.Page, params.PerPage)
@@ -165,5 +205,56 @@ func toAPIHITLRequest(req *model.HITLRequest) HITLRequest {
 	if req.RejectionReason != nil {
 		r.RejectionReason = req.RejectionReason
 	}
+	if req.ResolutionAction != nil {
+		action := HITLRequestResolutionAction(*req.ResolutionAction)
+		r.ResolutionAction = &action
+	}
+	r.HaltReason = toAPIHaltReason(req.HaltReason)
 	return r
+}
+
+// toAPIHaltReason converts a domain HaltReason to the API type; nil-safe.
+func toAPIHaltReason(hr *model.HaltReason) *HaltReason {
+	if hr == nil {
+		return nil
+	}
+	probe := HaltReasonProbe(hr.Probe)
+	observed := hr.Observed
+	threshold := hr.Threshold
+	out := &HaltReason{
+		Observed:  &observed,
+		Threshold: &threshold,
+	}
+	if hr.Probe != "" {
+		out.Probe = &probe
+	}
+	if hr.OnFail != "" {
+		out.OnFail = &hr.OnFail
+	}
+	if hr.Unit != "" {
+		out.Unit = &hr.Unit
+	}
+	if hr.Detail != "" {
+		out.Detail = &hr.Detail
+	}
+	return out
+}
+
+// toAPIProbeHalt converts a domain ProbeHalt to the API type.
+func toAPIProbeHalt(ph *model.ProbeHalt) ProbeHalt {
+	out := ProbeHalt{
+		Id:         ph.ID,
+		RunStepId:  ph.RunStepID,
+		RunId:      ph.RunID,
+		ProjectId:  ph.ProjectID,
+		StoryKey:   ph.StoryKey,
+		StoryTitle: ph.StoryTitle,
+		StepName:   ph.StepName,
+		CreatedAt:  ph.CreatedAt,
+		HaltReason: toAPIHaltReason(ph.HaltReason),
+	}
+	if ph.StageName != "" {
+		out.StageName = &ph.StageName
+	}
+	return out
 }

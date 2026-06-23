@@ -43,6 +43,10 @@ type Story struct {
 	Scope              *string
 	Status             string
 	AcceptanceCriteria *string
-	CreatedAt          time.Time
-	UpdatedAt          time.Time
+	// CurrentStage is the name of the stage the card currently sits in, advanced by
+	// the executor at stage boundaries. Nil means no stage (backlog before the first
+	// run, or after run completion).
+	CurrentStage *string
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }

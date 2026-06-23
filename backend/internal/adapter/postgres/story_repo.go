@@ -218,6 +218,22 @@ func (r *StoryRepo) Update(ctx context.Context, story *model.Story) (*model.Stor
 	return toDomainStory(row)
 }
 
+// UpdateStoryCurrentStage sets a story's current_stage to the given value.
+// A nil currentStage clears the stage (NULL) — used at run completion.
+func (r *StoryRepo) UpdateStoryCurrentStage(ctx context.Context, id uuid.UUID, currentStage *string) (*model.Story, error) {
+	row, err := r.queries.UpdateStoryCurrentStage(ctx, UpdateStoryCurrentStageParams{
+		ID:           id,
+		CurrentStage: textFromStringPtr(currentStage),
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, apperrors.NewNotFound("story", id)
+		}
+		return nil, apperrors.NewInternal("failed to update story current stage", err)
+	}
+	return toDomainStory(row)
+}
+
 func (r *StoryRepo) Delete(ctx context.Context, id uuid.UUID) error {
 	err := r.queries.DeleteStory(ctx, id)
 	if err != nil {
@@ -259,6 +275,9 @@ func toDomainStory(s Story) (*model.Story, error) {
 	}
 	if s.AcceptanceCriteria.Valid {
 		story.AcceptanceCriteria = &s.AcceptanceCriteria.String
+	}
+	if s.CurrentStage.Valid {
+		story.CurrentStage = &s.CurrentStage.String
 	}
 	return story, nil
 }

@@ -242,6 +242,11 @@ func (s *Server) LaunchRun(w http.ResponseWriter, r *http.Request, projectID Pro
 	s.runs.LaunchRun(w, r, projectID, storyID)
 }
 
+// StartStage delegates to RunHandler.
+func (s *Server) StartStage(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, storyID StoryIdPath) {
+	s.runs.StartStage(w, r, projectID, storyID)
+}
+
 // ListRunsByStory delegates to RunHandler.
 func (s *Server) ListRunsByStory(w http.ResponseWriter, r *http.Request, storyID StoryIdPath, params ListRunsByStoryParams) {
 	s.runs.ListRunsByStory(w, r, storyID, params)
@@ -310,6 +315,16 @@ func (s *Server) ApproveHITLRequest(w http.ResponseWriter, r *http.Request, hitl
 // RejectHITLRequest delegates to HITLHandler.
 func (s *Server) RejectHITLRequest(w http.ResponseWriter, r *http.Request, hitlRequestID HITLRequestIdPath) {
 	s.hitl.RejectHITLRequest(w, r, hitlRequestID)
+}
+
+// ResolveHITLRequest delegates to HITLHandler.
+func (s *Server) ResolveHITLRequest(w http.ResponseWriter, r *http.Request, hitlRequestID HITLRequestIdPath) {
+	s.hitl.ResolveHITLRequest(w, r, hitlRequestID)
+}
+
+// ListProbeHalts delegates to HITLHandler.
+func (s *Server) ListProbeHalts(w http.ResponseWriter, r *http.Request, params ListProbeHaltsParams) {
+	s.hitl.ListProbeHalts(w, r, params)
 }
 
 // GetProjectCosts delegates to CostHandler.

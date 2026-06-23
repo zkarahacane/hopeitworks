@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -39,6 +40,13 @@ func (r *HITLRepo) Create(ctx context.Context, req *model.HITLRequest) (*model.H
 	}
 	if req.Message != nil {
 		params.Message = pgtype.Text{String: *req.Message, Valid: true}
+	}
+	if req.HaltReason != nil {
+		raw, marshalErr := json.Marshal(req.HaltReason)
+		if marshalErr != nil {
+			return nil, apperrors.NewInternal("failed to marshal halt reason", marshalErr)
+		}
+		params.HaltReason = raw
 	}
 
 	row, err := r.queries.CreateHITLRequest(ctx, params)
@@ -97,6 +105,73 @@ func (r *HITLRepo) UpdateStatus(ctx context.Context, id uuid.UUID, status model.
 		return nil, apperrors.NewInternal("failed to update HITL request status", err)
 	}
 	return toDomainHITLRequest(row), nil
+}
+
+// UpdateResolution transitions a probe_halt HITL request to a terminal status
+// and records the enriched resolution action taken alongside the resolving human.
+func (r *HITLRepo) UpdateResolution(ctx context.Context, id uuid.UUID, status model.HITLStatus, resolvedBy *uuid.UUID, action string, resolvedAt time.Time) (*model.HITLRequest, error) {
+	params := UpdateHITLRequestStatusParams{
+		ID:               id,
+		Status:           string(status),
+		ResolvedAt:       pgtype.Timestamptz{Time: resolvedAt, Valid: true},
+		ResolutionAction: pgtype.Text{String: action, Valid: action != ""},
+	}
+	if resolvedBy != nil {
+		params.ResolvedBy = pgtype.UUID{Bytes: *resolvedBy, Valid: true}
+	}
+
+	row, err := r.queries.UpdateHITLRequestStatus(ctx, params)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, apperrors.NewNotFound("hitl_request", id)
+		}
+		return nil, apperrors.NewInternal("failed to update HITL request resolution", err)
+	}
+	return toDomainHITLRequest(row), nil
+}
+
+// ListProbeHalts returns pending probe_halt gates for batch triage.
+func (r *HITLRepo) ListProbeHalts(ctx context.Context, projectID *uuid.UUID) ([]*model.ProbeHalt, error) {
+	var arg pgtype.UUID
+	if projectID != nil {
+		arg = pgtype.UUID{Bytes: *projectID, Valid: true}
+	}
+	rows, err := r.queries.ListProbeHalts(ctx, arg)
+	if err != nil {
+		return nil, apperrors.NewInternal("failed to list probe halts", err)
+	}
+	result := make([]*model.ProbeHalt, len(rows))
+	for i, row := range rows {
+		ph := &model.ProbeHalt{
+			ID:         row.ID,
+			RunStepID:  row.RunStepID,
+			RunID:      row.RunID,
+			ProjectID:  row.ProjectID,
+			StoryKey:   row.StoryKey,
+			StoryTitle: row.StoryTitle,
+			StepName:   row.StepName,
+			CreatedAt:  row.CreatedAt,
+		}
+		if row.StageName.Valid {
+			ph.StageName = row.StageName.String
+		}
+		ph.HaltReason = unmarshalHaltReason(row.HaltReason)
+		result[i] = ph
+	}
+	return result, nil
+}
+
+// unmarshalHaltReason decodes the halt_reason JSONB column; returns nil on empty
+// or invalid payloads (a malformed reason must not block triage).
+func unmarshalHaltReason(raw []byte) *model.HaltReason {
+	if len(raw) == 0 {
+		return nil
+	}
+	var hr model.HaltReason
+	if err := json.Unmarshal(raw, &hr); err != nil {
+		return nil
+	}
+	return &hr
 }
 
 // ListPendingByProject returns all pending HITL requests for a project.
@@ -189,5 +264,9 @@ func toDomainHITLRequest(row HitlRequest) *model.HITLRequest {
 	if row.RejectionReason.Valid {
 		req.RejectionReason = &row.RejectionReason.String
 	}
+	if row.ResolutionAction.Valid {
+		req.ResolutionAction = &row.ResolutionAction.String
+	}
+	req.HaltReason = unmarshalHaltReason(row.HaltReason)
 	return req
 }

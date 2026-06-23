@@ -45,6 +45,14 @@ func (m *hitlMockHITLRepo) UpdateStatus(_ context.Context, _ uuid.UUID, _ model.
 	return nil, nil
 }
 
+func (m *hitlMockHITLRepo) UpdateResolution(_ context.Context, _ uuid.UUID, _ model.HITLStatus, _ *uuid.UUID, _ string, _ time.Time) (*model.HITLRequest, error) {
+	return nil, nil
+}
+
+func (m *hitlMockHITLRepo) ListProbeHalts(_ context.Context, _ *uuid.UUID) ([]*model.ProbeHalt, error) {
+	return nil, nil
+}
+
 func (m *hitlMockHITLRepo) ListPendingByProject(_ context.Context, _ uuid.UUID) ([]*model.PendingHITLRequest, error) {
 	return nil, nil
 }
@@ -249,6 +257,9 @@ func (m *hitlMockStoryRepo) CountByStatus(_ context.Context, _ uuid.UUID, _ []st
 }
 func (m *hitlMockStoryRepo) Update(_ context.Context, s *model.Story) (*model.Story, error) {
 	return s, nil
+}
+func (m *hitlMockStoryRepo) UpdateStoryCurrentStage(_ context.Context, id uuid.UUID, currentStage *string) (*model.Story, error) {
+	return &model.Story{ID: id, CurrentStage: currentStage}, nil
 }
 func (m *hitlMockStoryRepo) Delete(_ context.Context, _ uuid.UUID) error { return nil }
 

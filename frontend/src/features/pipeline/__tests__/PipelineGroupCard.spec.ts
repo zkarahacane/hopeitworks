@@ -25,6 +25,7 @@ function makeGroup(overrides: Partial<PipelineGroup> = {}): PipelineGroup {
   return {
     id: 'group-1',
     name: 'Development',
+    transition: 'auto',
     steps: [
       makeStep({ id: 's1', name: 'implement' }),
       makeStep({ id: 's2', name: 'review' }),

@@ -161,17 +161,19 @@ type Event struct {
 }
 
 type HitlRequest struct {
-	ID              uuid.UUID          `json:"id"`
-	RunStepID       uuid.UUID          `json:"run_step_id"`
-	GateType        string             `json:"gate_type"`
-	DiffContent     pgtype.Text        `json:"diff_content"`
-	Status          string             `json:"status"`
-	ResolvedAt      pgtype.Timestamptz `json:"resolved_at"`
-	ResolvedBy      pgtype.UUID        `json:"resolved_by"`
-	RejectionReason pgtype.Text        `json:"rejection_reason"`
-	CreatedAt       time.Time          `json:"created_at"`
-	DiffUrl         pgtype.Text        `json:"diff_url"`
-	Message         pgtype.Text        `json:"message"`
+	ID               uuid.UUID          `json:"id"`
+	RunStepID        uuid.UUID          `json:"run_step_id"`
+	GateType         string             `json:"gate_type"`
+	DiffContent      pgtype.Text        `json:"diff_content"`
+	Status           string             `json:"status"`
+	ResolvedAt       pgtype.Timestamptz `json:"resolved_at"`
+	ResolvedBy       pgtype.UUID        `json:"resolved_by"`
+	RejectionReason  pgtype.Text        `json:"rejection_reason"`
+	CreatedAt        time.Time          `json:"created_at"`
+	DiffUrl          pgtype.Text        `json:"diff_url"`
+	Message          pgtype.Text        `json:"message"`
+	HaltReason       []byte             `json:"halt_reason"`
+	ResolutionAction pgtype.Text        `json:"resolution_action"`
 }
 
 type NotificationConfig struct {
@@ -264,6 +266,8 @@ type RunStep struct {
 	RetryCount   int32              `json:"retry_count"`
 	RetryType    pgtype.Text        `json:"retry_type"`
 	ParentStepID pgtype.UUID        `json:"parent_step_id"`
+	StageID      pgtype.Text        `json:"stage_id"`
+	StageName    pgtype.Text        `json:"stage_name"`
 }
 
 type Stack struct {
@@ -288,6 +292,7 @@ type Story struct {
 	AcceptanceCriteria pgtype.Text `json:"acceptance_criteria"`
 	CreatedAt          time.Time   `json:"created_at"`
 	UpdatedAt          time.Time   `json:"updated_at"`
+	CurrentStage       pgtype.Text `json:"current_stage"`
 }
 
 type User struct {
