@@ -51,6 +51,10 @@ const (
 	// cloneURLEnv is the env var carrying the authenticated clone URL into the
 	// ephemeral command container, keeping the token out of the command argv.
 	cloneURLEnv = "HOPEITWORKS_CLONE_URL"
+
+	// eventTypePrompt tags the durable prompt-audit LogEvent published on the
+	// agnostic event bus, so consumers distinguish it from container stdout.
+	eventTypePrompt = "prompt"
 )
 
 // cmdShell is the shell used to drive the clone-then-run one-liner.

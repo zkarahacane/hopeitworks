@@ -20,10 +20,12 @@ type LogCallbackRequest struct {
 }
 
 // CostCallbackRequest is the request body for the cost callback endpoint.
+// InputTokens/OutputTokens are int64 to match agent-runtime's costPayload wire type.
 type CostCallbackRequest struct {
-	InputTokens  int    `json:"input_tokens"`
-	OutputTokens int    `json:"output_tokens"`
-	Model        string `json:"model"`
+	InputTokens  int64   `json:"input_tokens"`
+	OutputTokens int64   `json:"output_tokens"`
+	Model        string  `json:"model"`
+	CostUSD      float64 `json:"cost_usd"`
 }
 
 // StatusCallbackRequest is the request body for the status callback endpoint.
@@ -134,9 +136,10 @@ func (h *AgentCallbackHandler) HandleCost(w http.ResponseWriter, r *http.Request
 
 	costEvents := []model.CostEvent{
 		{
-			InputTokens:  int64(req.InputTokens),
-			OutputTokens: int64(req.OutputTokens),
+			InputTokens:  req.InputTokens,
+			OutputTokens: req.OutputTokens,
 			Model:        req.Model,
+			CostUSD:      req.CostUSD,
 		},
 	}
 

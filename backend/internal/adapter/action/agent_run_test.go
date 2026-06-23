@@ -2,6 +2,7 @@ package action_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -1769,27 +1770,192 @@ func newCallbackRuntimeAction(
 }
 
 // mockTokenStore is a minimal port.ContainerTokenStore for the callback-mode
-// runtime-dispatch test. Create returns a fixed token; Revoke records the call.
+// runtime-dispatch tests. Create returns a fixed token and remembers it; Revoke
+// records every token it was asked to revoke, so a test can prove the run revokes
+// the SAME token Create minted (the dead-revoke fix).
 type mockTokenStore struct {
-	mu           sync.Mutex
-	createdCalls int
-	revokedCalls int
+	mu            sync.Mutex
+	createdCalls  int
+	createdTokens []string
+	revokedTokens []string
 }
+
+const testMintedToken = "token-abc"
 
 func (m *mockTokenStore) Create(_ context.Context, _, _, _ uuid.UUID, _ string, _ time.Duration) (string, error) {
 	m.mu.Lock()
 	m.createdCalls++
+	m.createdTokens = append(m.createdTokens, testMintedToken)
 	m.mu.Unlock()
-	return "token-abc", nil
+	return testMintedToken, nil
 }
 
 func (m *mockTokenStore) Validate(_ context.Context, _ string) (*model.ContainerToken, error) {
 	return nil, nil
 }
 
-func (m *mockTokenStore) Revoke(_ context.Context, _ string) error {
+func (m *mockTokenStore) Revoke(_ context.Context, token string) error {
 	m.mu.Lock()
-	m.revokedCalls++
+	m.revokedTokens = append(m.revokedTokens, token)
 	m.mu.Unlock()
 	return nil
+}
+
+func (m *mockTokenStore) createCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.createdCalls
+}
+
+func (m *mockTokenStore) revokedTokenList() []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]string, len(m.revokedTokens))
+	copy(out, m.revokedTokens)
+	return out
+}
+
+// TestAgentRunAction_CallbackToken_MintedOnceAndRevoked is the Stage 3a proof that
+// the dead token-revoke is fixed. A callback-mode run via the runtime path must:
+//   - mint the callback token EXACTLY once (Create), and
+//   - revoke EXACTLY that token once (Revoke) after the callback resolves.
+//
+// Before Stage 3a the revoke never fired: it resolved the token through a stub
+// that always returned none, so the token only died at its 2h TTL.
+func TestAgentRunAction_CallbackToken_MintedOnceAndRevoked(t *testing.T) {
+	f := newAgentRunFixture(t)
+
+	fakeRT := &mockAgentRuntime{}
+	statusStore := &mockCallbackStatusStore{exitCode: 0}
+	tokenStore := &mockTokenStore{}
+
+	act := newCallbackRuntimeAction(f, statusStore, tokenStore, fakeRT)
+
+	runCtx := f.newRunContext()
+	runCtx.Metadata["runtime_kind"] = model.RuntimeKindClaudeCode
+
+	if err := act.Execute(context.Background(), runCtx); err != nil {
+		t.Fatalf("expected success, got %v", err)
+	}
+
+	// Mint exactly once.
+	if got := tokenStore.createCount(); got != 1 {
+		t.Fatalf("expected Create to be called once, got %d", got)
+	}
+
+	// Revoke exactly once, with the SAME token Create minted.
+	revoked := tokenStore.revokedTokenList()
+	if len(revoked) != 1 {
+		t.Fatalf("expected exactly 1 Revoke call, got %d (%v)", len(revoked), revoked)
+	}
+	if revoked[0] != testMintedToken {
+		t.Errorf("expected Revoke to use the minted token %q, got %q", testMintedToken, revoked[0])
+	}
+
+	// The minted token must also reach the harness via RunSpec.Env (AUTH_TOKEN) and
+	// the typed RunSpec.Callback mirror.
+	spec := fakeRT.lastSpec(t)
+	if got := envValue(spec.Env, "AUTH_TOKEN"); got != testMintedToken {
+		t.Errorf("expected AUTH_TOKEN=%q in RunSpec.Env, got %q", testMintedToken, got)
+	}
+	if spec.Callback == nil {
+		t.Fatal("expected RunSpec.Callback to be set in callback mode")
+	}
+	if spec.Callback.AuthToken != testMintedToken {
+		t.Errorf("expected RunSpec.Callback.AuthToken=%q, got %q", testMintedToken, spec.Callback.AuthToken)
+	}
+	if spec.Callback.RunID != f.runID || spec.Callback.StepID != f.stepID {
+		t.Errorf("RunSpec.Callback ids mismatch: run=%s step=%s", spec.Callback.RunID, spec.Callback.StepID)
+	}
+}
+
+// TestAgentRunAction_CallbackToken_RevokedOnWaitError proves the revoke fires even
+// when WaitForStatus FAILS (error / timeout / cancel). The revoke is deferred
+// before the wait, so a failed run still revokes its token with the SAME value
+// Create minted — the token never lingers to its 2h TTL on the error path.
+func TestAgentRunAction_CallbackToken_RevokedOnWaitError(t *testing.T) {
+	f := newAgentRunFixture(t)
+
+	fakeRT := &mockAgentRuntime{}
+	// WaitForStatus returns an error: the run must fail, yet the token is revoked.
+	statusStore := &mockCallbackStatusStore{waitErr: fmt.Errorf("status wait timed out")}
+	tokenStore := &mockTokenStore{}
+
+	act := newCallbackRuntimeAction(f, statusStore, tokenStore, fakeRT)
+
+	runCtx := f.newRunContext()
+	runCtx.Metadata["runtime_kind"] = model.RuntimeKindClaudeCode
+
+	if err := act.Execute(context.Background(), runCtx); err == nil {
+		t.Fatal("expected error from WaitForStatus failure, got nil")
+	}
+
+	// Minted once.
+	if got := tokenStore.createCount(); got != 1 {
+		t.Fatalf("expected Create to be called once, got %d", got)
+	}
+
+	// Revoked once with the minted token, despite the wait error (deferred revoke).
+	revoked := tokenStore.revokedTokenList()
+	if len(revoked) != 1 {
+		t.Fatalf("expected exactly 1 Revoke call on the error path, got %d (%v)", len(revoked), revoked)
+	}
+	if revoked[0] != testMintedToken {
+		t.Errorf("expected Revoke to use the minted token %q on the error path, got %q", testMintedToken, revoked[0])
+	}
+}
+
+// TestAgentRunAction_AuditsPromptOnEventBus proves the prompt is auditable on the
+// substrate-agnostic event bus: a run publishes exactly one LogEvent of Type
+// "prompt" whose Message is the rendered prompt, independent of the substrate.
+func TestAgentRunAction_AuditsPromptOnEventBus(t *testing.T) {
+	f := newAgentRunFixture(t)
+	runCtx := f.newRunContext()
+
+	if err := f.action.Execute(context.Background(), runCtx); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	// The mockTemplateRenderer renders "rendered: <first 20 chars of template>".
+	wantPrompt := "rendered: " + runCtx.Metadata["template_content"].(string)[:20]
+
+	var promptEvents []model.LogEvent
+	for _, e := range f.eventPub.getEvents() {
+		var le model.LogEvent
+		if err := json.Unmarshal(e.Payload, &le); err != nil {
+			continue
+		}
+		if le.Type == "prompt" {
+			promptEvents = append(promptEvents, le)
+		}
+	}
+
+	if len(promptEvents) != 1 {
+		t.Fatalf("expected exactly 1 prompt-audit event, got %d", len(promptEvents))
+	}
+	if promptEvents[0].Message != wantPrompt {
+		t.Errorf("prompt-audit Message mismatch:\n got=%q\nwant=%q", promptEvents[0].Message, wantPrompt)
+	}
+}
+
+// TestAgentRunAction_NoPromptAudit_WhenEmpty proves an empty rendered prompt is
+// NOT audited (no empty event pollutes the bus).
+func TestAgentRunAction_NoPromptAudit_WhenEmpty(t *testing.T) {
+	f := newAgentRunFixture(t)
+	runCtx := f.newRunContext()
+	delete(runCtx.Metadata, "template_content") // empty prompt
+
+	if err := f.action.Execute(context.Background(), runCtx); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	for _, e := range f.eventPub.getEvents() {
+		var le model.LogEvent
+		if err := json.Unmarshal(e.Payload, &le); err != nil {
+			continue
+		}
+		if le.Type == "prompt" {
+			t.Errorf("expected no prompt-audit event for an empty prompt, got %q", le.Message)
+		}
+	}
 }

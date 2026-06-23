@@ -46,8 +46,11 @@ func (s *CostService) RecordStepCost(ctx context.Context, stepID, projectID uuid
 		return nil
 	}
 
-	// Aggregate all events
+	// Aggregate all events. reportedCost sums the provider-real cost_usd carried by
+	// each event; anyReported flags that at least one event reported a real cost.
 	var totalInput, totalOutput int64
+	var reportedCost float64
+	var anyReported bool
 	modelName := events[0].Model
 	for _, e := range events {
 		totalInput += e.InputTokens
@@ -55,15 +58,27 @@ func (s *CostService) RecordStepCost(ctx context.Context, stepID, projectID uuid
 		if e.Model != "" {
 			modelName = e.Model
 		}
+		reportedCost += e.CostUSD
+		if e.CostUSD > 0 {
+			anyReported = true
+		}
 	}
 
-	// Compute cost
-	costUSD, known := model.ComputeCostUSD(modelName, totalInput, totalOutput)
-	if !known {
-		s.logger.Warn("unknown model for cost computation, cost set to zero",
-			"model", modelName,
-			"step_id", stepID,
-		)
+	// Cost source: prefer the provider-real cost reported by the agent. The pricing
+	// table is only the FALLBACK for events that did not report a real cost (legacy
+	// runs, providers that don't surface cost).
+	var costUSD float64
+	if anyReported {
+		costUSD = reportedCost
+	} else {
+		var known bool
+		costUSD, known = model.ComputeCostUSD(modelName, totalInput, totalOutput)
+		if !known {
+			s.logger.Warn("unknown model for cost computation, cost set to zero",
+				"model", modelName,
+				"step_id", stepID,
+			)
+		}
 	}
 
 	record := &model.CostRecord{

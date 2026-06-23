@@ -241,6 +241,22 @@ func (a *AgentRunAction) Execute(ctx context.Context, runCtx *model.RunContext) 
 		return fmt.Errorf("run environment commands: %w", err)
 	}
 
+	// 6c. Resolve the role and mint the callback token ONCE, before either dispatch
+	// path. Hoisting the mint here (out of buildAgentEnv) means the token lifecycle
+	// is substrate-agnostic: minted once per run, then revoked with the SAME token
+	// after the callback resolves (see waitForCallback). Returns nil for legacy /
+	// non-callback runs.
+	role := resolveRole(runCtx)
+	callback, err := a.prepareCallback(ctx, runCtx, role)
+	if err != nil {
+		return fmt.Errorf("prepare callback: %w", err)
+	}
+
+	// 6d. Audit the rendered prompt on the agnostic channel (durable event bus +
+	// operational log), once, before dispatch — so every substrate and both paths
+	// audit it identically. Skipped when the prompt is empty.
+	a.auditPrompt(ctx, runCtx, prompt, role)
+
 	// 7. Substrate dispatch. When a runtime is injected (SUBSTRATE selection in
 	// main.go, DockerRuntime by default), the run is realised THROUGH
 	// port.AgentRuntime — Docker is no longer special. The callback-wait + token
@@ -248,11 +264,11 @@ func (a *AgentRunAction) Execute(ctx context.Context, runCtx *model.RunContext) 
 	// this is NOT the rejected branch-beside-Docker fork. nil keeps the legacy
 	// direct path (back-compat).
 	if a.runtime != nil {
-		return a.executeViaRuntime(ctx, runCtx, project, story, agentImage, prompt, branchName, extraEnv, sidecarCtx)
+		return a.executeViaRuntime(ctx, runCtx, project, story, agentImage, prompt, branchName, extraEnv, sidecarCtx, callback)
 	}
 
 	// 7b. Legacy direct path (unchanged) — createContainer + Start + persist + wait.
-	containerID, err := a.createContainer(ctx, runCtx, project, story, agentImage, prompt, branchName, extraEnv, sidecarCtx)
+	containerID, err := a.createContainer(ctx, runCtx, project, story, agentImage, prompt, branchName, extraEnv, sidecarCtx, callback)
 	if err != nil {
 		return fmt.Errorf("create container: %w", err)
 	}
@@ -269,7 +285,7 @@ func (a *AgentRunAction) Execute(ctx context.Context, runCtx *model.RunContext) 
 	// 10. Wait for completion using the appropriate mode
 	var exitCode int
 	if isCallbackMode {
-		exitCode, err = a.waitForCallback(ctx, runCtx)
+		exitCode, err = a.waitForCallback(ctx, runCtx, callback)
 	} else {
 		exitCode, err = a.streamAndWait(ctx, containerID, runCtx)
 	}
@@ -365,8 +381,9 @@ func (a *AgentRunAction) createContainer(
 	agentImage, prompt, branchName string,
 	extraEnv []string,
 	sidecarCtx *port.SidecarContext,
+	callback *port.CallbackSpec,
 ) (string, error) {
-	env, err := a.buildAgentEnv(ctx, runCtx, project, story, agentImage, prompt, branchName, extraEnv)
+	env, err := a.buildAgentEnv(ctx, runCtx, project, story, agentImage, prompt, branchName, extraEnv, callbackToken(callback))
 	if err != nil {
 		return "", err
 	}
@@ -410,10 +427,12 @@ func (a *AgentRunAction) executeViaRuntime(
 	agentImage, prompt, branchName string,
 	extraEnv []string,
 	sidecarCtx *port.SidecarContext,
+	callback *port.CallbackSpec,
 ) error {
-	// buildAgentEnv mints the container token (callback mode) as a side effect, so
-	// the token lifecycle is unchanged from the legacy path.
-	env, err := a.buildAgentEnv(ctx, runCtx, project, story, agentImage, prompt, branchName, extraEnv)
+	// The callback token is minted once upstream (prepareCallback) and threaded in
+	// via callback; buildAgentEnv only emits AUTH_TOKEN from it. The token lifecycle
+	// is unchanged from — and now identical to — the legacy path.
+	env, err := a.buildAgentEnv(ctx, runCtx, project, story, agentImage, prompt, branchName, extraEnv, callbackToken(callback))
 	if err != nil {
 		return fmt.Errorf("build agent env: %w", err)
 	}
@@ -433,6 +452,7 @@ func (a *AgentRunAction) executeViaRuntime(
 		Memory:       a.config.DefaultMemory,
 		CPUs:         a.config.DefaultCPUs,
 		Network:      buildRunNetwork(sidecarCtx),
+		Callback:     callback,
 	}
 
 	handle, err := a.runtime.Launch(ctx, spec)
@@ -459,7 +479,7 @@ func (a *AgentRunAction) executeViaRuntime(
 	isCallbackMode := a.isCallbackMode(runtimeKind, agentImage)
 	var exitCode int
 	if isCallbackMode {
-		exitCode, err = a.waitForCallback(ctx, runCtx)
+		exitCode, err = a.waitForCallback(ctx, runCtx, callback)
 	} else {
 		exitCode, err = a.streamAndWait(ctx, handle.ID, runCtx)
 	}
@@ -497,10 +517,16 @@ func (a *AgentRunAction) buildAgentLabels(runCtx *model.RunContext, story *model
 
 // buildAgentEnv assembles the full KEY=value environment for one agent run: the
 // repo/branch/prompt base block, the resolved git token, and either the
-// callback-mode auth block (API_KEY, minted AUTH_TOKEN, CALLBACK_URL/PROVIDER/
-// RUN_ID/STEP_ID, MODEL) or the legacy OAuth block, followed by any sidecar
-// connection strings in extraEnv. The slice order is preserved exactly, so the
-// resulting env is byte-for-byte identical to the previous inline assembly.
+// callback-mode auth block (API_KEY, the AUTH_TOKEN minted upstream by
+// prepareCallback, CALLBACK_URL/PROVIDER/RUN_ID/STEP_ID, MODEL) or the legacy
+// OAuth block, followed by any sidecar connection strings in extraEnv. The slice
+// order is preserved exactly, so the resulting env is byte-for-byte identical to
+// the previous inline assembly.
+//
+// authToken is the per-run callback token minted once in Execute (prepareCallback)
+// and threaded in; it is "" for legacy/non-callback runs. buildAgentEnv no longer
+// mints the token itself — the mint is hoisted so it happens once per run for all
+// substrates and the matching revoke can run with the same token.
 func (a *AgentRunAction) buildAgentEnv(
 	ctx context.Context,
 	runCtx *model.RunContext,
@@ -508,6 +534,7 @@ func (a *AgentRunAction) buildAgentEnv(
 	story *model.Story,
 	agentImage, prompt, branchName string,
 	extraEnv []string,
+	authToken string,
 ) ([]string, error) {
 	repoURL := ""
 	if project.RepoURL != nil {
@@ -557,20 +584,12 @@ func (a *AgentRunAction) buildAgentEnv(
 			}
 		}
 
-		// Generate a short-lived container token for callback auth. The token is bound
-		// to the agent so the fetch-at-startup bundle endpoint can resolve this agent's
-		// capabilities server-side. agentID is uuid.Nil when no agent is bound, which
-		// yields an empty bundle (back-compat: behaves exactly as before).
-		if a.tokenStore != nil {
-			agentID := uuid.Nil
-			if id := extractAgentID(runCtx); id != nil {
-				agentID = *id
-			}
-			token, tokenErr := a.tokenStore.Create(ctx, runCtx.Run.ID, runCtx.RunStep.ID, agentID, role, 2*time.Hour)
-			if tokenErr != nil {
-				return nil, fmt.Errorf("create container token: %w", tokenErr)
-			}
-			env = append(env, "AUTH_TOKEN="+token)
+		// AUTH_TOKEN for callback auth. The token is minted ONCE upstream in Execute
+		// (prepareCallback) and threaded in, so the same token can be revoked after
+		// the callback resolves. Empty when no tokenStore is configured (back-compat:
+		// behaves exactly as before).
+		if authToken != "" {
+			env = append(env, "AUTH_TOKEN="+authToken)
 		}
 
 		env = append(env,
@@ -599,6 +618,105 @@ func (a *AgentRunAction) buildAgentEnv(
 	env = append(env, extraEnv...)
 
 	return env, nil
+}
+
+// prepareCallback mints the per-run callback token ONCE and returns the typed
+// CallbackSpec carried on the RunSpec, so the lifecycle — mint at launch, revoke
+// after the callback resolves — runs identically on every substrate.
+//
+// It returns (nil, nil) for non-callback runs: when callback mode is off
+// (statusStore nil or a non-callback runtime kind) there is no token to mint and
+// the legacy OAuth env is used. Gated on tokenStore != nil so a callback-capable
+// run with no token store still launches (back-compat: AUTH_TOKEN simply absent).
+func (a *AgentRunAction) prepareCallback(ctx context.Context, runCtx *model.RunContext, role string) (*port.CallbackSpec, error) {
+	runtimeKind, _ := runCtx.Metadata["runtime_kind"].(string)
+	agentImage, _ := runCtx.Metadata["agent_image"].(string)
+	if !a.isCallbackMode(runtimeKind, agentImage) {
+		return nil, nil
+	}
+
+	var token string
+	if a.tokenStore != nil {
+		// Bind the token to the agent so the fetch-at-startup bundle endpoint can
+		// resolve this agent's capabilities server-side. agentID is uuid.Nil when no
+		// agent is bound, which yields an empty bundle (back-compat).
+		agentID := uuid.Nil
+		if id := extractAgentID(runCtx); id != nil {
+			agentID = *id
+		}
+		t, err := a.tokenStore.Create(ctx, runCtx.Run.ID, runCtx.RunStep.ID, agentID, role, 2*time.Hour)
+		if err != nil {
+			return nil, fmt.Errorf("create container token: %w", err)
+		}
+		token = t
+	}
+
+	return &port.CallbackSpec{
+		URL:       a.callbackURL,
+		AuthToken: token,
+		RunID:     runCtx.Run.ID,
+		StepID:    runCtx.RunStep.ID,
+	}, nil
+}
+
+// callbackToken returns the minted auth token from a CallbackSpec, or "" when
+// there is no callback (legacy/non-callback run).
+func callbackToken(callback *port.CallbackSpec) string {
+	if callback == nil {
+		return ""
+	}
+	return callback.AuthToken
+}
+
+// auditPrompt makes the rendered prompt auditable through the substrate-agnostic
+// channel, independent of which substrate runs the agent or the (Docker-only)
+// log stream. It does two things:
+//   - Durable audit: publishes the prompt on the Postgres event bus as a LogEvent
+//     of Type "prompt" (→ events table + SSE). This survives the retirement of the
+//     Docker log-stream mechanism (Stage 5).
+//   - Operational signal: a structured Info log carrying only run/step/agent/role
+//     and the prompt length (the prompt body stays out of the bounded log_tail).
+//
+// A prompt is a rendered task template, not a secret. The ScrubHandler still
+// redacts any token-shaped field on the slog signal; the durable event-bus audit
+// is intentionally non-redacted (see in-body comment). An empty prompt is skipped
+// (no empty event).
+func (a *AgentRunAction) auditPrompt(ctx context.Context, runCtx *model.RunContext, prompt, role string) {
+	if prompt == "" {
+		return
+	}
+
+	agentID := ""
+	if id := extractAgentID(runCtx); id != nil {
+		agentID = id.String()
+	}
+
+	a.logger.Info("agent prompt dispatched",
+		"run_id", runCtx.Run.ID,
+		"step_id", runCtx.RunStep.ID,
+		"agent_id", agentID,
+		"role", role,
+		"prompt_len", len(prompt),
+	)
+
+	// Durable audit on the agnostic event bus — same mechanism as publishLogEvent,
+	// with Type "prompt" so consumers can distinguish it from container stdout.
+	//
+	// The prompt is published NON-redacted to the event bus (Postgres events table
+	// + SSE) ON PURPOSE: this is the auditable record of what the agent was asked to
+	// do (Decision #2, ADR §7#2). The ScrubHandler only wraps slog, not the event
+	// bus, so it does not touch this — which is intended; the prompt is a rendered
+	// task template, not a secret.
+	//
+	// The role is carried on the operational slog above, not duplicated into the
+	// LogEvent (no model field added — avoids scope creep). An event-bus consumer
+	// recovers the role by joining on run_id/step_id.
+	a.publishLogEvent(ctx, runCtx, model.LogEvent{
+		RunID:   runCtx.Run.ID.String(),
+		StepID:  runCtx.RunStep.ID.String(),
+		Message: prompt,
+		Type:    eventTypePrompt,
+	})
 }
 
 // streamAndWait starts log streaming, waits for container exit, and handles log tail.
@@ -795,24 +913,33 @@ func (a *AgentRunAction) isCallbackMode(runtimeKind, agentImage string) bool {
 // waitForCallback waits for the agent container to report its exit status via
 // the HTTP callback endpoint. Logs and cost events arrive asynchronously via
 // separate callback endpoints and do not flow through this method.
-func (a *AgentRunAction) waitForCallback(ctx context.Context, runCtx *model.RunContext) (int, error) {
+//
+// It REVOKES the callback token — the real one minted in Execute (prepareCallback)
+// and carried on callback — on EVERY exit path (success, WaitForStatus error,
+// timeout, cancel, panic) via defer, so the token dies with the run instead of
+// lingering until its 2h TTL. (Before Stage 3a the revoke was dead: it looked the
+// token up via a stub that always returned none.)
+func (a *AgentRunAction) waitForCallback(ctx context.Context, runCtx *model.RunContext, callback *port.CallbackSpec) (int, error) {
 	stepID := runCtx.RunStep.ID
+
+	// Revoke via defer, registered BEFORE WaitForStatus, so it fires on every exit
+	// path — including a WaitForStatus error, timeout, or context cancellation, none
+	// of which would reach a post-wait revoke. Bounded, detached context so it runs
+	// even when ctx is already cancelled.
+	if a.tokenStore != nil && callback != nil && callback.AuthToken != "" {
+		defer func() {
+			revokeCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if revokeErr := a.tokenStore.Revoke(revokeCtx, callback.AuthToken); revokeErr != nil {
+				a.logger.Warn("failed to revoke container token",
+					"step_id", stepID, "error", revokeErr)
+			}
+		}()
+	}
 
 	exitCode, errMsg, err := a.statusStore.WaitForStatus(ctx, stepID, 2*time.Hour)
 	if err != nil {
 		return -1, err
-	}
-
-	// Revoke the container token after completion
-	if a.tokenStore != nil {
-		revokeCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if tokenStr, ok := a.findContainerToken(runCtx); ok {
-			if revokeErr := a.tokenStore.Revoke(revokeCtx, tokenStr); revokeErr != nil {
-				a.logger.Warn("failed to revoke container token",
-					"step_id", stepID, "error", revokeErr)
-			}
-		}
 	}
 
 	if errMsg != "" {
@@ -821,14 +948,6 @@ func (a *AgentRunAction) waitForCallback(ctx context.Context, runCtx *model.RunC
 	}
 
 	return exitCode, nil
-}
-
-// findContainerToken looks for the AUTH_TOKEN in the run context metadata.
-// This is a best-effort lookup used to revoke tokens after completion.
-func (a *AgentRunAction) findContainerToken(_ *model.RunContext) (string, bool) {
-	// The token is not stored in metadata; revocation is handled by TTL expiry.
-	// This method exists as a hook for future token tracking if needed.
-	return "", false
 }
 
 // resolveProvider resolves the AI provider for the current step from run context metadata.
