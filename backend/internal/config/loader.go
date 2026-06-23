@@ -37,6 +37,9 @@ func setDefaults(cfg *pkgconfig.Config) {
 		t := true
 		cfg.Database.AutoMigrate = &t
 	}
+	if cfg.Substrate.Kind == "" {
+		cfg.Substrate.Kind = pkgconfig.SubstrateDocker
+	}
 }
 
 func applyEnvOverrides(cfg *pkgconfig.Config) {
@@ -81,6 +84,9 @@ func applyEnvOverrides(cfg *pkgconfig.Config) {
 	if v := os.Getenv("CALLBACK_BASE_URL"); v != "" {
 		cfg.Docker.CallbackBaseURL = v
 	}
+	if v := os.Getenv("SUBSTRATE"); v != "" {
+		cfg.Substrate.Kind = v
+	}
 	if v := os.Getenv("SMTP_HOST"); v != "" {
 		cfg.SMTP.Host = v
 	}
@@ -118,6 +124,12 @@ func validate(cfg *pkgconfig.Config) error {
 	}
 	if cfg.Database.Password == "" {
 		return fmt.Errorf("database.password is required")
+	}
+	switch cfg.Substrate.Kind {
+	case pkgconfig.SubstrateDocker, pkgconfig.SubstrateMicrosandbox:
+	default:
+		return fmt.Errorf("substrate.kind must be %q or %q, got %q",
+			pkgconfig.SubstrateDocker, pkgconfig.SubstrateMicrosandbox, cfg.Substrate.Kind)
 	}
 	return nil
 }

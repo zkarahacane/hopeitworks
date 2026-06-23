@@ -4,13 +4,32 @@ import "time"
 
 // Config holds the complete application configuration.
 type Config struct {
-	Server   ServerConfig   `yaml:"server"`
-	Database DatabaseConfig `yaml:"database"`
-	Docker   DockerConfig   `yaml:"docker"`
-	Log      LogConfig      `yaml:"logging"`
-	SMTP     SMTPConfig     `yaml:"smtp"`
-	Security SecurityConfig `yaml:"security"`
-	Stacks   []StackConfig  `yaml:"stacks"`
+	Server    ServerConfig    `yaml:"server"`
+	Database  DatabaseConfig  `yaml:"database"`
+	Docker    DockerConfig    `yaml:"docker"`
+	Substrate SubstrateConfig `yaml:"substrate"`
+	Log       LogConfig       `yaml:"logging"`
+	SMTP      SMTPConfig      `yaml:"smtp"`
+	Security  SecurityConfig  `yaml:"security"`
+	Stacks    []StackConfig   `yaml:"stacks"`
+}
+
+// Substrate kinds: the execution substrate that realises an agent run. "docker"
+// is the live default; "microsandbox" selects the microVM substrate, which is a
+// scaffold in P3a (selecting it does not change live execution — see main.go).
+const (
+	SubstrateDocker       = "docker"
+	SubstrateMicrosandbox = "microsandbox"
+)
+
+// SubstrateConfig selects which execution substrate the platform uses. The
+// substrate adapter (microsandbox/K8s later) implements port.AgentRuntime; the
+// Docker substrate remains the default and the only one wired into the live
+// agent_run flow until later P3 sub-phases.
+type SubstrateConfig struct {
+	// Kind is the substrate selector: "docker" (default) or "microsandbox".
+	// Override via the SUBSTRATE env var.
+	Kind string `yaml:"kind"`
 }
 
 // StackConfig is one entry of the stack catalogue: a catalogued runtime image
