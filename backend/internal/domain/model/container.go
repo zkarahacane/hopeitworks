@@ -2,6 +2,18 @@ package model
 
 import "time"
 
+// Container health/readiness states reported by ContainerManager.InspectHealth.
+// The first four mirror Docker's HEALTHCHECK statuses; the last two are the
+// fallback signal used when a container declares no healthcheck.
+const (
+	HealthHealthy    = "healthy"     // healthcheck passing
+	HealthUnhealthy  = "unhealthy"   // healthcheck failing
+	HealthStarting   = "starting"    // healthcheck in its start period
+	HealthNone       = "none"        // no healthcheck configured
+	HealthRunning    = "running"     // no healthcheck, container is running
+	HealthNotRunning = "not_running" // no healthcheck, container not running
+)
+
 // ContainerOpts specifies configuration for creating an agent container.
 type ContainerOpts struct {
 	// Image is the Docker image to use (e.g., "hopeitworks/agent:latest").

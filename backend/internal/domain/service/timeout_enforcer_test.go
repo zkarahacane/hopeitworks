@@ -91,6 +91,10 @@ func (m *mockContainerManager) ListNetworks(_ context.Context, _ map[string]stri
 	return nil, nil
 }
 
+func (m *mockContainerManager) InspectHealth(_ context.Context, _ string) (string, error) {
+	return model.HealthRunning, nil
+}
+
 func (m *mockContainerManager) getStopCalls() []string {
 	m.mu.Lock()
 	defer m.mu.Unlock()

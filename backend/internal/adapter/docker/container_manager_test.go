@@ -47,8 +47,6 @@ type mockDockerClient struct {
 	netConnectNet string
 	netConnectCtr string
 	netConnectCfg *network.EndpointSettings
-	netListOpts   network.ListOptions
-	inspectID     string
 
 	// Configurable return values.
 	createResp     dockercontainer.CreateResponse
@@ -123,8 +121,7 @@ func (m *mockDockerClient) ContainerList(_ context.Context, opts dockercontainer
 	return m.listContainers, m.listErr
 }
 
-func (m *mockDockerClient) ContainerInspect(_ context.Context, containerID string) (dockercontainer.InspectResponse, error) {
-	m.inspectID = containerID
+func (m *mockDockerClient) ContainerInspect(_ context.Context, _ string) (dockercontainer.InspectResponse, error) {
 	return m.inspectResp, m.inspectErr
 }
 
@@ -146,8 +143,7 @@ func (m *mockDockerClient) NetworkConnect(_ context.Context, networkID, containe
 	return m.netConnectErr
 }
 
-func (m *mockDockerClient) NetworkList(_ context.Context, options network.ListOptions) ([]network.Summary, error) {
-	m.netListOpts = options
+func (m *mockDockerClient) NetworkList(_ context.Context, _ network.ListOptions) ([]network.Summary, error) {
 	return m.netList, m.netListErr
 }
 

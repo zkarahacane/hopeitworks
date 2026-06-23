@@ -349,3 +349,24 @@ func (m *ContainerManager) ListNetworks(ctx context.Context, labelFilter map[str
 	m.logger.Debug("networks listed", slog.Int("count", len(result)))
 	return result, nil
 }
+
+// InspectHealth reports a container's readiness. If the container declares a
+// Docker HEALTHCHECK its health status is returned; otherwise a running /
+// not-running signal is returned.
+func (m *ContainerManager) InspectHealth(ctx context.Context, containerID string) (string, error) {
+	info, err := m.client.ContainerInspect(ctx, containerID)
+	if err != nil {
+		return "", apperrors.NewContainerError(
+			fmt.Sprintf("failed to inspect container %s: %v", containerID, err),
+			err,
+		)
+	}
+
+	if info.State != nil && info.State.Health != nil {
+		return info.State.Health.Status, nil
+	}
+	if info.State != nil && info.State.Running {
+		return model.HealthRunning, nil
+	}
+	return model.HealthNotRunning, nil
+}
