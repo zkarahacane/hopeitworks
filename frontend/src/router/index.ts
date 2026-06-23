@@ -100,6 +100,11 @@ const router = createRouter({
           redirect: { name: 'project-agents' },
         },
         {
+          path: 'environment',
+          name: 'project-environment',
+          component: () => import('@/views/ProjectEnvironmentView.vue'),
+        },
+        {
           path: 'costs',
           name: 'project-costs',
           component: () => import('@/views/CostDashboardView.vue'),
