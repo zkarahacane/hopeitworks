@@ -416,6 +416,12 @@ func (r *RunRepo) CreateRetryRunStep(ctx context.Context, step *model.RunStep) (
 	if step.ParentStepID != nil {
 		params.ParentStepID = pgtype.UUID{Bytes: *step.ParentStepID, Valid: true}
 	}
+	if step.StageID != "" {
+		params.StageID = pgtype.Text{String: step.StageID, Valid: true}
+	}
+	if step.StageName != "" {
+		params.StageName = pgtype.Text{String: step.StageName, Valid: true}
+	}
 
 	row, err := r.queries.CreateRetryRunStep(ctx, params)
 	if err != nil {

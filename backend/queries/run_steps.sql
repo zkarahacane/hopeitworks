@@ -32,9 +32,9 @@ RETURNING *;
 -- name: CreateRetryRunStep :one
 INSERT INTO run_steps (
     id, run_id, step_name, step_order, action, status,
-    retry_count, retry_type, parent_step_id
+    retry_count, retry_type, parent_step_id, stage_id, stage_name
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
 )
 RETURNING *;
 

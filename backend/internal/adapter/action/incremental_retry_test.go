@@ -362,6 +362,42 @@ func TestIncrementalRetryAction_CustomRetryPolicy(t *testing.T) {
 	}
 }
 
+// TestIncrementalRetryAction_StageStampedFromParent verifies that a retry step
+// carries the StageID and StageName of the parent step (Dette D1 fix).
+func TestIncrementalRetryAction_StageStampedFromParent(t *testing.T) {
+	t.Parallel()
+
+	const wantStageID = "stage-dev"
+	const wantStageName = "Development"
+
+	parent := makeParentStep(0, "error", "")
+	parent.StageID = wantStageID
+	parent.StageName = wantStageName
+
+	agentRun := &retryMockAgentRun{}
+	repo := &retryMockRunRepo{
+		getRunStepFn: func(_ context.Context, _ uuid.UUID) (*model.RunStep, error) {
+			return parent, nil
+		},
+	}
+
+	a := action.NewIncrementalRetryAction(repo, agentRun, testLogger())
+	if err := a.Execute(context.Background(), buildRetryRunCtx(parent.ID, nil)); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	createdStep := repo.createdStep
+	if createdStep == nil {
+		t.Fatal("expected a retry step to be created")
+	}
+	if createdStep.StageID != wantStageID {
+		t.Errorf("retry step StageID = %q; want %q", createdStep.StageID, wantStageID)
+	}
+	if createdStep.StageName != wantStageName {
+		t.Errorf("retry step StageName = %q; want %q", createdStep.StageName, wantStageName)
+	}
+}
+
 func (m *retryMockRunRepo) GetLatestRunByStory(_ context.Context, _ uuid.UUID) (*model.LatestRun, error) {
 	return nil, nil
 }
