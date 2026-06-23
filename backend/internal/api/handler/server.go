@@ -20,11 +20,12 @@ type Server struct {
 	costs          *CostHandler
 	notifications  *NotificationHandler
 	epicRuns       *EpicRunHandler
+	environment    *EnvironmentHandler
 }
 
 // NewServer creates a new Server with the given handlers.
-func NewServer(auth *AuthHandler, projects *ProjectHandler, users *UserHandler, profile *ProfileHandler, epics *EpicHandler, stories *StoryHandler, agents *AgentHandler, stacks *StackHandler, runs *RunHandler, pipelineConfig *PipelineConfigHandler, hitl *HITLHandler, costs *CostHandler, notifications *NotificationHandler, epicRuns *EpicRunHandler) *Server {
-	return &Server{auth: auth, projects: projects, users: users, profile: profile, epics: epics, stories: stories, agents: agents, stacks: stacks, runs: runs, pipelineConfig: pipelineConfig, hitl: hitl, costs: costs, notifications: notifications, epicRuns: epicRuns}
+func NewServer(auth *AuthHandler, projects *ProjectHandler, users *UserHandler, profile *ProfileHandler, epics *EpicHandler, stories *StoryHandler, agents *AgentHandler, stacks *StackHandler, runs *RunHandler, pipelineConfig *PipelineConfigHandler, hitl *HITLHandler, costs *CostHandler, notifications *NotificationHandler, epicRuns *EpicRunHandler, environment *EnvironmentHandler) *Server {
+	return &Server{auth: auth, projects: projects, users: users, profile: profile, epics: epics, stories: stories, agents: agents, stacks: stacks, runs: runs, pipelineConfig: pipelineConfig, hitl: hitl, costs: costs, notifications: notifications, epicRuns: epicRuns, environment: environment}
 }
 
 // RegisterUser delegates to AuthHandler.
@@ -435,4 +436,19 @@ func (s *Server) UpdatePromptTemplate(w http.ResponseWriter, r *http.Request, pr
 // Deprecated: use DeleteAgent instead.
 func (s *Server) DeletePromptTemplate(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, templateID TemplateIdPath) {
 	s.agents.DeleteAgent(w, r, projectID, templateID)
+}
+
+// GetProjectEnvironment delegates to EnvironmentHandler.
+func (s *Server) GetProjectEnvironment(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath) {
+	s.environment.GetProjectEnvironment(w, r, projectID)
+}
+
+// PutProjectEnvironment delegates to EnvironmentHandler.
+func (s *Server) PutProjectEnvironment(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath) {
+	s.environment.PutProjectEnvironment(w, r, projectID)
+}
+
+// DeleteProjectEnvironment delegates to EnvironmentHandler.
+func (s *Server) DeleteProjectEnvironment(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath) {
+	s.environment.DeleteProjectEnvironment(w, r, projectID)
 }
