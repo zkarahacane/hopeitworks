@@ -1,7 +1,21 @@
 # ─── Agent Test Stack ─────────────────────────────────────────────────────────
 # Isolated stack for agent-driven tests. Runs in parallel with the main dev
-# stack on different ports. No socket-proxy, no agent-network — agents do NOT
-# spawn sub-containers from inside this stack.
+# stack on different ports, on the same Docker daemon.
+#
+# Docker access mirrors the stable stack (docker-compose.yml): the API spawns
+# agent + sidecar + ephemeral-command containers through a filtered socket-proxy
+# (no raw socket mount, no root) onto an isolated agent-network. This lets the
+# runtime (P2c2: sidecars, per-run networks, env commands) actually run here.
+#
+# Cross-stack note: both stacks share the daemon and the `managed_by=hopeitworks`
+# label namespace. The sidecar GC is safe across stacks — it only reaps run
+# networks with no running sidecar (and only past its time window), and Docker
+# refuses to remove networks that still have attached endpoints. Worst case the
+# two stacks garbage-collect each other's genuine orphans, which is harmless.
+#
+# Image note: the runtime does NOT pull images implicitly (no ImagePull). The
+# stack/sidecar/command images referenced by an Environment must already be
+# present on the daemon (build the agent image, pull declared sidecar images).
 #
 # Ports:
 #   Postgres  → 5433 (host)
@@ -10,6 +24,23 @@
 # ──────────────────────────────────────────────────────────────────────────────
 
 services:
+  # Filtered proxy for the Docker socket — the API needs to spawn agent/sidecar
+  # containers but must NOT have unrestricted access to the daemon. Only allows
+  # container + network operations (no volumes, no exec, no swarm). Mirrors the
+  # stable stack. On Kubernetes this is replaced by a scoped ServiceAccount + RBAC.
+  socket-proxy:
+    image: tecnativa/docker-socket-proxy:0.3.0
+    container_name: hopeitworks-test-socket-proxy
+    environment:
+      CONTAINERS: 1   # allow container create/start/stop/inspect/remove/wait
+      NETWORKS: 1     # allow network create/remove/connect/list (per-run networks)
+      POST: 1         # required for create/start operations
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - hopeitworks-test
+    restart: unless-stopped
+
   test-postgres:
     image: postgres:16-alpine
     container_name: hopeitworks-test-postgres
@@ -56,6 +87,11 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD:-hopeitworks_dev_password}
       DB_SSLMODE: disable
       JWT_SECRET: ${JWT_SECRET:-dev-secret-key-change-in-production}
+      # --- docker / agent runtime ---
+      DOCKER_HOST: tcp://socket-proxy:2375
+      # Compose names this network "<project>_agent-network". This stack is always
+      # started with project "hopeitworks-test" (see scripts/agent-stack.sh).
+      DOCKER_AGENT_NETWORK: ${DOCKER_AGENT_NETWORK:-hopeitworks-test_agent-network}
       AGENT_IMAGE: ${AGENT_IMAGE:-hopeitworks/agent-go-node:latest}
       CLAUDE_MD_PATH: ${CLAUDE_MD_PATH:-agent/claude-md}
       GITHUB_TOKEN: ${GITHUB_TOKEN}
@@ -73,13 +109,21 @@ services:
         condition: service_healthy
       test-mailhog:
         condition: service_started
+      socket-proxy:
+        condition: service_started
     restart: unless-stopped
     networks:
       - hopeitworks-test
+      - agent-network
 
 volumes:
   test_postgres_data:
 
 networks:
   hopeitworks-test:
+    driver: bridge
+  # Isolated network for agent containers spawned by the runtime. Not internal —
+  # agents need internet access (git clone, provider API calls). Compose names it
+  # "hopeitworks-test_agent-network"; the API references it via DOCKER_AGENT_NETWORK.
+  agent-network:
     driver: bridge
