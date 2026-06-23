@@ -45,6 +45,8 @@ tags:
     description: Cost tracking and observability endpoints
   - name: api-keys
     description: User API key management endpoints
+  - name: environments
+    description: Project environment (execution composition) endpoints
 
 paths:
   # ── Auth ────────────────────────────────────────────────────────────────
@@ -1306,6 +1308,65 @@ paths:
                       $ref: "#/components/schemas/Stack"
         "401":
           $ref: "#/components/responses/Unauthorized"
+
+  /projects/{projectId}/environment:
+    get:
+      operationId: getProjectEnvironment
+      summary: Get the project's execution environment
+      description: Returns the project's single execution environment (stacks, services, commands). Returns 404 when absent.
+      tags: [environments]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+      responses:
+        "200":
+          description: The project environment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Environment"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      operationId: putProjectEnvironment
+      summary: Upsert the project's execution environment
+      description: >
+        Creates the environment when absent, replaces it when present (one per project).
+        Use source "declared" when not importing from a repo file.
+      tags: [environments]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EnvironmentInput"
+      responses:
+        "200":
+          description: Environment created or updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Environment"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    delete:
+      operationId: deleteProjectEnvironment
+      summary: Delete the project's execution environment
+      tags: [environments]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+      responses:
+        "204":
+          description: Environment deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
   /agents:
     get:
@@ -3168,6 +3229,96 @@ components:
         created_at:
           type: string
           format: date-time
+
+    Environment:
+      type: object
+      required:
+        - id
+        - project_id
+        - stacks
+        - services
+        - source
+        - commands
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        stacks:
+          type: array
+          items:
+            type: string
+          description: Stack keys (e.g. go, node, python, go-node)
+        services:
+          type: array
+          items:
+            $ref: "#/components/schemas/EnvironmentService"
+        source:
+          type: string
+          enum: [devcontainer, compose, makefile, declared]
+          description: Where the run composition is derived from
+        commands:
+          type: object
+          additionalProperties:
+            type: string
+          description: Named commands to run (test, migrate, seed, …)
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    EnvironmentService:
+      type: object
+      required:
+        - name
+        - image
+        - env
+      properties:
+        name:
+          type: string
+          description: Sidecar service name (e.g. postgres, redis)
+        image:
+          type: string
+          description: Docker image reference for the sidecar
+        env:
+          type: object
+          additionalProperties:
+            type: string
+          description: Environment variables injected into the sidecar
+
+    EnvironmentInput:
+      type: object
+      required:
+        - stacks
+        - services
+        - source
+        - commands
+      properties:
+        stacks:
+          type: array
+          items:
+            type: string
+          description: Stack keys (e.g. go, node, python, go-node)
+        services:
+          type: array
+          items:
+            $ref: "#/components/schemas/EnvironmentService"
+        source:
+          type: string
+          enum: [devcontainer, compose, makefile, declared]
+          default: declared
+          description: Where the run composition is derived from
+        commands:
+          type: object
+          additionalProperties:
+            type: string
+          description: Named commands to run (test, migrate, seed, …)
 
     Agent:
       type: object
