@@ -1423,3 +1423,373 @@ func (m *mockRunRepo) UpdateRunMetadata(_ context.Context, _ uuid.UUID, _ map[st
 func (m *mockRunRepo) AppendStepLogTail(_ context.Context, _ uuid.UUID, _ string) error {
 	return nil
 }
+
+// --- Substrate dispatch (Stage 2) test infrastructure ---
+
+// testSubstrateHandleID is the run handle the fake substrate returns from Launch.
+// Defined once so the assertions (persistContainerID, streamAndWait target, Stop
+// arg) all reference the same literal (goconst).
+const testSubstrateHandleID = "sub-123"
+
+// mockAgentRuntime is a fake port.AgentRuntime that records the RunSpec it was
+// asked to Launch and counts Launch/Wait/Stop, so the dispatch path can be
+// asserted without any real container backend. waitExitCode lets a test prove
+// that the runtime's own Wait is IGNORED as the outcome source in callback mode.
+type mockAgentRuntime struct {
+	mu sync.Mutex
+
+	launchSpecs []port.RunSpec
+	waitCalls   int
+	stopHandles []port.RunHandle
+
+	launchErr    error
+	waitExitCode int
+	waitErr      error
+}
+
+func (m *mockAgentRuntime) Provision(_ context.Context, _ model.CapabilitySpec) (model.ProvisionResult, error) {
+	return model.ProvisionResult{}, nil
+}
+
+func (m *mockAgentRuntime) Launch(_ context.Context, spec port.RunSpec) (port.RunHandle, error) {
+	m.mu.Lock()
+	m.launchSpecs = append(m.launchSpecs, spec)
+	m.mu.Unlock()
+	if m.launchErr != nil {
+		return port.RunHandle{}, m.launchErr
+	}
+	return port.RunHandle{ID: testSubstrateHandleID}, nil
+}
+
+func (m *mockAgentRuntime) Wait(_ context.Context, _ port.RunHandle) (port.RunResult, error) {
+	m.mu.Lock()
+	m.waitCalls++
+	m.mu.Unlock()
+	if m.waitErr != nil {
+		return port.RunResult{}, m.waitErr
+	}
+	return port.RunResult{ExitCode: m.waitExitCode}, nil
+}
+
+func (m *mockAgentRuntime) Stop(_ context.Context, h port.RunHandle) error {
+	m.mu.Lock()
+	m.stopHandles = append(m.stopHandles, h)
+	m.mu.Unlock()
+	return nil
+}
+
+func (m *mockAgentRuntime) SupportedCapabilities() model.CapabilitySet {
+	return model.CapabilitySet{}
+}
+
+func (m *mockAgentRuntime) launchCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return len(m.launchSpecs)
+}
+
+func (m *mockAgentRuntime) stopCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return len(m.stopHandles)
+}
+
+func (m *mockAgentRuntime) waitCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.waitCalls
+}
+
+func (m *mockAgentRuntime) lastSpec(t *testing.T) port.RunSpec {
+	t.Helper()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if len(m.launchSpecs) == 0 {
+		t.Fatalf("Launch was never called")
+	}
+	return m.launchSpecs[len(m.launchSpecs)-1]
+}
+
+// mockCallbackStatusStore is a fake port.CallbackStatusStore. WaitForStatus
+// returns the configured exit code / error message, recording that it was
+// consulted — used to prove the callback channel (not the runtime's Wait) is the
+// outcome source in callback mode.
+type mockCallbackStatusStore struct {
+	mu sync.Mutex
+
+	waitCalls int
+	exitCode  int
+	errMsg    string
+	waitErr   error
+}
+
+func (m *mockCallbackStatusStore) WaitForStatus(_ context.Context, _ uuid.UUID, _ time.Duration) (int, string, error) {
+	m.mu.Lock()
+	m.waitCalls++
+	m.mu.Unlock()
+	if m.waitErr != nil {
+		return -1, "", m.waitErr
+	}
+	return m.exitCode, m.errMsg, nil
+}
+
+func (m *mockCallbackStatusStore) SetStatus(_ context.Context, _ uuid.UUID, _ int, _ string) error {
+	return nil
+}
+
+func (m *mockCallbackStatusStore) waitCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.waitCalls
+}
+
+// envHas reports whether env contains a KEY=value entry for the given key.
+func envHas(env []string, key string) bool {
+	prefix := key + "="
+	for _, e := range env {
+		if strings.HasPrefix(e, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+// TestAgentRunAction_RuntimeDispatch_Legacy proves the legacy-mode run is realised
+// THROUGH the injected port.AgentRuntime: Launch is called once with a RunSpec
+// carrying the buildAgentEnv output / labels / resources / empty Network, the
+// substrate handle is persisted as the container id, the outcome comes from
+// streamAndWait (legacy, statusStore nil), Stop is deferred, and the Docker
+// ContainerManager.Create is NEVER called directly on this path.
+func TestAgentRunAction_RuntimeDispatch_Legacy(t *testing.T) {
+	f := newAgentRunFixture(t)
+	fakeRT := &mockAgentRuntime{}
+
+	// Rebuild the action with the runtime injected (legacy mode: statusStore nil,
+	// no runtime_kind metadata → isCallbackMode false → streamAndWait).
+	action := newRuntimeAction(f, nil, nil, "", fakeRT)
+
+	runCtx := f.newRunContext()
+	if err := action.Execute(context.Background(), runCtx); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	// Launch called exactly once.
+	if got := fakeRT.launchCount(); got != 1 {
+		t.Fatalf("expected 1 Launch call, got %d", got)
+	}
+	spec := fakeRT.lastSpec(t)
+
+	// The Docker ContainerManager.Create must NOT be called on the runtime path.
+	f.containerMgr.mu.Lock()
+	createCalls := len(f.containerMgr.createCalls)
+	f.containerMgr.mu.Unlock()
+	if createCalls != 0 {
+		t.Fatalf("expected 0 direct containerMgr.Create calls on the runtime path, got %d", createCalls)
+	}
+
+	// RunSpec.Env carries what buildAgentEnv produced (base block present).
+	for _, key := range []string{"REPO_URL", "STORY_KEY", "PROMPT", "CLAUDE_MD_CONTENT"} {
+		if !envHas(spec.Env, key) {
+			t.Errorf("expected RunSpec.Env to contain %s=, env=%v", key, spec.Env)
+		}
+	}
+
+	// RunSpec.Labels match buildAgentLabels.
+	if spec.Labels["managed_by"] != model.LabelManagedByValue ||
+		spec.Labels["run_id"] != f.runID.String() ||
+		spec.Labels["step_id"] != f.stepID.String() ||
+		spec.Labels["story_key"] != testStoryKey {
+		t.Errorf("RunSpec.Labels mismatch: %v", spec.Labels)
+	}
+
+	// Resources copied from AgentConfig.
+	if spec.Memory != 4294967296 || spec.CPUs != 2.0 {
+		t.Errorf("RunSpec resources mismatch: memory=%d cpus=%f", spec.Memory, spec.CPUs)
+	}
+
+	// No Environment → zero RunNetwork (byte-identical to single-homed legacy).
+	if spec.Network.Name != "" {
+		t.Errorf("expected empty RunNetwork.Name with no Environment, got %q", spec.Network.Name)
+	}
+
+	// Image threaded through.
+	if spec.Image != "hopeitworks/agent:latest" {
+		t.Errorf("expected RunSpec.Image hopeitworks/agent:latest, got %q", spec.Image)
+	}
+
+	// persistContainerID received the substrate handle id.
+	f.runRepo.mu.Lock()
+	var persistedHandle bool
+	for _, c := range f.runRepo.containerInfoCalls {
+		if c.ContainerID != nil && *c.ContainerID == testSubstrateHandleID {
+			persistedHandle = true
+		}
+	}
+	f.runRepo.mu.Unlock()
+	if !persistedHandle {
+		t.Errorf("expected persistContainerID(%q) to be called with the substrate handle", testSubstrateHandleID)
+	}
+
+	// Stop deferred once on the handle.
+	if got := fakeRT.stopCount(); got != 1 {
+		t.Errorf("expected 1 Stop call (deferred teardown), got %d", got)
+	}
+	if len(fakeRT.stopHandles) == 1 && fakeRT.stopHandles[0].ID != testSubstrateHandleID {
+		t.Errorf("expected Stop on handle %q, got %q", testSubstrateHandleID, fakeRT.stopHandles[0].ID)
+	}
+}
+
+// TestAgentRunAction_RuntimeDispatch_CallbackWaitNotSkipped is the anti-drift
+// guard. In callback mode the outcome MUST come from the callback channel
+// (statusStore.WaitForStatus), NOT from the runtime's own Wait — proving the
+// rejected P3c fork (read result.ExitCode off the substrate, skipping
+// callback-wait + token-revoke) has not been reintroduced.
+//
+// The fake runtime's Wait is rigged to return a NON-zero exit code; the callback
+// reports 0. The run must succeed (callback wins) and statusStore.WaitForStatus
+// must have been consulted.
+func TestAgentRunAction_RuntimeDispatch_CallbackWaitNotSkipped(t *testing.T) {
+	f := newAgentRunFixture(t)
+
+	// Rig the runtime so its OWN Wait would fail the run if it were the outcome
+	// source (exit 1). It must be ignored in callback mode.
+	fakeRT := &mockAgentRuntime{waitExitCode: 1, waitErr: nil}
+
+	// Callback channel says exit 0 (success).
+	statusStore := &mockCallbackStatusStore{exitCode: 0}
+
+	// apiKeySvc is nil: the fixture runCtx carries no UserID (uuid.Nil), so
+	// buildAgentEnv never resolves an API key. tokenStore IS exercised (the token
+	// mint stays in buildAgentEnv).
+	tokenStore := &mockTokenStore{}
+
+	action := newCallbackRuntimeAction(f, statusStore, tokenStore, fakeRT)
+
+	runCtx := f.newRunContext()
+	// claude_code runtime_kind → callback mode (with statusStore set).
+	runCtx.Metadata["runtime_kind"] = model.RuntimeKindClaudeCode
+
+	if err := action.Execute(context.Background(), runCtx); err != nil {
+		t.Fatalf("expected success (callback reports exit 0), got %v", err)
+	}
+
+	// The callback channel WAS consulted: outcome came from the callback.
+	if got := statusStore.waitCount(); got != 1 {
+		t.Fatalf("expected statusStore.WaitForStatus to be consulted once (callback = outcome source), got %d", got)
+	}
+
+	// The runtime's own Wait was NOT used as the outcome source. (The dispatch does
+	// not call runtime.Wait at all in callback mode; assert it was not consulted.)
+	if got := fakeRT.waitCount(); got != 0 {
+		t.Errorf("expected runtime.Wait NOT to be the outcome source in callback mode, but it was called %d times", got)
+	}
+
+	// Launch + Stop still happen exactly once (substrate lifecycle preserved).
+	if got := fakeRT.launchCount(); got != 1 {
+		t.Errorf("expected 1 Launch call, got %d", got)
+	}
+	if got := fakeRT.stopCount(); got != 1 {
+		t.Errorf("expected 1 Stop call (deferred teardown), got %d", got)
+	}
+}
+
+// newRuntimeAction builds an AgentRunAction from the fixture's mocks plus the
+// supplied auth/callback wiring and an injected runtime. Keeps the long positional
+// constructor in one place for the Stage 2 runtime-path tests.
+func newRuntimeAction(
+	f *agentRunFixture,
+	apiKeySvc *service.APIKeyService,
+	tokenStore port.ContainerTokenStore,
+	callbackURL string,
+	rt port.AgentRuntime,
+) *action.AgentRunAction {
+	agentCfg := action.AgentConfig{
+		DefaultMemory: 4294967296,
+		DefaultCPUs:   2.0,
+		NetworkName:   testNetwork,
+		LogTailLines:  50,
+	}
+	return action.NewAgentRunAction(
+		f.containerMgr,
+		f.logStreamer,
+		f.eventPub,
+		f.storyRepo,
+		f.projectRepo,
+		f.runRepo,
+		f.environmentRepo,
+		f.sidecarMgr,
+		f.stackRepo,
+		&mockTemplateRenderer{},
+		f.costSvc,
+		agentCfg,
+		testLogger(),
+		apiKeySvc,
+		tokenStore,
+		nil, // statusStore set by withStatusStore when callback mode is wanted
+		callbackURL,
+		action.WithAgentRuntime(rt),
+	)
+}
+
+// newCallbackRuntimeAction builds an AgentRunAction wired for callback mode (a
+// status store set so isCallbackMode is satisfied) with a runtime injected. Used
+// by the anti-drift test that proves callback-wait is the outcome source.
+func newCallbackRuntimeAction(
+	f *agentRunFixture,
+	statusStore port.CallbackStatusStore,
+	tokenStore port.ContainerTokenStore,
+	rt port.AgentRuntime,
+) *action.AgentRunAction {
+	agentCfg := action.AgentConfig{
+		DefaultMemory: 4294967296,
+		DefaultCPUs:   2.0,
+		NetworkName:   testNetwork,
+		LogTailLines:  50,
+	}
+	return action.NewAgentRunAction(
+		f.containerMgr,
+		f.logStreamer,
+		f.eventPub,
+		f.storyRepo,
+		f.projectRepo,
+		f.runRepo,
+		f.environmentRepo,
+		f.sidecarMgr,
+		f.stackRepo,
+		&mockTemplateRenderer{},
+		f.costSvc,
+		agentCfg,
+		testLogger(),
+		nil, // apiKeySvc — not needed: fixture runCtx has no UserID
+		tokenStore,
+		statusStore,
+		"http://callback",
+		action.WithAgentRuntime(rt),
+	)
+}
+
+// mockTokenStore is a minimal port.ContainerTokenStore for the callback-mode
+// runtime-dispatch test. Create returns a fixed token; Revoke records the call.
+type mockTokenStore struct {
+	mu           sync.Mutex
+	createdCalls int
+	revokedCalls int
+}
+
+func (m *mockTokenStore) Create(_ context.Context, _, _, _ uuid.UUID, _ string, _ time.Duration) (string, error) {
+	m.mu.Lock()
+	m.createdCalls++
+	m.mu.Unlock()
+	return "token-abc", nil
+}
+
+func (m *mockTokenStore) Validate(_ context.Context, _ string) (*model.ContainerToken, error) {
+	return nil, nil
+}
+
+func (m *mockTokenStore) Revoke(_ context.Context, _ string) error {
+	m.mu.Lock()
+	m.revokedCalls++
+	m.mu.Unlock()
+	return nil
+}
