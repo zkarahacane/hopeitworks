@@ -11,6 +11,11 @@ import (
 	"github.com/zakari/hopeitworks/backend/internal/domain/port"
 )
 
+const (
+	errWantCanceled = "expected context.Canceled, got %v"
+	errGCNotStopped = "sidecar gc did not stop after context cancellation"
+)
+
 // mockSidecarManagerForGC is a minimal SidecarManager that records GC calls. Only
 // GC and the windows it is invoked with are exercised here; the other methods are
 // no-ops to satisfy the interface.
@@ -94,10 +99,10 @@ func TestSidecarGC_CallsGCOnTick(t *testing.T) {
 	select {
 	case err := <-done:
 		if err != context.Canceled {
-			t.Errorf("expected context.Canceled, got %v", err)
+			t.Errorf(errWantCanceled, err)
 		}
 	case <-time.After(2 * time.Second):
-		t.Fatal("sidecar gc did not stop after context cancellation")
+		t.Fatal(errGCNotStopped)
 	}
 
 	if mgr.calls() == 0 {
@@ -128,10 +133,10 @@ func TestSidecarGC_StopsOnContextCancellation(t *testing.T) {
 	select {
 	case err := <-done:
 		if err != context.Canceled {
-			t.Errorf("expected context.Canceled, got %v", err)
+			t.Errorf(errWantCanceled, err)
 		}
 	case <-time.After(2 * time.Second):
-		t.Fatal("sidecar gc did not stop after context cancellation")
+		t.Fatal(errGCNotStopped)
 	}
 }
 
@@ -153,10 +158,10 @@ func TestSidecarGC_ContinuesOnGCError(t *testing.T) {
 	select {
 	case err := <-done:
 		if err != context.Canceled {
-			t.Errorf("expected context.Canceled, got %v", err)
+			t.Errorf(errWantCanceled, err)
 		}
 	case <-time.After(2 * time.Second):
-		t.Fatal("sidecar gc did not stop after context cancellation")
+		t.Fatal(errGCNotStopped)
 	}
 
 	if mgr.calls() < 2 {
