@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"time"
 
+	cerrdefs "github.com/containerd/errdefs"
 	dockercontainer "github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/network"
@@ -320,7 +321,7 @@ func (m *ContainerManager) CreateNetwork(ctx context.Context, name string, label
 // network that does not exist is treated as success.
 func (m *ContainerManager) RemoveNetwork(ctx context.Context, nameOrID string) error {
 	if err := m.client.NetworkRemove(ctx, nameOrID); err != nil {
-		if client.IsErrNotFound(err) {
+		if cerrdefs.IsNotFound(err) {
 			m.logger.Debug("network already absent", slog.String("network", nameOrID))
 			return nil
 		}

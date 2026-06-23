@@ -140,7 +140,7 @@ func (m *mockContainerManager) InspectHealth(_ context.Context, containerID stri
 	return model.HealthHealthy, nil
 }
 
-func newTestSidecarManager(cm *mockContainerManager) *DockerSidecarManager {
+func newTestSidecarManager(cm *mockContainerManager) *SidecarManager {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
 	s := NewDockerSidecarManager(cm, logger)
 	// Tighten timings so tests are fast.

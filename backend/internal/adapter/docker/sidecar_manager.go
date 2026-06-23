@@ -13,8 +13,8 @@ import (
 	"github.com/zakari/hopeitworks/backend/internal/domain/port"
 )
 
-// Ensure DockerSidecarManager implements port.SidecarManager at compile time.
-var _ port.SidecarManager = (*DockerSidecarManager)(nil)
+// Ensure SidecarManager implements port.SidecarManager at compile time.
+var _ port.SidecarManager = (*SidecarManager)(nil)
 
 const (
 	// sidecarNetworkPrefix is the name prefix for per-run sidecar networks. The
@@ -93,9 +93,9 @@ func detectServiceType(image string) string {
 	return ""
 }
 
-// DockerSidecarManager orchestrates Environment sidecars over the injected
+// SidecarManager orchestrates Environment sidecars over the injected
 // ContainerManager. It does not own a Docker client of its own.
-type DockerSidecarManager struct {
+type SidecarManager struct {
 	containers port.ContainerManager
 	logger     *slog.Logger
 
@@ -112,8 +112,8 @@ type DockerSidecarManager struct {
 // NewDockerSidecarManager builds a SidecarManager backed by the given
 // ContainerManager. The ContainerManager is reused for both networks and
 // containers — no second Docker client is created.
-func NewDockerSidecarManager(containers port.ContainerManager, logger *slog.Logger) *DockerSidecarManager {
-	return &DockerSidecarManager{
+func NewDockerSidecarManager(containers port.ContainerManager, logger *slog.Logger) *SidecarManager {
+	return &SidecarManager{
 		containers:        containers,
 		logger:            logger,
 		readinessTimeout:  defaultReadinessTimeout,
@@ -127,7 +127,7 @@ func NewDockerSidecarManager(containers port.ContainerManager, logger *slog.Logg
 // teardownContext derives a context for teardown that is immune to the caller's
 // cancellation (Launch's ctx may already be cancelled when rollback runs) but
 // still bounded by its own timeout so it cannot hang forever.
-func (s *DockerSidecarManager) teardownContext(ctx context.Context) (context.Context, context.CancelFunc) {
+func (s *SidecarManager) teardownContext(ctx context.Context) (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.WithoutCancel(ctx), s.teardownTimeout)
 }
 
@@ -139,7 +139,7 @@ func networkName(runID uuid.UUID) string {
 // Launch brings up the Environment's services on a fresh per-run network. It is
 // nil-safe (nil/empty env -> empty context, no side effects) and rolls back
 // atomically on any error.
-func (s *DockerSidecarManager) Launch(ctx context.Context, runID uuid.UUID, env *model.Environment) (*port.SidecarContext, error) {
+func (s *SidecarManager) Launch(ctx context.Context, runID uuid.UUID, env *model.Environment) (*port.SidecarContext, error) {
 	sc := &port.SidecarContext{
 		RunID:        runID,
 		ContainerIDs: map[string]string{},
@@ -180,7 +180,7 @@ func (s *DockerSidecarManager) Launch(ctx context.Context, runID uuid.UUID, env 
 
 // launchService creates, starts and waits-ready a single sidecar, recording it
 // into sc on success.
-func (s *DockerSidecarManager) launchService(ctx context.Context, sc *port.SidecarContext, runID uuid.UUID, svc model.EnvironmentService) error {
+func (s *SidecarManager) launchService(ctx context.Context, sc *port.SidecarContext, runID uuid.UUID, svc model.EnvironmentService) error {
 	svcType := detectServiceType(svc.Image)
 
 	// Attach the sidecar to the run network DIRECTLY at creation (NetworkName,
@@ -226,7 +226,7 @@ func (s *DockerSidecarManager) launchService(ctx context.Context, sc *port.Sidec
 // its own HEALTHCHECK, so "healthy" must count as ready even for unknown types,
 // and "unhealthy" must count as failure. Containers with no healthcheck at all
 // fall back to a running check plus a short grace delay.
-func (s *DockerSidecarManager) waitReady(ctx context.Context, containerID string) error {
+func (s *SidecarManager) waitReady(ctx context.Context, containerID string) error {
 	deadline := s.now().Add(s.readinessTimeout)
 	for {
 		status, err := s.containers.InspectHealth(ctx, containerID)
@@ -264,7 +264,7 @@ func (s *DockerSidecarManager) waitReady(ctx context.Context, containerID string
 }
 
 // sleep waits for d, honouring context cancellation.
-func (s *DockerSidecarManager) sleep(ctx context.Context, d time.Duration) error {
+func (s *SidecarManager) sleep(ctx context.Context, d time.Duration) error {
 	if d <= 0 {
 		return ctx.Err()
 	}
@@ -282,7 +282,7 @@ func (s *DockerSidecarManager) sleep(ctx context.Context, d time.Duration) error
 // container, then remove the network. Best-effort, log-only, never panics. Runs
 // on a context detached from the caller's so it still works if Launch's ctx was
 // cancelled (otherwise every teardown call would fail with context.Canceled).
-func (s *DockerSidecarManager) rollback(ctx context.Context, sc *port.SidecarContext) {
+func (s *SidecarManager) rollback(ctx context.Context, sc *port.SidecarContext) {
 	tctx, cancel := s.teardownContext(ctx)
 	defer cancel()
 
@@ -298,7 +298,7 @@ func (s *DockerSidecarManager) rollback(ctx context.Context, sc *port.SidecarCon
 }
 
 // teardownContainers stops and removes all sidecar containers in sc.
-func (s *DockerSidecarManager) teardownContainers(ctx context.Context, sc *port.SidecarContext) {
+func (s *SidecarManager) teardownContainers(ctx context.Context, sc *port.SidecarContext) {
 	for name, id := range sc.ContainerIDs {
 		if err := s.containers.Stop(ctx, id); err != nil {
 			s.logger.Warn("teardown: stop sidecar failed",
@@ -320,7 +320,7 @@ func (s *DockerSidecarManager) teardownContainers(ctx context.Context, sc *port.
 // Stop stops the sidecar containers in sc. Best-effort, idempotent, defer-safe.
 // Runs on a detached, bounded context so it still works when called from a defer
 // after the run's context was cancelled.
-func (s *DockerSidecarManager) Stop(ctx context.Context, sc *port.SidecarContext) error {
+func (s *SidecarManager) Stop(ctx context.Context, sc *port.SidecarContext) error {
 	if sc == nil || len(sc.ContainerIDs) == 0 {
 		return nil
 	}
@@ -342,7 +342,7 @@ func (s *DockerSidecarManager) Stop(ctx context.Context, sc *port.SidecarContext
 // Cleanup stops+removes the sidecar containers and removes the run network.
 // Best-effort, idempotent, defer-safe. Runs on a detached, bounded context so it
 // still works when called from a defer after the run's context was cancelled.
-func (s *DockerSidecarManager) Cleanup(ctx context.Context, sc *port.SidecarContext) error {
+func (s *SidecarManager) Cleanup(ctx context.Context, sc *port.SidecarContext) error {
 	if sc == nil || (len(sc.ContainerIDs) == 0 && sc.NetworkName == "") {
 		return nil
 	}
@@ -365,7 +365,7 @@ func (s *DockerSidecarManager) Cleanup(ctx context.Context, sc *port.SidecarCont
 // container still attached. A network is matched to its containers by the shared
 // run_id label, avoiding a per-network container lookup. Only running containers
 // keep a network alive — exited-but-not-yet-removed sidecars must not block GC.
-func (s *DockerSidecarManager) ListOrphanNetworks(ctx context.Context) ([]model.NetworkInfo, error) {
+func (s *SidecarManager) ListOrphanNetworks(ctx context.Context) ([]model.NetworkInfo, error) {
 	managed := map[string]string{labelManagedBy: managedByLabel}
 
 	networks, err := s.containers.ListNetworks(ctx, managed)
@@ -399,7 +399,7 @@ func (s *DockerSidecarManager) ListOrphanNetworks(ctx context.Context) ([]model.
 }
 
 // GC removes orphan run networks older than olderThan. Best-effort, log-only.
-func (s *DockerSidecarManager) GC(ctx context.Context, olderThan time.Duration) error {
+func (s *SidecarManager) GC(ctx context.Context, olderThan time.Duration) error {
 	orphans, err := s.ListOrphanNetworks(ctx)
 	if err != nil {
 		return err
