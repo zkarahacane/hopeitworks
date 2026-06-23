@@ -1,5 +1,10 @@
 import { computed, onMounted, watch } from 'vue'
-import { usePipelineConfigStore, type PipelineStep } from '@/stores/pipelineConfig'
+import {
+  usePipelineConfigStore,
+  type PipelineStep,
+  type Guard,
+  type TransitionPolicy,
+} from '@/stores/pipelineConfig'
 import type { Ref } from 'vue'
 
 /**
@@ -63,6 +68,22 @@ export function usePipelineConfig(projectId: Ref<string>) {
     store.renameGroup(groupId, name)
   }
 
+  function updateGroupTransition(groupId: string, transition: TransitionPolicy) {
+    store.updateGroupTransition(groupId, transition)
+  }
+
+  function addGuard(groupId: string, stepId?: string) {
+    store.addGuard(groupId, stepId)
+  }
+
+  function removeGuard(groupId: string, guardIndex: number, stepId?: string) {
+    store.removeGuard(groupId, guardIndex, stepId)
+  }
+
+  function updateGuard(groupId: string, guardIndex: number, guard: Guard, stepId?: string) {
+    store.updateGuard(groupId, guardIndex, guard, stepId)
+  }
+
   function addStepToGroup(groupId: string, step: PipelineStep) {
     store.addStepToGroup(groupId, step)
   }
@@ -101,6 +122,10 @@ export function usePipelineConfig(projectId: Ref<string>) {
     addGroup,
     removeGroup,
     renameGroup,
+    updateGroupTransition,
+    addGuard,
+    removeGuard,
+    updateGuard,
     addStepToGroup,
     removeStepFromGroup,
     updateStepInGroup,

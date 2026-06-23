@@ -1,7 +1,25 @@
-import { describe, it, expect, vi, afterEach } from 'vitest'
+import { describe, it, expect, vi, afterEach, beforeAll } from 'vitest'
 import { mount, type VueWrapper } from '@vue/test-utils'
 import PrimeVue from 'primevue/config'
 import ConfirmationService from 'primevue/confirmationservice'
+
+beforeAll(() => {
+  // PrimeVue Select uses matchMedia which is not available in jsdom
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  })
+})
+
 import PipelineGroupCard from '../PipelineGroupCard.vue'
 import type { PipelineGroup, PipelineStep } from '@/stores/pipelineConfig'
 import type { Agent } from '@/stores/agents'
@@ -232,6 +250,50 @@ describe('PipelineGroupCard', () => {
       await btn.trigger('click')
       expect(wrapper.emitted('move-down')).toBeTruthy()
       expect(wrapper.emitted('move-down')![0]).toEqual([1])
+    })
+  })
+
+  describe('transition policy', () => {
+    it('renders the transition select and hint', () => {
+      mountComponent({ transition: 'manual' })
+      expect(wrapper.find('[data-testid="transition-select"]').exists()).toBe(true)
+      expect(wrapper.find('[data-testid="transition-hint"]').text()).toContain('manual = attend un Go')
+    })
+
+    it('emits update-transition with group id and value', () => {
+      mountComponent({ id: 'g1', transition: 'auto' })
+      // call the handler directly (PrimeVue Select internals are not under test)
+      const vm = wrapper.vm as unknown as { onTransitionChange: (v: string) => void }
+      vm.onTransitionChange('gate')
+      expect(wrapper.emitted('update-transition')).toBeTruthy()
+      expect(wrapper.emitted('update-transition')![0]).toEqual(['g1', 'gate'])
+    })
+  })
+
+  describe('guards', () => {
+    it('renders the guard editor with the stage guards', () => {
+      mountComponent({
+        guards: [{ kind: 'wallclock', max: 1800, on_fail: 'halt-gate' }],
+      })
+      expect(wrapper.find('[data-testid="guard-editor"]').exists()).toBe(true)
+      expect(wrapper.findAll('[data-testid="guard-row"]')).toHaveLength(1)
+    })
+
+    it('forwards add-guard with the group id', async () => {
+      mountComponent({ id: 'g1' })
+      await wrapper.find('[data-testid="add-guard"]').trigger('click')
+      expect(wrapper.emitted('add-guard')).toBeTruthy()
+      expect(wrapper.emitted('add-guard')![0]).toEqual(['g1'])
+    })
+
+    it('forwards remove-guard with the group id and index', async () => {
+      mountComponent({
+        id: 'g1',
+        guards: [{ kind: 'log_silence', threshold: 120, on_fail: 'halt-gate' }],
+      })
+      await wrapper.find('[data-testid="remove-guard"]').trigger('click')
+      expect(wrapper.emitted('remove-guard')).toBeTruthy()
+      expect(wrapper.emitted('remove-guard')![0]).toEqual(['g1', 0])
     })
   })
 })

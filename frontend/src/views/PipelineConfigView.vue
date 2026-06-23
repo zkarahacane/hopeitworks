@@ -13,7 +13,7 @@ import PipelineStepPalette from '@/features/pipeline/PipelineStepPalette.vue'
 import { usePipelineConfig } from '@/composables/usePipelineConfig'
 import { useAuth } from '@/composables/useAuth'
 import { useAgents } from '@/composables/useAgents'
-import type { PipelineStep } from '@/stores/pipelineConfig'
+import type { PipelineStep, Guard, TransitionPolicy } from '@/stores/pipelineConfig'
 
 const route = useRoute()
 const toast = useToast()
@@ -37,6 +37,10 @@ const {
   updateStepInGroup,
   reorderStepsInGroup,
   reorderGroups,
+  updateGroupTransition,
+  addGuard,
+  removeGuard,
+  updateGuard,
 } = usePipelineConfig(projectId)
 
 const { agents, fetchAgents } = useAgents(projectId.value)
@@ -88,6 +92,22 @@ function handleReorderGroups(fromIndex: number, toIndex: number) {
 
 function handleReorderStep(groupId: string, fromIndex: number, toIndex: number) {
   reorderStepsInGroup(groupId, fromIndex, toIndex)
+}
+
+function handleUpdateTransition(groupId: string, transition: TransitionPolicy) {
+  updateGroupTransition(groupId, transition)
+}
+
+function handleAddGuard(groupId: string) {
+  addGuard(groupId)
+}
+
+function handleRemoveGuard(groupId: string, guardIndex: number) {
+  removeGuard(groupId, guardIndex)
+}
+
+function handleUpdateGuard(groupId: string, guardIndex: number, guard: Guard) {
+  updateGuard(groupId, guardIndex, guard)
 }
 
 function handlePaletteAddStep(actionType: string) {
@@ -216,6 +236,10 @@ async function handleSave() {
           @remove-step="handleRemoveStep"
           @reorder-groups="handleReorderGroups"
           @reorder-step="handleReorderStep"
+          @update-transition="handleUpdateTransition"
+          @add-guard="handleAddGuard"
+          @remove-guard="handleRemoveGuard"
+          @update-guard="handleUpdateGuard"
         />
       </div>
 
