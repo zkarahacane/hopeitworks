@@ -328,6 +328,57 @@ func (a *AgentRunAction) createContainer(
 	extraEnv []string,
 	sidecarCtx *port.SidecarContext,
 ) (string, error) {
+	env, err := a.buildAgentEnv(ctx, runCtx, project, story, agentImage, prompt, branchName, extraEnv)
+	if err != nil {
+		return "", err
+	}
+
+	opts := model.ContainerOpts{
+		Image:       agentImage,
+		NetworkName: a.config.NetworkName,
+		Memory:      a.config.DefaultMemory,
+		CPUs:        a.config.DefaultCPUs,
+		Env:         env,
+		Labels:      a.buildAgentLabels(runCtx, story),
+	}
+
+	// Dual-home the agent container: it keeps its shared NetworkName (API callback
+	// / egress) AND attaches to the run network so it can reach the sidecars by
+	// their service-name DNS alias. Only set when a run network actually exists,
+	// so a project without an Environment keeps identical ContainerOpts.
+	if sidecarCtx != nil && sidecarCtx.NetworkName != "" {
+		opts.ExtraNetworks = []string{sidecarCtx.NetworkName}
+	}
+
+	return a.containerMgr.Create(ctx, opts)
+}
+
+// buildAgentLabels returns the bookkeeping labels stamped onto the agent
+// execution (managed_by/run_id/step_id/story_key). Extracted so the label set
+// lives in one place independent of the execution substrate.
+func (a *AgentRunAction) buildAgentLabels(runCtx *model.RunContext, story *model.Story) map[string]string {
+	return map[string]string{
+		model.LabelManagedBy: model.LabelManagedByValue,
+		model.LabelRunID:     runCtx.Run.ID.String(),
+		"step_id":            runCtx.RunStep.ID.String(),
+		"story_key":          story.Key,
+	}
+}
+
+// buildAgentEnv assembles the full KEY=value environment for one agent run: the
+// repo/branch/prompt base block, the resolved git token, and either the
+// callback-mode auth block (API_KEY, minted AUTH_TOKEN, CALLBACK_URL/PROVIDER/
+// RUN_ID/STEP_ID, MODEL) or the legacy OAuth block, followed by any sidecar
+// connection strings in extraEnv. The slice order is preserved exactly, so the
+// resulting env is byte-for-byte identical to the previous inline assembly.
+func (a *AgentRunAction) buildAgentEnv(
+	ctx context.Context,
+	runCtx *model.RunContext,
+	project *model.Project,
+	story *model.Story,
+	agentImage, prompt, branchName string,
+	extraEnv []string,
+) ([]string, error) {
 	repoURL := ""
 	if project.RepoURL != nil {
 		repoURL = *project.RepoURL
@@ -387,7 +438,7 @@ func (a *AgentRunAction) createContainer(
 			}
 			token, tokenErr := a.tokenStore.Create(ctx, runCtx.Run.ID, runCtx.RunStep.ID, agentID, role, 2*time.Hour)
 			if tokenErr != nil {
-				return "", fmt.Errorf("create container token: %w", tokenErr)
+				return nil, fmt.Errorf("create container token: %w", tokenErr)
 			}
 			env = append(env, "AUTH_TOKEN="+token)
 		}
@@ -417,29 +468,7 @@ func (a *AgentRunAction) createContainer(
 	// the slice is byte-for-byte identical to before when extraEnv is nil.
 	env = append(env, extraEnv...)
 
-	opts := model.ContainerOpts{
-		Image:       agentImage,
-		NetworkName: a.config.NetworkName,
-		Memory:      a.config.DefaultMemory,
-		CPUs:        a.config.DefaultCPUs,
-		Env:         env,
-		Labels: map[string]string{
-			model.LabelManagedBy: model.LabelManagedByValue,
-			model.LabelRunID:     runCtx.Run.ID.String(),
-			"step_id":            runCtx.RunStep.ID.String(),
-			"story_key":          story.Key,
-		},
-	}
-
-	// Dual-home the agent container: it keeps its shared NetworkName (API callback
-	// / egress) AND attaches to the run network so it can reach the sidecars by
-	// their service-name DNS alias. Only set when a run network actually exists,
-	// so a project without an Environment keeps identical ContainerOpts.
-	if sidecarCtx != nil && sidecarCtx.NetworkName != "" {
-		opts.ExtraNetworks = []string{sidecarCtx.NetworkName}
-	}
-
-	return a.containerMgr.Create(ctx, opts)
+	return env, nil
 }
 
 // streamAndWait starts log streaming, waits for container exit, and handles log tail.
