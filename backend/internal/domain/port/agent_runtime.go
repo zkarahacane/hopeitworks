@@ -25,6 +25,50 @@ type RunSpec struct {
 	Env          []string             // KEY=value pairs (no secrets once fetch-at-startup lands)
 	Labels       map[string]string    // bookkeeping labels (run_id/step_id/story_key)
 	Capabilities model.CapabilitySpec // composed skills/mcp/tool-policy for this run
+
+	// NEW (Stage 1) — resources. The Action copies AgentConfig.DefaultMemory/
+	// DefaultCPUs here so the adapter, not the Action, owns ContainerOpts.
+	Memory int64
+	CPUs   float64
+
+	// NEW (Stage 1) — agnostic per-run connectivity. Replaces the leaking
+	// sidecarCtx.NetworkName. The adapter realises it: Docker attaches the
+	// execution to Network.Name as an ExtraNetworks entry (+Aliases); a microVM
+	// maps it to host routing or degrades to the conn-strings already in Env.
+	// Zero value = no extra attachment (no-Environment case → ContainerOpts
+	// stays byte-identical).
+	Network RunNetwork
+
+	// NEW (Stage 1) — one-shot overrides so build/migrate/seed/test commands run
+	// on the SAME port on every substrate later. Empty for an agent launch (the
+	// image entrypoint is kept untouched).
+	Entrypoint []string
+	Cmd        []string
+	Workdir    string
+}
+
+// RunNetwork is the agnostic description of the per-run isolated network the
+// execution joins, plus the service endpoints reachable on it.
+type RunNetwork struct {
+	// Name is the run-scoped isolated network identity (e.g. hopeitworks-run-<id>).
+	// It is NOT the substrate's shared/primary network — that is an adapter-level
+	// deployment concern, never carried per-run. Empty = no extra attachment.
+	Name string
+	// Aliases maps a network name to a DNS alias for this execution on it. Nil for
+	// an agent launch (the agent reaches sidecars by THEIR alias, registers none of
+	// its own), matching today's ContainerOpts.
+	Aliases map[string]string
+	// Endpoints are the service endpoints reachable on Name (host+port), derived
+	// from the sidecar context. Informational for substrates that route by host;
+	// Docker reaches them by DNS on Name. Optional.
+	Endpoints []ServiceEndpoint
+}
+
+// ServiceEndpoint is one reachable service on the run network.
+type ServiceEndpoint struct {
+	Name string
+	Host string
+	Port int
 }
 
 // RunHandle identifies a launched execution (container/microVM/pod id).
