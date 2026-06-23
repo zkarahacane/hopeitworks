@@ -1806,6 +1806,78 @@ func TestRetryStep_MaxRetriesExceeded(t *testing.T) {
 	}
 }
 
+// TestRetryStep_StageStampedFromParent verifies that a retry step carries the
+// StageID and StageName of its parent step (Dette D1 fix).
+func TestRetryStep_StageStampedFromParent(t *testing.T) {
+	runID := uuid.New()
+	stepID := uuid.New()
+	projectID := uuid.New()
+	errMsg := "agent failed"
+
+	const wantStageID = "stage-dev"
+	const wantStageName = "Development"
+
+	var capturedStep *model.RunStep
+
+	runRepo := &mockRunRepo{
+		getRunFn: func(_ context.Context, id uuid.UUID) (*model.Run, error) {
+			return &model.Run{
+				ID:        id,
+				ProjectID: projectID,
+				Status:    model.RunStatusFailed,
+			}, nil
+		},
+		getRunStepFn: func(_ context.Context, id uuid.UUID) (*model.RunStep, error) {
+			return &model.RunStep{
+				ID:           id,
+				RunID:        runID,
+				StepName:     "implement",
+				StepOrder:    0,
+				Action:       "agent_run",
+				Status:       model.StepStatusFailed,
+				ErrorMessage: &errMsg,
+				RetryCount:   0,
+				StageID:      wantStageID,
+				StageName:    wantStageName,
+			}, nil
+		},
+		listRetryStepsByParentFn: func(_ context.Context, _ uuid.UUID) ([]*model.RunStep, error) {
+			return nil, nil // no existing retries
+		},
+		updateRunStatusFn: func(_ context.Context, id uuid.UUID, status model.RunStatus, _, _, _ *time.Time, _ *string) (*model.Run, error) {
+			return &model.Run{ID: id, ProjectID: projectID, Status: status}, nil
+		},
+		createRetryRunStepFn: func(_ context.Context, step *model.RunStep) (*model.RunStep, error) {
+			capturedStep = step
+			return step, nil
+		},
+		listRunStepsByRunFn: func(_ context.Context, _ uuid.UUID) ([]*model.RunStep, error) {
+			return []*model.RunStep{
+				{ID: stepID, Status: model.StepStatusFailed},
+			}, nil
+		},
+	}
+
+	jobQueue := &mockJobQueue{
+		enqueueExecuteRunFn: func(_ context.Context, _ uuid.UUID) error { return nil },
+	}
+
+	svc := NewRunService(runRepo, newMockProjectRepoForService(), nil, nil, jobQueue)
+	_, err := svc.RetryStep(context.Background(), runID, stepID)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if capturedStep == nil {
+		t.Fatal("createRetryRunStepFn was not called")
+	}
+	if capturedStep.StageID != wantStageID {
+		t.Errorf("retry step StageID = %q; want %q", capturedStep.StageID, wantStageID)
+	}
+	if capturedStep.StageName != wantStageName {
+		t.Errorf("retry step StageName = %q; want %q", capturedStep.StageName, wantStageName)
+	}
+}
+
 func TestListRunsByStory_ProgressPopulated(t *testing.T) {
 	storyID := uuid.New()
 	run1ID := uuid.New()
