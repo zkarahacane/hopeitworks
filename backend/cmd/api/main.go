@@ -268,6 +268,11 @@ func run() error {
 	containerTokenStore := memoryadapter.NewContainerTokenStore(appCtx)
 	callbackStatusStore := memoryadapter.NewCallbackStatusStore()
 
+	// Sidecar manager: brings up an Environment's services on a per-run isolated
+	// network over the same Docker ContainerManager. Hoisted here (instead of the
+	// agent_run block below) so the periodic sidecar GC can also reference it.
+	var sidecarMgr port.SidecarManager
+
 	// Agent run action (requires Docker)
 	if containerMgr != nil {
 		logStreamer, logErr := dockeradapter.NewDockerLogStreamerFromHost(cfg.Docker.Host, logger)
@@ -280,9 +285,7 @@ func run() error {
 				NetworkName:   cfg.Docker.AgentNetwork,
 				LogTailLines:  50,
 			}
-			// Sidecar manager brings up an Environment's services on a per-run
-			// isolated network over the same Docker ContainerManager.
-			sidecarMgr := dockeradapter.NewDockerSidecarManager(containerMgr, logger)
+			sidecarMgr = dockeradapter.NewDockerSidecarManager(containerMgr, logger)
 			agentRunAction := actionadapter.NewAgentRunAction(
 				containerMgr, logStreamer, eventRepo,
 				storyRepo, projectRepo, runRepo,
@@ -353,6 +356,26 @@ func run() error {
 		go func() {
 			if err := timeoutEnforcer.Start(appCtx); err != nil && err != context.Canceled {
 				logger.Error("timeout enforcer failed", "error", err)
+			}
+		}()
+	}
+
+	// Periodic sidecar GC: best-effort safety net that reaps orphan per-run
+	// networks (and their sidecars) leaked when the process dies abruptly between
+	// Launch and the agent_run defer Cleanup (SIGKILL/OOM). The normal teardown is
+	// still the defer; this only catches crashes. Wide interval/window so it can
+	// never touch a run that is still starting up (GC already skips networks with a
+	// running sidecar; the window is a second margin against the create-then-start
+	// race). Only started when the sidecar manager is wired (Docker available).
+	if sidecarMgr != nil {
+		sidecarGC := service.NewSidecarGC(
+			sidecarMgr, logger,
+			service.DefaultSidecarGCInterval,
+			service.DefaultSidecarGCWindow,
+		)
+		go func() {
+			if err := sidecarGC.Start(appCtx); err != nil && err != context.Canceled {
+				logger.Error("sidecar gc failed", "error", err)
 			}
 		}()
 	}
