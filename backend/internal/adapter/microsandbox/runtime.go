@@ -1,28 +1,30 @@
-// Package microsandbox is the scaffold of the microVM substrate adapter. It
-// implements the target domain port port.AgentRuntime, but is INERT in P3a:
+// Package microsandbox is the microVM substrate adapter. It implements the
+// target domain port port.AgentRuntime.
 //
-//   - It is NOT wired into the live agent_run flow (which still drives the
-//     Docker ContainerManager directly). The factory in main.go only logs the
-//     selected substrate; selecting "microsandbox" does not intercept execution.
-//   - Its microVM operations (Launch/Wait/Stop) are STUBS returning
-//     ErrNotImplemented — real microVM execution lands in P3b and requires a KVM
-//     host plus the microsandbox Go SDK (deliberately NOT a dependency yet).
+// Build tags split this package into a default (pure) part and a
+// libkrun-dependent part:
 //
-// What IS real and testable here:
+//   - This file (runtime.go, untagged) holds the pure, always-compiled logic:
+//     SupportedCapabilities, Provision (agnostic→native triage, warn+skip) and
+//     the ResolveImage helper. It carries NO microsandbox-SDK import, so the
+//     default build (and CI) compiles it on any host without libkrun.
+//   - runtime_microsandbox.go (//go:build microsandbox) holds the REAL live
+//     execution (Launch/Wait/Stop) via the microsandbox Go SDK. Building it
+//     requires the `microsandbox` tag AND a KVM/HVF host with libkrun present
+//     (see deploy/lima/microsandbox-vm.yaml). This is P3b.
+//   - runtime_stub.go (//go:build !microsandbox) provides the default fallback:
+//     Launch/Wait/Stop return ErrNotBuilt ("not built with microsandbox tag"),
+//     so a binary compiled without the tag selecting SUBSTRATE=microsandbox
+//     fails clearly instead of silently doing nothing.
 //
-//   - SupportedCapabilities — pure data declaring which agnostic capability
-//     kinds a microVM substrate can translate.
-//   - Provision — the agnostic→supported triage with warn+skip (an unsupported
-//     capability degrades the run, never blocks it). The native translation is a
-//     TODO; the filtering is fully covered by tests.
-//   - ResolveImage — pure helper composing a launch image from a RunSpec via the
-//     stack catalogue (StackRef-by-key first, free-form spec.Image fallback),
-//     mirroring the RunService image-resolution invariant.
+// The adapter is NOT wired into the live agent_run flow (which still drives the
+// Docker ContainerManager directly). The factory in main.go only logs the
+// selected substrate and constructs this adapter; selecting "microsandbox" does
+// not intercept the live Docker execution path.
 package microsandbox
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 
@@ -30,13 +32,10 @@ import (
 	"github.com/zakari/hopeitworks/backend/internal/domain/port"
 )
 
-// Compile-time guarantee that Runtime satisfies the target runtime port.
+// Compile-time guarantee that Runtime satisfies the target runtime port. The
+// Launch/Wait/Stop half lives in the build-tagged files; this assertion holds
+// for both the tagged and the fallback build.
 var _ port.AgentRuntime = (*Runtime)(nil)
-
-// ErrNotImplemented is the sentinel returned by the live-execution stubs
-// (Launch/Wait/Stop). Real microVM execution is P3b and requires a KVM host plus
-// the microsandbox Go SDK; until then these operations are intentionally absent.
-var ErrNotImplemented = errors.New("microsandbox: live execution not implemented (P3a scaffold, real microVM lands in P3b on a KVM host)")
 
 // Reasons recorded in ProvisionWarning for capabilities a microVM substrate
 // cannot (yet) translate. Kept as constants for goconst and reuse in tests.
@@ -48,17 +47,18 @@ const (
 	transportStdio = "stdio"
 )
 
-// Runtime is the microsandbox (microVM) substrate adapter. In P3a it is a
-// scaffold: it satisfies port.AgentRuntime so the rest of the system can target
-// the stable port, but only Provision/SupportedCapabilities carry real logic.
+// Runtime is the microsandbox (microVM) substrate adapter. It satisfies
+// port.AgentRuntime so the rest of the system can target the stable port. The
+// pure half (Provision/SupportedCapabilities/ResolveImage) lives here; the live
+// half (Launch/Wait/Stop) lives in the build-tagged files.
 //
 // The name is intentionally Runtime (not MicrosandboxRuntime) — the package
 // qualifier already conveys the substrate, so callers write microsandbox.Runtime
 // without stutter.
 type Runtime struct {
-	// enabled gates the live-execution stubs. Even when enabled, P3a returns
-	// ErrNotImplemented; the flag exists so P3b can flip behaviour without
-	// changing the factory contract.
+	// enabled gates the live-execution path in the tagged build. When false the
+	// tagged Launch refuses to start a microVM (e.g. KVM not provisioned); the
+	// fallback build ignores it and always returns ErrNotBuilt.
 	enabled bool
 	logger  *slog.Logger
 	// stacks resolves a stack key to its catalogued image. Optional: when nil,
@@ -165,22 +165,6 @@ func (r *Runtime) Provision(_ context.Context, spec model.CapabilitySpec) (model
 	r.logger.Debug("microsandbox: provision triage (scaffold)",
 		"applied", len(res.Applied), "warnings", len(res.Warnings))
 	return res, nil
-}
-
-// Launch is a P3a stub. Real microVM launch (clone + harness + capabilities) lands
-// in P3b and requires a KVM host plus the microsandbox Go SDK.
-func (r *Runtime) Launch(_ context.Context, _ port.RunSpec) (port.RunHandle, error) {
-	return port.RunHandle{}, ErrNotImplemented
-}
-
-// Wait is a P3a stub. See ErrNotImplemented.
-func (r *Runtime) Wait(_ context.Context, _ port.RunHandle) (port.RunResult, error) {
-	return port.RunResult{}, ErrNotImplemented
-}
-
-// Stop is a P3a stub. See ErrNotImplemented.
-func (r *Runtime) Stop(_ context.Context, _ port.RunHandle) error {
-	return ErrNotImplemented
 }
 
 // ResolveImage composes the effective launch image for a run, mirroring the

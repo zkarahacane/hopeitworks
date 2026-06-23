@@ -21,6 +21,7 @@ require (
 	github.com/riverqueue/river/riverdriver/riverpgxv5 v0.30.2
 	github.com/sqlc-dev/sqlc v1.30.0
 	github.com/stretchr/testify v1.11.1
+	github.com/superradcompany/microsandbox/sdk/go v0.5.9
 	github.com/testcontainers/testcontainers-go v0.40.0
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.40.0
 	golang.org/x/crypto v0.47.0
