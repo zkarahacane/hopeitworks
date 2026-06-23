@@ -33,25 +33,32 @@ type AgentConfig struct {
 //   - Callback mode: claude_code/opencode/cma runtimes use HTTP callbacks for logs/cost/status
 //   - Legacy mode: no runtime kind (older images) uses Docker log streaming and exit code detection
 type AgentRunAction struct {
-	containerMgr port.ContainerManager
-	logStreamer  port.LogStreamer
-	eventPub     port.EventPublisher
-	storyRepo    port.StoryRepository
-	projectRepo  port.ProjectRepository
-	runRepo      port.RunRepository
-	renderer     port.TemplateRenderer
-	costSvc      *service.CostService
-	config       AgentConfig
-	logger       *slog.Logger
-	apiKeySvc    *service.APIKeyService
-	tokenStore   port.ContainerTokenStore
-	statusStore  port.CallbackStatusStore
-	callbackURL  string
+	containerMgr    port.ContainerManager
+	logStreamer     port.LogStreamer
+	eventPub        port.EventPublisher
+	storyRepo       port.StoryRepository
+	projectRepo     port.ProjectRepository
+	runRepo         port.RunRepository
+	environmentRepo port.EnvironmentRepository
+	sidecarMgr      port.SidecarManager
+	renderer        port.TemplateRenderer
+	costSvc         *service.CostService
+	config          AgentConfig
+	logger          *slog.Logger
+	apiKeySvc       *service.APIKeyService
+	tokenStore      port.ContainerTokenStore
+	statusStore     port.CallbackStatusStore
+	callbackURL     string
 }
 
 // NewAgentRunAction creates a new agent run action.
 // The apiKeySvc, tokenStore, statusStore, and callbackURL parameters enable callback mode
 // for the claude_code/opencode/cma runtimes. Pass nil/empty to disable callback mode.
+//
+// environmentRepo and sidecarMgr drive the per-run Environment: when the project has an
+// Environment with sidecar services, sidecarMgr brings them up on an isolated per-run
+// network and their connection strings are injected into the agent container. Both are
+// nil-safe at the call sites; a project without an Environment behaves exactly as before.
 func NewAgentRunAction(
 	containerMgr port.ContainerManager,
 	logStreamer port.LogStreamer,
@@ -59,6 +66,8 @@ func NewAgentRunAction(
 	storyRepo port.StoryRepository,
 	projectRepo port.ProjectRepository,
 	runRepo port.RunRepository,
+	environmentRepo port.EnvironmentRepository,
+	sidecarMgr port.SidecarManager,
 	renderer port.TemplateRenderer,
 	costSvc *service.CostService,
 	config AgentConfig,
@@ -69,20 +78,22 @@ func NewAgentRunAction(
 	callbackURL string,
 ) *AgentRunAction {
 	return &AgentRunAction{
-		containerMgr: containerMgr,
-		logStreamer:  logStreamer,
-		eventPub:     eventPub,
-		storyRepo:    storyRepo,
-		projectRepo:  projectRepo,
-		runRepo:      runRepo,
-		renderer:     renderer,
-		costSvc:      costSvc,
-		config:       config,
-		logger:       logger,
-		apiKeySvc:    apiKeySvc,
-		tokenStore:   tokenStore,
-		statusStore:  statusStore,
-		callbackURL:  callbackURL,
+		containerMgr:    containerMgr,
+		logStreamer:     logStreamer,
+		eventPub:        eventPub,
+		storyRepo:       storyRepo,
+		projectRepo:     projectRepo,
+		runRepo:         runRepo,
+		environmentRepo: environmentRepo,
+		sidecarMgr:      sidecarMgr,
+		renderer:        renderer,
+		costSvc:         costSvc,
+		config:          config,
+		logger:          logger,
+		apiKeySvc:       apiKeySvc,
+		tokenStore:      tokenStore,
+		statusStore:     statusStore,
+		callbackURL:     callbackURL,
 	}
 }
 
@@ -151,22 +162,56 @@ func (a *AgentRunAction) Execute(ctx context.Context, runCtx *model.RunContext) 
 	runtimeKind, _ := runCtx.Metadata["runtime_kind"].(string)
 	isCallbackMode := a.isCallbackMode(runtimeKind, agentImage)
 
-	// 6. Create container
-	containerID, err := a.createContainer(ctx, runCtx, project, story, agentImage, prompt, branchName)
+	// 6. Resolve the project's Environment and bring up its sidecar services.
+	// Back-compat is HARD: a project without an Environment (GetByProjectID ->
+	// NotFound) leaves env nil, no network/sidecar is created, and the container
+	// is built exactly as before. Only env-level errors other than NotFound fail.
+	env, err := a.resolveEnvironment(ctx, runCtx.ProjectID)
+	if err != nil {
+		return fmt.Errorf("resolve environment: %w", err)
+	}
+
+	// Launch sidecars on a per-run isolated network. Nil-safe: env==nil or no
+	// services yields a nil sidecarCtx and is a no-op. Fail-fast on launch error.
+	var sidecarCtx *port.SidecarContext
+	if env != nil && len(env.Services) > 0 {
+		sc, launchErr := a.sidecarMgr.Launch(ctx, runCtx.Run.ID, env)
+		if launchErr != nil {
+			return fmt.Errorf("launch sidecars: %w", launchErr)
+		}
+		sidecarCtx = sc
+		// Teardown is GUARANTEED even if a later step fails. Cleanup runs on its
+		// own detached, bounded context inside the SidecarManager, so it works
+		// even when ctx is already cancelled.
+		defer func() {
+			if cleanupErr := a.sidecarMgr.Cleanup(context.Background(), sidecarCtx); cleanupErr != nil {
+				a.logger.Warn("failed to clean up sidecars",
+					"run_id", runCtx.Run.ID, "error", cleanupErr)
+			}
+		}()
+	}
+
+	// Build connection strings for the sidecar services (DATABASE_URL, etc.).
+	// nil when there is no Environment — extraEnv stays nil and the container env
+	// is byte-for-byte identical to the pre-Environment behaviour.
+	extraEnv := buildConnStrings(env)
+
+	// 7. Create container
+	containerID, err := a.createContainer(ctx, runCtx, project, story, agentImage, prompt, branchName, extraEnv, sidecarCtx)
 	if err != nil {
 		return fmt.Errorf("create container: %w", err)
 	}
 	defer a.cleanupContainer(containerID)
 
-	// 7. Start container
+	// 8. Start container
 	if err := a.containerMgr.Start(ctx, containerID); err != nil {
 		return fmt.Errorf("start container: %w", err)
 	}
 
-	// 8. Persist container ID to run step
+	// 9. Persist container ID to run step
 	a.persistContainerID(ctx, runCtx.RunStep.ID, containerID)
 
-	// 9. Wait for completion using the appropriate mode
+	// 10. Wait for completion using the appropriate mode
 	var exitCode int
 	if isCallbackMode {
 		exitCode, err = a.waitForCallback(ctx, runCtx)
@@ -177,7 +222,7 @@ func (a *AgentRunAction) Execute(ctx context.Context, runCtx *model.RunContext) 
 		return fmt.Errorf("stream/wait: %w", err)
 	}
 
-	// 10. Check exit code
+	// 11. Check exit code
 	if exitCode != 0 {
 		return fmt.Errorf("agent exited with code %d", exitCode)
 	}
@@ -263,6 +308,8 @@ func (a *AgentRunAction) createContainer(
 	project *model.Project,
 	story *model.Story,
 	agentImage, prompt, branchName string,
+	extraEnv []string,
+	sidecarCtx *port.SidecarContext,
 ) (string, error) {
 	repoURL := ""
 	if project.RepoURL != nil {
@@ -353,6 +400,10 @@ func (a *AgentRunAction) createContainer(
 		}
 	}
 
+	// Append sidecar connection strings LAST, preserving the existing env order so
+	// the slice is byte-for-byte identical to before when extraEnv is nil.
+	env = append(env, extraEnv...)
+
 	opts := model.ContainerOpts{
 		Image:       agentImage,
 		NetworkName: a.config.NetworkName,
@@ -365,6 +416,14 @@ func (a *AgentRunAction) createContainer(
 			"step_id":    runCtx.RunStep.ID.String(),
 			"story_key":  story.Key,
 		},
+	}
+
+	// Dual-home the agent container: it keeps its shared NetworkName (API callback
+	// / egress) AND attaches to the run network so it can reach the sidecars by
+	// their service-name DNS alias. Only set when a run network actually exists,
+	// so a project without an Environment keeps identical ContainerOpts.
+	if sidecarCtx != nil && sidecarCtx.NetworkName != "" {
+		opts.ExtraNetworks = []string{sidecarCtx.NetworkName}
 	}
 
 	return a.containerMgr.Create(ctx, opts)

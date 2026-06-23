@@ -168,11 +168,10 @@ func run() error {
 	}
 
 	// Environment persistence (P2c1): one execution composition per project (stacks +
-	// sidecar services + config source + commands). Instantiated at boot so it is ready
-	// for the service/handler + run-path wiring that lands in P2c2. The blank assignment
-	// keeps it constructed without an API surface yet.
+	// sidecar services + config source + commands). Wired into the agent_run path below
+	// (P2c2c): when a project has an Environment with sidecar services, they are brought
+	// up per-run and their connection strings injected into the agent container.
 	environmentRepo := pgadapter.NewEnvironmentRepo(queries)
-	_ = environmentRepo
 
 	// Template renderer (Handlebars engine for prompt templates)
 	handlebarsRenderer := hbadapter.NewRenderer()
@@ -281,9 +280,13 @@ func run() error {
 				NetworkName:   cfg.Docker.AgentNetwork,
 				LogTailLines:  50,
 			}
+			// Sidecar manager brings up an Environment's services on a per-run
+			// isolated network over the same Docker ContainerManager.
+			sidecarMgr := dockeradapter.NewDockerSidecarManager(containerMgr, logger)
 			agentRunAction := actionadapter.NewAgentRunAction(
 				containerMgr, logStreamer, eventRepo,
 				storyRepo, projectRepo, runRepo,
+				environmentRepo, sidecarMgr,
 				handlebarsRenderer, costSvc, agentCfg, logger,
 				apiKeySvc, containerTokenStore, callbackStatusStore,
 				cfg.Docker.CallbackBaseURL,

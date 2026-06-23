@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/url"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -19,6 +21,11 @@ import (
 )
 
 const testContainerID = "container-123"
+
+const (
+	testNetwork  = "test-network"
+	testStoryKey = "S-42"
+)
 
 // testLogger creates a silent logger for tests.
 func testLogger() *slog.Logger {
@@ -351,6 +358,88 @@ func (m *mockTemplateRenderer) Render(templateContent string, _ *model.TemplateC
 	return "rendered: " + templateContent[:min(20, len(templateContent))], nil
 }
 
+// mockEnvironmentRepo is an EnvironmentRepository mock. By default GetByProjectID
+// returns NotFound, modelling a project with no Environment (legacy behaviour).
+type mockEnvironmentRepo struct {
+	getByProjectIDFn func(ctx context.Context, projectID uuid.UUID) (*model.Environment, error)
+}
+
+func (m *mockEnvironmentRepo) Create(_ context.Context, e *model.Environment) (*model.Environment, error) {
+	return e, nil
+}
+func (m *mockEnvironmentRepo) GetByID(_ context.Context, id uuid.UUID) (*model.Environment, error) {
+	return nil, errors.NewNotFound("environment", id)
+}
+func (m *mockEnvironmentRepo) GetByProjectID(ctx context.Context, projectID uuid.UUID) (*model.Environment, error) {
+	if m.getByProjectIDFn != nil {
+		return m.getByProjectIDFn(ctx, projectID)
+	}
+	return nil, errors.NewNotFound("environment", projectID)
+}
+func (m *mockEnvironmentRepo) Update(_ context.Context, e *model.Environment) (*model.Environment, error) {
+	return e, nil
+}
+func (m *mockEnvironmentRepo) Delete(_ context.Context, _ uuid.UUID) error { return nil }
+
+// mockSidecarManager is a SidecarManager mock. launchFn defaults to a guard that
+// FAILS the test if Launch is ever called: the back-compat golden test relies on
+// Launch staying untouched when a project has no Environment.
+type mockSidecarManager struct {
+	t *testing.T
+
+	launchFn func(ctx context.Context, runID uuid.UUID, env *model.Environment) (*port.SidecarContext, error)
+
+	mu           sync.Mutex
+	launchCalls  int
+	cleanupCalls int
+	stopCalls    int
+}
+
+func (m *mockSidecarManager) Launch(ctx context.Context, runID uuid.UUID, env *model.Environment) (*port.SidecarContext, error) {
+	m.mu.Lock()
+	m.launchCalls++
+	m.mu.Unlock()
+	if m.launchFn != nil {
+		return m.launchFn(ctx, runID, env)
+	}
+	if m.t != nil {
+		m.t.Errorf("SidecarManager.Launch must not be called when project has no Environment")
+	}
+	return nil, fmt.Errorf("unexpected Launch call")
+}
+
+func (m *mockSidecarManager) Stop(_ context.Context, _ *port.SidecarContext) error {
+	m.mu.Lock()
+	m.stopCalls++
+	m.mu.Unlock()
+	return nil
+}
+
+func (m *mockSidecarManager) Cleanup(_ context.Context, _ *port.SidecarContext) error {
+	m.mu.Lock()
+	m.cleanupCalls++
+	m.mu.Unlock()
+	return nil
+}
+
+func (m *mockSidecarManager) ListOrphanNetworks(_ context.Context) ([]model.NetworkInfo, error) {
+	return nil, nil
+}
+
+func (m *mockSidecarManager) GC(_ context.Context, _ time.Duration) error { return nil }
+
+func (m *mockSidecarManager) getLaunchCalls() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.launchCalls
+}
+
+func (m *mockSidecarManager) getCleanupCalls() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.cleanupCalls
+}
+
 // --- Test fixture ---
 
 // mockCostRepo is a no-op CostRepository for use in AgentRunAction tests.
@@ -415,13 +504,15 @@ type agentRunFixture struct {
 	run     *model.Run
 	runStep *model.RunStep
 
-	containerMgr *mockContainerManager
-	logStreamer  *mockLogStreamer
-	eventPub     *mockEventPublisher
-	storyRepo    *mockStoryRepo
-	projectRepo  *mockProjectRepo
-	runRepo      *mockRunRepo
-	costSvc      *service.CostService
+	containerMgr    *mockContainerManager
+	logStreamer     *mockLogStreamer
+	eventPub        *mockEventPublisher
+	storyRepo       *mockStoryRepo
+	projectRepo     *mockProjectRepo
+	runRepo         *mockRunRepo
+	environmentRepo *mockEnvironmentRepo
+	sidecarMgr      *mockSidecarManager
+	costSvc         *service.CostService
 
 	action *action.AgentRunAction
 }
@@ -441,7 +532,7 @@ func newAgentRunFixture(t *testing.T) *agentRunFixture {
 	f.story = &model.Story{
 		ID:                 f.storyID,
 		ProjectID:          f.projectID,
-		Key:                "S-42",
+		Key:                testStoryKey,
 		Title:              "Test Story",
 		Objective:          strPtr("Implement feature X"),
 		Scope:              &backendScope,
@@ -514,6 +605,12 @@ func newAgentRunFixture(t *testing.T) *agentRunFixture {
 	}
 	f.runRepo = &mockRunRepo{}
 
+	// Default: project has no Environment (GetByProjectID -> NotFound) and the
+	// SidecarManager guards against any Launch call. This is the legacy path the
+	// back-compat golden test pins.
+	f.environmentRepo = &mockEnvironmentRepo{}
+	f.sidecarMgr = &mockSidecarManager{t: t}
+
 	// Create a real TemplateRenderer
 	renderer := &mockTemplateRenderer{}
 
@@ -523,7 +620,7 @@ func newAgentRunFixture(t *testing.T) *agentRunFixture {
 	agentCfg := action.AgentConfig{
 		DefaultMemory: 4294967296,
 		DefaultCPUs:   2.0,
-		NetworkName:   "test-network",
+		NetworkName:   testNetwork,
 		LogTailLines:  50,
 	}
 
@@ -534,6 +631,8 @@ func newAgentRunFixture(t *testing.T) *agentRunFixture {
 		f.storyRepo,
 		f.projectRepo,
 		f.runRepo,
+		f.environmentRepo,
+		f.sidecarMgr,
 		renderer,
 		f.costSvc,
 		agentCfg,
@@ -591,8 +690,8 @@ func TestAgentRunAction_HappyPath(t *testing.T) {
 	if opts.Image != "hopeitworks/agent:latest" {
 		t.Errorf("expected image %q, got %q", "hopeitworks/agent:latest", opts.Image)
 	}
-	if opts.NetworkName != "test-network" {
-		t.Errorf("expected network %q, got %q", "test-network", opts.NetworkName)
+	if opts.NetworkName != testNetwork {
+		t.Errorf("expected network %q, got %q", testNetwork, opts.NetworkName)
 	}
 	if opts.Memory != 4294967296 {
 		t.Errorf("expected memory 4294967296, got %d", opts.Memory)
@@ -611,7 +710,7 @@ func TestAgentRunAction_HappyPath(t *testing.T) {
 	if opts.Labels["step_id"] != f.stepID.String() {
 		t.Errorf("expected step_id label %s, got %s", f.stepID, opts.Labels["step_id"])
 	}
-	if opts.Labels["story_key"] != "S-42" {
+	if opts.Labels["story_key"] != testStoryKey {
 		t.Errorf("expected story_key label S-42, got %s", opts.Labels["story_key"])
 	}
 
@@ -635,7 +734,7 @@ func TestAgentRunAction_HappyPath(t *testing.T) {
 	if envMap["BRANCH_NAME"] != "feat/s-42-test" {
 		t.Errorf("expected BRANCH_NAME feat/s-42-test, got %q", envMap["BRANCH_NAME"])
 	}
-	if envMap["STORY_KEY"] != "S-42" {
+	if envMap["STORY_KEY"] != testStoryKey {
 		t.Errorf("expected STORY_KEY S-42, got %q", envMap["STORY_KEY"])
 	}
 	if _, ok := envMap["PROMPT_CONTENT"]; !ok {
@@ -1009,6 +1108,268 @@ func TestAgentRunAction_ModelFallback(t *testing.T) {
 			t.Errorf("expected no MODEL env var when model is not in metadata, got %q", env)
 		}
 	}
+}
+
+// TestAgentRunAction_NoEnvironment_GoldenBackCompat is the cardinal back-compat
+// gate. A run whose project has NO Environment (GetByProjectID -> NotFound) must
+// produce ContainerOpts STRICTLY identical to the pre-P2c2c behaviour: no extra
+// connection-string env, no ExtraNetworks, and the SidecarManager is never asked
+// to Launch. The guard mockSidecarManager fails the test if Launch is called.
+func TestAgentRunAction_NoEnvironment_GoldenBackCompat(t *testing.T) {
+	f := newAgentRunFixture(t)
+	runCtx := f.newRunContext()
+
+	if err := f.action.Execute(context.Background(), runCtx); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	// SidecarManager.Launch must NOT have been called.
+	if got := f.sidecarMgr.getLaunchCalls(); got != 0 {
+		t.Fatalf("expected 0 Launch calls for a project with no Environment, got %d", got)
+	}
+	// No Environment -> no sidecar teardown either.
+	if got := f.sidecarMgr.getCleanupCalls(); got != 0 {
+		t.Fatalf("expected 0 Cleanup calls for a project with no Environment, got %d", got)
+	}
+
+	f.containerMgr.mu.Lock()
+	createCalls := f.containerMgr.createCalls
+	f.containerMgr.mu.Unlock()
+	if len(createCalls) != 1 {
+		t.Fatalf("expected 1 create call, got %d", len(createCalls))
+	}
+	opts := createCalls[0]
+
+	// Golden invariant 1: ExtraNetworks empty (container is single-homed exactly
+	// like before P2c2c).
+	if len(opts.ExtraNetworks) != 0 {
+		t.Errorf("expected empty ExtraNetworks, got %v", opts.ExtraNetworks)
+	}
+	// Golden invariant 2: NetworkName unchanged (the shared agent network only).
+	if opts.NetworkName != testNetwork {
+		t.Errorf("expected NetworkName test-network, got %q", opts.NetworkName)
+	}
+	// Golden invariant 3: no connection-string env leaked in.
+	for _, key := range []string{"DATABASE_URL", "REDIS_URL", "MONGODB_URL", "ELASTICSEARCH_URL", "SMTP_HOST", "SMTP_PORT"} {
+		for _, e := range opts.Env {
+			if strings.HasPrefix(e, key+"=") {
+				t.Errorf("expected no %s in env for a project with no Environment, got %q", key, e)
+			}
+		}
+	}
+
+	// Golden invariant 4: the env slice equals the legacy set, field-by-field.
+	// Build the expected legacy env exactly as createContainer would with no
+	// extraEnv, sort both, and compare element-by-element.
+	wantEnv := []string{
+		"REPO_URL=https://github.com/test/repo",
+		"BRANCH_NAME=feat/s-42-test",
+		"STORY_KEY=S-42",
+		"PROMPT_CONTENT=" + envValue(opts.Env, "PROMPT_CONTENT"),
+		"PROMPT=" + envValue(opts.Env, "PROMPT"),
+		"GIT_TOKEN=" + envValue(opts.Env, "GIT_TOKEN"),
+		"GIT_PROVIDER=" + envValue(opts.Env, "GIT_PROVIDER"),
+		"GITHUB_TOKEN=" + envValue(opts.Env, "GITHUB_TOKEN"),
+		"CLAUDE_MD_CONTENT=" + envValue(opts.Env, "CLAUDE_MD_CONTENT"),
+		"CLAUDE_CODE_OAUTH_TOKEN=" + envValue(opts.Env, "CLAUDE_CODE_OAUTH_TOKEN"),
+	}
+	gotEnv := append([]string(nil), opts.Env...)
+	sort.Strings(gotEnv)
+	sort.Strings(wantEnv)
+	if len(gotEnv) != len(wantEnv) {
+		t.Fatalf("env length mismatch: got %d (%v), want %d (%v)", len(gotEnv), gotEnv, len(wantEnv), wantEnv)
+	}
+	for i := range gotEnv {
+		if gotEnv[i] != wantEnv[i] {
+			t.Errorf("env[%d] mismatch:\n got=%q\nwant=%q", i, gotEnv[i], wantEnv[i])
+		}
+	}
+
+	// Golden invariant 5: labels unchanged.
+	if opts.Labels["managed_by"] != "hopeitworks" ||
+		opts.Labels["run_id"] != f.runID.String() ||
+		opts.Labels["step_id"] != f.stepID.String() ||
+		opts.Labels["story_key"] != testStoryKey {
+		t.Errorf("labels changed: %v", opts.Labels)
+	}
+	// Golden invariant 6: resource limits unchanged.
+	if opts.Memory != 4294967296 || opts.CPUs != 2.0 {
+		t.Errorf("resource limits changed: memory=%d cpus=%f", opts.Memory, opts.CPUs)
+	}
+}
+
+// TestAgentRunAction_WithEnvironment_SidecarWiring proves the live path: a project
+// WITH an Environment (one postgres service) launches sidecars, injects
+// DATABASE_URL, dual-homes the agent container on the run network, and tears the
+// sidecars down via the deferred Cleanup even when a later step fails.
+func TestAgentRunAction_WithEnvironment_SidecarWiring(t *testing.T) {
+	f := newAgentRunFixture(t)
+
+	runNetwork := "hopeitworks-run-" + f.runID.String()
+	env := &model.Environment{
+		ProjectID: f.projectID,
+		Services: []model.EnvironmentService{
+			{
+				Name:  "db",
+				Image: "postgres:16",
+				Env: map[string]string{
+					"POSTGRES_USER":     "app",
+					"POSTGRES_PASSWORD": "secret",
+					"POSTGRES_DB":       "appdb",
+				},
+			},
+		},
+	}
+	f.environmentRepo.getByProjectIDFn = func(_ context.Context, _ uuid.UUID) (*model.Environment, error) {
+		return env, nil
+	}
+	f.sidecarMgr.launchFn = func(_ context.Context, runID uuid.UUID, gotEnv *model.Environment) (*port.SidecarContext, error) {
+		if gotEnv != env {
+			t.Errorf("Launch received unexpected environment")
+		}
+		return &port.SidecarContext{
+			RunID:        runID,
+			NetworkName:  runNetwork,
+			ContainerIDs: map[string]string{"db": "sidecar-db"},
+			ServiceAddrs: map[string]string{"db": "db"},
+		}, nil
+	}
+
+	// Make a later step fail to prove the deferred Cleanup still runs.
+	f.containerMgr.startFn = func(_ context.Context, _ string) error {
+		return fmt.Errorf("docker start error")
+	}
+
+	runCtx := f.newRunContext()
+	if err := f.action.Execute(context.Background(), runCtx); err == nil {
+		t.Fatal("expected error from start failure, got nil")
+	}
+
+	// Launch was called exactly once.
+	if got := f.sidecarMgr.getLaunchCalls(); got != 1 {
+		t.Fatalf("expected 1 Launch call, got %d", got)
+	}
+	// Cleanup runs even though a later step failed (deferred teardown).
+	if got := f.sidecarMgr.getCleanupCalls(); got != 1 {
+		t.Fatalf("expected 1 Cleanup call (deferred), got %d", got)
+	}
+
+	f.containerMgr.mu.Lock()
+	createCalls := f.containerMgr.createCalls
+	f.containerMgr.mu.Unlock()
+	if len(createCalls) != 1 {
+		t.Fatalf("expected 1 create call, got %d", len(createCalls))
+	}
+	opts := createCalls[0]
+
+	// DATABASE_URL injected from the postgres service.
+	wantURL := "postgres://app:secret@db:5432/appdb"
+	if got := envValue(opts.Env, "DATABASE_URL"); got != wantURL {
+		t.Errorf("expected DATABASE_URL=%q, got %q", wantURL, got)
+	}
+
+	// Dual-homing: keeps shared NetworkName AND attaches to the run network.
+	if opts.NetworkName != testNetwork {
+		t.Errorf("expected shared NetworkName test-network, got %q", opts.NetworkName)
+	}
+	if len(opts.ExtraNetworks) != 1 || opts.ExtraNetworks[0] != runNetwork {
+		t.Errorf("expected ExtraNetworks=[%s], got %v", runNetwork, opts.ExtraNetworks)
+	}
+}
+
+// TestAgentRunAction_ConnString_EscapesCredentials proves the connection-string
+// builder percent-encodes user-controlled credentials. A POSTGRES_PASSWORD made
+// of URL-reserved characters (@ : / # ?) must yield a DATABASE_URL that parses
+// cleanly with url.Parse and whose userinfo round-trips back to the exact
+// password — no broken URL, no injected components.
+func TestAgentRunAction_ConnString_EscapesCredentials(t *testing.T) {
+	f := newAgentRunFixture(t)
+
+	const rawPass = "p@s:w/rd#?x"
+	env := &model.Environment{
+		ProjectID: f.projectID,
+		Services: []model.EnvironmentService{
+			{
+				Name:  "db",
+				Image: "postgres:16",
+				Env: map[string]string{
+					"POSTGRES_USER":     "app",
+					"POSTGRES_PASSWORD": rawPass,
+					"POSTGRES_DB":       "appdb",
+				},
+			},
+		},
+	}
+	f.environmentRepo.getByProjectIDFn = func(_ context.Context, _ uuid.UUID) (*model.Environment, error) {
+		return env, nil
+	}
+	f.sidecarMgr.launchFn = func(_ context.Context, runID uuid.UUID, _ *model.Environment) (*port.SidecarContext, error) {
+		return &port.SidecarContext{
+			RunID:        runID,
+			NetworkName:  "hopeitworks-run-" + runID.String(),
+			ContainerIDs: map[string]string{"db": "sidecar-db"},
+			ServiceAddrs: map[string]string{"db": "db"},
+		}, nil
+	}
+
+	if err := f.action.Execute(context.Background(), f.newRunContext()); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	f.containerMgr.mu.Lock()
+	createCalls := f.containerMgr.createCalls
+	f.containerMgr.mu.Unlock()
+	if len(createCalls) != 1 {
+		t.Fatalf("expected 1 create call, got %d", len(createCalls))
+	}
+
+	raw := envValue(createCalls[0].Env, "DATABASE_URL")
+	if raw == "" {
+		t.Fatal("expected DATABASE_URL to be set")
+	}
+	// The raw env value must NOT contain the unescaped password verbatim — the
+	// reserved characters must be percent-encoded.
+	if strings.Contains(raw, rawPass) {
+		t.Errorf("expected password to be percent-encoded, but raw URL contains it verbatim: %q", raw)
+	}
+
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		t.Fatalf("DATABASE_URL must be parsable, got error: %v (url=%q)", err, raw)
+	}
+	if parsed.Scheme != "postgres" {
+		t.Errorf("expected scheme postgres, got %q", parsed.Scheme)
+	}
+	if parsed.Host != "db:5432" {
+		t.Errorf("expected host db:5432, got %q", parsed.Host)
+	}
+	if parsed.Path != "/appdb" {
+		t.Errorf("expected path /appdb, got %q", parsed.Path)
+	}
+	if parsed.User == nil {
+		t.Fatal("expected userinfo in DATABASE_URL")
+	}
+	if parsed.User.Username() != "app" {
+		t.Errorf("expected username app, got %q", parsed.User.Username())
+	}
+	gotPass, ok := parsed.User.Password()
+	if !ok {
+		t.Fatal("expected a password in userinfo")
+	}
+	if gotPass != rawPass {
+		t.Errorf("password did not round-trip: got %q, want %q", gotPass, rawPass)
+	}
+}
+
+// envValue returns the value of the first KEY=value entry matching key, or "".
+func envValue(env []string, key string) string {
+	prefix := key + "="
+	for _, e := range env {
+		if strings.HasPrefix(e, prefix) {
+			return e[len(prefix):]
+		}
+	}
+	return ""
 }
 
 func (m *mockStoryRepo) CountByEpicGroupedByStatus(_ context.Context, _ uuid.UUID) (model.StoryCounts, error) {
