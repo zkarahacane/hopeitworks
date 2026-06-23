@@ -1,0 +1,30 @@
+# docker-compose.microsandbox.yml — overlay that switches the api service to the
+# microVM (microsandbox) substrate. Compose it ON TOP of the base stack:
+#
+#   docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.microsandbox.yml up api
+#
+# It does three things:
+#   1. Builds the api from Dockerfile.microsandbox (cgo + `-tags microsandbox`).
+#   2. Exposes /dev/kvm into the container so libkrun can create microVMs.
+#   3. Selects the microsandbox substrate via SUBSTRATE=microsandbox.
+#
+# REQUIREMENTS: the Docker HOST must expose /dev/kvm (bare-metal Linux with KVM,
+# or a nested-virt VM — see deploy/lima/microsandbox-vm.yaml). Docker Desktop on
+# macOS does NOT pass /dev/kvm through; run this from inside the Lima VM instead.
+services:
+  api:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile.microsandbox
+    environment:
+      # Select the microVM substrate. The adapter is constructed; live agent_run
+      # still uses Docker until the P3c migration (this overlay does not change
+      # that), but SUBSTRATE drives selectSubstrate + the future wiring.
+      SUBSTRATE: microsandbox
+    # /dev/kvm is the load-bearing line: libkrun needs the KVM device node.
+    devices:
+      - "/dev/kvm"
+    # Some hosts also require the container to be in the kvm group; uncomment if
+    # /dev/kvm is root:kvm 0660 on the host (find the gid with `getent group kvm`).
+    # group_add:
+    #   - kvm

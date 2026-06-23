@@ -574,19 +574,24 @@ func stackCatalogueFromConfig(entries []pkgconfig.StackConfig, logger *slog.Logg
 }
 
 // selectSubstrate logs the configured execution substrate and, for the
-// microsandbox kind, constructs the scaffold AgentRuntime adapter (P3a). The
-// adapter is intentionally inert: it is NOT wired into the live agent_run flow,
-// so live execution always uses the Docker ContainerManager regardless of this
-// selection. This function records intent only — it never alters the Docker
-// wiring. Returns the AgentRuntime when one is constructed (microsandbox), or
-// nil for the docker default (the live path needs no extra adapter).
+// microsandbox kind, constructs the AgentRuntime adapter. The adapter is NOT yet
+// wired into the live agent_run flow, so live execution always uses the Docker
+// ContainerManager regardless of this selection (the agent_run → AgentRuntime
+// migration is the deferred P3c). This function records intent and constructs
+// the adapter only — it never alters the Docker wiring. Returns the AgentRuntime
+// when one is constructed (microsandbox), or nil for the docker default (the
+// live path needs no extra adapter).
+//
+// The adapter's live half (Launch/Wait/Stop) is real only in a binary built
+// with `-tags microsandbox` on a KVM/HVF host (P3b); the default build returns
+// microsandbox.ErrNotBuilt. enabled=true lets the tagged build launch microVMs;
+// the fallback build ignores it.
 func selectSubstrate(kind string, stacks port.StackRepository, logger *slog.Logger) port.AgentRuntime {
 	switch kind {
 	case pkgconfig.SubstrateMicrosandbox:
 		logger.Info("substrate selected", "substrate", pkgconfig.SubstrateMicrosandbox)
-		// enabled=false: even a constructed adapter stays a stub in P3a.
-		rt := microsandboxadapter.NewRuntime(false, stacks, logger)
-		logger.Warn("microsandbox runtime is scaffold-only (P3a): live execution still uses Docker",
+		rt := microsandboxadapter.NewRuntime(true, stacks, logger)
+		logger.Warn("microsandbox runtime constructed but not wired into live agent_run (P3c); live execution still uses Docker. Live microVM ops require a binary built with -tags microsandbox on a KVM host",
 			"substrate", pkgconfig.SubstrateMicrosandbox)
 		return rt
 	default:

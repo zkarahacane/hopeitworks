@@ -122,21 +122,6 @@ func TestRuntime_Provision_WarnSkip(t *testing.T) {
 	}
 }
 
-func TestRuntime_LiveStubs_ReturnNotImplemented(t *testing.T) {
-	rt := NewRuntime(true, nil, nil) // even enabled, P3a stays a stub
-	ctx := context.Background()
-
-	if _, err := rt.Launch(ctx, port.RunSpec{}); !errors.Is(err, ErrNotImplemented) {
-		t.Errorf("Launch err = %v, want ErrNotImplemented", err)
-	}
-	if _, err := rt.Wait(ctx, port.RunHandle{}); !errors.Is(err, ErrNotImplemented) {
-		t.Errorf("Wait err = %v, want ErrNotImplemented", err)
-	}
-	if err := rt.Stop(ctx, port.RunHandle{}); !errors.Is(err, ErrNotImplemented) {
-		t.Errorf("Stop err = %v, want ErrNotImplemented", err)
-	}
-}
-
 func TestRuntime_ResolveImage(t *testing.T) {
 	const (
 		freeFormImage = "ghcr.io/acme/custom:1.2.3"
