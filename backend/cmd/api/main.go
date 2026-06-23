@@ -173,6 +173,8 @@ func run() error {
 	// (P2c2c): when a project has an Environment with sidecar services, they are brought
 	// up per-run and their connection strings injected into the agent container.
 	environmentRepo := pgadapter.NewEnvironmentRepo(queries)
+	environmentService := service.NewEnvironmentService(environmentRepo)
+	environmentHandler := handler.NewEnvironmentHandler(environmentService)
 
 	// Template renderer (Handlebars engine for prompt templates)
 	handlebarsRenderer := hbadapter.NewRenderer()
@@ -438,7 +440,7 @@ func run() error {
 	epicRunService := service.NewEpicRunService(epicRunRepo, storyRepo, epicRepo, schedulerService, parallelGroupExecutor, eventRepo, logger)
 	epicRunHandler := handler.NewEpicRunHandler(epicRunService)
 
-	server := handler.NewServer(authHandler, projectHandler, userHandler, profileHandler, epicHandler, storyHandler, agentHandler, stackHandler, runHandler, pipelineConfigHandler, hitlHandler, costHandler, notificationHandler, epicRunHandler)
+	server := handler.NewServer(authHandler, projectHandler, userHandler, profileHandler, epicHandler, storyHandler, agentHandler, stackHandler, runHandler, pipelineConfigHandler, hitlHandler, costHandler, notificationHandler, epicRunHandler, environmentHandler)
 
 	// Project user handler
 	projectUserHandler := handler.NewProjectUserHandler(projectUserService)
