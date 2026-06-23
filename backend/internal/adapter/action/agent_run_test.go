@@ -1446,6 +1446,10 @@ type mockAgentRuntime struct {
 	launchErr    error
 	waitExitCode int
 	waitErr      error
+	// waitDelay, when > 0, makes Wait sleep before returning so a test can order it
+	// relative to the callback-status arrival (crash-detection reconciliation). Wait
+	// still honours ctx cancellation while sleeping, so it never leaks.
+	waitDelay time.Duration
 }
 
 func (m *mockAgentRuntime) Provision(_ context.Context, _ model.CapabilitySpec) (model.ProvisionResult, error) {
@@ -1462,14 +1466,24 @@ func (m *mockAgentRuntime) Launch(_ context.Context, spec port.RunSpec) (port.Ru
 	return port.RunHandle{ID: testSubstrateHandleID}, nil
 }
 
-func (m *mockAgentRuntime) Wait(_ context.Context, _ port.RunHandle) (port.RunResult, error) {
+func (m *mockAgentRuntime) Wait(ctx context.Context, _ port.RunHandle) (port.RunResult, error) {
 	m.mu.Lock()
 	m.waitCalls++
+	delay := m.waitDelay
+	waitErr := m.waitErr
+	exitCode := m.waitExitCode
 	m.mu.Unlock()
-	if m.waitErr != nil {
-		return port.RunResult{}, m.waitErr
+	if delay > 0 {
+		select {
+		case <-time.After(delay):
+		case <-ctx.Done():
+			return port.RunResult{}, ctx.Err()
+		}
 	}
-	return port.RunResult{ExitCode: m.waitExitCode}, nil
+	if waitErr != nil {
+		return port.RunResult{}, waitErr
+	}
+	return port.RunResult{ExitCode: exitCode}, nil
 }
 
 func (m *mockAgentRuntime) Stop(_ context.Context, h port.RunHandle) error {
@@ -1495,12 +1509,6 @@ func (m *mockAgentRuntime) stopCount() int {
 	return len(m.stopHandles)
 }
 
-func (m *mockAgentRuntime) waitCount() int {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.waitCalls
-}
-
 func (m *mockAgentRuntime) lastSpec(t *testing.T) port.RunSpec {
 	t.Helper()
 	m.mu.Lock()
@@ -1522,16 +1530,39 @@ type mockCallbackStatusStore struct {
 	exitCode  int
 	errMsg    string
 	waitErr   error
+	// block, when true, makes WaitForStatus park on ctx.Done() and return ctx.Err()
+	// — modelling a status that NEVER arrives, so the substrate process exit drives
+	// the outcome (crash detection).
+	block bool
+	// delay, when > 0, holds the status back for that long before returning it —
+	// modelling a callback that lands AFTER the process exit but within the grace.
+	delay time.Duration
 }
 
-func (m *mockCallbackStatusStore) WaitForStatus(_ context.Context, _ uuid.UUID, _ time.Duration) (int, string, error) {
+func (m *mockCallbackStatusStore) WaitForStatus(ctx context.Context, _ uuid.UUID, _ time.Duration) (int, string, error) {
 	m.mu.Lock()
 	m.waitCalls++
+	block := m.block
+	delay := m.delay
+	waitErr := m.waitErr
+	exitCode := m.exitCode
+	errMsg := m.errMsg
 	m.mu.Unlock()
-	if m.waitErr != nil {
-		return -1, "", m.waitErr
+	if block {
+		<-ctx.Done()
+		return -1, "", ctx.Err()
 	}
-	return m.exitCode, m.errMsg, nil
+	if delay > 0 {
+		select {
+		case <-time.After(delay):
+		case <-ctx.Done():
+			return -1, "", ctx.Err()
+		}
+	}
+	if waitErr != nil {
+		return -1, "", waitErr
+	}
+	return exitCode, errMsg, nil
 }
 
 func (m *mockCallbackStatusStore) SetStatus(_ context.Context, _ uuid.UUID, _ int, _ string) error {
@@ -1679,10 +1710,13 @@ func TestAgentRunAction_RuntimeDispatch_CallbackWaitNotSkipped(t *testing.T) {
 		t.Fatalf("expected statusStore.WaitForStatus to be consulted once (callback = outcome source), got %d", got)
 	}
 
-	// The runtime's own Wait was NOT used as the outcome source. (The dispatch does
-	// not call runtime.Wait at all in callback mode; assert it was not consulted.)
-	if got := fakeRT.waitCount(); got != 0 {
-		t.Errorf("expected runtime.Wait NOT to be the outcome source in callback mode, but it was called %d times", got)
+	// The runtime's own Wait exit code was NOT used as the outcome source. Stage 3b
+	// DOES consult runtime.Wait concurrently for crash detection, so it may be called
+	// — but its non-zero exit code must NOT decide the outcome. The success above
+	// (with waitExitCode=1) already proves it; here we only assert the status, not
+	// the process exit, drove the result.
+	if statusStore.exitCode != 0 {
+		t.Fatalf("test misconfigured: status exit code must be 0 to prove callback wins")
 	}
 
 	// Launch + Stop still happen exactly once (substrate lifecycle preserved).
@@ -1692,6 +1726,203 @@ func TestAgentRunAction_RuntimeDispatch_CallbackWaitNotSkipped(t *testing.T) {
 	if got := fakeRT.stopCount(); got != 1 {
 		t.Errorf("expected 1 Stop call (deferred teardown), got %d", got)
 	}
+}
+
+// testCrashGrace is the short grace the Stage 3b reconciliation tests configure so
+// a crash is declared (or a late status is awaited) in milliseconds, not the 5s
+// production default.
+const testCrashGrace = 50 * time.Millisecond
+
+// TestAgentRunAction_RuntimeDispatch_StatusWinsOverProcessExit is the anti-drift
+// guard under concurrency: even when the substrate process is OBSERVED to exit
+// first (runtime.Wait returns quickly with a non-zero exit), the callback status is
+// the source of truth. The status reports exit 0, so the run SUCCEEDS — the
+// process exit code is never read as the outcome, only used for crash detection.
+func TestAgentRunAction_RuntimeDispatch_StatusWinsOverProcessExit(t *testing.T) {
+	f := newAgentRunFixture(t)
+
+	// Process "finished" fast with a non-zero exit; if it were the outcome the run
+	// would fail. The status arrives and reports success.
+	fakeRT := &mockAgentRuntime{waitExitCode: 1}
+	statusStore := &mockCallbackStatusStore{exitCode: 0}
+	tokenStore := &mockTokenStore{}
+
+	act := newCrashGraceRuntimeAction(f, statusStore, tokenStore, fakeRT, testCrashGrace)
+
+	runCtx := f.newRunContext()
+	runCtx.Metadata["runtime_kind"] = model.RuntimeKindClaudeCode
+
+	if err := act.Execute(context.Background(), runCtx); err != nil {
+		t.Fatalf("expected success (callback status reports exit 0), got %v", err)
+	}
+
+	// The callback channel WAS the outcome source.
+	if got := statusStore.waitCount(); got != 1 {
+		t.Errorf("expected statusStore.WaitForStatus consulted once, got %d", got)
+	}
+	// Substrate lifecycle preserved: Launch + Stop once each. (runtime.Wait may or
+	// may not have returned before status won — both are fine and leak-free.)
+	if got := fakeRT.launchCount(); got != 1 {
+		t.Errorf("expected 1 Launch call, got %d", got)
+	}
+	if got := fakeRT.stopCount(); got != 1 {
+		t.Errorf("expected 1 Stop call (deferred teardown), got %d", got)
+	}
+	// Token still revoked exactly once.
+	if revoked := tokenStore.revokedTokenList(); len(revoked) != 1 || revoked[0] != testMintedToken {
+		t.Errorf("expected exactly 1 revoke of %q, got %v", testMintedToken, revoked)
+	}
+}
+
+// TestAgentRunAction_RuntimeDispatch_CrashWhenProcessExitsWithoutStatus proves the
+// crash-detection path (ADR §2d): the substrate process exits (runtime.Wait returns
+// fast) and NO callback status ever arrives (WaitForStatus parks on ctx). After the
+// short grace the run is declared a CRASH — an error — instead of blocking on the
+// 2h status timeout. The test also bounds the wall time to ~grace, proving it does
+// not wait 2h.
+func TestAgentRunAction_RuntimeDispatch_CrashWhenProcessExitsWithoutStatus(t *testing.T) {
+	f := newAgentRunFixture(t)
+
+	// Process exits fast (exit 1); status NEVER arrives (blocks until ctx done).
+	fakeRT := &mockAgentRuntime{waitExitCode: 1}
+	statusStore := &mockCallbackStatusStore{block: true}
+	tokenStore := &mockTokenStore{}
+
+	act := newCrashGraceRuntimeAction(f, statusStore, tokenStore, fakeRT, testCrashGrace)
+
+	runCtx := f.newRunContext()
+	runCtx.Metadata["runtime_kind"] = model.RuntimeKindClaudeCode
+
+	start := time.Now()
+	err := act.Execute(context.Background(), runCtx)
+	elapsed := time.Since(start)
+
+	if err == nil {
+		t.Fatal("expected a crash error when the process exits without a callback status, got nil")
+	}
+	if !strings.Contains(err.Error(), "without reporting a callback status") {
+		t.Errorf("expected a crash error message, got: %v", err)
+	}
+	// It must resolve in roughly the grace, NOT the 2h status timeout.
+	if elapsed > 5*time.Second {
+		t.Errorf("expected crash detection to resolve within the grace, took %v", elapsed)
+	}
+
+	// Substrate lifecycle preserved and token revoked despite the crash.
+	if got := fakeRT.stopCount(); got != 1 {
+		t.Errorf("expected 1 Stop call (deferred teardown), got %d", got)
+	}
+	if revoked := tokenStore.revokedTokenList(); len(revoked) != 1 || revoked[0] != testMintedToken {
+		t.Errorf("expected exactly 1 revoke of %q even on crash, got %v", testMintedToken, revoked)
+	}
+}
+
+// TestAgentRunAction_RuntimeDispatch_StatusAfterProcessExit_WithinGrace proves the
+// reverse ordering inside the grace window: the substrate process exits first, then
+// the callback status lands a moment later but BEFORE the grace elapses. The outcome
+// is the status (success), NOT a crash — the in-flight callback is honoured.
+func TestAgentRunAction_RuntimeDispatch_StatusAfterProcessExit_WithinGrace(t *testing.T) {
+	f := newAgentRunFixture(t)
+
+	// Process exits immediately; the status arrives shortly after but well within
+	// the grace (delay < grace).
+	fakeRT := &mockAgentRuntime{waitExitCode: 1}
+	statusStore := &mockCallbackStatusStore{exitCode: 0, delay: testCrashGrace / 5}
+	tokenStore := &mockTokenStore{}
+
+	act := newCrashGraceRuntimeAction(f, statusStore, tokenStore, fakeRT, testCrashGrace)
+
+	runCtx := f.newRunContext()
+	runCtx.Metadata["runtime_kind"] = model.RuntimeKindClaudeCode
+
+	if err := act.Execute(context.Background(), runCtx); err != nil {
+		t.Fatalf("expected success (status arrives within grace), got %v", err)
+	}
+
+	// The status WAS the outcome source — not a crash.
+	if got := statusStore.waitCount(); got != 1 {
+		t.Errorf("expected statusStore.WaitForStatus consulted once, got %d", got)
+	}
+	if got := fakeRT.stopCount(); got != 1 {
+		t.Errorf("expected 1 Stop call (deferred teardown), got %d", got)
+	}
+	if revoked := tokenStore.revokedTokenList(); len(revoked) != 1 || revoked[0] != testMintedToken {
+		t.Errorf("expected exactly 1 revoke of %q, got %v", testMintedToken, revoked)
+	}
+}
+
+// TestAgentRunAction_RuntimeDispatch_CleanExitWaitsForStatus proves the ADR §2d
+// exit-0 rule: a substrate process that finishes CLEANLY (exit 0) without a status
+// is NOT a crash — it is a delayed/in-flight callback. Even when the status lands
+// only AFTER the crash grace would have elapsed, the run waits for the authoritative
+// status (bounded by the 2h WaitForStatus, not the grace) and SUCCEEDS. A non-zero
+// exit on the same timing would have been declared a crash; exit 0 must not be.
+func TestAgentRunAction_RuntimeDispatch_CleanExitWaitsForStatus(t *testing.T) {
+	f := newAgentRunFixture(t)
+
+	// Process exits CLEANLY (exit 0) right away; the status arrives well AFTER the
+	// grace (3× grace) and reports success.
+	fakeRT := &mockAgentRuntime{waitExitCode: 0}
+	statusStore := &mockCallbackStatusStore{exitCode: 0, delay: testCrashGrace * 3}
+	tokenStore := &mockTokenStore{}
+
+	act := newCrashGraceRuntimeAction(f, statusStore, tokenStore, fakeRT, testCrashGrace)
+
+	runCtx := f.newRunContext()
+	runCtx.Metadata["runtime_kind"] = model.RuntimeKindClaudeCode
+
+	if err := act.Execute(context.Background(), runCtx); err != nil {
+		t.Fatalf("expected success: a clean exit-0 without a status must wait for the status, not crash; got %v", err)
+	}
+
+	// The status WAS the outcome source — waited beyond the grace, no crash.
+	if got := statusStore.waitCount(); got != 1 {
+		t.Errorf("expected statusStore.WaitForStatus consulted once, got %d", got)
+	}
+	if got := fakeRT.stopCount(); got != 1 {
+		t.Errorf("expected 1 Stop call (deferred teardown), got %d", got)
+	}
+	if revoked := tokenStore.revokedTokenList(); len(revoked) != 1 || revoked[0] != testMintedToken {
+		t.Errorf("expected exactly 1 revoke of %q, got %v", testMintedToken, revoked)
+	}
+}
+
+// newCrashGraceRuntimeAction is newCallbackRuntimeAction with an explicit short
+// CrashGrace, so the Stage 3b reconciliation tests resolve in milliseconds.
+func newCrashGraceRuntimeAction(
+	f *agentRunFixture,
+	statusStore port.CallbackStatusStore,
+	tokenStore port.ContainerTokenStore,
+	rt port.AgentRuntime,
+	crashGrace time.Duration,
+) *action.AgentRunAction {
+	agentCfg := action.AgentConfig{
+		DefaultMemory: 4294967296,
+		DefaultCPUs:   2.0,
+		NetworkName:   testNetwork,
+		LogTailLines:  50,
+		CrashGrace:    crashGrace,
+	}
+	return action.NewAgentRunAction(
+		f.containerMgr,
+		f.logStreamer,
+		f.eventPub,
+		f.storyRepo,
+		f.projectRepo,
+		f.runRepo,
+		f.environmentRepo,
+		f.sidecarMgr,
+		f.stackRepo,
+		&mockTemplateRenderer{},
+		f.costSvc,
+		agentCfg,
+		testLogger(),
+		nil, // apiKeySvc — not needed: fixture runCtx has no UserID
+		tokenStore,
+		statusStore,
+		"http://callback",
+		action.WithAgentRuntime(rt),
+	)
 }
 
 // newRuntimeAction builds an AgentRunAction from the fixture's mocks plus the

@@ -26,6 +26,9 @@ type AgentConfig struct {
 	NetworkName string
 	// LogTailLines is the number of log lines to keep for error context.
 	LogTailLines int
+	// CrashGrace bounds how long the Action waits for a callback status AFTER the
+	// substrate process has exited, before declaring a crash. 0 => default (5s).
+	CrashGrace time.Duration
 }
 
 // AgentRunAction implements model.Action for running coding agents in containers.
@@ -474,12 +477,14 @@ func (a *AgentRunAction) executeViaRuntime(
 
 	// OUTCOME — IDENTICAL to the legacy path. We do NOT read result.ExitCode off the
 	// runtime's Wait as the outcome (that is the rejected P3c fork). In callback mode
-	// the callback channel is the source of truth (waitForCallback); in legacy mode
-	// we streamAndWait on the handle id (= container id for Docker).
+	// the callback channel is the source of truth (awaitCallbackOrCrash); runtime.Wait
+	// is consulted ONLY to detect a substrate process that exits without ever reporting
+	// a callback status (crash detection, ADR §2d) — never as the outcome. In legacy
+	// mode we streamAndWait on the handle id (= container id for Docker).
 	isCallbackMode := a.isCallbackMode(runtimeKind, agentImage)
 	var exitCode int
 	if isCallbackMode {
-		exitCode, err = a.waitForCallback(ctx, runCtx, callback)
+		exitCode, err = a.awaitCallbackOrCrash(ctx, runCtx, handle, callback)
 	} else {
 		exitCode, err = a.streamAndWait(ctx, handle.ID, runCtx)
 	}
@@ -919,35 +924,142 @@ func (a *AgentRunAction) isCallbackMode(runtimeKind, agentImage string) bool {
 // timeout, cancel, panic) via defer, so the token dies with the run instead of
 // lingering until its 2h TTL. (Before Stage 3a the revoke was dead: it looked the
 // token up via a stub that always returned none.)
+//
+// This is the LEGACY callback-wait path (Execute with runtime==nil): there is no
+// substrate handle here, so it cannot watch the process for crash detection. The
+// substrate path uses awaitCallbackOrCrash instead.
 func (a *AgentRunAction) waitForCallback(ctx context.Context, runCtx *model.RunContext, callback *port.CallbackSpec) (int, error) {
 	stepID := runCtx.RunStep.ID
 
 	// Revoke via defer, registered BEFORE WaitForStatus, so it fires on every exit
 	// path — including a WaitForStatus error, timeout, or context cancellation, none
-	// of which would reach a post-wait revoke. Bounded, detached context so it runs
-	// even when ctx is already cancelled.
-	if a.tokenStore != nil && callback != nil && callback.AuthToken != "" {
-		defer func() {
-			revokeCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			if revokeErr := a.tokenStore.Revoke(revokeCtx, callback.AuthToken); revokeErr != nil {
-				a.logger.Warn("failed to revoke container token",
-					"step_id", stepID, "error", revokeErr)
-			}
-		}()
-	}
+	// of which would reach a post-wait revoke.
+	defer a.revokeCallbackToken(stepID, callback)
 
 	exitCode, errMsg, err := a.statusStore.WaitForStatus(ctx, stepID, 2*time.Hour)
+	return a.finishCallbackStatus(stepID, exitCode, errMsg, err)
+}
+
+// revokeCallbackToken revokes the minted token best-effort on a bounded detached
+// context. No-op when there is no token. Shared by every callback-wait path so the
+// token dies with the run regardless of how the wait ends.
+func (a *AgentRunAction) revokeCallbackToken(stepID uuid.UUID, callback *port.CallbackSpec) {
+	if a.tokenStore == nil || callback == nil || callback.AuthToken == "" {
+		return
+	}
+	revokeCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := a.tokenStore.Revoke(revokeCtx, callback.AuthToken); err != nil {
+		a.logger.Warn("failed to revoke container token", "step_id", stepID, "error", err)
+	}
+}
+
+// awaitCallbackOrCrash waits for the agent's callback status (the AUTHORITATIVE
+// outcome) while concurrently watching the substrate process via runtime.Wait for
+// CRASH DETECTION. The callback is the source of truth; runtime.Wait only tells us
+// the exec finished. If the process exits NON-ZERO WITHOUT a callback status
+// arriving within a short grace, the run is declared a crash instead of blocking on
+// the 2h status timeout (ADR §2d). A CLEAN exit (code 0) without a status is treated
+// as an in-flight callback and keeps waiting on the authoritative status (bounded by
+// the 2h WaitForStatus), never a false crash. The reverse — status arrives, Wait
+// never returns — also stays bounded by that 2h timeout.
+//
+// Concurrency: both goroutines send on buffered (cap 1) channels and both their
+// contexts are cancelled by defer, so neither leaks regardless of which path wins
+// (the buffered send never blocks even after this method returns; the deferred
+// runtime.Stop in executeViaRuntime guarantees runtime.Wait unblocks).
+func (a *AgentRunAction) awaitCallbackOrCrash(ctx context.Context, runCtx *model.RunContext, handle port.RunHandle, callback *port.CallbackSpec) (int, error) {
+	stepID := runCtx.RunStep.ID
+	defer a.revokeCallbackToken(stepID, callback)
+
+	type statusResult struct {
+		exitCode int
+		errMsg   string
+		err      error
+	}
+	statusCh := make(chan statusResult, 1)
+	statusCtx, cancelStatus := context.WithCancel(ctx)
+	defer cancelStatus()
+	go func() {
+		ec, em, err := a.statusStore.WaitForStatus(statusCtx, stepID, 2*time.Hour)
+		statusCh <- statusResult{exitCode: ec, errMsg: em, err: err}
+	}()
+
+	waitCh := make(chan port.RunResult, 1)
+	waitCtx, cancelWait := context.WithCancel(context.Background())
+	defer cancelWait()
+	go func() {
+		// This runtime.Wait(waitCtx, handle) may run CONCURRENTLY with the deferred
+		// runtime.Stop(handle) in executeViaRuntime, on the SAME handle. That is safe:
+		// the Docker client tolerates concurrent Wait+Stop on one container, and it is
+		// the expected contract for any substrate adapter (Stop is precisely what
+		// unblocks a pending Wait). So even if this goroutine is still parked in Wait
+		// when the method returns, the deferred Stop releases it and the buffered send
+		// below never blocks — no leak.
+		res, werr := a.runtime.Wait(waitCtx, handle)
+		if werr != nil {
+			a.logger.Debug("runtime wait ended with error (crash detector)", "handle", handle.ID, "error", werr)
+		}
+		waitCh <- res
+	}()
+
+	select {
+	case s := <-statusCh:
+		return a.finishCallbackStatus(stepID, s.exitCode, s.errMsg, s.err)
+	case w := <-waitCh:
+		// The substrate process exited. The AUTHORITATIVE outcome is still the
+		// callback status; runtime.Wait only signals the exec finished.
+		//
+		// ADR §2d: a crash is declared ONLY for a NON-ZERO exit without a status. A
+		// clean exit (0) without a status is treated as a delayed/in-flight callback
+		// — keep waiting on the authoritative status (bounded by the goroutine's own
+		// 2h WaitForStatus), never declaring a false crash on a clean exit.
+		if w.ExitCode == 0 {
+			s := <-statusCh
+			return a.finishCallbackStatus(stepID, s.exitCode, s.errMsg, s.err)
+		}
+		// Non-zero exit: give the (possibly in-flight) callback a brief grace, then
+		// declare a crash. A context deadline (not time.After) bounds the grace and
+		// is cleaned up by defer — no leaked timer.
+		graceCtx, cancelGrace := context.WithTimeout(context.Background(), a.crashGrace())
+		defer cancelGrace()
+		select {
+		case s := <-statusCh:
+			return a.finishCallbackStatus(stepID, s.exitCode, s.errMsg, s.err)
+		case <-graceCtx.Done():
+			// Grace elapsed. Final NON-BLOCKING check: the status may have landed in
+			// the same scheduling tick the deadline fired (select is random when both
+			// are ready). Prefer the authoritative status if it is already buffered.
+			select {
+			case s := <-statusCh:
+				return a.finishCallbackStatus(stepID, s.exitCode, s.errMsg, s.err)
+			default:
+				return -1, fmt.Errorf("agent process exited (code %d) on the substrate without reporting a callback status", w.ExitCode)
+			}
+		}
+	}
+}
+
+// finishCallbackStatus turns a WaitForStatus result into the outcome shared by
+// the legacy and substrate callback-wait paths: propagate any wait error, warn on
+// a non-empty container error message, and return the reported exit code.
+func (a *AgentRunAction) finishCallbackStatus(stepID uuid.UUID, exitCode int, errMsg string, err error) (int, error) {
 	if err != nil {
 		return -1, err
 	}
-
 	if errMsg != "" {
-		a.logger.Warn("agent container reported error",
-			"step_id", stepID, "exit_code", exitCode, "error", errMsg)
+		a.logger.Warn("agent container reported error", "step_id", stepID, "exit_code", exitCode, "error", errMsg)
 	}
-
 	return exitCode, nil
+}
+
+// crashGrace returns the configured grace period the substrate callback-wait gives
+// an in-flight callback after the process exits, or the 5s default when unset.
+func (a *AgentRunAction) crashGrace() time.Duration {
+	if a.config.CrashGrace > 0 {
+		return a.config.CrashGrace
+	}
+	return 5 * time.Second
 }
 
 // resolveProvider resolves the AI provider for the current step from run context metadata.
