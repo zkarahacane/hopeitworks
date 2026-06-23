@@ -135,6 +135,23 @@ v1 démontrable = **INC 1 + INC 2** (« les colonnes du board reflètent enfin l
 
 ---
 
+## INC 5 — Config UI : transition policy + guards (écart INC 3/4a)
+
+**Goal.** Combler le trou de configuration découvert à l'audit front : le moteur enforce `transition` (INC 3) et les `guards` (INC 4a), mais le pipeline editor ne permet ni de **définir** la policy d'un stage, ni de **configurer** une probe. Sans ça, tout stage reste `auto` et aucune probe n'est activable depuis l'UI → features livrées mais dormantes. **Frontend only — backend + schéma OpenAPI (`transition`, `Guard` avec `on_fail`) supportent déjà tout.**
+
+**Fichiers :** `frontend/src/views/PipelineConfigView.vue`, `frontend/src/features/pipeline/PipelineGroupCard.vue` (+ `PipelineStepCard.vue` si guards au niveau step), `frontend/src/stores/pipelineConfig.ts`.
+
+1. **Éditeur de transition policy** : sur chaque stage (PipelineGroupCard), un Select `auto | manual | gate` (défaut `auto`, hint « auto = avance seule, manual = attend Go, gate = HITL »). Store : `updateGroupTransition(groupId, value)` → `isDirty`. Persisté par le `PUT /pipeline` existant.
+2. **Éditeur de guards** : sur le stage (et/ou step), affordance « + Guard » + liste éditable. Par guard : `kind` (log_silence | wallclock | cost_batch), `threshold` (log_silence, secondes) / `max` (wallclock s, cost_batch USD selon kind), `on_fail` (halt-gate | fail | retry, défaut halt-gate). Store : `addGuard/removeGuard/updateGuard`. Types depuis le schéma généré (`Guard`). Persisté par `PUT /pipeline`.
+3. Tests unitaires des nouvelles fonctions store + rendu des contrôles.
+
+**Hors scope :** aucun backend ; pas d'affichage des breaches dans le run detail (volontaire). **Verify :** front build + type-check + lint + vitest verts. **▶ CC :** branche `feat/board-config-ui` depuis develop ; commits locaux, pas de push.
+
+## Dette D1 — retry steps stampent le stage (backend)
+
+**Goal.** `CreateRetryRunStep` laisse `stage_id`/`stage_name` à NULL (flaggé par l'agent INC 1) → un step rejoué perd son stage. Stamper le stage du step parent.
+**Fichiers :** `backend/internal/domain/service/run_service.go` (+ repo/sqlc si besoin) — là où le retry step est créé ; copier `StageID`/`StageName` depuis le `ParentStepID`. **Verify :** go build/vet/test -short + golangci-lint ; test : un step rejoué porte le stage du parent. **▶ CC :** branche `fix/retry-step-stage-stamp` depuis develop ; commits locaux, pas de push.
+
 ## Ordre de lancement recommandé
 
 1. **INC 1** (keystone) → merge develop.
