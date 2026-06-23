@@ -8,6 +8,15 @@ export type PipelineConfig = components['schemas']['PipelineConfig']
 export type PipelineStep = components['schemas']['PipelineStep']
 export type PipelineGroup = components['schemas']['PipelineGroup']
 export type RetryPolicy = components['schemas']['RetryPolicy']
+export type Guard = components['schemas']['Guard']
+export type TransitionPolicy = PipelineGroup['transition']
+export type GuardKind = Guard['kind']
+export type GuardOnFail = Guard['on_fail']
+
+/** A fresh guard with sensible defaults (log_silence heartbeat, halt-gate on breach). */
+export function defaultGuard(): Guard {
+  return { kind: 'log_silence', threshold: 120, on_fail: 'halt-gate' }
+}
 
 /**
  * Pinia store for pipeline configuration state management.
@@ -94,6 +103,100 @@ export const usePipelineConfigStore = defineStore('pipelineConfig', () => {
       groups: config.value.groups.map((g: PipelineGroup) =>
         g.id === groupId ? { ...g, name } : g,
       ),
+    }
+    isDirty.value = true
+  }
+
+  /** Set a group's transition policy (auto | manual | gate) and mark dirty */
+  function updateGroupTransition(groupId: string, transition: TransitionPolicy) {
+    if (!config.value) return
+    config.value = {
+      ...config.value,
+      groups: config.value.groups.map((g: PipelineGroup) =>
+        g.id === groupId ? { ...g, transition } : g,
+      ),
+    }
+    isDirty.value = true
+  }
+
+  /**
+   * Add a guard to a stage (group) or, when stepId is provided, to a step.
+   * Defaults to a log_silence / halt-gate guard. Marks dirty.
+   */
+  function addGuard(groupId: string, stepId?: string) {
+    if (!config.value) return
+    const guard = defaultGuard()
+    config.value = {
+      ...config.value,
+      groups: config.value.groups.map((g: PipelineGroup) => {
+        if (g.id !== groupId) return g
+        if (stepId === undefined) {
+          return { ...g, guards: [...(g.guards ?? []), guard] }
+        }
+        return {
+          ...g,
+          steps: g.steps.map((s: PipelineStep) =>
+            s.id === stepId ? { ...s, guards: [...(s.guards ?? []), guard] } : s,
+          ),
+        }
+      }),
+    }
+    isDirty.value = true
+  }
+
+  /**
+   * Remove the guard at `guardIndex` from a stage (group) or, when stepId is
+   * provided, from a step. Marks dirty.
+   */
+  function removeGuard(groupId: string, guardIndex: number, stepId?: string) {
+    if (!config.value) return
+    const dropAt = (guards: Guard[] = []) =>
+      guards.filter((_: Guard, i: number) => i !== guardIndex)
+    config.value = {
+      ...config.value,
+      groups: config.value.groups.map((g: PipelineGroup) => {
+        if (g.id !== groupId) return g
+        if (stepId === undefined) {
+          return { ...g, guards: dropAt(g.guards) }
+        }
+        return {
+          ...g,
+          steps: g.steps.map((s: PipelineStep) =>
+            s.id === stepId ? { ...s, guards: dropAt(s.guards) } : s,
+          ),
+        }
+      }),
+    }
+    isDirty.value = true
+  }
+
+  /**
+   * Replace the guard at `guardIndex` on a stage (group) or, when stepId is
+   * provided, on a step. Marks dirty.
+   */
+  function updateGuard(
+    groupId: string,
+    guardIndex: number,
+    guard: Guard,
+    stepId?: string,
+  ) {
+    if (!config.value) return
+    const replaceAt = (guards: Guard[] = []) =>
+      guards.map((g: Guard, i: number) => (i === guardIndex ? guard : g))
+    config.value = {
+      ...config.value,
+      groups: config.value.groups.map((g: PipelineGroup) => {
+        if (g.id !== groupId) return g
+        if (stepId === undefined) {
+          return { ...g, guards: replaceAt(g.guards) }
+        }
+        return {
+          ...g,
+          steps: g.steps.map((s: PipelineStep) =>
+            s.id === stepId ? { ...s, guards: replaceAt(s.guards) } : s,
+          ),
+        }
+      }),
     }
     isDirty.value = true
   }
@@ -286,6 +389,10 @@ export const usePipelineConfigStore = defineStore('pipelineConfig', () => {
     addGroup,
     removeGroup,
     renameGroup,
+    updateGroupTransition,
+    addGuard,
+    removeGuard,
+    updateGuard,
     addStepToGroup,
     removeStepFromGroup,
     updateStepInGroup,
