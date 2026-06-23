@@ -18,8 +18,8 @@ func NewEnvironmentHandler(svc *service.EnvService) *EnvironmentHandler {
 }
 
 // GetProjectEnvironment handles GET /projects/{projectId}/environment.
-func (h *EnvironmentHandler) GetProjectEnvironment(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath) {
-	env, err := h.service.GetByProject(r.Context(), projectId)
+func (h *EnvironmentHandler) GetProjectEnvironment(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath) {
+	env, err := h.service.GetByProject(r.Context(), projectID)
 	if err != nil {
 		writeErrorResponse(w, err)
 		return
@@ -28,7 +28,7 @@ func (h *EnvironmentHandler) GetProjectEnvironment(w http.ResponseWriter, r *htt
 }
 
 // PutProjectEnvironment handles PUT /projects/{projectId}/environment (upsert).
-func (h *EnvironmentHandler) PutProjectEnvironment(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath) {
+func (h *EnvironmentHandler) PutProjectEnvironment(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath) {
 	var req EnvironmentInput
 	if !decodeJSONBody(w, r, &req) {
 		return
@@ -41,7 +41,7 @@ func (h *EnvironmentHandler) PutProjectEnvironment(w http.ResponseWriter, r *htt
 		Commands: req.Commands,
 	}
 
-	env, err := h.service.Upsert(r.Context(), projectId, input)
+	env, err := h.service.Upsert(r.Context(), projectID, input)
 	if err != nil {
 		writeErrorResponse(w, err)
 		return
@@ -50,8 +50,8 @@ func (h *EnvironmentHandler) PutProjectEnvironment(w http.ResponseWriter, r *htt
 }
 
 // DeleteProjectEnvironment handles DELETE /projects/{projectId}/environment.
-func (h *EnvironmentHandler) DeleteProjectEnvironment(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath) {
-	if err := h.service.Delete(r.Context(), projectId); err != nil {
+func (h *EnvironmentHandler) DeleteProjectEnvironment(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath) {
+	if err := h.service.Delete(r.Context(), projectID); err != nil {
 		writeErrorResponse(w, err)
 		return
 	}

@@ -439,16 +439,16 @@ func (s *Server) DeletePromptTemplate(w http.ResponseWriter, r *http.Request, pr
 }
 
 // GetProjectEnvironment delegates to EnvironmentHandler.
-func (s *Server) GetProjectEnvironment(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath) {
-	s.environment.GetProjectEnvironment(w, r, projectId)
+func (s *Server) GetProjectEnvironment(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath) {
+	s.environment.GetProjectEnvironment(w, r, projectID)
 }
 
 // PutProjectEnvironment delegates to EnvironmentHandler.
-func (s *Server) PutProjectEnvironment(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath) {
-	s.environment.PutProjectEnvironment(w, r, projectId)
+func (s *Server) PutProjectEnvironment(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath) {
+	s.environment.PutProjectEnvironment(w, r, projectID)
 }
 
 // DeleteProjectEnvironment delegates to EnvironmentHandler.
-func (s *Server) DeleteProjectEnvironment(w http.ResponseWriter, r *http.Request, projectId ProjectIdPath) {
-	s.environment.DeleteProjectEnvironment(w, r, projectId)
+func (s *Server) DeleteProjectEnvironment(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath) {
+	s.environment.DeleteProjectEnvironment(w, r, projectID)
 }
