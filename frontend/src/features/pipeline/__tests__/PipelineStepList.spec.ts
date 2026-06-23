@@ -1,7 +1,25 @@
-import { describe, it, expect, afterEach } from 'vitest'
+import { describe, it, expect, afterEach, beforeAll, vi } from 'vitest'
 import { mount, type VueWrapper } from '@vue/test-utils'
 import PrimeVue from 'primevue/config'
 import ConfirmationService from 'primevue/confirmationservice'
+
+beforeAll(() => {
+  // PrimeVue Select (transition policy) uses matchMedia which jsdom lacks
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  })
+})
+
 import PipelineStepList from '../PipelineStepList.vue'
 import type { PipelineGroup, PipelineStep } from '@/stores/pipelineConfig'
 import type { Agent } from '@/stores/agents'

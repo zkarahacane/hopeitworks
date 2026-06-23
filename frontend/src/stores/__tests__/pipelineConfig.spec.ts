@@ -318,7 +318,152 @@ describe('usePipelineConfigStore', () => {
     })
   })
 
+  describe('transition policy', () => {
+    beforeEach(async () => {
+      mockGet.mockResolvedValue({ data: mockConfig, error: undefined })
+    })
+
+    it('updateGroupTransition sets transition and marks dirty', async () => {
+      const store = usePipelineConfigStore()
+      await store.fetchConfig('proj-1')
+
+      store.updateGroupTransition('dev', 'manual')
+
+      expect(store.groups[0]!.transition).toBe('manual')
+      expect(store.isDirty).toBe(true)
+    })
+
+    it('updateGroupTransition only affects the target group', async () => {
+      const store = usePipelineConfigStore()
+      await store.fetchConfig('proj-1')
+      store.addGroup('Review')
+      const reviewId = store.groups[1]!.id
+
+      store.updateGroupTransition(reviewId, 'gate')
+
+      expect(store.groups[0]!.transition).not.toBe('gate')
+      expect(store.groups[1]!.transition).toBe('gate')
+    })
+
+    it('updateGroupTransition does nothing when config is null', () => {
+      const store = usePipelineConfigStore()
+      store.updateGroupTransition('dev', 'gate')
+      expect(store.config).toBeNull()
+      expect(store.isDirty).toBe(false)
+    })
+  })
+
+  describe('guards', () => {
+    beforeEach(async () => {
+      mockGet.mockResolvedValue({ data: mockConfig, error: undefined })
+    })
+
+    it('addGuard appends a default guard to a stage and marks dirty', async () => {
+      const store = usePipelineConfigStore()
+      await store.fetchConfig('proj-1')
+
+      store.addGuard('dev')
+
+      expect(store.groups[0]!.guards).toHaveLength(1)
+      expect(store.groups[0]!.guards![0]).toEqual({
+        kind: 'log_silence',
+        threshold: 120,
+        on_fail: 'halt-gate',
+      })
+      expect(store.isDirty).toBe(true)
+    })
+
+    it('addGuard appends to existing stage guards', async () => {
+      const store = usePipelineConfigStore()
+      await store.fetchConfig('proj-1')
+
+      store.addGuard('dev')
+      store.addGuard('dev')
+
+      expect(store.groups[0]!.guards).toHaveLength(2)
+    })
+
+    it('updateGuard replaces the guard at index and marks dirty', async () => {
+      const store = usePipelineConfigStore()
+      await store.fetchConfig('proj-1')
+      store.addGuard('dev')
+
+      store.updateGuard('dev', 0, { kind: 'wallclock', max: 1800, on_fail: 'fail' })
+
+      expect(store.groups[0]!.guards![0]).toEqual({
+        kind: 'wallclock',
+        max: 1800,
+        on_fail: 'fail',
+      })
+      expect(store.isDirty).toBe(true)
+    })
+
+    it('removeGuard removes the guard at index and marks dirty', async () => {
+      const store = usePipelineConfigStore()
+      await store.fetchConfig('proj-1')
+      store.addGuard('dev')
+      store.updateGuard('dev', 0, { kind: 'cost_batch', max: 5, on_fail: 'halt-gate' })
+      store.addGuard('dev')
+
+      store.removeGuard('dev', 0)
+
+      expect(store.groups[0]!.guards).toHaveLength(1)
+      // the surviving guard is the second (default) one
+      expect(store.groups[0]!.guards![0]!.kind).toBe('log_silence')
+      expect(store.isDirty).toBe(true)
+    })
+
+    it('addGuard targets a step when stepId is provided', async () => {
+      const store = usePipelineConfigStore()
+      await store.fetchConfig('proj-1')
+
+      store.addGuard('dev', 's1')
+
+      expect(store.groups[0]!.steps[0]!.guards).toHaveLength(1)
+      // group-level guards untouched
+      expect(store.groups[0]!.guards ?? []).toHaveLength(0)
+    })
+
+    it('updateGuard and removeGuard target a step when stepId is provided', async () => {
+      const store = usePipelineConfigStore()
+      await store.fetchConfig('proj-1')
+      store.addGuard('dev', 's1')
+
+      store.updateGuard('dev', 0, { kind: 'wallclock', max: 600, on_fail: 'retry' }, 's1')
+      expect(store.groups[0]!.steps[0]!.guards![0]!.kind).toBe('wallclock')
+
+      store.removeGuard('dev', 0, 's1')
+      expect(store.groups[0]!.steps[0]!.guards).toHaveLength(0)
+    })
+
+    it('guard mutations do nothing when config is null', () => {
+      const store = usePipelineConfigStore()
+      store.addGuard('dev')
+      store.updateGuard('dev', 0, { kind: 'wallclock', max: 1, on_fail: 'fail' })
+      store.removeGuard('dev', 0)
+      expect(store.config).toBeNull()
+      expect(store.isDirty).toBe(false)
+    })
+  })
+
   describe('saveConfig', () => {
+    it('persists transition and guards via the PUT body', async () => {
+      mockGet.mockResolvedValue({ data: mockConfig, error: undefined })
+
+      const store = usePipelineConfigStore()
+      await store.fetchConfig('proj-1')
+      store.updateGroupTransition('dev', 'gate')
+      store.addGuard('dev')
+
+      mockPut.mockResolvedValue({ data: { ...mockConfig, groups: store.groups }, error: undefined })
+
+      await store.saveConfig('proj-1')
+
+      const sentGroups = mockPut.mock.calls[0]![1].body.groups
+      expect(sentGroups[0].transition).toBe('gate')
+      expect(sentGroups[0].guards).toHaveLength(1)
+    })
+
     it('saves config successfully and resets isDirty', async () => {
       mockGet.mockResolvedValue({ data: mockConfig, error: undefined })
 
