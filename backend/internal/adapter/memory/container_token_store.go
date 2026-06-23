@@ -28,14 +28,17 @@ func NewContainerTokenStore(ctx context.Context) *ContainerTokenStore {
 }
 
 // Create generates and stores a new token for a run step bound to an agent.
+// role is the step's pipeline role (e.g. "dev", "review") used for RBAC capability filtering;
+// an empty role means the step is not role-scoped (only universal capabilities are granted).
 // Returns the token string.
-func (s *ContainerTokenStore) Create(_ context.Context, runID, stepID, agentID uuid.UUID, ttl time.Duration) (string, error) {
+func (s *ContainerTokenStore) Create(_ context.Context, runID, stepID, agentID uuid.UUID, role string, ttl time.Duration) (string, error) {
 	token := uuid.New().String()
 	ct := &model.ContainerToken{
 		Token:     token,
 		RunID:     runID,
 		StepID:    stepID,
 		AgentID:   agentID,
+		Role:      role,
 		ExpiresAt: time.Now().Add(ttl),
 	}
 	s.tokens.Store(token, ct)

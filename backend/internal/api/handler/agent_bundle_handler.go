@@ -43,12 +43,33 @@ func (h *AgentBundleHandler) HandleBundle(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	bundle, err := h.bundleSvc.ComposeBundle(r.Context(), ct.AgentID)
+	bundle, err := h.bundleSvc.ComposeBundle(r.Context(), ct.AgentID, ct.Role)
 	if err != nil {
 		h.logger.Warn("bundle composition failed, returning empty bundle",
-			"agent_id", ct.AgentID, "step_id", ct.StepID, "error", err)
+			"agent_id", ct.AgentID, "step_id", ct.StepID, "role", ct.Role, "error", err)
 		bundle = model.RuntimeBundle{}
 	}
+
+	// Audit log: who/what/when at provision level. No secrets (names + counts only).
+	grantedServers := make([]string, 0, len(bundle.MCP.MCPServers))
+	for name := range bundle.MCP.MCPServers {
+		grantedServers = append(grantedServers, name)
+	}
+	toolsAllow, toolsDeny := 0, 0
+	if bundle.ToolPolicy != nil {
+		toolsAllow = len(bundle.ToolPolicy.Allow)
+		toolsDeny = len(bundle.ToolPolicy.Deny)
+	}
+	h.logger.Info("capability bundle composed",
+		"run_id", ct.RunID,
+		"step_id", ct.StepID,
+		"agent_id", ct.AgentID,
+		"role", ct.Role,
+		"mcp_servers", grantedServers,
+		"tools_allow", toolsAllow,
+		"tools_deny", toolsDeny,
+		"skills", len(bundle.Skills),
+	)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)

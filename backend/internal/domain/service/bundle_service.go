@@ -41,12 +41,16 @@ func NewBundleService(
 	}
 }
 
-// ComposeBundle builds the RuntimeBundle for an agent. A nil agent id (uuid.Nil) or an
-// agent with no capabilities yields the zero-value bundle — the runtime then materialises
-// nothing and behaves exactly as before this layer existed. The returned error is reserved
-// for hard failures the caller may choose to degrade on; capability-level problems are
-// warn+skip and never surface here.
-func (s *BundleService) ComposeBundle(ctx context.Context, agentID uuid.UUID) (model.RuntimeBundle, error) {
+// ComposeBundle builds the RuntimeBundle for an agent, filtered by role.
+// A nil agent id (uuid.Nil) or an agent with no capabilities yields the zero-value
+// bundle — the runtime then materialises nothing and behaves exactly as before.
+// The returned error is reserved for hard failures the caller may choose to degrade
+// on; capability-level problems are warn+skip and never surface here.
+//
+// Fail-safe: a role of "" (empty/unknown) only receives universal capabilities
+// (Roles == nil/empty). Role-scoped capabilities (Roles non-empty) are never granted
+// to an unidentified role, ensuring the narrowest possible permission surface.
+func (s *BundleService) ComposeBundle(ctx context.Context, agentID uuid.UUID, role string) (model.RuntimeBundle, error) {
 	var bundle model.RuntimeBundle
 	if agentID == uuid.Nil {
 		return bundle, nil
@@ -71,9 +75,9 @@ func (s *BundleService) ComposeBundle(ctx context.Context, agentID uuid.UUID) (m
 		case model.CapabilityKindSkill:
 			s.addSkill(c, &bundle)
 		case model.CapabilityKindMCPServer:
-			s.addMCPServer(ctx, c, projectID, &bundle)
+			s.addMCPServer(ctx, c, projectID, role, &bundle)
 		case model.CapabilityKindToolPolicy:
-			s.addToolPolicy(c, &bundle)
+			s.addToolPolicy(c, role, &bundle)
 		default:
 			s.logger.Warn("bundle: unknown capability kind, skipping",
 				"capability_id", c.ID, "kind", c.Kind)
@@ -101,13 +105,21 @@ func (s *BundleService) addSkill(c *model.Capability, bundle *model.RuntimeBundl
 	bundle.Skills = append(bundle.Skills, skill)
 }
 
-func (s *BundleService) addMCPServer(ctx context.Context, c *model.Capability, projectID *uuid.UUID, bundle *model.RuntimeBundle) {
+func (s *BundleService) addMCPServer(ctx context.Context, c *model.Capability, projectID *uuid.UUID, role string, bundle *model.RuntimeBundle) {
 	var spec model.MCPServerSpec
 	if err := json.Unmarshal(c.Spec, &spec); err != nil {
 		s.logger.Warn("bundle: malformed mcp_server spec, skipping",
 			"capability_id", c.ID, "name", c.Name, "error", err)
 		return
 	}
+
+	// Fail-safe: an empty/unknown role does not match role-scoped capabilities.
+	if !model.RoleMatches(spec.Roles, role) {
+		s.logger.Debug("bundle: mcp_server filtered by role",
+			"capability_id", c.ID, "name", c.Name, "spec_roles", spec.Roles, "role", role)
+		return
+	}
+
 	name := spec.Name
 	if name == "" {
 		name = c.Name
@@ -140,13 +152,21 @@ func (s *BundleService) addMCPServer(ctx context.Context, c *model.Capability, p
 	bundle.MCP.MCPServers[name] = entry
 }
 
-func (s *BundleService) addToolPolicy(c *model.Capability, bundle *model.RuntimeBundle) {
+func (s *BundleService) addToolPolicy(c *model.Capability, role string, bundle *model.RuntimeBundle) {
 	var policy model.ToolPolicySpec
 	if err := json.Unmarshal(c.Spec, &policy); err != nil {
 		s.logger.Warn("bundle: malformed tool_policy spec, skipping",
 			"capability_id", c.ID, "name", c.Name, "error", err)
 		return
 	}
+
+	// Fail-safe: an empty/unknown role does not match role-scoped policies.
+	if !model.RoleMatches(policy.Roles, role) {
+		s.logger.Debug("bundle: tool_policy filtered by role",
+			"capability_id", c.ID, "name", c.Name, "spec_roles", policy.Roles, "role", role)
+		return
+	}
+
 	if bundle.ToolPolicy == nil {
 		bundle.ToolPolicy = &model.ToolPolicySpec{}
 	}

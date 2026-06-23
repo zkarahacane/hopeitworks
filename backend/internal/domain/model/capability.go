@@ -28,6 +28,31 @@ const (
 	CapabilityScopeProject = "project"
 )
 
+// Known pipeline roles. Using constants avoids repeated string literals (goconst).
+// Roles are set in the pipeline YAML config map (e.g. role: "dev") and flow through
+// ContainerToken.Role into ComposeBundle for RBAC filtering.
+const (
+	RoleDev       = "dev"
+	RoleImplement = "implement"
+	RoleReview    = "review"
+	RoleMerge     = "merge"
+)
+
+// RoleMatches reports whether the given role is allowed by specRoles.
+// If specRoles is empty, the capability is universal (all roles).
+// If specRoles is non-empty, only listed roles match — an empty/unknown role does NOT match.
+func RoleMatches(specRoles []string, role string) bool {
+	if len(specRoles) == 0 {
+		return true
+	}
+	for _, r := range specRoles {
+		if r == role {
+			return true
+		}
+	}
+	return false
+}
+
 // Capability is a versioned, runtime-agnostic capability (skill, MCP server or
 // tool policy) that can be composed onto an agent.
 type Capability struct {
@@ -67,6 +92,9 @@ type SkillSpec struct {
 // headers (the default); "stdio" references an in-image binary for the
 // ultra-sensitive case. CredentialRef points at a secret resolved at runtime —
 // secrets are never baked nor stored in the spec in clear.
+//
+// Roles, when non-empty, restricts this server to the listed pipeline roles.
+// An empty Roles slice means the server is universal and granted to all roles.
 type MCPServerSpec struct {
 	Name          string            `json:"name"`
 	Transport     string            `json:"transport"` // "http" | "stdio"
@@ -74,12 +102,16 @@ type MCPServerSpec struct {
 	Headers       map[string]string `json:"headers,omitempty"`
 	Command       string            `json:"command,omitempty"`
 	CredentialRef string            `json:"credential_ref,omitempty"`
+	Roles         []string          `json:"roles,omitempty"`
 }
 
 // ToolPolicySpec is an allow/deny list of tools, applied per role.
+// Roles, when non-empty, restricts this policy to the listed pipeline roles.
+// An empty Roles slice means the policy is universal and applied to all roles.
 type ToolPolicySpec struct {
 	Allow []string `json:"allow"`
 	Deny  []string `json:"deny"`
+	Roles []string `json:"roles,omitempty"`
 }
 
 // CapabilitySet declares which capability kinds an adapter can translate. The
