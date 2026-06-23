@@ -3,6 +3,8 @@ package action
 import (
 	"context"
 	stderrors "errors"
+	"net/url"
+	"strconv"
 
 	"github.com/google/uuid"
 
@@ -57,62 +59,88 @@ func buildConnStrings(env *model.Environment) []string {
 
 // connStringsForService returns the connection-string env entries for a single
 // service, or nil when its type is unknown.
+//
+// URLs are assembled with net/url, never by raw concatenation: svc.Env is
+// user-controlled, so a password containing reserved characters (@ : / # ?) is
+// percent-encoded via url.UserPassword and cannot break the URL or inject extra
+// components. Ports come from model.ServicePort(svcType) — the single source of
+// truth shared with the Docker readiness probe — not from literals.
 func connStringsForService(svc model.EnvironmentService) []string {
 	host := svc.Name // DNS alias on the per-run network.
-	switch model.DetectServiceType(svc.Image) {
+	svcType := model.DetectServiceType(svc.Image)
+	port := model.ServicePort(svcType)
+	hostport := host + ":" + strconv.Itoa(port)
+
+	switch svcType {
 	case model.ServiceTypePostgres:
 		user := envOr(svc.Env, "POSTGRES_USER", "postgres")
 		pass := envOr(svc.Env, "POSTGRES_PASSWORD", "postgres")
 		db := envOr(svc.Env, "POSTGRES_DB", user)
-		return []string{
-			"DATABASE_URL=postgres://" + user + ":" + pass + "@" + host + ":5432/" + db,
+		u := url.URL{
+			Scheme: "postgres",
+			User:   url.UserPassword(user, pass),
+			Host:   hostport,
+			Path:   "/" + db,
 		}
+		return []string{"DATABASE_URL=" + u.String()}
 	case model.ServiceTypeMySQL, model.ServiceTypeMariaDB:
 		user := envOr(svc.Env, "MYSQL_USER", "root")
 		pass := envOr(svc.Env, "MYSQL_PASSWORD", envOr(svc.Env, "MYSQL_ROOT_PASSWORD", ""))
 		db := envOr(svc.Env, "MYSQL_DATABASE", "")
-		creds := user
-		if pass != "" {
-			creds = user + ":" + pass
+		u := url.URL{
+			Scheme: "mysql",
+			User:   userInfo(user, pass),
+			Host:   hostport,
+			Path:   "/" + db,
 		}
-		return []string{
-			"DATABASE_URL=mysql://" + creds + "@" + host + ":3306/" + db,
-		}
+		return []string{"DATABASE_URL=" + u.String()}
 	case model.ServiceTypeRedis:
 		pass := envOr(svc.Env, "REDIS_PASSWORD", "")
-		auth := ""
+		u := url.URL{
+			Scheme: "redis",
+			Host:   hostport,
+			Path:   "/0",
+		}
+		// Redis AUTH with no username: userinfo is ":<password>".
 		if pass != "" {
-			auth = ":" + pass + "@"
+			u.User = url.UserPassword("", pass)
 		}
-		return []string{
-			"REDIS_URL=redis://" + auth + host + ":6379/0",
-		}
+		return []string{"REDIS_URL=" + u.String()}
 	case model.ServiceTypeMongo:
 		user := envOr(svc.Env, "MONGO_INITDB_ROOT_USERNAME", "")
 		pass := envOr(svc.Env, "MONGO_INITDB_ROOT_PASSWORD", "")
-		creds := ""
-		if user != "" {
-			creds = user
-			if pass != "" {
-				creds = user + ":" + pass
-			}
-			creds += "@"
+		u := url.URL{
+			Scheme: "mongodb",
+			User:   userInfo(user, pass),
+			Host:   hostport,
 		}
-		return []string{
-			"MONGODB_URL=mongodb://" + creds + host + ":27017",
-		}
+		return []string{"MONGODB_URL=" + u.String()}
 	case model.ServiceTypeElasticsearch:
-		return []string{
-			"ELASTICSEARCH_URL=http://" + host + ":9200",
-		}
+		u := url.URL{Scheme: "http", Host: hostport}
+		return []string{"ELASTICSEARCH_URL=" + u.String()}
 	case model.ServiceTypeMailHog:
 		return []string{
 			"SMTP_HOST=" + host,
-			"SMTP_PORT=1025",
+			"SMTP_PORT=" + strconv.Itoa(port),
 		}
 	default:
 		// Unknown type: no auto connection string (still DNS-reachable).
 		return nil
+	}
+}
+
+// userInfo builds the URL userinfo for a service that authenticates with an
+// optional user + optional password. Returns nil (no userinfo) when no user is
+// set, user-only when there is no password, and user:password otherwise. The
+// password is always percent-encoded by url.UserPassword.
+func userInfo(user, pass string) *url.Userinfo {
+	switch {
+	case user == "":
+		return nil
+	case pass == "":
+		return url.User(user)
+	default:
+		return url.UserPassword(user, pass)
 	}
 }
 

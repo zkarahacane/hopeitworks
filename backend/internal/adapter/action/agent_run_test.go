@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/url"
 	"sort"
 	"strings"
 	"sync"
@@ -1268,6 +1269,90 @@ func TestAgentRunAction_WithEnvironment_SidecarWiring(t *testing.T) {
 	}
 	if len(opts.ExtraNetworks) != 1 || opts.ExtraNetworks[0] != runNetwork {
 		t.Errorf("expected ExtraNetworks=[%s], got %v", runNetwork, opts.ExtraNetworks)
+	}
+}
+
+// TestAgentRunAction_ConnString_EscapesCredentials proves the connection-string
+// builder percent-encodes user-controlled credentials. A POSTGRES_PASSWORD made
+// of URL-reserved characters (@ : / # ?) must yield a DATABASE_URL that parses
+// cleanly with url.Parse and whose userinfo round-trips back to the exact
+// password — no broken URL, no injected components.
+func TestAgentRunAction_ConnString_EscapesCredentials(t *testing.T) {
+	f := newAgentRunFixture(t)
+
+	const rawPass = "p@s:w/rd#?x"
+	env := &model.Environment{
+		ProjectID: f.projectID,
+		Services: []model.EnvironmentService{
+			{
+				Name:  "db",
+				Image: "postgres:16",
+				Env: map[string]string{
+					"POSTGRES_USER":     "app",
+					"POSTGRES_PASSWORD": rawPass,
+					"POSTGRES_DB":       "appdb",
+				},
+			},
+		},
+	}
+	f.environmentRepo.getByProjectIDFn = func(_ context.Context, _ uuid.UUID) (*model.Environment, error) {
+		return env, nil
+	}
+	f.sidecarMgr.launchFn = func(_ context.Context, runID uuid.UUID, _ *model.Environment) (*port.SidecarContext, error) {
+		return &port.SidecarContext{
+			RunID:        runID,
+			NetworkName:  "hopeitworks-run-" + runID.String(),
+			ContainerIDs: map[string]string{"db": "sidecar-db"},
+			ServiceAddrs: map[string]string{"db": "db"},
+		}, nil
+	}
+
+	if err := f.action.Execute(context.Background(), f.newRunContext()); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	f.containerMgr.mu.Lock()
+	createCalls := f.containerMgr.createCalls
+	f.containerMgr.mu.Unlock()
+	if len(createCalls) != 1 {
+		t.Fatalf("expected 1 create call, got %d", len(createCalls))
+	}
+
+	raw := envValue(createCalls[0].Env, "DATABASE_URL")
+	if raw == "" {
+		t.Fatal("expected DATABASE_URL to be set")
+	}
+	// The raw env value must NOT contain the unescaped password verbatim — the
+	// reserved characters must be percent-encoded.
+	if strings.Contains(raw, rawPass) {
+		t.Errorf("expected password to be percent-encoded, but raw URL contains it verbatim: %q", raw)
+	}
+
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		t.Fatalf("DATABASE_URL must be parsable, got error: %v (url=%q)", err, raw)
+	}
+	if parsed.Scheme != "postgres" {
+		t.Errorf("expected scheme postgres, got %q", parsed.Scheme)
+	}
+	if parsed.Host != "db:5432" {
+		t.Errorf("expected host db:5432, got %q", parsed.Host)
+	}
+	if parsed.Path != "/appdb" {
+		t.Errorf("expected path /appdb, got %q", parsed.Path)
+	}
+	if parsed.User == nil {
+		t.Fatal("expected userinfo in DATABASE_URL")
+	}
+	if parsed.User.Username() != "app" {
+		t.Errorf("expected username app, got %q", parsed.User.Username())
+	}
+	gotPass, ok := parsed.User.Password()
+	if !ok {
+		t.Fatal("expected a password in userinfo")
+	}
+	if gotPass != rawPass {
+		t.Errorf("password did not round-trip: got %q, want %q", gotPass, rawPass)
 	}
 }
 
