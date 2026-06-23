@@ -59,12 +59,6 @@ var serviceHealthTests = map[string][]string{
 	model.ServiceTypeMongo:    {"CMD-SHELL", "mongosh --eval 'db.runCommand({ping:1})' || mongo --eval 'db.runCommand({ping:1})'"},
 }
 
-// servicePort returns the default listen port for a detected service type, or 0
-// when unknown. Thin wrapper over the domain's single source of truth.
-func servicePort(svcType string) int {
-	return model.ServicePort(svcType)
-}
-
 // detectServiceType maps an image reference to a known service type, or "" when
 // unknown. Thin wrapper over the domain's single source of truth so detection is
 // not duplicated across adapters.

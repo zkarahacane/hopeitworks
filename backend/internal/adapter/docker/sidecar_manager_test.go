@@ -508,6 +508,8 @@ func TestSidecarListOrphanNetworks(t *testing.T) {
 }
 
 func TestServicePort(t *testing.T) {
+	// Ports are owned by the domain (single source of truth); the docker package
+	// no longer wraps them. Assert against model.ServicePort directly.
 	cases := map[string]int{
 		"postgres": 5432,
 		"redis":    6379,
@@ -515,8 +517,8 @@ func TestServicePort(t *testing.T) {
 		"":         0, // unknown
 	}
 	for svcType, want := range cases {
-		if got := servicePort(svcType); got != want {
-			t.Errorf("servicePort(%q) = %d, want %d", svcType, got, want)
+		if got := model.ServicePort(svcType); got != want {
+			t.Errorf("model.ServicePort(%q) = %d, want %d", svcType, got, want)
 		}
 	}
 }
