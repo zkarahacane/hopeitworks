@@ -35,6 +35,10 @@ const (
 	// defaultRunningGrace is the short settle delay used as a fallback for
 	// services that declare no sensible healthcheck.
 	defaultRunningGrace = 1 * time.Second
+	// defaultTeardownTimeout bounds rollback/Stop/Cleanup. Teardown runs on a
+	// context detached from the caller's (which may already be cancelled), so it
+	// needs its own deadline to avoid hanging forever against the real daemon.
+	defaultTeardownTimeout = 30 * time.Second
 )
 
 // serviceProfile holds the per-type knowledge needed to probe and (later, in
@@ -51,6 +55,12 @@ type serviceProfile struct {
 
 // serviceProfiles maps a detected service type to its probe/port profile. It is
 // intentionally small and additive; unknown types fall back to a running check.
+//
+// TODO(P2c2c): probe creds (redis AUTH / mariadb-admin). These probes assume no
+// auth: a redis configured with requirepass returns NOAUTH (false unhealthy),
+// and mysqladmin is deprecated on recent MariaDB (use mariadb-admin). The real
+// fix injects the service credentials into the probe, which is part of the
+// connection-string work in P2c2c.
 var serviceProfiles = map[string]serviceProfile{
 	"postgres": {healthTest: []string{"CMD-SHELL", "pg_isready -U postgres || pg_isready"}, port: 5432},
 	"redis":    {healthTest: []string{"CMD", "redis-cli", "ping"}, port: 6379},
@@ -93,6 +103,7 @@ type DockerSidecarManager struct {
 	readinessTimeout  time.Duration
 	readinessInterval time.Duration
 	runningGrace      time.Duration
+	teardownTimeout   time.Duration
 
 	// now is injectable so GC windowing is deterministic in tests.
 	now func() time.Time
@@ -108,8 +119,16 @@ func NewDockerSidecarManager(containers port.ContainerManager, logger *slog.Logg
 		readinessTimeout:  defaultReadinessTimeout,
 		readinessInterval: defaultReadinessInterval,
 		runningGrace:      defaultRunningGrace,
+		teardownTimeout:   defaultTeardownTimeout,
 		now:               time.Now,
 	}
+}
+
+// teardownContext derives a context for teardown that is immune to the caller's
+// cancellation (Launch's ctx may already be cancelled when rollback runs) but
+// still bounded by its own timeout so it cannot hang forever.
+func (s *DockerSidecarManager) teardownContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(ctx), s.teardownTimeout)
 }
 
 // networkName returns the per-run network name for a run id (full UUID).
@@ -164,11 +183,15 @@ func (s *DockerSidecarManager) Launch(ctx context.Context, runID uuid.UUID, env 
 func (s *DockerSidecarManager) launchService(ctx context.Context, sc *port.SidecarContext, runID uuid.UUID, svc model.EnvironmentService) error {
 	svcType := detectServiceType(svc.Image)
 
+	// Attach the sidecar to the run network DIRECTLY at creation (NetworkName,
+	// not ExtraNetworks) so it never lands on the default bridge first — that
+	// would break per-run isolation. The alias makes it reachable by svc.Name on
+	// the run network (Create applies Aliases on the primary endpoint too).
 	opts := model.ContainerOpts{
-		Image:         svc.Image,
-		Env:           envMapToSlice(svc.Env),
-		ExtraNetworks: []string{sc.NetworkName},
-		Aliases:       map[string]string{sc.NetworkName: svc.Name},
+		Image:       svc.Image,
+		Env:         envMapToSlice(svc.Env),
+		NetworkName: sc.NetworkName,
+		Aliases:     map[string]string{sc.NetworkName: svc.Name},
 		Labels: map[string]string{
 			labelManagedBy: managedByLabel,
 			labelRunID:     runID.String(),
@@ -188,7 +211,7 @@ func (s *DockerSidecarManager) launchService(ctx context.Context, sc *port.Sidec
 		return fmt.Errorf("starting sidecar %s: %w", svc.Name, err)
 	}
 
-	if err := s.waitReady(ctx, id, svcType); err != nil {
+	if err := s.waitReady(ctx, id); err != nil {
 		return fmt.Errorf("sidecar %s not ready: %w", svc.Name, err)
 	}
 
@@ -198,11 +221,12 @@ func (s *DockerSidecarManager) launchService(ctx context.Context, sc *port.Sidec
 }
 
 // waitReady blocks until the sidecar is ready or the readiness timeout elapses.
-// Services with a real healthcheck are polled via InspectHealth until "healthy";
-// services without one fall back to a running check plus a short grace delay.
-func (s *DockerSidecarManager) waitReady(ctx context.Context, containerID, svcType string) error {
-	hasHealthcheck := svcType != "" && len(serviceProfiles[svcType].healthTest) > 0
-
+// Readiness is deduced from the status actually returned by InspectHealth, not
+// only from whether we configured a profile healthcheck: a custom image may bake
+// its own HEALTHCHECK, so "healthy" must count as ready even for unknown types,
+// and "unhealthy" must count as failure. Containers with no healthcheck at all
+// fall back to a running check plus a short grace delay.
+func (s *DockerSidecarManager) waitReady(ctx context.Context, containerID string) error {
 	deadline := s.now().Add(s.readinessTimeout)
 	for {
 		status, err := s.containers.InspectHealth(ctx, containerID)
@@ -210,25 +234,25 @@ func (s *DockerSidecarManager) waitReady(ctx context.Context, containerID, svcTy
 			return err
 		}
 
-		if hasHealthcheck {
-			switch status {
-			case model.HealthHealthy:
-				return nil
-			case model.HealthUnhealthy:
-				return fmt.Errorf("container %s reported unhealthy", containerID)
+		switch status {
+		case model.HealthHealthy:
+			// A passing healthcheck (configured by us OR baked in the image) is
+			// the strongest readiness signal.
+			return nil
+		case model.HealthUnhealthy:
+			return fmt.Errorf("container %s reported unhealthy", containerID)
+		case model.HealthRunning:
+			// No healthcheck reported by Docker: a running container plus a short
+			// grace delay is the best signal we have. Documented limit: readiness
+			// is approximate when neither we nor the image declare a healthcheck.
+			if err := s.sleep(ctx, s.runningGrace); err != nil {
+				return err
 			}
-		} else {
-			// No sensible healthcheck for this type: a running container plus a
-			// short grace delay is the best signal we have. Documented limit:
-			// readiness is approximate for unknown service types.
-			if status == model.HealthRunning {
-				s.sleep(ctx, s.runningGrace)
-				return nil
-			}
-			if status == model.HealthNotRunning {
-				return fmt.Errorf("container %s is not running", containerID)
-			}
+			return nil
+		case model.HealthNotRunning:
+			return fmt.Errorf("container %s is not running", containerID)
 		}
+		// model.HealthStarting (healthcheck in its start period): keep polling.
 
 		if !s.now().Before(deadline) {
 			return fmt.Errorf("readiness timeout after %s (last status %q)", s.readinessTimeout, status)
@@ -255,11 +279,16 @@ func (s *DockerSidecarManager) sleep(ctx context.Context, d time.Duration) error
 }
 
 // rollback tears down a partially-launched run: stop+remove every started
-// container, then remove the network. Best-effort, log-only, never panics.
+// container, then remove the network. Best-effort, log-only, never panics. Runs
+// on a context detached from the caller's so it still works if Launch's ctx was
+// cancelled (otherwise every teardown call would fail with context.Canceled).
 func (s *DockerSidecarManager) rollback(ctx context.Context, sc *port.SidecarContext) {
-	s.teardownContainers(ctx, sc)
+	tctx, cancel := s.teardownContext(ctx)
+	defer cancel()
+
+	s.teardownContainers(tctx, sc)
 	if sc.NetworkName != "" {
-		if err := s.containers.RemoveNetwork(ctx, sc.NetworkName); err != nil {
+		if err := s.containers.RemoveNetwork(tctx, sc.NetworkName); err != nil {
 			s.logger.Warn("rollback: remove network failed",
 				slog.String("network", sc.NetworkName),
 				slog.String("error", err.Error()),
@@ -289,12 +318,17 @@ func (s *DockerSidecarManager) teardownContainers(ctx context.Context, sc *port.
 }
 
 // Stop stops the sidecar containers in sc. Best-effort, idempotent, defer-safe.
+// Runs on a detached, bounded context so it still works when called from a defer
+// after the run's context was cancelled.
 func (s *DockerSidecarManager) Stop(ctx context.Context, sc *port.SidecarContext) error {
 	if sc == nil || len(sc.ContainerIDs) == 0 {
 		return nil
 	}
+	tctx, cancel := s.teardownContext(ctx)
+	defer cancel()
+
 	for name, id := range sc.ContainerIDs {
-		if err := s.containers.Stop(ctx, id); err != nil {
+		if err := s.containers.Stop(tctx, id); err != nil {
 			s.logger.Warn("stop sidecar failed",
 				slog.String("sidecar", name),
 				slog.String("container_id", id),
@@ -306,14 +340,18 @@ func (s *DockerSidecarManager) Stop(ctx context.Context, sc *port.SidecarContext
 }
 
 // Cleanup stops+removes the sidecar containers and removes the run network.
-// Best-effort, idempotent, defer-safe.
+// Best-effort, idempotent, defer-safe. Runs on a detached, bounded context so it
+// still works when called from a defer after the run's context was cancelled.
 func (s *DockerSidecarManager) Cleanup(ctx context.Context, sc *port.SidecarContext) error {
 	if sc == nil || (len(sc.ContainerIDs) == 0 && sc.NetworkName == "") {
 		return nil
 	}
-	s.teardownContainers(ctx, sc)
+	tctx, cancel := s.teardownContext(ctx)
+	defer cancel()
+
+	s.teardownContainers(tctx, sc)
 	if sc.NetworkName != "" {
-		if err := s.containers.RemoveNetwork(ctx, sc.NetworkName); err != nil {
+		if err := s.containers.RemoveNetwork(tctx, sc.NetworkName); err != nil {
 			s.logger.Warn("cleanup: remove network failed",
 				slog.String("network", sc.NetworkName),
 				slog.String("error", err.Error()),
@@ -323,9 +361,10 @@ func (s *DockerSidecarManager) Cleanup(ctx context.Context, sc *port.SidecarCont
 	return nil
 }
 
-// ListOrphanNetworks lists managed run networks with no managed sidecar
-// container still attached. A network is matched to its containers by the
-// shared run_id label, avoiding a per-network container lookup.
+// ListOrphanNetworks lists managed run networks with no RUNNING managed sidecar
+// container still attached. A network is matched to its containers by the shared
+// run_id label, avoiding a per-network container lookup. Only running containers
+// keep a network alive — exited-but-not-yet-removed sidecars must not block GC.
 func (s *DockerSidecarManager) ListOrphanNetworks(ctx context.Context) ([]model.NetworkInfo, error) {
 	managed := map[string]string{labelManagedBy: managedByLabel}
 
@@ -333,7 +372,7 @@ func (s *DockerSidecarManager) ListOrphanNetworks(ctx context.Context) ([]model.
 	if err != nil {
 		return nil, err
 	}
-	containers, err := s.containers.ListContainers(ctx, managed)
+	containers, err := s.containers.ListRunningContainers(ctx, managed)
 	if err != nil {
 		return nil, err
 	}

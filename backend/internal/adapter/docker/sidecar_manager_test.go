@@ -35,6 +35,7 @@ type mockContainerManager struct {
 	removeNetworkFn func(nameOrID string) error
 	listNetworksFn  func() ([]model.NetworkInfo, error)
 	listContainerFn func() ([]port.ContainerInfo, error)
+	listRunningFn   func() ([]port.ContainerInfo, error)
 }
 
 func newMockCM() *mockContainerManager {
@@ -90,6 +91,13 @@ func (m *mockContainerManager) Wait(_ context.Context, _ string) (int, error) {
 func (m *mockContainerManager) ListContainers(_ context.Context, _ map[string]string) ([]port.ContainerInfo, error) {
 	if m.listContainerFn != nil {
 		return m.listContainerFn()
+	}
+	return nil, nil
+}
+
+func (m *mockContainerManager) ListRunningContainers(_ context.Context, _ map[string]string) ([]port.ContainerInfo, error) {
+	if m.listRunningFn != nil {
+		return m.listRunningFn()
 	}
 	return nil, nil
 }
@@ -222,10 +230,15 @@ func TestSidecarLaunch_HappyPath(t *testing.T) {
 	if len(cm.createdOpts) != 1 || cm.createdOpts[0].Healthcheck == nil {
 		t.Errorf("expected postgres healthcheck to be configured")
 	}
-	// Sidecar attached to the run network as an extra network with alias.
-	if len(cm.createdOpts[0].ExtraNetworks) != 1 || cm.createdOpts[0].ExtraNetworks[0] != wantNet {
-		t.Errorf("expected sidecar attached to run network, got %v", cm.createdOpts[0].ExtraNetworks)
+	// Isolation: the sidecar is attached to the run network DIRECTLY at creation
+	// (NetworkName, not ExtraNetworks) so it never lands on the default bridge.
+	if cm.createdOpts[0].NetworkName != wantNet {
+		t.Errorf("expected sidecar created on run network via NetworkName, got %q", cm.createdOpts[0].NetworkName)
 	}
+	if len(cm.createdOpts[0].ExtraNetworks) != 0 {
+		t.Errorf("expected no ExtraNetworks (no bridge dual-home), got %v", cm.createdOpts[0].ExtraNetworks)
+	}
+	// DNS alias svc.Name on the run network (applied on the primary endpoint).
 	if cm.createdOpts[0].Aliases[wantNet] != "db" {
 		t.Errorf("expected dns alias db on run network, got %v", cm.createdOpts[0].Aliases)
 	}
@@ -322,6 +335,70 @@ func TestSidecarLaunch_RollbackOnUnhealthy(t *testing.T) {
 	}
 }
 
+func TestSidecarLaunch_RollbackWithCancelledContext(t *testing.T) {
+	// If the caller's context is cancelled mid-Launch (InspectHealth returns
+	// context.Canceled), teardown must still run: it uses a context detached from
+	// the caller's. The mock ignores ctx, but the real SDK would not — this proves
+	// rollback no longer reuses the dead ctx.
+	cm := newMockCM()
+	cm.inspectHealthFn = func(_ string) (string, error) { return "", context.Canceled }
+	s := newTestSidecarManager(cm)
+
+	_, err := s.Launch(context.Background(), uuid.New(), pgEnv())
+	if err == nil {
+		t.Fatal("expected error from cancelled readiness, got nil")
+	}
+	if len(cm.stoppedIDs) != 1 || len(cm.removedIDs) != 1 || len(cm.removedNetworks) != 1 {
+		t.Errorf("expected full teardown despite cancellation: stops=%d removes=%d nets=%d",
+			len(cm.stoppedIDs), len(cm.removedIDs), len(cm.removedNetworks))
+	}
+}
+
+func TestSidecarLaunch_BakedImageHealthcheckReady(t *testing.T) {
+	// Unknown service type whose IMAGE bakes its own HEALTHCHECK: InspectHealth
+	// returns "healthy" -> must be treated as ready (no false timeout/rollback),
+	// even though we configured no profile healthcheck.
+	cm := newMockCM()
+	cm.inspectHealthFn = func(_ string) (string, error) { return model.HealthHealthy, nil }
+	s := newTestSidecarManager(cm)
+
+	env := &model.Environment{
+		Services: []model.EnvironmentService{{Name: "custom", Image: "ghcr.io/acme/thing:1"}},
+	}
+	sc, err := s.Launch(context.Background(), uuid.New(), env)
+	if err != nil {
+		t.Fatalf("expected ready via baked image healthcheck, got %v", err)
+	}
+	if sc.ServiceAddrs["custom"] != "custom" {
+		t.Errorf("expected custom addr recorded")
+	}
+	// We did not configure a profile healthcheck for the unknown type.
+	if cm.createdOpts[0].Healthcheck != nil {
+		t.Errorf("expected no profile healthcheck for unknown type")
+	}
+	if len(cm.removedIDs) != 0 || len(cm.removedNetworks) != 0 {
+		t.Errorf("expected no rollback, got removes=%d nets=%d", len(cm.removedIDs), len(cm.removedNetworks))
+	}
+}
+
+func TestSidecarLaunch_BakedImageUnhealthyRollback(t *testing.T) {
+	// Unknown type, image healthcheck reports unhealthy -> failure + rollback.
+	cm := newMockCM()
+	cm.inspectHealthFn = func(_ string) (string, error) { return model.HealthUnhealthy, nil }
+	s := newTestSidecarManager(cm)
+
+	env := &model.Environment{
+		Services: []model.EnvironmentService{{Name: "custom", Image: "ghcr.io/acme/thing:1"}},
+	}
+	_, err := s.Launch(context.Background(), uuid.New(), env)
+	if err == nil {
+		t.Fatal("expected unhealthy error, got nil")
+	}
+	if len(cm.removedIDs) != 1 || len(cm.removedNetworks) != 1 {
+		t.Errorf("expected full rollback, got removes=%d nets=%d", len(cm.removedIDs), len(cm.removedNetworks))
+	}
+}
+
 func TestSidecarStop_NilContext_NoOp(t *testing.T) {
 	cm := newMockCM()
 	s := newTestSidecarManager(cm)
@@ -378,10 +455,13 @@ func TestSidecarGC_Windowed(t *testing.T) {
 			{ID: "old", Name: "hopeitworks-run-old", Labels: map[string]string{labelRunID: "run-old"}, CreatedAt: now.Add(-2 * time.Hour)},
 			{ID: "recent", Name: "hopeitworks-run-recent", Labels: map[string]string{labelRunID: "run-recent"}, CreatedAt: now.Add(-1 * time.Minute)},
 			{ID: "live", Name: "hopeitworks-run-live", Labels: map[string]string{labelRunID: "run-live"}, CreatedAt: now.Add(-2 * time.Hour)},
+			{ID: "exited", Name: "hopeitworks-run-exited", Labels: map[string]string{labelRunID: "run-exited"}, CreatedAt: now.Add(-2 * time.Hour)},
 		}, nil
 	}
-	cm.listContainerFn = func() ([]port.ContainerInfo, error) {
-		// run-live still has a container -> not an orphan.
+	// Orphan detection uses RUNNING containers only: run-live has a running
+	// container; run-exited's container is exited (absent from running list) so
+	// its old network must be reaped.
+	cm.listRunningFn = func() ([]port.ContainerInfo, error) {
 		return []port.ContainerInfo{
 			{ID: "c1", Labels: map[string]string{labelRunID: "run-live"}},
 		}, nil
@@ -393,10 +473,14 @@ func TestSidecarGC_Windowed(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	// Only the old orphan is removed: recent is within the window, live has a
-	// container.
-	if len(cm.removedNetworks) != 1 || cm.removedNetworks[0] != "old" {
-		t.Errorf("expected only 'old' removed, got %v", cm.removedNetworks)
+	// old + exited removed; recent within window kept; live has a running
+	// container kept.
+	if len(cm.removedNetworks) != 2 {
+		t.Fatalf("expected 2 networks removed, got %v", cm.removedNetworks)
+	}
+	got := map[string]bool{cm.removedNetworks[0]: true, cm.removedNetworks[1]: true}
+	if !got["old"] || !got["exited"] {
+		t.Errorf("expected 'old' and 'exited' removed, got %v", cm.removedNetworks)
 	}
 }
 
@@ -409,7 +493,7 @@ func TestSidecarListOrphanNetworks(t *testing.T) {
 			{ID: "n-nolabel", Labels: map[string]string{}}, // not a run network
 		}, nil
 	}
-	cm.listContainerFn = func() ([]port.ContainerInfo, error) {
+	cm.listRunningFn = func() ([]port.ContainerInfo, error) {
 		return []port.ContainerInfo{{ID: "c", Labels: map[string]string{labelRunID: "r2"}}}, nil
 	}
 	s := newTestSidecarManager(cm)
