@@ -22,6 +22,11 @@ import (
 
 const testContainerID = "container-123"
 
+const (
+	testNetwork  = "test-network"
+	testStoryKey = "S-42"
+)
+
 // testLogger creates a silent logger for tests.
 func testLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -527,7 +532,7 @@ func newAgentRunFixture(t *testing.T) *agentRunFixture {
 	f.story = &model.Story{
 		ID:                 f.storyID,
 		ProjectID:          f.projectID,
-		Key:                "S-42",
+		Key:                testStoryKey,
 		Title:              "Test Story",
 		Objective:          strPtr("Implement feature X"),
 		Scope:              &backendScope,
@@ -615,7 +620,7 @@ func newAgentRunFixture(t *testing.T) *agentRunFixture {
 	agentCfg := action.AgentConfig{
 		DefaultMemory: 4294967296,
 		DefaultCPUs:   2.0,
-		NetworkName:   "test-network",
+		NetworkName:   testNetwork,
 		LogTailLines:  50,
 	}
 
@@ -685,8 +690,8 @@ func TestAgentRunAction_HappyPath(t *testing.T) {
 	if opts.Image != "hopeitworks/agent:latest" {
 		t.Errorf("expected image %q, got %q", "hopeitworks/agent:latest", opts.Image)
 	}
-	if opts.NetworkName != "test-network" {
-		t.Errorf("expected network %q, got %q", "test-network", opts.NetworkName)
+	if opts.NetworkName != testNetwork {
+		t.Errorf("expected network %q, got %q", testNetwork, opts.NetworkName)
 	}
 	if opts.Memory != 4294967296 {
 		t.Errorf("expected memory 4294967296, got %d", opts.Memory)
@@ -705,7 +710,7 @@ func TestAgentRunAction_HappyPath(t *testing.T) {
 	if opts.Labels["step_id"] != f.stepID.String() {
 		t.Errorf("expected step_id label %s, got %s", f.stepID, opts.Labels["step_id"])
 	}
-	if opts.Labels["story_key"] != "S-42" {
+	if opts.Labels["story_key"] != testStoryKey {
 		t.Errorf("expected story_key label S-42, got %s", opts.Labels["story_key"])
 	}
 
@@ -729,7 +734,7 @@ func TestAgentRunAction_HappyPath(t *testing.T) {
 	if envMap["BRANCH_NAME"] != "feat/s-42-test" {
 		t.Errorf("expected BRANCH_NAME feat/s-42-test, got %q", envMap["BRANCH_NAME"])
 	}
-	if envMap["STORY_KEY"] != "S-42" {
+	if envMap["STORY_KEY"] != testStoryKey {
 		t.Errorf("expected STORY_KEY S-42, got %q", envMap["STORY_KEY"])
 	}
 	if _, ok := envMap["PROMPT_CONTENT"]; !ok {
@@ -1141,7 +1146,7 @@ func TestAgentRunAction_NoEnvironment_GoldenBackCompat(t *testing.T) {
 		t.Errorf("expected empty ExtraNetworks, got %v", opts.ExtraNetworks)
 	}
 	// Golden invariant 2: NetworkName unchanged (the shared agent network only).
-	if opts.NetworkName != "test-network" {
+	if opts.NetworkName != testNetwork {
 		t.Errorf("expected NetworkName test-network, got %q", opts.NetworkName)
 	}
 	// Golden invariant 3: no connection-string env leaked in.
@@ -1184,7 +1189,7 @@ func TestAgentRunAction_NoEnvironment_GoldenBackCompat(t *testing.T) {
 	if opts.Labels["managed_by"] != "hopeitworks" ||
 		opts.Labels["run_id"] != f.runID.String() ||
 		opts.Labels["step_id"] != f.stepID.String() ||
-		opts.Labels["story_key"] != "S-42" {
+		opts.Labels["story_key"] != testStoryKey {
 		t.Errorf("labels changed: %v", opts.Labels)
 	}
 	// Golden invariant 6: resource limits unchanged.
@@ -1264,7 +1269,7 @@ func TestAgentRunAction_WithEnvironment_SidecarWiring(t *testing.T) {
 	}
 
 	// Dual-homing: keeps shared NetworkName AND attaches to the run network.
-	if opts.NetworkName != "test-network" {
+	if opts.NetworkName != testNetwork {
 		t.Errorf("expected shared NetworkName test-network, got %q", opts.NetworkName)
 	}
 	if len(opts.ExtraNetworks) != 1 || opts.ExtraNetworks[0] != runNetwork {
