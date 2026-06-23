@@ -161,6 +161,18 @@ The whole stack runs in Docker (frontend, API, Postgres, mail, and a filtered Do
 
 > Pipeline execution needs a Git provider with push access (`GITHUB_TOKEN`) and an LLM token for the agents. See [`docs/local-setup.md`](docs/local-setup.md) for the full setup.
 
+### Execution substrates & platform support
+
+The runtime is pluggable. The **default substrate is Docker** (`SUBSTRATE=docker`) and
+runs anywhere Docker runs — Linux, macOS, Windows.
+
+A **hardened microVM substrate (microsandbox / libkrun)** is also supported for stronger
+isolation and native nested-container fidelity (testcontainers / DinD inside the agent).
+It is **Linux-only: it requires KVM** (`/dev/kvm`). It cannot run inside Docker Desktop on
+macOS (no nested-virt passthrough). On macOS, run the stack inside a Linux VM with nested
+virtualization (Apple **M3+ / macOS 15+**) — see [`deploy/lima/README.md`](deploy/lima/README.md)
+for a one-command, reproducible setup.
+
 ### Repository layout
 
 ```

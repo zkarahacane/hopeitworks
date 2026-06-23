@@ -1,0 +1,54 @@
+# Reproducible Lima VM that can run the microsandbox (microVM) agent substrate.
+#
+# Why a VM on macOS: microsandbox uses libkrun microVMs, which need KVM (Linux) or
+# HVF (macOS). It is *embedded* (no server) and runs the microVM on the SAME host as
+# the caller — so the hopeitworks API must run where /dev/kvm lives. Docker Desktop
+# does NOT expose /dev/kvm to containers, so on macOS we run a Linux VM with nested
+# virtualization (Apple M3+/macOS 15+), where /dev/kvm becomes available.
+#
+# One command provisions a ready microVM host (KVM + Docker + microsandbox):
+#     limactl start ./deploy/lima/microsandbox-vm.yaml --name microsandbox --tty=false
+#
+# Validated 2026-06-23 on Apple M4 Pro / macOS 26.5: KVM_CREATE_VM ok and
+# `msb run python` booted a real microVM inside the guest.
+vmType: "vz"                 # Apple Virtualization.framework — required for nested virt
+rosetta:
+  enabled: false
+nestedVirtualization: true   # → /dev/kvm inside the guest (needs M3+ / macOS 15+)
+cpus: 4
+memory: "6GiB"
+disk: "40GiB"
+images:
+  - location: "https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg-arm64.img"
+    arch: "aarch64"
+mounts: []
+provision:
+  # system: tools, Docker, and group access to /dev/kvm (root:kvm 0660) + the docker socket
+  - mode: system
+    script: |
+      #!/bin/bash
+      set -eux
+      export DEBIAN_FRONTEND=noninteractive
+      apt-get update
+      apt-get install -y cpu-checker ca-certificates curl git docker.io docker-compose-v2
+      systemctl enable --now docker
+      u="${LIMA_CIDATA_USER:-$(logname 2>/dev/null || echo lima)}"
+      # /dev/kvm is root:kvm 0660 → user must be in kvm; docker socket → docker group.
+      usermod -aG kvm "$u" || true
+      usermod -aG docker "$u" || true
+  # user: install microsandbox (libkrun) for the guest user
+  - mode: user
+    script: |
+      #!/bin/bash
+      set -eux
+      curl -fsSL https://install.microsandbox.dev | sh
+      "$HOME/.local/bin/msb" --version
+probes:
+  - description: "kvm device + docker + microsandbox available"
+    script: |
+      #!/bin/bash
+      set -eu
+      test -e /dev/kvm
+      command -v docker >/dev/null
+      test -x "$HOME/.local/bin/msb"
+    hint: "/dev/kvm missing (nested virt not active — need M3+/macOS 15+ and vmType vz), or docker/msb not installed"
