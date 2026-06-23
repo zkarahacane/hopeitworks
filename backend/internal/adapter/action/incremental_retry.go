@@ -78,7 +78,7 @@ func (a *IncrementalRetryAction) Execute(ctx context.Context, runCtx *model.RunC
 		retryType = "full"
 	}
 
-	// 6. Create new RunStep
+	// 6. Create new RunStep — carry StageID/StageName from parent (D1 fix).
 	newStep := &model.RunStep{
 		ID:           uuid.New(),
 		RunID:        parent.RunID,
@@ -89,6 +89,8 @@ func (a *IncrementalRetryAction) Execute(ctx context.Context, runCtx *model.RunC
 		RetryCount:   parent.RetryCount + 1,
 		RetryType:    &retryType,
 		ParentStepID: &parent.ID,
+		StageID:      parent.StageID,
+		StageName:    parent.StageName,
 	}
 	created, err := a.runRepo.CreateRetryRunStep(ctx, newStep)
 	if err != nil {

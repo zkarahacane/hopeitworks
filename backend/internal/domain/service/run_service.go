@@ -834,7 +834,7 @@ func (s *RunService) RetryStep(ctx context.Context, runID, stepID uuid.UUID) (*m
 		retryType = "full"
 	}
 
-	// 6. Create the retry step
+	// 6. Create the retry step — carry StageID/StageName from parent (D1 fix).
 	newStep := &model.RunStep{
 		ID:           uuid.New(),
 		RunID:        runID,
@@ -845,6 +845,8 @@ func (s *RunService) RetryStep(ctx context.Context, runID, stepID uuid.UUID) (*m
 		RetryCount:   retryCount,
 		RetryType:    &retryType,
 		ParentStepID: &rootStepID,
+		StageID:      step.StageID,
+		StageName:    step.StageName,
 	}
 	_, err = s.runRepo.CreateRetryRunStep(ctx, newStep)
 	if err != nil {
