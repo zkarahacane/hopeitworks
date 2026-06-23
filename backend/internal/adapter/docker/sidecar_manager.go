@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -41,56 +40,36 @@ const (
 	defaultTeardownTimeout = 30 * time.Second
 )
 
-// serviceProfile holds the per-type knowledge needed to probe and (later, in
-// P2c2c) build connection strings for a sidecar. It is keyed by a detected
-// service type derived from the image name.
-type serviceProfile struct {
-	// healthTest is the Docker HEALTHCHECK command for this service type. Empty
-	// means "no sensible healthcheck" -> fall back to running + grace delay.
-	healthTest []string
-	// port is the service's default listen port, factored here for reuse by
-	// P2c2c connection-string injection.
-	port int
-}
-
-// serviceProfiles maps a detected service type to its probe/port profile. It is
-// intentionally small and additive; unknown types fall back to a running check.
+// serviceHealthTests is the Docker HEALTHCHECK command for each known service
+// type. It is the Docker-specific facet of a service profile; the type detection
+// and default ports live in the domain (model.DetectServiceType / model.ServicePort)
+// so the mapping is not duplicated between this readiness probe and the run-path
+// connection-string injection (action.buildConnStrings). An empty/absent entry
+// means "no sensible healthcheck" -> fall back to running + grace delay.
 //
-// TODO(P2c2c): probe creds (redis AUTH / mariadb-admin). These probes assume no
-// auth: a redis configured with requirepass returns NOAUTH (false unhealthy),
-// and mysqladmin is deprecated on recent MariaDB (use mariadb-admin). The real
-// fix injects the service credentials into the probe, which is part of the
-// connection-string work in P2c2c.
-var serviceProfiles = map[string]serviceProfile{
-	"postgres": {healthTest: []string{"CMD-SHELL", "pg_isready -U postgres || pg_isready"}, port: 5432},
-	"redis":    {healthTest: []string{"CMD", "redis-cli", "ping"}, port: 6379},
-	"mysql":    {healthTest: []string{"CMD-SHELL", "mysqladmin ping -h 127.0.0.1 --silent"}, port: 3306},
-	"mariadb":  {healthTest: []string{"CMD-SHELL", "mysqladmin ping -h 127.0.0.1 --silent"}, port: 3306},
-	"mongo":    {healthTest: []string{"CMD-SHELL", "mongosh --eval 'db.runCommand({ping:1})' || mongo --eval 'db.runCommand({ping:1})'"}, port: 27017},
+// TODO: probe creds (redis AUTH / mariadb-admin). These probes assume no auth: a
+// redis configured with requirepass returns NOAUTH (false unhealthy), and
+// mysqladmin is deprecated on recent MariaDB (use mariadb-admin). The real fix
+// injects the service credentials into the probe.
+var serviceHealthTests = map[string][]string{
+	model.ServiceTypePostgres: {"CMD-SHELL", "pg_isready -U postgres || pg_isready"},
+	model.ServiceTypeRedis:    {"CMD", "redis-cli", "ping"},
+	model.ServiceTypeMySQL:    {"CMD-SHELL", "mysqladmin ping -h 127.0.0.1 --silent"},
+	model.ServiceTypeMariaDB:  {"CMD-SHELL", "mysqladmin ping -h 127.0.0.1 --silent"},
+	model.ServiceTypeMongo:    {"CMD-SHELL", "mongosh --eval 'db.runCommand({ping:1})' || mongo --eval 'db.runCommand({ping:1})'"},
 }
 
-// servicePort returns the default listen port for a detected service type, or
-// 0 when unknown. Factored here for reuse by P2c2c connection-string injection.
+// servicePort returns the default listen port for a detected service type, or 0
+// when unknown. Thin wrapper over the domain's single source of truth.
 func servicePort(svcType string) int {
-	return serviceProfiles[svcType].port
+	return model.ServicePort(svcType)
 }
 
 // detectServiceType maps an image reference to a known service type, or "" when
-// unknown. It matches on the repository segment of the image (ignoring registry
-// host and tag), e.g. "docker.io/library/postgres:16" -> "postgres".
+// unknown. Thin wrapper over the domain's single source of truth so detection is
+// not duplicated across adapters.
 func detectServiceType(image string) string {
-	ref := image
-	if i := strings.LastIndex(ref, "/"); i >= 0 {
-		ref = ref[i+1:]
-	}
-	if i := strings.IndexAny(ref, ":@"); i >= 0 {
-		ref = ref[:i]
-	}
-	ref = strings.ToLower(ref)
-	if _, ok := serviceProfiles[ref]; ok {
-		return ref
-	}
-	return ""
+	return model.DetectServiceType(image)
 }
 
 // SidecarManager orchestrates Environment sidecars over the injected
@@ -432,12 +411,12 @@ func (s *SidecarManager) GC(ctx context.Context, olderThan time.Duration) error 
 // healthcheckFor returns the HEALTHCHECK config for a service type, or nil when
 // no sensible healthcheck exists (readiness then falls back to running+grace).
 func healthcheckFor(svcType string, interval time.Duration) *model.ContainerHealthcheck {
-	profile, ok := serviceProfiles[svcType]
-	if !ok || len(profile.healthTest) == 0 {
+	test, ok := serviceHealthTests[svcType]
+	if !ok || len(test) == 0 {
 		return nil
 	}
 	return &model.ContainerHealthcheck{
-		Test:        profile.healthTest,
+		Test:        test,
 		Interval:    interval,
 		Timeout:     3 * time.Second,
 		Retries:     3,
