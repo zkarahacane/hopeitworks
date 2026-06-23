@@ -98,6 +98,10 @@ func (m *mockContainerManager) ListContainers(ctx context.Context, labels map[st
 	return nil, nil
 }
 
+func (m *mockContainerManager) ListRunningContainers(_ context.Context, _ map[string]string) ([]port.ContainerInfo, error) {
+	return nil, nil
+}
+
 func (m *mockContainerManager) CreateNetwork(_ context.Context, _ string, _ map[string]string) (string, error) {
 	return "", nil
 }

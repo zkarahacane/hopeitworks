@@ -99,9 +99,16 @@ func (m *ContainerManager) Create(ctx context.Context, opts model.ContainerOpts)
 
 	var networkingConfig *network.NetworkingConfig
 	if opts.NetworkName != "" {
+		endpoint := &network.EndpointSettings{}
+		// Honour a DNS alias declared for the primary network so a container
+		// attached at creation time (no ExtraNetworks) is still reachable by its
+		// service name on that network.
+		if alias, ok := opts.Aliases[opts.NetworkName]; ok && alias != "" {
+			endpoint.Aliases = []string{alias}
+		}
 		networkingConfig = &network.NetworkingConfig{
 			EndpointsConfig: map[string]*network.EndpointSettings{
-				opts.NetworkName: {},
+				opts.NetworkName: endpoint,
 			},
 		}
 	}
@@ -120,13 +127,24 @@ func (m *ContainerManager) Create(ctx context.Context, opts model.ContainerOpts)
 	)
 
 	// Attach to any additional networks. Empty/nil ExtraNetworks leaves the
-	// current single-network behaviour untouched.
+	// current single-network behaviour untouched. If a connect fails, the
+	// freshly-created container is removed best-effort so Create stays
+	// all-or-nothing (the caller never learns the id, so it cannot clean up).
 	for _, netName := range opts.ExtraNetworks {
 		var aliases []string
 		if alias, ok := opts.Aliases[netName]; ok && alias != "" {
 			aliases = []string{alias}
 		}
 		if err := m.ConnectContainer(ctx, netName, resp.ID, aliases); err != nil {
+			if rmErr := m.client.ContainerRemove(ctx, resp.ID, dockercontainer.RemoveOptions{
+				Force:         true,
+				RemoveVolumes: true,
+			}); rmErr != nil {
+				m.logger.Warn("create rollback: remove container failed",
+					slog.String("container_id", resp.ID),
+					slog.String("error", rmErr.Error()),
+				)
+			}
 			return "", err
 		}
 	}
@@ -205,15 +223,30 @@ func (m *ContainerManager) Wait(ctx context.Context, containerID string) (int, e
 	return 0, nil
 }
 
-// ListContainers lists all containers matching the specified labels.
+// ListContainers lists all containers (any state) matching the specified labels.
 func (m *ContainerManager) ListContainers(ctx context.Context, labels map[string]string) ([]port.ContainerInfo, error) {
+	return m.listContainers(ctx, labels, false)
+}
+
+// ListRunningContainers lists only running containers matching the labels.
+func (m *ContainerManager) ListRunningContainers(ctx context.Context, labels map[string]string) ([]port.ContainerInfo, error) {
+	return m.listContainers(ctx, labels, true)
+}
+
+// listContainers is the shared listing implementation. When runningOnly is true
+// it sets All=false and a status=running filter so exited containers are
+// excluded; otherwise it lists every state (All=true).
+func (m *ContainerManager) listContainers(ctx context.Context, labels map[string]string, runningOnly bool) ([]port.ContainerInfo, error) {
 	filterArgs := filters.NewArgs()
 	for key, value := range labels {
 		filterArgs.Add("label", key+"="+value)
 	}
+	if runningOnly {
+		filterArgs.Add("status", "running")
+	}
 
 	containers, err := m.client.ContainerList(ctx, dockercontainer.ListOptions{
-		All:     true,
+		All:     !runningOnly,
 		Filters: filterArgs,
 	})
 	if err != nil {
@@ -234,6 +267,7 @@ func (m *ContainerManager) ListContainers(ctx context.Context, labels map[string
 
 	m.logger.Debug("containers listed",
 		slog.Int("count", len(result)),
+		slog.Bool("running_only", runningOnly),
 	)
 
 	return result, nil

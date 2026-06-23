@@ -870,3 +870,115 @@ func TestCreate_NoExtraNetworksUnchanged(t *testing.T) {
 		t.Errorf("expected no NetworkConnect call, got network %s", mock.netConnectNet)
 	}
 }
+
+func TestCreate_AtomicOnConnectFailure(t *testing.T) {
+	// ConnectContainer fails after ContainerCreate succeeds: the freshly-created
+	// container must be force-removed so Create stays all-or-nothing (the caller
+	// never learns the id and cannot clean up).
+	mock := &mockDockerClient{
+		createResp:    dockercontainer.CreateResponse{ID: "ctr-leak"},
+		netConnectErr: errors.New("no such network"),
+	}
+	mgr := newTestManager(mock)
+
+	opts := model.ContainerOpts{
+		Image:         "alpine:latest",
+		ExtraNetworks: []string{"run-net"},
+	}
+
+	id, err := mgr.Create(context.Background(), opts)
+	if err == nil {
+		t.Fatal("expected error from connect failure, got nil")
+	}
+	if id != "" {
+		t.Errorf("expected empty id on failure, got %q", id)
+	}
+	if mock.removeID != "ctr-leak" {
+		t.Errorf("expected ContainerRemove on ctr-leak, got %q", mock.removeID)
+	}
+	if !mock.removeOpts.Force {
+		t.Error("expected force removal during create rollback")
+	}
+}
+
+func TestCreate_PrimaryNetworkAlias(t *testing.T) {
+	// An alias declared for the primary NetworkName is applied on that endpoint
+	// at creation, no ExtraNetworks / NetworkConnect needed.
+	mock := &mockDockerClient{
+		createResp: dockercontainer.CreateResponse{ID: "ctr-alias"},
+	}
+	mgr := newTestManager(mock)
+
+	opts := model.ContainerOpts{
+		Image:       "postgres:16",
+		NetworkName: "run-net",
+		Aliases:     map[string]string{"run-net": "db"},
+	}
+
+	if _, err := mgr.Create(context.Background(), opts); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	ep := mock.createNetConfig.EndpointsConfig["run-net"]
+	if ep == nil || len(ep.Aliases) != 1 || ep.Aliases[0] != "db" {
+		t.Errorf("expected alias db on primary endpoint, got %+v", ep)
+	}
+	if mock.netConnectNet != "" {
+		t.Errorf("expected no NetworkConnect, got %q", mock.netConnectNet)
+	}
+}
+
+func TestInspectHealth(t *testing.T) {
+	running := &dockercontainer.State{Running: true}
+	stopped := &dockercontainer.State{Running: false}
+	withHealth := func(status string) *dockercontainer.State {
+		return &dockercontainer.State{Running: true, Health: &dockercontainer.Health{Status: status}}
+	}
+
+	tests := []struct {
+		name    string
+		resp    dockercontainer.InspectResponse
+		respErr error
+		want    string
+		wantErr bool
+	}{
+		{name: "healthcheck healthy", resp: inspectWith(withHealth(model.HealthHealthy)), want: model.HealthHealthy},
+		{name: "healthcheck unhealthy", resp: inspectWith(withHealth(model.HealthUnhealthy)), want: model.HealthUnhealthy},
+		{name: "healthcheck starting", resp: inspectWith(withHealth(model.HealthStarting)), want: model.HealthStarting},
+		{name: "no healthcheck running", resp: inspectWith(running), want: model.HealthRunning},
+		{name: "no healthcheck not running", resp: inspectWith(stopped), want: model.HealthNotRunning},
+		{name: "nil state", resp: inspectWith(nil), want: model.HealthNotRunning},
+		{name: "inspect error", respErr: errors.New("daemon down"), wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mock := &mockDockerClient{inspectResp: tt.resp, inspectErr: tt.respErr}
+			mgr := newTestManager(mock)
+
+			got, err := mgr.InspectHealth(context.Background(), "c")
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				var domainErr *apperrors.DomainError
+				if !errors.As(err, &domainErr) {
+					t.Fatalf("expected DomainError, got %T", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("expected no error, got %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("InspectHealth = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// inspectWith builds an InspectResponse carrying the given state.
+func inspectWith(state *dockercontainer.State) dockercontainer.InspectResponse {
+	return dockercontainer.InspectResponse{
+		ContainerJSONBase: &dockercontainer.ContainerJSONBase{State: state},
+	}
+}
