@@ -36,6 +36,9 @@ type CostEvent struct {
 	InputTokens  int64
 	OutputTokens int64
 	Model        string
+	// CostUSD is the real cost reported by the agent/provider for this event.
+	// 0 = not reported → the cost falls back to the pricing table (ComputeCostUSD).
+	CostUSD float64
 }
 
 // Pricing holds input and output pricing per million tokens.

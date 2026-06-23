@@ -366,6 +366,66 @@ func TestRecordStepCost_UnknownModel_ZeroCost(t *testing.T) {
 	assert.Nil(t, inserted.AgentID)
 }
 
+// TestRecordStepCost_ProviderReportedCost_WinsOverPricing proves the provider-real
+// cost_usd carried on the events is persisted verbatim and does NOT get replaced
+// by the pricing-table derivation (Decision #1: pricing is a fallback only).
+func TestRecordStepCost_ProviderReportedCost_WinsOverPricing(t *testing.T) {
+	costRepo := &mockCostRepo{}
+	svc := newTestCostService(costRepo, nil, nil, nil)
+
+	// A known model whose pricing derivation would be far from the reported cost,
+	// so we can assert the reported value (not the derived one) is persisted.
+	events := []model.CostEvent{
+		{InputTokens: 1_000_000, OutputTokens: 100_000, Model: "claude-opus-4-6", CostUSD: 0.0123},
+	}
+
+	err := svc.RecordStepCost(context.Background(), uuid.New(), uuid.New(), events, nil)
+	require.NoError(t, err)
+	require.Len(t, costRepo.insertCalls, 1)
+
+	inserted := costRepo.insertCalls[0]
+	// Provider-real cost wins: exactly the reported value, not 15.0+7.5 from pricing.
+	assert.Equal(t, 0.0123, inserted.CostUSD)
+}
+
+// TestRecordStepCost_ProviderReportedCost_Aggregated proves multiple events with
+// real cost_usd are summed into the persisted record.
+func TestRecordStepCost_ProviderReportedCost_Aggregated(t *testing.T) {
+	costRepo := &mockCostRepo{}
+	svc := newTestCostService(costRepo, nil, nil, nil)
+
+	events := []model.CostEvent{
+		{InputTokens: 100, OutputTokens: 50, Model: "claude-opus-4-6", CostUSD: 0.01},
+		{InputTokens: 200, OutputTokens: 75, Model: "claude-opus-4-6", CostUSD: 0.02},
+	}
+
+	err := svc.RecordStepCost(context.Background(), uuid.New(), uuid.New(), events, nil)
+	require.NoError(t, err)
+	require.Len(t, costRepo.insertCalls, 1)
+
+	assert.InDelta(t, 0.03, costRepo.insertCalls[0].CostUSD, 1e-9)
+}
+
+// TestRecordStepCost_NoReportedCost_FallsBackToPricing proves that when no event
+// reports a real cost (CostUSD == 0, the legacy stream path), the cost falls back
+// to the pricing-table derivation.
+func TestRecordStepCost_NoReportedCost_FallsBackToPricing(t *testing.T) {
+	costRepo := &mockCostRepo{}
+	svc := newTestCostService(costRepo, nil, nil, nil)
+
+	// CostUSD intentionally omitted (0) → fallback to ComputeCostUSD.
+	events := []model.CostEvent{
+		{InputTokens: 1_000_000, OutputTokens: 100_000, Model: "claude-opus-4-6"},
+	}
+
+	err := svc.RecordStepCost(context.Background(), uuid.New(), uuid.New(), events, nil)
+	require.NoError(t, err)
+	require.Len(t, costRepo.insertCalls, 1)
+
+	// 15*1 + 75*0.1 = 22.5 from the pricing table.
+	assert.InDelta(t, 22.5, costRepo.insertCalls[0].CostUSD, 0.001)
+}
+
 func TestRecordStepCost_MultipleEvents_Aggregated(t *testing.T) {
 	costRepo := &mockCostRepo{}
 	svc := newTestCostService(costRepo, nil, nil, nil)

@@ -3,6 +3,8 @@ package port
 import (
 	"context"
 
+	"github.com/google/uuid"
+
 	"github.com/zakari/hopeitworks/backend/internal/domain/model"
 )
 
@@ -45,6 +47,24 @@ type RunSpec struct {
 	Entrypoint []string
 	Cmd        []string
 	Workdir    string
+
+	// NEW (Stage 3a) — typed callback contract for callback-mode runs. The Action
+	// mints the token and fills this once (substrate-agnostic) so the lifecycle —
+	// mint at launch, revoke after the callback resolves — runs identically on
+	// every substrate. nil for legacy (non-callback) runs. The auth values ALSO
+	// live in Env (AUTH_TOKEN/CALLBACK_URL/RUN_ID/STEP_ID) for the harness; this is
+	// the typed mirror the adapter MAY use directly.
+	Callback *CallbackSpec
+}
+
+// CallbackSpec is the typed callback contract carried on a RunSpec. The Action
+// mints the AuthToken (per agent/role) and fills this; the adapter MAY use the
+// typed fields, but the actual values also live in RunSpec.Env for the harness.
+type CallbackSpec struct {
+	URL       string
+	AuthToken string
+	RunID     uuid.UUID
+	StepID    uuid.UUID
 }
 
 // RunNetwork is the agnostic description of the per-run isolated network the
