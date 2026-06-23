@@ -32,6 +32,66 @@ Commits : `type(scope): message` — impératif, minuscule, sans point final. Ty
 
 Construis **directement** — Claude Code + Opus gèrent l'implémentation sans cérémonie multi-rôles. Déléguer à des sous-agents (`Agent` tool, `isolation: "worktree"`) uniquement quand ça aide : tâches de code parallèles, exploration large de la codebase, ou préserver le contexte principal. Pas de role-play PM/architecte/review.
 
+## Délégation à des sous-agents (worktrees)
+
+### Worktree obligatoire — anti-collision
+
+Tout sous-agent qui **écrit du code** tourne dans son **propre worktree** (`isolation: "worktree"`). Jamais deux agents qui écrivent dans le repo principal, ni sur la même branche, en parallèle — sinon ils se marchent dessus.
+
+Règles non négociables :
+
+1. **1 agent = 1 worktree = 1 branche** (`feat/*|fix/*|chore/*` depuis `develop`).
+2. **Périmètres disjoints** : découpe le travail parallèle par zone qui ne se chevauche pas — `backend/`, `frontend/`, `agent-runtime/`, `docs/`. Si deux tâches touchent les mêmes fichiers, **ne les parallélise pas** : séquence-les.
+3. **Chaque prompt de délégation écrivant du code commence par le préambule garde-fou** ci-dessous.
+4. Dis explicitement à l'agent **quels chemins il possède** et lesquels lui sont interdits.
+5. Un agent lecture seule (exploration, audit, review) n'a PAS besoin de worktree.
+
+### Préambule garde-fou (copier en tête de CHAQUE prompt d'agent qui écrit)
+
+> **Avant toute écriture, vérifie ton isolation :**
+> 1. `git rev-parse --show-toplevel` → tu dois être dans un worktree `.claude/worktrees/...`, **jamais** dans le repo racine `/Users/.../hopeitworks`.
+> 2. `git branch --show-current` → tu dois être sur **ta** branche dédiée (`feat/...|fix/...|chore/...`), **jamais** sur `develop` ni `main`.
+> 3. Si l'une des deux échoue : **arrête-toi, n'écris rien**, signale le problème.
+> 4. Reste **strictement** dans ton périmètre de fichiers : `<CHEMINS AUTORISÉS>`. Ne touche à rien d'autre.
+
+### Nettoyage des worktrees
+
+Après merge de la branche d'un agent, supprime son worktree. Un worktree resté **locké** (process agent mal terminé) se force :
+
+```bash
+git worktree list                       # voir les worktrees actifs (dont .claude/worktrees/)
+git worktree remove <path>              # suppression propre
+git worktree remove -f -f <path>        # forcer si locké
+git worktree prune                      # nettoyer les références mortes
+```
+
+Vérifie `git -C <path> status` **avant** de supprimer : ne jette jamais un worktree avec du travail non commité.
+
+## Definition of Done
+
+Une US / feature n'est **DONE** que si **tous** ces points sont couverts — ou explicitement déclarés _non applicables_ (et tu dis pourquoi) :
+
+- [ ] **Backend** — code + tests (unit, + integration testcontainers si DB) + `golangci-lint` vert.
+- [ ] **Frontend** — le pendant UI existe (view / feature / store / composable). **Aucune US backend ne se livre sans son volet front.** Si vraiment pas de front, écris-le noir sur blanc.
+- [ ] **API contract** — `api/openapi.yaml` à jour + types régénérés des **deux** côtés (`make generate` back, `npm run generate-api` front).
+- [ ] **E2E Playwright** — spec ajoutée ou mise à jour dans `frontend/e2e/` couvrant le parcours user touché.
+- [ ] **Doc fonctionnelle** — `docs/product.md` reflète tout comportement user-visible nouveau ou modifié.
+- [ ] **CI verte** sur `develop`.
+
+### Règle anti-oubli front
+
+Par **défaut, toute US a un volet front.** Quand tu découpes une US, liste d'abord ce qui change côté UI ; back-only est l'exception qui se justifie, pas la norme. Si tu délègues le back et le front à deux agents parallèles, ils partagent le **même** contrat `api/openapi.yaml` — fige-le d'abord, puis fan-out.
+
+### DoD reviewer (fin de tâche)
+
+Avant d'annoncer « terminé » sur une tâche qui touche au produit, lance un sous-agent reviewer (Sonnet, ou Haiku pour un petit diff) qui audite le diff contre la DoD et retourne les manques. Prompt type :
+
+> Audite le diff `git diff develop...HEAD` (lecture seule) contre cette Definition of Done :
+> back+tests+lint / **front présent** / openapi.yaml + types régénérés / **spec Playwright** ajoutée ou mise à jour / **docs/product.md** mis à jour si l'UX change / CI.
+> Pour chaque point : ✅ couvert, ⚠️ partiel, ❌ manquant — avec le fichier qui le prouve (ou son absence). Ne corrige rien, retourne juste le rapport.
+
+Traite chaque ❌ avant de clore — ou justifie le _non applicable_.
+
 ## Development Environment
 
 Devcontainer = code-only. Deux Docker stacks sur le même daemon :
@@ -57,5 +117,27 @@ Devcontainer = code-only. Deux Docker stacks sur le même daemon :
 ./scripts/reset-dev.sh                 # → utiliser le host
 ./scripts/e2e-stack.sh up              # → utiliser le host
 ```
+
+### Substrat microsandbox (microVM) — Mac → VM Lima
+
+Le substrat agent par défaut est **Docker** (`SUBSTRATE=docker`, tourne partout). Le substrat
+durci **microsandbox** (microVM libkrun) est **Linux/KVM-only** : il a besoin de `/dev/kvm` et
+**Docker Desktop sur macOS ne l'expose pas aux conteneurs** (pas de nested-virt passthrough).
+Sur Mac, on le fait donc tourner dans une **VM Linux Lima** avec virtu imbriquée (Apple **M3+ /
+macOS 15+**) :
+
+```bash
+brew install lima
+limactl start ./deploy/lima/microsandbox-vm.yaml --name microsandbox --tty=false
+# → VM Linux : /dev/kvm fonctionnel + Docker + microsandbox installés
+limactl shell microsandbox          # entrer dans la VM (y déployer la stack agent-test, SUBSTRATE=microsandbox)
+limactl stop microsandbox           # libérer la RAM   |   limactl delete microsandbox
+```
+
+- Le code SDK microsandbox est derrière `//go:build microsandbox` → build par défaut/CI inchangé ;
+  l'image se build via `backend/Dockerfile.microsandbox` (CGO, glibc 2.39 / ubuntu:24.04).
+- Lima **auto-forwarde** les ports de la VM vers `localhost` du Mac (0 conf réseau).
+- Détails + runbook + pièges : [`deploy/lima/README.md`](deploy/lima/README.md).
+- Validé sur Apple M4 Pro / macOS 26 : `KVM_CREATE_VM` ✓, `msb run` boote un vrai microVM.
 
 Seed credentials: `admin@hopeitworks.dev` / `admin1234`
