@@ -371,14 +371,29 @@ func (s *SidecarManager) ListOrphanNetworks(ctx context.Context) ([]model.Networ
 	return orphans, nil
 }
 
-// GC removes orphan run networks older than olderThan. Best-effort, log-only.
+// GC removes orphan run networks AND orphan ephemeral command containers older
+// than olderThan. Best-effort, log-only. The command containers are normally
+// removed by their own defer; this reaper is the safety net for when the API
+// process dies mid-command and the defer never runs (the network GC alone would
+// leave the exited command container behind).
 func (s *SidecarManager) GC(ctx context.Context, olderThan time.Duration) error {
+	cutoff := s.now().Add(-olderThan)
+
+	netErr := s.gcNetworks(ctx, cutoff)
+	cmdErr := s.gcCommandContainers(ctx, cutoff)
+	if netErr != nil {
+		return netErr
+	}
+	return cmdErr
+}
+
+// gcNetworks removes orphan run networks created before cutoff.
+func (s *SidecarManager) gcNetworks(ctx context.Context, cutoff time.Time) error {
 	orphans, err := s.ListOrphanNetworks(ctx)
 	if err != nil {
 		return err
 	}
 
-	cutoff := s.now().Add(-olderThan)
 	removed := 0
 	for _, n := range orphans {
 		if n.CreatedAt.After(cutoff) {
@@ -398,6 +413,53 @@ func (s *SidecarManager) GC(ctx context.Context, olderThan time.Duration) error 
 
 	if removed > 0 {
 		s.logger.Info("gc removed orphan networks", slog.Int("count", removed))
+	}
+	return nil
+}
+
+// gcCommandContainers reaps ephemeral env-command containers (role=env_command)
+// that are no longer running and were created before cutoff. A container still
+// running is left alone (its command may still be in flight); only exited or
+// dead ones are removed. Matched by label so it never touches sidecars or agents.
+func (s *SidecarManager) gcCommandContainers(ctx context.Context, cutoff time.Time) error {
+	filter := map[string]string{
+		labelManagedBy:  managedByLabel,
+		model.LabelRole: model.RoleEnvCommand,
+	}
+
+	all, err := s.containers.ListContainers(ctx, filter)
+	if err != nil {
+		return err
+	}
+	running, err := s.containers.ListRunningContainers(ctx, filter)
+	if err != nil {
+		return err
+	}
+	runningIDs := make(map[string]bool, len(running))
+	for _, c := range running {
+		runningIDs[c.ID] = true
+	}
+
+	removed := 0
+	for _, c := range all {
+		if runningIDs[c.ID] {
+			continue // still running: leave it
+		}
+		if c.CreatedAt.After(cutoff) {
+			continue // too recent: a run may still be starting up
+		}
+		if err := s.containers.Remove(ctx, c.ID); err != nil {
+			s.logger.Warn("gc: remove orphan command container failed",
+				slog.String("container_id", c.ID),
+				slog.String("error", err.Error()),
+			)
+			continue
+		}
+		removed++
+	}
+
+	if removed > 0 {
+		s.logger.Info("gc removed orphan command containers", slog.Int("count", removed))
 	}
 	return nil
 }

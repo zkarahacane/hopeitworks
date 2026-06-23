@@ -49,6 +49,16 @@ type ContainerOpts struct {
 	// container so readiness can be polled via ContainerInspect. Optional and
 	// nil-safe: nil means no healthcheck is configured (current behaviour).
 	Healthcheck *ContainerHealthcheck
+
+	// Entrypoint overrides the image's ENTRYPOINT. Optional and nil-safe: an
+	// empty/nil slice leaves the image entrypoint untouched (current behaviour).
+	Entrypoint []string
+
+	// Cmd overrides the image's CMD. Optional and nil-safe: an empty/nil slice
+	// leaves the image command untouched (current behaviour). Used to run an
+	// ephemeral one-shot command (e.g. an Environment build/migrate/seed step)
+	// in an otherwise stock stack image.
+	Cmd []string
 }
 
 // ContainerHealthcheck describes a Docker HEALTHCHECK probe for a container.

@@ -23,8 +23,9 @@ import (
 const testContainerID = "container-123"
 
 const (
-	testNetwork  = "test-network"
-	testStoryKey = "S-42"
+	testNetwork      = "test-network"
+	testStoryKey     = "S-42"
+	testAgentRepoURL = "https://github.com/test/repo"
 )
 
 // testLogger creates a silent logger for tests.
@@ -440,6 +441,27 @@ func (m *mockSidecarManager) getCleanupCalls() int {
 	return m.cleanupCalls
 }
 
+// mockStackRepo is a StackRepository mock. By default GetByKey returns a stack
+// with no image, so callers fall back to the agent image unless getByKeyFn is
+// set to return a real image_ref.
+type mockStackRepo struct {
+	getByKeyFn func(ctx context.Context, key string) (*model.Stack, error)
+}
+
+func (m *mockStackRepo) List(_ context.Context) ([]*model.Stack, error) { return nil, nil }
+func (m *mockStackRepo) GetByID(_ context.Context, _ uuid.UUID) (*model.Stack, error) {
+	return nil, nil
+}
+func (m *mockStackRepo) GetByKey(ctx context.Context, key string) (*model.Stack, error) {
+	if m.getByKeyFn != nil {
+		return m.getByKeyFn(ctx, key)
+	}
+	return nil, errors.NewNotFound("stack", key)
+}
+func (m *mockStackRepo) Upsert(_ context.Context, s *model.Stack) (*model.Stack, error) {
+	return s, nil
+}
+
 // --- Test fixture ---
 
 // mockCostRepo is a no-op CostRepository for use in AgentRunAction tests.
@@ -512,6 +534,7 @@ type agentRunFixture struct {
 	runRepo         *mockRunRepo
 	environmentRepo *mockEnvironmentRepo
 	sidecarMgr      *mockSidecarManager
+	stackRepo       *mockStackRepo
 	costSvc         *service.CostService
 
 	action *action.AgentRunAction
@@ -528,7 +551,7 @@ func newAgentRunFixture(t *testing.T) *agentRunFixture {
 	}
 
 	backendScope := "backend"
-	repoURL := "https://github.com/test/repo"
+	repoURL := testAgentRepoURL
 	f.story = &model.Story{
 		ID:                 f.storyID,
 		ProjectID:          f.projectID,
@@ -610,6 +633,7 @@ func newAgentRunFixture(t *testing.T) *agentRunFixture {
 	// back-compat golden test pins.
 	f.environmentRepo = &mockEnvironmentRepo{}
 	f.sidecarMgr = &mockSidecarManager{t: t}
+	f.stackRepo = &mockStackRepo{}
 
 	// Create a real TemplateRenderer
 	renderer := &mockTemplateRenderer{}
@@ -633,6 +657,7 @@ func newAgentRunFixture(t *testing.T) *agentRunFixture {
 		f.runRepo,
 		f.environmentRepo,
 		f.sidecarMgr,
+		f.stackRepo,
 		renderer,
 		f.costSvc,
 		agentCfg,
@@ -728,7 +753,7 @@ func TestAgentRunAction_HappyPath(t *testing.T) {
 	if !strings.Contains(envMap["CLAUDE_MD_CONTENT"], "Test Project") {
 		t.Errorf("expected CLAUDE_MD_CONTENT to contain project name, got: %q", envMap["CLAUDE_MD_CONTENT"])
 	}
-	if envMap["REPO_URL"] != "https://github.com/test/repo" {
+	if envMap["REPO_URL"] != testAgentRepoURL {
 		t.Errorf("expected REPO_URL, got %q", envMap["REPO_URL"])
 	}
 	if envMap["BRANCH_NAME"] != "feat/s-42-test" {
@@ -1162,7 +1187,7 @@ func TestAgentRunAction_NoEnvironment_GoldenBackCompat(t *testing.T) {
 	// Build the expected legacy env exactly as createContainer would with no
 	// extraEnv, sort both, and compare element-by-element.
 	wantEnv := []string{
-		"REPO_URL=https://github.com/test/repo",
+		"REPO_URL=" + testAgentRepoURL,
 		"BRANCH_NAME=feat/s-42-test",
 		"STORY_KEY=S-42",
 		"PROMPT_CONTENT=" + envValue(opts.Env, "PROMPT_CONTENT"),

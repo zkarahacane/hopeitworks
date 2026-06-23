@@ -74,6 +74,14 @@ func (m *ContainerManager) Create(ctx context.Context, opts model.ContainerOpts)
 		Env:    opts.Env,
 		Labels: opts.Labels,
 	}
+	// Optional ENTRYPOINT/CMD overrides. Nil-safe: empty slices leave the
+	// image's own entrypoint/command untouched, preserving current behaviour.
+	if len(opts.Entrypoint) > 0 {
+		config.Entrypoint = opts.Entrypoint
+	}
+	if len(opts.Cmd) > 0 {
+		config.Cmd = opts.Cmd
+	}
 	if opts.Healthcheck != nil {
 		config.Healthcheck = &dockercontainer.HealthConfig{
 			Test:        opts.Healthcheck.Test,

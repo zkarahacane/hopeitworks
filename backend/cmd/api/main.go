@@ -301,7 +301,7 @@ func run() error {
 			agentRunAction := actionadapter.NewAgentRunAction(
 				containerMgr, logStreamer, eventRepo,
 				storyRepo, projectRepo, runRepo,
-				environmentRepo, sidecarMgr,
+				environmentRepo, sidecarMgr, stackRepo,
 				handlebarsRenderer, costSvc, agentCfg, logger,
 				apiKeySvc, containerTokenStore, callbackStatusStore,
 				cfg.Docker.CallbackBaseURL,
