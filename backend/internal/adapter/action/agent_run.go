@@ -385,7 +385,7 @@ func (a *AgentRunAction) createContainer(
 			if id := extractAgentID(runCtx); id != nil {
 				agentID = *id
 			}
-			token, tokenErr := a.tokenStore.Create(ctx, runCtx.Run.ID, runCtx.RunStep.ID, agentID, 2*time.Hour)
+			token, tokenErr := a.tokenStore.Create(ctx, runCtx.Run.ID, runCtx.RunStep.ID, agentID, role, 2*time.Hour)
 			if tokenErr != nil {
 				return "", fmt.Errorf("create container token: %w", tokenErr)
 			}

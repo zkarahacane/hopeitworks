@@ -100,13 +100,13 @@ func TestComposeBundle_BackCompat_Empty(t *testing.T) {
 	svc := newBundleService(caps, &mockCredentialRepo{}, agents)
 
 	t.Run("nil agent id", func(t *testing.T) {
-		b, err := svc.ComposeBundle(context.Background(), uuid.Nil)
+		b, err := svc.ComposeBundle(context.Background(), uuid.Nil, "")
 		require.NoError(t, err)
 		assert.True(t, b.IsEmpty())
 	})
 
 	t.Run("agent with no capabilities", func(t *testing.T) {
-		b, err := svc.ComposeBundle(context.Background(), agentID)
+		b, err := svc.ComposeBundle(context.Background(), agentID, "")
 		require.NoError(t, err)
 		assert.True(t, b.IsEmpty())
 	})
@@ -129,7 +129,7 @@ func TestComposeBundle_Skill(t *testing.T) {
 	agents := &mockAgentRepo{agents: map[uuid.UUID]*model.Agent{agentID: {ID: agentID}}}
 	svc := newBundleService(caps, &mockCredentialRepo{}, agents)
 
-	b, err := svc.ComposeBundle(context.Background(), agentID)
+	b, err := svc.ComposeBundle(context.Background(), agentID, "")
 	require.NoError(t, err)
 	require.Len(t, b.Skills, 1)
 	assert.Equal(t, "code-review", b.Skills[0].Name) // falls back to capability name
@@ -165,7 +165,7 @@ func TestComposeBundle_MCPServerWithCredential(t *testing.T) {
 	}}
 	svc.capRepo = caps
 
-	b, err := svc.ComposeBundle(context.Background(), agentID)
+	b, err := svc.ComposeBundle(context.Background(), agentID, "")
 	require.NoError(t, err)
 	require.Contains(t, b.MCP.MCPServers, "kanban")
 	assert.Equal(t, "http://mcp-kanban.internal/sse", b.MCP.MCPServers["kanban"].URL)
@@ -194,7 +194,7 @@ func TestComposeBundle_MissingCredential_WarnSkip(t *testing.T) {
 		agents: map[uuid.UUID]*model.Agent{agentID: {ID: agentID}},
 	})
 
-	b, err := svc.ComposeBundle(context.Background(), agentID)
+	b, err := svc.ComposeBundle(context.Background(), agentID, "")
 	require.NoError(t, err)
 	assert.Contains(t, b.MCP.MCPServers, "kanban")
 	assert.Empty(t, b.Credentials)
@@ -225,10 +225,174 @@ func TestComposeBundle_ToolPolicyAndMalformedSkipped(t *testing.T) {
 		agents: map[uuid.UUID]*model.Agent{agentID: {ID: agentID}},
 	})
 
-	b, err := svc.ComposeBundle(context.Background(), agentID)
+	b, err := svc.ComposeBundle(context.Background(), agentID, "")
 	require.NoError(t, err)
 	require.NotNil(t, b.ToolPolicy)
 	assert.Equal(t, []string{"Read", "Grep"}, b.ToolPolicy.Allow)
 	assert.Equal(t, []string{"Bash(rm:*)"}, b.ToolPolicy.Deny)
 	assert.Empty(t, b.Skills) // the malformed skill was skipped
+}
+
+func TestComposeBundle_RoleFiltering(t *testing.T) {
+	agentBase := &mockAgentRepo{agents: map[uuid.UUID]*model.Agent{}}
+
+	tests := []struct {
+		name    string
+		caps    func(agentID uuid.UUID) []*model.Capability
+		role    string
+		checkFn func(t *testing.T, b model.RuntimeBundle)
+	}{
+		{
+			name: "review role — mcp_server scopé dev filtré",
+			caps: func(_ uuid.UUID) []*model.Capability {
+				return []*model.Capability{
+					{
+						ID:   uuid.New(),
+						Kind: model.CapabilityKindMCPServer,
+						Name: "write-mcp",
+						Spec: mustSpec(t, model.MCPServerSpec{
+							Name:  "write-mcp",
+							URL:   "http://write-mcp.internal/sse",
+							Roles: []string{model.RoleDev},
+						}),
+					},
+				}
+			},
+			role: model.RoleReview,
+			checkFn: func(t *testing.T, b model.RuntimeBundle) {
+				assert.NotContains(t, b.MCP.MCPServers, "write-mcp")
+			},
+		},
+		{
+			name: "review role — mcp_server universel inclus",
+			caps: func(_ uuid.UUID) []*model.Capability {
+				return []*model.Capability{
+					{
+						ID:   uuid.New(),
+						Kind: model.CapabilityKindMCPServer,
+						Name: "read-mcp",
+						Spec: mustSpec(t, model.MCPServerSpec{
+							Name:  "read-mcp",
+							URL:   "http://read-mcp.internal/sse",
+							Roles: []string{},
+						}),
+					},
+				}
+			},
+			role: model.RoleReview,
+			checkFn: func(t *testing.T, b model.RuntimeBundle) {
+				assert.Contains(t, b.MCP.MCPServers, "read-mcp")
+			},
+		},
+		{
+			name: "dev role — mcp_server scopé dev inclus",
+			caps: func(_ uuid.UUID) []*model.Capability {
+				return []*model.Capability{
+					{
+						ID:   uuid.New(),
+						Kind: model.CapabilityKindMCPServer,
+						Name: "write-mcp",
+						Spec: mustSpec(t, model.MCPServerSpec{
+							Name:  "write-mcp",
+							URL:   "http://write-mcp.internal/sse",
+							Roles: []string{model.RoleDev},
+						}),
+					},
+				}
+			},
+			role: model.RoleDev,
+			checkFn: func(t *testing.T, b model.RuntimeBundle) {
+				assert.Contains(t, b.MCP.MCPServers, "write-mcp")
+			},
+		},
+		{
+			name: "rôle vide — seulement capacités universelles",
+			caps: func(_ uuid.UUID) []*model.Capability {
+				return []*model.Capability{
+					{
+						ID:   uuid.New(),
+						Kind: model.CapabilityKindMCPServer,
+						Name: "write-mcp",
+						Spec: mustSpec(t, model.MCPServerSpec{
+							Name:  "write-mcp",
+							URL:   "http://write-mcp.internal/sse",
+							Roles: []string{model.RoleDev},
+						}),
+					},
+					{
+						ID:   uuid.New(),
+						Kind: model.CapabilityKindMCPServer,
+						Name: "read-mcp",
+						Spec: mustSpec(t, model.MCPServerSpec{
+							Name:  "read-mcp",
+							URL:   "http://read-mcp.internal/sse",
+							Roles: []string{},
+						}),
+					},
+				}
+			},
+			role: "",
+			checkFn: func(t *testing.T, b model.RuntimeBundle) {
+				assert.NotContains(t, b.MCP.MCPServers, "write-mcp")
+				assert.Contains(t, b.MCP.MCPServers, "read-mcp")
+			},
+		},
+		{
+			name: "tool_policy scopée review appliquée à review",
+			caps: func(_ uuid.UUID) []*model.Capability {
+				return []*model.Capability{
+					{
+						ID:   uuid.New(),
+						Kind: model.CapabilityKindToolPolicy,
+						Name: "review-policy",
+						Spec: mustSpec(t, model.ToolPolicySpec{
+							Allow: []string{"Read", "Grep"},
+							Deny:  []string{"Bash", "Edit", "Write"},
+							Roles: []string{model.RoleReview},
+						}),
+					},
+				}
+			},
+			role: model.RoleReview,
+			checkFn: func(t *testing.T, b model.RuntimeBundle) {
+				require.NotNil(t, b.ToolPolicy)
+				assert.Contains(t, b.ToolPolicy.Deny, "Bash")
+			},
+		},
+		{
+			name: "tool_policy scopée review non appliquée à dev",
+			caps: func(_ uuid.UUID) []*model.Capability {
+				return []*model.Capability{
+					{
+						ID:   uuid.New(),
+						Kind: model.CapabilityKindToolPolicy,
+						Name: "review-policy",
+						Spec: mustSpec(t, model.ToolPolicySpec{
+							Allow: []string{"Read", "Grep"},
+							Deny:  []string{"Bash", "Edit", "Write"},
+							Roles: []string{model.RoleReview},
+						}),
+					},
+				}
+			},
+			role: model.RoleDev,
+			checkFn: func(t *testing.T, b model.RuntimeBundle) {
+				assert.Nil(t, b.ToolPolicy)
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			agentID := uuid.New()
+			agentBase.agents[agentID] = &model.Agent{ID: agentID}
+			caps := &mockCapabilityRepo{forAgent: map[uuid.UUID][]*model.Capability{
+				agentID: tc.caps(agentID),
+			}}
+			svc := newBundleService(caps, &mockCredentialRepo{}, agentBase)
+			b, err := svc.ComposeBundle(context.Background(), agentID, tc.role)
+			require.NoError(t, err)
+			tc.checkFn(t, b)
+		})
+	}
 }

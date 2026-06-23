@@ -13,10 +13,15 @@ import (
 // server-side (the container never names the agent itself — it cannot fetch another
 // agent's bundle/secrets). AgentID is uuid.Nil when no agent is bound, which yields
 // an empty bundle (back-compat).
+//
+// Role is the step role resolved from the pipeline config (e.g. "dev", "review", "merge").
+// An empty role means the step is not role-scoped; in that case only universal capabilities
+// (Roles == nil/empty) are included in the bundle.
 type ContainerToken struct {
 	Token     string
 	RunID     uuid.UUID
 	StepID    uuid.UUID
 	AgentID   uuid.UUID
+	Role      string // role du step, ex. "dev"/"review"/"merge" ; "" = non scopé
 	ExpiresAt time.Time
 }
