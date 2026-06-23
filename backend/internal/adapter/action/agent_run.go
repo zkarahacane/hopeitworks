@@ -50,6 +50,29 @@ type AgentRunAction struct {
 	tokenStore      port.ContainerTokenStore
 	statusStore     port.CallbackStatusStore
 	callbackURL     string
+
+	// runtime, when non-nil, is the execution substrate the run is realised on
+	// (port.AgentRuntime). main.go injects docker.Runtime by DEFAULT (Docker is no
+	// longer special — it is an adapter behind the port), and may inject an
+	// alternative substrate (e.g. microsandbox) under SUBSTRATE selection. When nil
+	// the Action drives the ContainerManager directly via the legacy path, kept
+	// byte-identical for back-compat. Set via WithAgentRuntime.
+	runtime port.AgentRuntime
+}
+
+// Option configures optional behaviour of an AgentRunAction without widening the
+// (already large) NewAgentRunAction positional signature. The legacy path uses no
+// options; its constructor call-sites stay unchanged (variadic empty).
+type Option func(*AgentRunAction)
+
+// WithAgentRuntime selects the execution substrate the run dispatches through.
+// When set, Execute realises the run via this port.AgentRuntime (Launch/Wait/Stop
+// — Docker-as-adapter by default) while keeping callback-wait + token mint/revoke
+// + the outcome model in the Action. Passing nil is a no-op (legacy direct path).
+func WithAgentRuntime(rt port.AgentRuntime) Option {
+	return func(a *AgentRunAction) {
+		a.runtime = rt
+	}
 }
 
 // NewAgentRunAction creates a new agent run action.
@@ -83,8 +106,9 @@ func NewAgentRunAction(
 	tokenStore port.ContainerTokenStore,
 	statusStore port.CallbackStatusStore,
 	callbackURL string,
+	opts ...Option,
 ) *AgentRunAction {
-	return &AgentRunAction{
+	a := &AgentRunAction{
 		containerMgr:    containerMgr,
 		logStreamer:     logStreamer,
 		eventPub:        eventPub,
@@ -103,6 +127,10 @@ func NewAgentRunAction(
 		statusStore:     statusStore,
 		callbackURL:     callbackURL,
 	}
+	for _, opt := range opts {
+		opt(a)
+	}
+	return a
 }
 
 // Name returns the action identifier.
@@ -213,7 +241,17 @@ func (a *AgentRunAction) Execute(ctx context.Context, runCtx *model.RunContext) 
 		return fmt.Errorf("run environment commands: %w", err)
 	}
 
-	// 7. Create container
+	// 7. Substrate dispatch. When a runtime is injected (SUBSTRATE selection in
+	// main.go, DockerRuntime by default), the run is realised THROUGH
+	// port.AgentRuntime — Docker is no longer special. The callback-wait + token
+	// mint/revoke + outcome model stay in the Action (see executeViaRuntime), so
+	// this is NOT the rejected branch-beside-Docker fork. nil keeps the legacy
+	// direct path (back-compat).
+	if a.runtime != nil {
+		return a.executeViaRuntime(ctx, runCtx, project, story, agentImage, prompt, branchName, extraEnv, sidecarCtx)
+	}
+
+	// 7b. Legacy direct path (unchanged) — createContainer + Start + persist + wait.
 	containerID, err := a.createContainer(ctx, runCtx, project, story, agentImage, prompt, branchName, extraEnv, sidecarCtx)
 	if err != nil {
 		return fmt.Errorf("create container: %w", err)
@@ -351,6 +389,98 @@ func (a *AgentRunAction) createContainer(
 	}
 
 	return a.containerMgr.Create(ctx, opts)
+}
+
+// executeViaRuntime realises the agent run THROUGH port.AgentRuntime instead of
+// driving the Docker ContainerManager directly. Docker is no longer special: the
+// injected runtime (docker.Runtime by default, microsandbox under SUBSTRATE) owns
+// only Launch/Stop/Wait, while THIS Action keeps the substrate-agnostic outcome
+// model — callback-wait in callback mode, streamAndWait in legacy mode — plus the
+// token mint (inside buildAgentEnv) and persistContainerID timing.
+//
+// It deliberately does NOT read result.ExitCode off the runtime's Wait as the
+// outcome source: that was the rejected P3c branch-beside-Docker fork, which let
+// substrate runs skip callback-wait and token-revoke. Here the outcome flows from
+// exactly the same place as the legacy path.
+func (a *AgentRunAction) executeViaRuntime(
+	ctx context.Context,
+	runCtx *model.RunContext,
+	project *model.Project,
+	story *model.Story,
+	agentImage, prompt, branchName string,
+	extraEnv []string,
+	sidecarCtx *port.SidecarContext,
+) error {
+	// buildAgentEnv mints the container token (callback mode) as a side effect, so
+	// the token lifecycle is unchanged from the legacy path.
+	env, err := a.buildAgentEnv(ctx, runCtx, project, story, agentImage, prompt, branchName, extraEnv)
+	if err != nil {
+		return fmt.Errorf("build agent env: %w", err)
+	}
+
+	runtimeKind, _ := runCtx.Metadata["runtime_kind"].(string)
+	modelID, _ := runCtx.Metadata["model"].(string)
+
+	spec := port.RunSpec{
+		RuntimeKind:  runtimeKind,
+		Model:        modelID,
+		Provider:     resolveProvider(runCtx),
+		Image:        agentImage,
+		Prompt:       prompt,
+		Env:          env,
+		Labels:       a.buildAgentLabels(runCtx, story),
+		Capabilities: model.CapabilitySpec{}, // materialised by the harness at startup (fetch-at-startup)
+		Memory:       a.config.DefaultMemory,
+		CPUs:         a.config.DefaultCPUs,
+		Network:      buildRunNetwork(sidecarCtx),
+	}
+
+	handle, err := a.runtime.Launch(ctx, spec)
+	if err != nil {
+		return fmt.Errorf("launch agent on substrate: %w", err)
+	}
+	// Teardown guaranteed, mirroring the legacy defer cleanupContainer. A detached
+	// context lets Stop run even when ctx is already cancelled.
+	defer func() {
+		if stopErr := a.runtime.Stop(context.Background(), handle); stopErr != nil {
+			a.logger.Warn("failed to stop agent substrate handle",
+				"run_id", runCtx.Run.ID, "handle", handle.ID, "error", stopErr)
+		}
+	}()
+
+	// Persist the substrate handle as the run-step container id (same timing as the
+	// legacy path persists it after Start), so the out-of-band reapers keep working.
+	a.persistContainerID(ctx, runCtx.RunStep.ID, handle.ID)
+
+	// OUTCOME — IDENTICAL to the legacy path. We do NOT read result.ExitCode off the
+	// runtime's Wait as the outcome (that is the rejected P3c fork). In callback mode
+	// the callback channel is the source of truth (waitForCallback); in legacy mode
+	// we streamAndWait on the handle id (= container id for Docker).
+	isCallbackMode := a.isCallbackMode(runtimeKind, agentImage)
+	var exitCode int
+	if isCallbackMode {
+		exitCode, err = a.waitForCallback(ctx, runCtx)
+	} else {
+		exitCode, err = a.streamAndWait(ctx, handle.ID, runCtx)
+	}
+	if err != nil {
+		return fmt.Errorf("stream/wait: %w", err)
+	}
+	if exitCode != 0 {
+		return fmt.Errorf("agent exited with code %d", exitCode)
+	}
+	return nil
+}
+
+// buildRunNetwork maps the per-run sidecar network onto the agnostic
+// port.RunNetwork. nil/empty sidecarCtx => zero RunNetwork (no extra attachment),
+// so a project without an Environment yields a launch byte-identical to the
+// single-homed legacy case.
+func buildRunNetwork(sidecarCtx *port.SidecarContext) port.RunNetwork {
+	if sidecarCtx != nil && sidecarCtx.NetworkName != "" {
+		return port.RunNetwork{Name: sidecarCtx.NetworkName}
+	}
+	return port.RunNetwork{}
 }
 
 // buildAgentLabels returns the bookkeeping labels stamped onto the agent
