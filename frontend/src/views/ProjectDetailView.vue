@@ -26,6 +26,7 @@ const tabs = [
   { label: 'Runs', icon: 'pi pi-play', route: 'project-runs' },
   { label: 'Pipeline', icon: 'pi pi-cog', route: 'project-pipeline' },
   { label: 'Agents', icon: 'pi pi-microchip', route: 'project-agents' },
+  { label: 'Environment', icon: 'pi pi-server', route: 'project-environment' },
   { label: 'Costs', icon: 'pi pi-dollar', route: 'project-costs' },
   { label: 'Settings', icon: 'pi pi-sliders-h', route: 'project-settings' },
   { label: 'Notifications', icon: 'pi pi-bell', route: 'project-notifications' },
