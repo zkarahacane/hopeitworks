@@ -225,3 +225,68 @@ logging:
 		t.Errorf("Stacks len = %d, want 0 when section absent", len(cfg.Stacks))
 	}
 }
+
+// minimalDB is a valid database section reused by the substrate tests; defined
+// as a const so the substrate cases stay focused (and to satisfy goconst).
+const minimalDB = `
+database:
+  host: localhost
+  port: 5432
+  name: testdb
+  user: testuser
+  password: testpass
+  sslmode: disable
+
+logging:
+  level: info
+`
+
+func writeConfig(t *testing.T, yaml string) string {
+	t.Helper()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yaml")
+	if err := os.WriteFile(path, []byte(yaml), 0644); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func TestLoad_SubstrateDefaultsToDocker(t *testing.T) {
+	t.Setenv("SUBSTRATE", "")
+	cfg, err := Load(writeConfig(t, minimalDB))
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if cfg.Substrate.Kind != "docker" {
+		t.Errorf("Substrate.Kind = %q, want docker default", cfg.Substrate.Kind)
+	}
+}
+
+func TestLoad_SubstrateFromYAML(t *testing.T) {
+	t.Setenv("SUBSTRATE", "")
+	cfg, err := Load(writeConfig(t, minimalDB+"\nsubstrate:\n  kind: microsandbox\n"))
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if cfg.Substrate.Kind != "microsandbox" {
+		t.Errorf("Substrate.Kind = %q, want microsandbox", cfg.Substrate.Kind)
+	}
+}
+
+func TestLoad_SubstrateEnvOverride(t *testing.T) {
+	t.Setenv("SUBSTRATE", "microsandbox")
+	cfg, err := Load(writeConfig(t, minimalDB))
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if cfg.Substrate.Kind != "microsandbox" {
+		t.Errorf("Substrate.Kind = %q, want microsandbox from env override", cfg.Substrate.Kind)
+	}
+}
+
+func TestLoad_SubstrateInvalidRejected(t *testing.T) {
+	t.Setenv("SUBSTRATE", "k8s")
+	if _, err := Load(writeConfig(t, minimalDB)); err == nil {
+		t.Fatal("Load() should reject an unknown substrate kind")
+	}
+}

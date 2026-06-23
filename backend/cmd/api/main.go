@@ -20,6 +20,7 @@ import (
 	gitadapter "github.com/zakari/hopeitworks/backend/internal/adapter/git"
 	hbadapter "github.com/zakari/hopeitworks/backend/internal/adapter/handlebars"
 	memoryadapter "github.com/zakari/hopeitworks/backend/internal/adapter/memory"
+	microsandboxadapter "github.com/zakari/hopeitworks/backend/internal/adapter/microsandbox"
 	pgadapter "github.com/zakari/hopeitworks/backend/internal/adapter/postgres"
 	riveradapter "github.com/zakari/hopeitworks/backend/internal/adapter/river"
 	smtpadapter "github.com/zakari/hopeitworks/backend/internal/adapter/smtp"
@@ -216,6 +217,17 @@ func run() error {
 	if err != nil {
 		logger.Warn("docker container manager unavailable, timeout enforcer and orphan cleaner disabled", "error", err)
 	}
+
+	// Substrate selection (P3a). The substrate is the execution backend that
+	// realises an agent run via port.AgentRuntime. Docker is the live default and
+	// the ONLY substrate wired into the agent_run flow below. The microsandbox
+	// adapter is a scaffold: selecting it logs the choice and constructs the
+	// (inert) AgentRuntime, but does NOT intercept execution — live runs still go
+	// through the Docker ContainerManager. This switch never touches the Docker
+	// wiring; it only records intent. The returned AgentRuntime is the scaffold
+	// adapter (microsandbox) or nil (docker); P3a does not consume it on the live
+	// path, so it is intentionally discarded here.
+	_ = selectSubstrate(cfg.Substrate.Kind, stackRepo, logger)
 
 	// HITL repository (created early because hitl_gate action needs it)
 	hitlRepo := pgadapter.NewHITLRepo(queries)
@@ -540,6 +552,28 @@ func stackCatalogueFromConfig(entries []pkgconfig.StackConfig, logger *slog.Logg
 		out = append(out, model.Stack{Key: e.Key, ImageRef: e.ImageRef, Toolchain: toolchain})
 	}
 	return out
+}
+
+// selectSubstrate logs the configured execution substrate and, for the
+// microsandbox kind, constructs the scaffold AgentRuntime adapter (P3a). The
+// adapter is intentionally inert: it is NOT wired into the live agent_run flow,
+// so live execution always uses the Docker ContainerManager regardless of this
+// selection. This function records intent only — it never alters the Docker
+// wiring. Returns the AgentRuntime when one is constructed (microsandbox), or
+// nil for the docker default (the live path needs no extra adapter).
+func selectSubstrate(kind string, stacks port.StackRepository, logger *slog.Logger) port.AgentRuntime {
+	switch kind {
+	case pkgconfig.SubstrateMicrosandbox:
+		logger.Info("substrate selected", "substrate", pkgconfig.SubstrateMicrosandbox)
+		// enabled=false: even a constructed adapter stays a stub in P3a.
+		rt := microsandboxadapter.NewRuntime(false, stacks, logger)
+		logger.Warn("microsandbox runtime is scaffold-only (P3a): live execution still uses Docker",
+			"substrate", pkgconfig.SubstrateMicrosandbox)
+		return rt
+	default:
+		logger.Info("substrate selected", "substrate", pkgconfig.SubstrateDocker)
+		return nil
+	}
 }
 
 // startTokenCleanup launches a goroutine that periodically purges expired revoked tokens.
