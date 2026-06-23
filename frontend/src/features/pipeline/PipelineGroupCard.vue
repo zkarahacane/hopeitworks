@@ -2,9 +2,11 @@
 import { ref, watch, nextTick, type ComponentPublicInstance } from 'vue'
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
+import Select from 'primevue/select'
 import { useConfirm } from 'primevue/useconfirm'
 import PipelineStepCard from './PipelineStepCard.vue'
-import type { PipelineGroup, PipelineStep } from '@/stores/pipelineConfig'
+import GuardEditor from './GuardEditor.vue'
+import type { PipelineGroup, PipelineStep, Guard, TransitionPolicy } from '@/stores/pipelineConfig'
 import type { Agent } from '@/stores/agents'
 
 const props = defineProps<{
@@ -26,7 +28,17 @@ const emit = defineEmits<{
   'move-up': [index: number]
   'move-down': [index: number]
   'reorder-step': [groupId: string, fromIndex: number, toIndex: number]
+  'update-transition': [groupId: string, transition: TransitionPolicy]
+  'add-guard': [groupId: string]
+  'remove-guard': [groupId: string, guardIndex: number]
+  'update-guard': [groupId: string, guardIndex: number, guard: Guard]
 }>()
+
+const transitionOptions: { label: string; value: TransitionPolicy }[] = [
+  { label: 'Auto', value: 'auto' },
+  { label: 'Manual', value: 'manual' },
+  { label: 'Gate', value: 'gate' },
+]
 
 const confirm = useConfirm()
 const collapsed = ref(false)
@@ -74,6 +86,10 @@ function confirmRemove() {
       emit('remove', props.group.id)
     },
   })
+}
+
+function onTransitionChange(value: TransitionPolicy) {
+  emit('update-transition', props.group.id, value)
 }
 
 function handleMoveStepUp(stepIndex: number) {
@@ -173,6 +189,41 @@ function toggleStepExpand(index: number) {
           @click="confirmRemove"
         />
       </template>
+    </div>
+
+    <!-- Stage config: transition policy + guards -->
+    <div
+      v-show="!collapsed"
+      class="flex flex-col gap-3 pl-4 mt-1 py-2"
+      data-testid="stage-config"
+    >
+      <!-- Transition policy -->
+      <div class="flex flex-wrap items-center gap-2">
+        <label class="text-sm font-medium">Transition</label>
+        <Select
+          :model-value="group.transition"
+          :options="transitionOptions"
+          option-label="label"
+          option-value="value"
+          :disabled="!isAdmin"
+          size="small"
+          class="w-32"
+          data-testid="transition-select"
+          @update:model-value="onTransitionChange"
+        />
+        <span class="text-xs opacity-50 flex-1 min-w-0" data-testid="transition-hint">
+          auto = avance seule · manual = attend un Go · gate = HITL
+        </span>
+      </div>
+
+      <!-- Guards -->
+      <GuardEditor
+        :guards="group.guards ?? []"
+        :is-admin="isAdmin"
+        @add="emit('add-guard', group.id)"
+        @remove="(i: number) => emit('remove-guard', group.id, i)"
+        @update="(i: number, guard: Guard) => emit('update-guard', group.id, i, guard)"
+      />
     </div>
 
     <!-- Steps area -->

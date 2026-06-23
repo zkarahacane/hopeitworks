@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import PipelineGroupCard from './PipelineGroupCard.vue'
-import type { PipelineGroup, PipelineStep } from '@/stores/pipelineConfig'
+import type { PipelineGroup, PipelineStep, Guard, TransitionPolicy } from '@/stores/pipelineConfig'
 import type { Agent } from '@/stores/agents'
 
 defineProps<{
@@ -17,6 +17,10 @@ const emit = defineEmits<{
   'remove-step': [groupId: string, stepId: string]
   'reorder-groups': [fromIndex: number, toIndex: number]
   'reorder-step': [groupId: string, fromIndex: number, toIndex: number]
+  'update-transition': [groupId: string, transition: TransitionPolicy]
+  'add-guard': [groupId: string]
+  'remove-guard': [groupId: string, guardIndex: number]
+  'update-guard': [groupId: string, guardIndex: number, guard: Guard]
 }>()
 
 function handleMoveGroupUp(index: number) {
@@ -52,6 +56,10 @@ function handleMoveGroupDown(index: number, groupCount: number) {
       @move-up="handleMoveGroupUp(index)"
       @move-down="handleMoveGroupDown(index, groups.length)"
       @reorder-step="(gId: string, from: number, to: number) => emit('reorder-step', gId, from, to)"
+      @update-transition="(gId: string, t: TransitionPolicy) => emit('update-transition', gId, t)"
+      @add-guard="emit('add-guard', $event)"
+      @remove-guard="(gId: string, i: number) => emit('remove-guard', gId, i)"
+      @update-guard="(gId: string, i: number, guard: Guard) => emit('update-guard', gId, i, guard)"
     />
   </div>
 </template>
