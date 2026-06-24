@@ -90,6 +90,12 @@ func (m *humanMockRunRepo) ListRunsByProject(_ context.Context, _ uuid.UUID, _, 
 func (m *humanMockRunRepo) ListRunsByStory(_ context.Context, _ uuid.UUID, _, _ int32) ([]*model.Run, error) {
 	return nil, nil
 }
+func (m *humanMockRunRepo) ListRunsByStatus(_ context.Context, _ model.RunStatus) ([]*model.Run, error) {
+	return nil, nil
+}
+func (m *humanMockRunRepo) MarkRunOrphanedIfRunning(_ context.Context, _ uuid.UUID, _ time.Time, _ string) (bool, error) {
+	return false, nil
+}
 func (m *humanMockRunRepo) UpdateRunStatus(_ context.Context, id uuid.UUID, _ model.RunStatus, _, _, _ *time.Time, _ *string) (*model.Run, error) {
 	return &model.Run{ID: id}, nil
 }

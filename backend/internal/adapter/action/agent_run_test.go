@@ -298,6 +298,12 @@ func (m *mockRunRepo) ListRunsByStory(ctx context.Context, storyID uuid.UUID, li
 	}
 	return nil, nil
 }
+func (m *mockRunRepo) ListRunsByStatus(_ context.Context, _ model.RunStatus) ([]*model.Run, error) {
+	return nil, nil
+}
+func (m *mockRunRepo) MarkRunOrphanedIfRunning(_ context.Context, _ uuid.UUID, _ time.Time, _ string) (bool, error) {
+	return false, nil
+}
 func (m *mockRunRepo) UpdateRunStatus(ctx context.Context, id uuid.UUID, status model.RunStatus, startedAt, completedAt, pausedAt *time.Time, errorMsg *string) (*model.Run, error) {
 	if m.updateRunStatusFn != nil {
 		return m.updateRunStatusFn(ctx, id, status, startedAt, completedAt, pausedAt, errorMsg)

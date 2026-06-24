@@ -23,11 +23,16 @@ type TimeoutEnforcer struct {
 	logger         *slog.Logger
 	defaultTimeout time.Duration
 	checkInterval  time.Duration
+	// reconciler reconciles DB run statuses against live containers on each tick.
+	// Optional: nil disables periodic reconciliation.
+	reconciler *OrphanReconciler
 }
 
 // NewTimeoutEnforcer creates a new TimeoutEnforcer.
 // defaultTimeout is the maximum time a container may run before being stopped (default 30 minutes).
 // checkInterval is how often the enforcer checks for timed-out containers (default 30 seconds).
+// reconciler is invoked on each watchdog tick to reconcile orphaned DB run
+// statuses (runs stuck `running` with no live container); pass nil to disable.
 func NewTimeoutEnforcer(
 	containerMgr port.ContainerManager,
 	runRepo port.RunRepository,
@@ -35,6 +40,7 @@ func NewTimeoutEnforcer(
 	logger *slog.Logger,
 	defaultTimeout time.Duration,
 	checkInterval time.Duration,
+	reconciler *OrphanReconciler,
 ) *TimeoutEnforcer {
 	return &TimeoutEnforcer{
 		containerMgr:   containerMgr,
@@ -43,6 +49,7 @@ func NewTimeoutEnforcer(
 		logger:         logger,
 		defaultTimeout: defaultTimeout,
 		checkInterval:  checkInterval,
+		reconciler:     reconciler,
 	}
 }
 
@@ -66,6 +73,11 @@ func (t *TimeoutEnforcer) Start(ctx context.Context) error {
 		case <-ticker.C:
 			if err := t.CheckTimeouts(ctx); err != nil {
 				t.logger.Error("timeout check failed", "error", err)
+			}
+			if t.reconciler != nil {
+				if err := t.reconciler.ReconcileOrphanedRuns(ctx); err != nil {
+					t.logger.Error("orphan run reconciliation failed", "error", err)
+				}
 			}
 		}
 	}

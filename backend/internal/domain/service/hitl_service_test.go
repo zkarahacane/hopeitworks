@@ -156,6 +156,12 @@ func (m *mockRunRepoForHITL) ListRunsByProject(_ context.Context, _ uuid.UUID, _
 func (m *mockRunRepoForHITL) ListRunsByStory(_ context.Context, _ uuid.UUID, _, _ int32) ([]*model.Run, error) {
 	return nil, nil
 }
+func (m *mockRunRepoForHITL) ListRunsByStatus(_ context.Context, _ model.RunStatus) ([]*model.Run, error) {
+	return nil, nil
+}
+func (m *mockRunRepoForHITL) MarkRunOrphanedIfRunning(_ context.Context, _ uuid.UUID, _ time.Time, _ string) (bool, error) {
+	return false, nil
+}
 func (m *mockRunRepoForHITL) UpdateRunStatus(_ context.Context, id uuid.UUID, status model.RunStatus, _, _, _ *time.Time, _ *string) (*model.Run, error) {
 	run, ok := m.runs[id]
 	if !ok {

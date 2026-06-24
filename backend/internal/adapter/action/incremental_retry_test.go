@@ -53,6 +53,12 @@ func (m *retryMockRunRepo) ListRunsByProject(_ context.Context, _ uuid.UUID, _, 
 func (m *retryMockRunRepo) ListRunsByStory(_ context.Context, _ uuid.UUID, _, _ int32) ([]*model.Run, error) {
 	return nil, nil
 }
+func (m *retryMockRunRepo) ListRunsByStatus(_ context.Context, _ model.RunStatus) ([]*model.Run, error) {
+	return nil, nil
+}
+func (m *retryMockRunRepo) MarkRunOrphanedIfRunning(_ context.Context, _ uuid.UUID, _ time.Time, _ string) (bool, error) {
+	return false, nil
+}
 func (m *retryMockRunRepo) UpdateRunStatus(_ context.Context, id uuid.UUID, status model.RunStatus, _, _, _ *time.Time, _ *string) (*model.Run, error) {
 	return &model.Run{ID: id, Status: status}, nil
 }

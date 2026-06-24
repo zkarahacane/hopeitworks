@@ -694,6 +694,12 @@ func (m *storyHandlerRunRepo) ListRunsByProject(_ context.Context, _ uuid.UUID, 
 func (m *storyHandlerRunRepo) ListRunsByStory(_ context.Context, _ uuid.UUID, _, _ int32) ([]*model.Run, error) {
 	return nil, nil
 }
+func (m *storyHandlerRunRepo) ListRunsByStatus(_ context.Context, _ model.RunStatus) ([]*model.Run, error) {
+	return nil, nil
+}
+func (m *storyHandlerRunRepo) MarkRunOrphanedIfRunning(_ context.Context, _ uuid.UUID, _ time.Time, _ string) (bool, error) {
+	return false, nil
+}
 func (m *storyHandlerRunRepo) UpdateRunStatus(_ context.Context, _ uuid.UUID, _ model.RunStatus, _, _, _ *time.Time, _ *string) (*model.Run, error) {
 	return nil, nil
 }
