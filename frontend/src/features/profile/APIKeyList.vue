@@ -9,6 +9,7 @@ import ConfirmDialog from 'primevue/confirmdialog'
 import { useConfirm } from 'primevue/useconfirm'
 import { useToast } from 'primevue/usetoast'
 import { useAPIKeys } from '@/composables/useAPIKeys'
+import { useInFlightGuard } from '@/composables/useInFlightGuard'
 import APIKeyDialog from './APIKeyDialog.vue'
 
 const confirm = useConfirm()
@@ -16,6 +17,9 @@ const toast = useToast()
 const { keys, isLoading, error, fetchKeys, deleteKey } = useAPIKeys()
 
 const dialogVisible = ref(false)
+// Per-key guard for the trash button feedback + re-entrancy at the UI layer
+// (#295). The store's deleteKey also coalesces concurrent DELETEs as a backstop.
+const deleteGuard = useInFlightGuard()
 
 onMounted(() => {
   fetchKeys()
@@ -26,30 +30,34 @@ function providerSeverity(provider: string): 'info' | 'secondary' {
 }
 
 function handleDelete(keyId: string, keyName: string) {
+  if (deleteGuard.isBusy(keyId)) return
   confirm.require({
     message: `Delete API key "${keyName}"? This cannot be undone.`,
     header: 'Delete API Key',
     icon: 'pi pi-exclamation-triangle',
     acceptClass: 'p-button-danger',
     accept: async () => {
-      // deleteKey coalesces a concurrent duplicate into 'busy' (anti double-fire),
-      // so a re-entrant accept never fires a second DELETE nor a duplicate toast.
-      const result = await deleteKey(keyId)
-      if (result === 'deleted') {
-        toast.add({
-          severity: 'success',
-          summary: 'API key deleted',
-          detail: `"${keyName}" was revoked.`,
-          life: 3000,
-        })
-      } else if (result === 'error') {
-        toast.add({
-          severity: 'error',
-          summary: 'Delete failed',
-          detail: error.value ?? 'Could not delete the API key.',
-          life: 5000,
-        })
-      }
+      // Guard at the UI layer so the trash button shows a spinner and a
+      // re-entrant accept is ignored; deleteKey also coalesces concurrent
+      // DELETEs into 'busy' as a backstop (anti double-fire).
+      await deleteGuard.run(async () => {
+        const result = await deleteKey(keyId)
+        if (result === 'deleted') {
+          toast.add({
+            severity: 'success',
+            summary: 'API key deleted',
+            detail: `"${keyName}" was revoked.`,
+            life: 3000,
+          })
+        } else if (result === 'error') {
+          toast.add({
+            severity: 'error',
+            summary: 'Delete failed',
+            detail: error.value ?? 'Could not delete the API key.',
+            life: 5000,
+          })
+        }
+      }, keyId)
     },
   })
 }
@@ -111,6 +119,8 @@ function handleDelete(keyId: string, keyName: string) {
             text
             size="small"
             aria-label="Delete API key"
+            :loading="deleteGuard.isBusy(data.id)"
+            :disabled="deleteGuard.isBusy(data.id)"
             @click="handleDelete(data.id, data.key_name)"
           />
         </template>

@@ -7,12 +7,15 @@ import Select from 'primevue/select'
 import Message from 'primevue/message'
 import ProgressSpinner from 'primevue/progressspinner'
 import { useEnvironmentEditor } from '@/composables/useEnvironmentEditor'
+import { useInFlightGuard } from '@/composables/useInFlightGuard'
 
 const props = defineProps<{
   projectId: string
 }>()
 
 const toast = useToast()
+// Guard the Delete button against double-click while the DELETE is in flight (#295).
+const deleteGuard = useInFlightGuard()
 
 const {
   stacks,
@@ -52,13 +55,16 @@ async function handleSave() {
 }
 
 async function handleDelete() {
+  if (deleteGuard.isBusy()) return
   if (!window.confirm('Delete the environment configuration for this project?')) return
-  const ok = await remove()
-  if (ok) {
-    toast.add({ severity: 'success', summary: 'Environment deleted', life: 3000 })
-  } else {
-    toast.add({ severity: 'error', summary: 'Failed to delete environment', life: 4000 })
-  }
+  await deleteGuard.run(async () => {
+    const ok = await remove()
+    if (ok) {
+      toast.add({ severity: 'success', summary: 'Environment deleted', life: 3000 })
+    } else {
+      toast.add({ severity: 'error', summary: 'Failed to delete environment', life: 4000 })
+    }
+  })
 }
 </script>
 
@@ -197,7 +203,8 @@ async function handleDelete() {
           label="Delete"
           icon="pi pi-trash"
           severity="danger"
-          :disabled="!exists"
+          :disabled="!exists || deleteGuard.isBusy()"
+          :loading="deleteGuard.isBusy()"
           @click="handleDelete"
         />
       </div>
