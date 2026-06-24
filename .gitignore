@@ -52,3 +52,7 @@ deploy/docker-compose.local.yml
 .playwright-mcp/
 /ui-*.png
 /hopeitworks-ui-screens.pdf
+
+# La Manufacture : ignorer l'état runtime régénérable, garder config.md versionné
+.lamanufacture/*
+!.lamanufacture/config.md
