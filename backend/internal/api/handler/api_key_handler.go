@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/zakari/hopeitworks/backend/internal/api/middleware"
 	"github.com/zakari/hopeitworks/backend/internal/domain/model"
@@ -83,21 +82,18 @@ func (h *APIKeyHandler) CreateMyAPIKey(w http.ResponseWriter, r *http.Request) {
 }
 
 // DeleteMyAPIKey handles DELETE /api/v1/users/me/api-keys/{keyId}.
-func (h *APIKeyHandler) DeleteMyAPIKey(w http.ResponseWriter, r *http.Request) {
-	_, ok := middleware.UserIDFromContext(r.Context())
+// keyID is parsed and validated as a UUID by the generated router wrapper, so an
+// invalid id is rejected with 400 upstream and never reaches this handler. The
+// deletion is scoped to the authenticated user: a key that does not exist or
+// belongs to another user is a no-op (idempotent 204), never a 5xx.
+func (h *APIKeyHandler) DeleteMyAPIKey(w http.ResponseWriter, r *http.Request, keyID KeyIdPath) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
 		writeErrorResponse(w, errors.NewUnauthorized("authentication required"))
 		return
 	}
 
-	keyIDStr := chi.URLParam(r, "keyId")
-	keyID, err := uuid.Parse(keyIDStr)
-	if err != nil {
-		writeErrorResponse(w, errors.NewValidation("keyId", "must be a valid UUID"))
-		return
-	}
-
-	if err := h.service.DeleteKey(r.Context(), keyID); err != nil {
+	if err := h.service.DeleteKey(r.Context(), userID, keyID); err != nil {
 		writeErrorResponse(w, err)
 		return
 	}

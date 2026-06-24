@@ -195,3 +195,137 @@ test.describe('Profile Page', () => {
     await expect(page.getByRole('button', { name: 'Update Password' })).toBeDisabled()
   })
 })
+
+// Bug #288: deleting an API key returned 501 and double-fired the request, with
+// no user feedback. These specs cover the acceptance criteria RG1-RG6.
+// RG5 (non-UUID id -> 400) and RG6 (route no longer 501) are server concerns
+// proven by the backend tests; the UI only ever sends valid ids and consumes a
+// 204, so they are not re-asserted at the e2e layer.
+test.describe('Profile — API Keys (#288)', () => {
+  const apiKeyFixture = {
+    id: '11111111-1111-1111-1111-111111111111',
+    provider: 'claude',
+    key_name: 'default',
+    key_hint: '...1234',
+    created_at: '2026-01-01T00:00:00Z',
+  }
+  // Stateful list so the GET mock stays faithful to the server across a delete:
+  // a successful DELETE mutates it, so any refetch reflects the real state.
+  let apiKeys: Array<typeof apiKeyFixture>
+
+  test.beforeEach(async ({ page }) => {
+    apiKeys = [{ ...apiKeyFixture }]
+
+    await page.route('**/api/v1/auth/me', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(userFixture) })
+    })
+    await page.route('**/api/v1/users/me', async (route) => {
+      if (route.request().method() === 'GET') {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(userFixture) })
+      } else {
+        await route.fallback()
+      }
+    })
+    await page.route('**/api/v1/users/me/api-keys', async (route) => {
+      if (route.request().method() === 'GET') {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(apiKeys) })
+      } else {
+        await route.fallback()
+      }
+    })
+  })
+
+  /** Mocks DELETE: 204 (and mutates the stateful list) or a failure status. */
+  async function mockDelete(page: import('@playwright/test').Page, status: number) {
+    await page.route('**/api/v1/users/me/api-keys/*', async (route) => {
+      if (route.request().method() !== 'DELETE') {
+        await route.fallback()
+        return
+      }
+      if (status === 204) {
+        const id = route.request().url().split('/').pop()
+        apiKeys = apiKeys.filter((k) => k.id !== id)
+        await route.fulfill({ status: 204, body: '' })
+      } else {
+        await route.fulfill({
+          status,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: { code: 'INTERNAL_ERROR', message: 'boom' } }),
+        })
+      }
+    })
+  }
+
+  /** Tracks every DELETE issued against the api-keys collection. */
+  function trackDeletes(page: import('@playwright/test').Page): string[] {
+    const calls: string[] = []
+    page.on('request', (req) => {
+      if (req.method() === 'DELETE' && req.url().includes('/users/me/api-keys/')) {
+        calls.push(req.url())
+      }
+    })
+    return calls
+  }
+
+  // PrimeVue ConfirmDialog uses role="alertdialog" and default labels Yes/No.
+  // Anchor on the button labels (^...$) so they never match the trash button
+  // (aria-label "Delete API key"); the accept button being visible is the
+  // "dialog open" signal.
+  const acceptBtn = (page: import('@playwright/test').Page) =>
+    page.getByRole('button', { name: /^(yes|accept|confirm|ok)$/i })
+  const rejectBtn = (page: import('@playwright/test').Page) =>
+    page.getByRole('button', { name: /^(no|cancel|reject)$/i })
+
+  async function openDeleteConfirm(page: import('@playwright/test').Page) {
+    await expect(page.getByRole('cell', { name: 'default' })).toBeVisible()
+    await page.getByRole('button', { name: 'Delete API key' }).click()
+    await expect(acceptBtn(page)).toBeVisible()
+  }
+
+  test('RG1: confirming a delete returns 204, removes the row and shows a success toast', async ({ page }) => {
+    await mockDelete(page, 204)
+
+    await page.goto('/profile')
+    await openDeleteConfirm(page)
+    await acceptBtn(page).click()
+
+    await expect(page.getByText('API key deleted')).toBeVisible()
+    await expect(page.getByText('No API keys configured yet.')).toBeVisible()
+    await expect(page.getByRole('cell', { name: 'default' })).toHaveCount(0)
+  })
+
+  test('RG2: cancelling the dialog emits no DELETE and keeps the key', async ({ page }) => {
+    const deletes = trackDeletes(page)
+
+    await page.goto('/profile')
+    await openDeleteConfirm(page)
+    await rejectBtn(page).click()
+
+    await expect(acceptBtn(page)).toBeHidden()
+    await expect(page.getByRole('cell', { name: 'default' })).toBeVisible()
+    expect(deletes).toHaveLength(0)
+  })
+
+  test('RG3: confirming once emits exactly one DELETE (no double-fire)', async ({ page }) => {
+    const deletes = trackDeletes(page)
+    await mockDelete(page, 204)
+
+    await page.goto('/profile')
+    await openDeleteConfirm(page)
+    await acceptBtn(page).click()
+
+    await expect(page.getByText('API key deleted')).toBeVisible()
+    expect(deletes).toHaveLength(1)
+  })
+
+  test('RG4: an API failure shows a visible error and keeps the key (no optimistic removal)', async ({ page }) => {
+    await mockDelete(page, 500)
+
+    await page.goto('/profile')
+    await openDeleteConfirm(page)
+    await acceptBtn(page).click()
+
+    await expect(page.getByText('Delete failed')).toBeVisible()
+    await expect(page.getByRole('cell', { name: 'default' })).toBeVisible()
+  })
+})

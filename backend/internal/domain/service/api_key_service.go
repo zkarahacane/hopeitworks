@@ -97,8 +97,22 @@ func (s *APIKeyService) ListKeys(ctx context.Context, userID uuid.UUID) ([]*mode
 	return s.repo.ListByUser(ctx, userID)
 }
 
-// DeleteKey removes an API key by ID.
-func (s *APIKeyService) DeleteKey(ctx context.Context, id uuid.UUID) error {
+// DeleteKey removes an API key owned by the given user. The deletion is scoped
+// to userID, so a user can never delete another user's key by guessing its UUID.
+// A key that is absent or owned by someone else is a no-op: the call is
+// idempotent (a second delete of the same id never errors), and it leaks no
+// information about keys the caller does not own.
+func (s *APIKeyService) DeleteKey(ctx context.Context, userID, id uuid.UUID) error {
+	key, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		if domErr, ok := err.(*errors.DomainError); ok && domErr.Category == errors.CategoryNotFound {
+			return nil
+		}
+		return err
+	}
+	if key.UserID != userID {
+		return nil
+	}
 	return s.repo.Delete(ctx, id)
 }
 

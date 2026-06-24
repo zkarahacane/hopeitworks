@@ -21,11 +21,12 @@ type Server struct {
 	notifications  *NotificationHandler
 	epicRuns       *EpicRunHandler
 	environment    *EnvironmentHandler
+	apiKeys        *APIKeyHandler
 }
 
 // NewServer creates a new Server with the given handlers.
-func NewServer(auth *AuthHandler, projects *ProjectHandler, users *UserHandler, profile *ProfileHandler, epics *EpicHandler, stories *StoryHandler, agents *AgentHandler, stacks *StackHandler, runs *RunHandler, pipelineConfig *PipelineConfigHandler, hitl *HITLHandler, costs *CostHandler, notifications *NotificationHandler, epicRuns *EpicRunHandler, environment *EnvironmentHandler) *Server {
-	return &Server{auth: auth, projects: projects, users: users, profile: profile, epics: epics, stories: stories, agents: agents, stacks: stacks, runs: runs, pipelineConfig: pipelineConfig, hitl: hitl, costs: costs, notifications: notifications, epicRuns: epicRuns, environment: environment}
+func NewServer(auth *AuthHandler, projects *ProjectHandler, users *UserHandler, profile *ProfileHandler, epics *EpicHandler, stories *StoryHandler, agents *AgentHandler, stacks *StackHandler, runs *RunHandler, pipelineConfig *PipelineConfigHandler, hitl *HITLHandler, costs *CostHandler, notifications *NotificationHandler, epicRuns *EpicRunHandler, environment *EnvironmentHandler, apiKeys *APIKeyHandler) *Server {
+	return &Server{auth: auth, projects: projects, users: users, profile: profile, epics: epics, stories: stories, agents: agents, stacks: stacks, runs: runs, pipelineConfig: pipelineConfig, hitl: hitl, costs: costs, notifications: notifications, epicRuns: epicRuns, environment: environment, apiKeys: apiKeys}
 }
 
 // RegisterUser delegates to AuthHandler.
@@ -451,4 +452,19 @@ func (s *Server) PutProjectEnvironment(w http.ResponseWriter, r *http.Request, p
 // DeleteProjectEnvironment delegates to EnvironmentHandler.
 func (s *Server) DeleteProjectEnvironment(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath) {
 	s.environment.DeleteProjectEnvironment(w, r, projectID)
+}
+
+// ListMyAPIKeys delegates to APIKeyHandler.
+func (s *Server) ListMyAPIKeys(w http.ResponseWriter, r *http.Request) {
+	s.apiKeys.ListMyAPIKeys(w, r)
+}
+
+// CreateMyAPIKey delegates to APIKeyHandler.
+func (s *Server) CreateMyAPIKey(w http.ResponseWriter, r *http.Request) {
+	s.apiKeys.CreateMyAPIKey(w, r)
+}
+
+// DeleteMyAPIKey delegates to APIKeyHandler.
+func (s *Server) DeleteMyAPIKey(w http.ResponseWriter, r *http.Request, keyID KeyIdPath) {
+	s.apiKeys.DeleteMyAPIKey(w, r, keyID)
 }
