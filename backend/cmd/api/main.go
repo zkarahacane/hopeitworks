@@ -449,7 +449,7 @@ func run() error {
 	epicRunService := service.NewEpicRunService(epicRunRepo, storyRepo, epicRepo, schedulerService, parallelGroupExecutor, eventRepo, logger)
 	epicRunHandler := handler.NewEpicRunHandler(epicRunService)
 
-	server := handler.NewServer(authHandler, projectHandler, userHandler, profileHandler, epicHandler, storyHandler, agentHandler, stackHandler, runHandler, pipelineConfigHandler, hitlHandler, costHandler, notificationHandler, epicRunHandler, environmentHandler)
+	server := handler.NewServer(authHandler, projectHandler, userHandler, profileHandler, epicHandler, storyHandler, agentHandler, stackHandler, runHandler, pipelineConfigHandler, hitlHandler, costHandler, notificationHandler, epicRunHandler, environmentHandler, apiKeyHandler)
 
 	// Project user handler
 	projectUserHandler := handler.NewProjectUserHandler(projectUserService)
@@ -480,13 +480,6 @@ func run() error {
 		r.Get("/", projectUserHandler.ListMembers)
 		r.Post("/", projectUserHandler.AddUser)
 		r.Delete("/{user_id}", projectUserHandler.RemoveUser)
-	})
-
-	// Mount user API keys routes (manually registered)
-	r.Route("/api/v1/users/me/api-keys", func(r chi.Router) {
-		r.Get("/", apiKeyHandler.ListMyAPIKeys)
-		r.Post("/", apiKeyHandler.CreateMyAPIKey)
-		r.Delete("/{keyId}", apiKeyHandler.DeleteMyAPIKey)
 	})
 
 	// Mount internal callback routes for agent containers (container token auth, NOT JWT).

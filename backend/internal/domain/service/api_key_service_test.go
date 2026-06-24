@@ -167,8 +167,8 @@ func TestAPIKeyService_DeleteKey(t *testing.T) {
 		t.Fatalf("CreateKey failed: %v", err)
 	}
 
-	// Delete the key
-	if err := svc.DeleteKey(ctx, key.ID); err != nil {
+	// Delete the key (owner)
+	if err := svc.DeleteKey(ctx, userID, key.ID); err != nil {
 		t.Fatalf("DeleteKey failed: %v", err)
 	}
 
@@ -179,6 +179,61 @@ func TestAPIKeyService_DeleteKey(t *testing.T) {
 	}
 	if len(keys) != 0 {
 		t.Fatalf("expected 0 keys after delete, got %d", len(keys))
+	}
+}
+
+// TestAPIKeyService_DeleteKey_Idempotent verifies that deleting an already-absent
+// key (e.g. a second DELETE of the same id, RG3) is a no-op, not an error.
+func TestAPIKeyService_DeleteKey_Idempotent(t *testing.T) {
+	repo := newMockAPIKeyRepo()
+	svc := NewAPIKeyService(repo, "test-master-key")
+	ctx := context.Background()
+	userID := uuid.New()
+
+	key, err := svc.CreateKey(ctx, userID, "claude", "default", "sk-ant-12345678")
+	if err != nil {
+		t.Fatalf("CreateKey failed: %v", err)
+	}
+
+	if err := svc.DeleteKey(ctx, userID, key.ID); err != nil {
+		t.Fatalf("first DeleteKey failed: %v", err)
+	}
+	// Second delete of the same id must also succeed (idempotent), never error.
+	if err := svc.DeleteKey(ctx, userID, key.ID); err != nil {
+		t.Fatalf("second DeleteKey (idempotent) failed: %v", err)
+	}
+	// Deleting an id that never existed is also a no-op.
+	if err := svc.DeleteKey(ctx, userID, uuid.New()); err != nil {
+		t.Fatalf("DeleteKey of unknown id failed: %v", err)
+	}
+}
+
+// TestAPIKeyService_DeleteKey_ScopedToOwner verifies that a user cannot delete
+// another user's key by guessing its id: the call is a no-op and the key is kept.
+func TestAPIKeyService_DeleteKey_ScopedToOwner(t *testing.T) {
+	repo := newMockAPIKeyRepo()
+	svc := NewAPIKeyService(repo, "test-master-key")
+	ctx := context.Background()
+	owner := uuid.New()
+	attacker := uuid.New()
+
+	key, err := svc.CreateKey(ctx, owner, "claude", "default", "sk-ant-12345678")
+	if err != nil {
+		t.Fatalf("CreateKey failed: %v", err)
+	}
+
+	// Attacker tries to delete the owner's key: no error (no information leak),
+	// but the key must remain.
+	if err := svc.DeleteKey(ctx, attacker, key.ID); err != nil {
+		t.Fatalf("DeleteKey by non-owner should be a no-op, got error: %v", err)
+	}
+
+	keys, err := svc.ListKeys(ctx, owner)
+	if err != nil {
+		t.Fatalf("ListKeys failed: %v", err)
+	}
+	if len(keys) != 1 {
+		t.Fatalf("owner's key must survive a non-owner delete, got %d keys", len(keys))
 	}
 }
 

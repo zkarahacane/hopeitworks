@@ -7,10 +7,12 @@ import Tag from 'primevue/tag'
 import Message from 'primevue/message'
 import ConfirmDialog from 'primevue/confirmdialog'
 import { useConfirm } from 'primevue/useconfirm'
+import { useToast } from 'primevue/usetoast'
 import { useAPIKeys } from '@/composables/useAPIKeys'
 import APIKeyDialog from './APIKeyDialog.vue'
 
 const confirm = useConfirm()
+const toast = useToast()
 const { keys, isLoading, error, fetchKeys, deleteKey } = useAPIKeys()
 
 const dialogVisible = ref(false)
@@ -30,7 +32,24 @@ function handleDelete(keyId: string, keyName: string) {
     icon: 'pi pi-exclamation-triangle',
     acceptClass: 'p-button-danger',
     accept: async () => {
-      await deleteKey(keyId)
+      // deleteKey coalesces a concurrent duplicate into 'busy' (anti double-fire),
+      // so a re-entrant accept never fires a second DELETE nor a duplicate toast.
+      const result = await deleteKey(keyId)
+      if (result === 'deleted') {
+        toast.add({
+          severity: 'success',
+          summary: 'API key deleted',
+          detail: `"${keyName}" was revoked.`,
+          life: 3000,
+        })
+      } else if (result === 'error') {
+        toast.add({
+          severity: 'error',
+          summary: 'Delete failed',
+          detail: error.value ?? 'Could not delete the API key.',
+          life: 5000,
+        })
+      }
     },
   })
 }

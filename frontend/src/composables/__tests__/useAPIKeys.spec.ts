@@ -122,31 +122,65 @@ describe('useAPIKeys', () => {
 
       const result = await deleteKey('key-1')
 
-      expect(result).toBe(true)
+      expect(result).toBe('deleted')
       expect(mockDelete).toHaveBeenCalledWith('/users/me/api-keys/{keyId}', {
         params: { path: { keyId: 'key-1' } },
       })
       expect(keys.value).toHaveLength(0)
     })
 
-    it('returns false when API returns error', async () => {
+    it("returns 'error' when API returns error", async () => {
       mockDelete.mockResolvedValue({ error: { message: 'not found' } })
 
       const { error, deleteKey } = useAPIKeys()
       const result = await deleteKey('key-missing')
 
-      expect(result).toBe(false)
+      expect(result).toBe('error')
       expect(error.value).toBe('Failed to delete API key')
     })
 
-    it('returns false on network failure', async () => {
+    it("returns 'error' on network failure", async () => {
       mockDelete.mockRejectedValue(new Error('Network error'))
 
       const { error, deleteKey } = useAPIKeys()
       const result = await deleteKey('key-1')
 
-      expect(result).toBe(false)
+      expect(result).toBe('error')
       expect(error.value).toBe('Network error')
+    })
+
+    it('keeps the key on error — no optimistic removal (RG4)', async () => {
+      mockGet.mockResolvedValue({ data: [sampleKey], error: undefined })
+      mockDelete.mockResolvedValue({ error: { message: 'boom' } })
+
+      const { keys, fetchKeys, deleteKey } = useAPIKeys()
+      await fetchKeys()
+      expect(keys.value).toHaveLength(1)
+
+      const result = await deleteKey('key-1')
+
+      expect(result).toBe('error')
+      expect(keys.value).toHaveLength(1)
+    })
+
+    it('coalesces concurrent deletes of the same key into one DELETE (RG3, anti double-fire)', async () => {
+      let resolveDelete!: (value: { error: undefined }) => void
+      mockDelete.mockReturnValue(
+        new Promise((resolve) => {
+          resolveDelete = resolve
+        }),
+      )
+
+      const { deleteKey } = useAPIKeys()
+      const first = deleteKey('key-1')
+      // Second call while the first DELETE is still in flight must be coalesced.
+      const second = deleteKey('key-1')
+
+      expect(await second).toBe('busy')
+
+      resolveDelete({ error: undefined })
+      expect(await first).toBe('deleted')
+      expect(mockDelete).toHaveBeenCalledTimes(1)
     })
   })
 })
