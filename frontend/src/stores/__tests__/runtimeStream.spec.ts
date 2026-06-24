@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { reduceRuntimeEvent, useRuntimeStream } from '../runtimeStream'
 
@@ -225,5 +225,92 @@ describe('useRuntimeStream store getters', () => {
     s.reset()
     expect(s.runSignal('r1')).toBeNull()
     expect([...s.activeStepIds]).toEqual([])
+  })
+})
+
+// ── #294 — Dashboard elapsed hydration (running runs without a `run.started`
+// SSE event must still show a real elapsed, not 00:00). Fake timers anchor the
+// clock so derived elapsed is deterministic. ──────────────────────────────────
+describe('hydrateRunStartedAt — REST seeding for elapsed (#294)', () => {
+  // A fixed "now" 3 minutes after the seeded start.
+  const NOW = new Date('2026-06-17T10:03:00Z')
+  const START = '2026-06-17T10:00:00Z'
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.useFakeTimers()
+    vi.setSystemTime(NOW)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  // RG1: a run whose `run.started` SSE arrives while the dashboard is open keeps
+  // ticking live; hydration of the SAME run must not disturb the live start.
+  it('RG1: SSE-started run keeps a live ticking elapsed', () => {
+    const s = useRuntimeStream()
+    s.ingest('run.started', { run_id: 'r1', started_at: '2026-06-17T10:02:30Z' })
+    // REST list later carries a (slightly different) started_at — must be ignored.
+    s.hydrateRunStartedAt('r1', '2026-06-17T09:00:00Z', undefined, 'running')
+    s.tick(NOW.getTime())
+    expect(s.runSignal('r1')?.startedAt).toBe('2026-06-17T10:02:30Z')
+    expect(s.runElapsedSeconds('r1')).toBe(30)
+  })
+
+  // RG2 (the bug): a run already running for 3min, known only via REST
+  // started_at, with no SSE — elapsed must be ~180s, never 0.
+  it('RG2: running run hydrated from REST shows real elapsed, not 0', () => {
+    const s = useRuntimeStream()
+    expect(s.runElapsedSeconds('r1')).toBe(0) // nothing known yet
+    s.hydrateRunStartedAt('r1', START, undefined, 'running')
+    s.tick(NOW.getTime())
+    expect(s.runSignal('r1')?.status).toBe('running')
+    expect(s.runElapsedSeconds('r1')).toBe(180)
+  })
+
+  // RG3: a pending run with no started_at must not be seeded — the getter keeps
+  // signalling "no duration" (0 here; the view renders the placeholder).
+  it('RG3: run without started_at is not seeded (no phantom 00:00)', () => {
+    const s = useRuntimeStream()
+    s.hydrateRunStartedAt('r1', null, undefined, 'pending')
+    s.hydrateRunStartedAt('r1', undefined, undefined, 'pending')
+    expect(s.runSignal('r1')).toBeNull()
+    expect(s.runElapsedSeconds('r1')).toBe(0)
+  })
+
+  // RG4: dashboard elapsed (store, hydrated) == list duration (raw started_at
+  // diff) within ±1s, because both derive from the same started_at.
+  it('RG4: hydrated elapsed matches the list duration computed from started_at', () => {
+    const s = useRuntimeStream()
+    s.hydrateRunStartedAt('r1', START, undefined, 'running')
+    s.tick(NOW.getTime())
+    const listSecs = Math.floor((NOW.getTime() - new Date(START).getTime()) / 1000)
+    expect(Math.abs(s.runElapsedSeconds('r1') - listSecs)).toBeLessThanOrEqual(1)
+  })
+
+  // RG5: a terminal run hydrated from REST freezes at completed_at - started_at
+  // and does not keep running as the clock advances.
+  it('RG5: terminal run hydrated from REST freezes at completed_at - started_at', () => {
+    const s = useRuntimeStream()
+    s.hydrateRunStartedAt('r1', START, '2026-06-17T10:00:45Z', 'completed')
+    s.tick(new Date('2026-06-17T11:00:00Z').getTime()) // long after
+    expect(s.runSignal('r1')?.status).toBe('completed')
+    expect(s.runElapsedSeconds('r1')).toBe(45)
+  })
+
+  it('is idempotent: re-hydrating the same run does not change timing', () => {
+    const s = useRuntimeStream()
+    s.hydrateRunStartedAt('r1', START, undefined, 'running')
+    s.hydrateRunStartedAt('r1', '2026-06-17T08:00:00Z', undefined, 'running')
+    s.tick(NOW.getTime())
+    expect(s.runSignal('r1')?.startedAt).toBe(START)
+    expect(s.runElapsedSeconds('r1')).toBe(180)
+  })
+
+  it('ignores empty runId', () => {
+    const s = useRuntimeStream()
+    s.hydrateRunStartedAt('', START, undefined, 'running')
+    expect(Object.keys(s.runs)).toHaveLength(0)
   })
 })
