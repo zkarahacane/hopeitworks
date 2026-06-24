@@ -1,6 +1,6 @@
 # hopeitworks — Vision Produit
 
-*Maintenu par François. Dernière mise à jour : 2026-06-23.*
+*Maintenu par François. Dernière mise à jour : 2026-06-24.*
 
 ## Vision
 
@@ -36,7 +36,7 @@ Configure l'instance : providers Git, modèles IA, pipelines, notifications, bud
 ```
 Project → Epic → Story → Run → Step
                            ↓
-                         Agent (container Docker isolé)
+                         Agent (exec d'un harness sur un substrat isolé)
 ```
 
 - **Project** : un repo Git avec sa configuration (pipeline, provider, budget)
@@ -44,7 +44,7 @@ Project → Epic → Story → Run → Step
 - **Story** : une user story avec des critères d'acceptation testables
 - **Run** : une exécution complète de la pipeline pour une story
 - **Step** : une étape de la pipeline (code, CI, review, merge...)
-- **Agent** : un agent IA qui exécute une étape dans un container isolé
+- **Agent** : un agent IA qui exécute une étape — fondamentalement « exec d'un harness » (clone repo → `agent-runtime` → CLI claude/opencode → callback HTTP) sur un **substrat d'exécution isolé et pluggable** (Docker, microVM, …)
 
 ## Capacités livrées
 
@@ -69,7 +69,7 @@ Project → Epic → Story → Run → Step
 - Lancement d'un epic entier avec exécution parallèle
 
 ### Exécution de pipeline
-- Lancement d'une story : container Docker → agent code → branche → PR
+- Lancement d'une story : substrat isolé → agent code → branche → PR
 - Pipeline configurable par projet (groupes d'étapes = stages, agents, modèles, prompts)
 - **Politique de transition par stage** (configurée dans l'éditeur de pipeline) :
   - **auto** : la carte avance seule au stage suivant
@@ -106,15 +106,25 @@ Project → Epic → Story → Run → Step
 - Limites de budget configurables par projet
 
 ### Agents et runtime
-- Entité Agent configurable (image Docker, modèle, provider, prompt)
+- Entité Agent configurable (image, modèle, provider, prompt)
 - Support multi-provider (Claude, opencode)
 - Agent runtime Go avec callbacks HTTP
-- Images Docker multi-stack (go-node, node, go, python)
+
+#### Substrat d'exécution pluggable
+- L'exécution d'un agent est une couche **pluggable derrière `port.AgentRuntime`** : tous les substrats sont **égaux derrière le même port**, le substrat live est choisi par config (`SUBSTRATE`). **Docker n'est pas un cas spécial** — c'est un adapter comme les autres.
+- **Docker** (`SUBSTRATE=docker`) — **défaut dev/CI**, tourne partout (pas besoin de KVM).
+- **microsandbox** (`SUBSTRATE=microsandbox`) — **policy de prod** : microVM libkrun, isolation noyau (KVM) pour le code non-fiable généré par l'agent ; fidélité nested-container native (testcontainers/DinD dans l'agent). Linux/KVM-only.
+- **exec** (local, sans container) et **K8s/OpenShift gVisor/Kata** (futur P4) sont ajoutables derrière le même port, **sans toucher le domaine**.
+
+#### Image agent vs services (deux concerns distincts)
+- **Image agent** = l'environnement *où* l'agent s'exécute (rootfs du microVM/container) : harness `agent-runtime` + CLI (claude/opencode) **et la toolchain** (go/node/python) pour build/test. Fournie par un **catalogue de stacks** — images ghcr digest-pinnées (go-node, node, go, python). Un microVM, comme un container, a **toujours** besoin d'une image (son rootfs).
+- **Services** (db, redis, keycloak…) = **dépendances réseau**, pas le runtime de l'agent. Lancés en **sidecars** via la feature **Environment** : réseau de run isolé + conn-strings injectées dans l'env de l'agent.
+- **Caveat** : sidecars-sous-microVM pas encore supportés par microsandbox (dégrade en conn-strings seules) ; le substrat **Docker** fournit les sidecars complets.
 
 ### Actions pipeline intégrées
-- `agent_run` : exécution d'agent en container (mode callback ou legacy)
-- `ci_poll` : polling CI (GitHub Actions, GitLab)
-- `git_branch` / `git_pr` : création de branche et PR
+- `agent_run` : exécution d'agent sur le substrat configuré, dispatchée via `port.AgentRuntime` (mode callback ou legacy)
+- `ci_poll` : polling CI via l'API GitHub (go-github)
+- `git_branch` / `git_pr` : création de branche et PR via l'**API GitHub** (go-github, token) — plus de dépendance au binaire `gh` côté backend ; l'agent commit/push avec `git`
 - `hitl_gate` : gate d'approbation humaine
 - `notification` : envoi de notifications
 - `incremental_retry` : retry intelligent avec contexte d'erreur
