@@ -139,12 +139,16 @@ func (h *CostHandler) GetProjectCostRuns(w http.ResponseWriter, r *http.Request,
 
 	data := make([]RunCostRow, len(rows))
 	for i, row := range rows {
+		tokensInput := row.TokensInput
+		tokensOutput := row.TokensOutput
 		data[i] = RunCostRow{
 			RunId:        row.RunID,
 			StoryKey:     row.StoryKey,
 			Status:       row.Status,
 			StartedAt:    row.StartedAt,
 			TotalCostUsd: row.TotalCostUSD,
+			TokensInput:  &tokensInput,
+			TokensOutput: &tokensOutput,
 		}
 	}
 
@@ -180,6 +184,34 @@ func (h *CostHandler) GetProjectCostsByAgent(w http.ResponseWriter, r *http.Requ
 			TokensOutput: b.TokensOutput,
 			CostUsd:      b.CostUSD,
 			RunsCount:    b.RunsCount,
+		}
+	}
+
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// GetProjectCostsByRole handles GET /projects/{projectId}/costs/by-role.
+func (h *CostHandler) GetProjectCostsByRole(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath) {
+	breakdown, err := h.service.GetProjectCostsByRole(r.Context(), projectID)
+	if err != nil {
+		writeErrorResponse(w, err)
+		return
+	}
+
+	resp := ProjectCostByRole{
+		TotalCost:         breakdown.TotalCost,
+		TotalTokensInput:  breakdown.TotalInput,
+		TotalTokensOutput: breakdown.TotalOutput,
+		Roles:             make([]ProjectRoleCostBreakdown, len(breakdown.Roles)),
+	}
+
+	for i, role := range breakdown.Roles {
+		resp.Roles[i] = ProjectRoleCostBreakdown{
+			Role:         role.Role,
+			TokensInput:  role.TokensInput,
+			TokensOutput: role.TokensOutput,
+			CostUsd:      role.CostUSD,
+			RunsCount:    role.RunsCount,
 		}
 	}
 

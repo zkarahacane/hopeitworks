@@ -49,6 +49,10 @@ type CostRepository interface {
 	// ListByProjectByAgent returns cost breakdown by agent for a project.
 	ListByProjectByAgent(ctx context.Context, projectID uuid.UUID) ([]model.AgentCostBreakdown, error)
 
+	// ListByProjectByRole returns cost breakdown by role (agent type) for a
+	// project across all runs. Unattributed records are bucketed under "unknown".
+	ListByProjectByRole(ctx context.Context, projectID uuid.UUID) ([]model.ProjectRoleCostBreakdown, error)
+
 	// ListCostsByRunByRole returns per-role cost breakdown for a run. Role is the
 	// agent type the cost was attributed to; unattributed records are bucketed
 	// under "unknown". No status filter is applied.

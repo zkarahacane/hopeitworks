@@ -14,10 +14,18 @@
  */
 
 import type { RunCostDetail, StepCostBreakdown } from '@/features/runs/composables/useRunCosts'
+import type { components } from '@/api/schema'
 import { COST_ROLES, costRoleForStep, costRoleLabel, type CostRole } from './stepType'
 
+type ProjectCostByRoleResponse = components['schemas']['ProjectCostByRole']
+
 export interface RoleCost {
-  role: CostRole
+  /**
+   * Role key. For the run-level heuristic this is a `CostRole`
+   * ('dev'|'review'|'merge'|'other'); for the project-level endpoint it is the
+   * real agent type ('implement'|'review'|'merge'|…|'unknown'). Both are strings.
+   */
+  role: string
   label: string
   costUsd: number
   tokensInput: number
@@ -78,5 +86,49 @@ export function costByRole(detail: RunCostDetail | null | undefined): CostByRole
     roles,
     total,
     derivedFromStepsOnly: steps.length === 0,
+  }
+}
+
+/** Human label for a project-level role key (agent type), e.g. "implement" → "Implement". */
+function projectRoleLabel(role: string): string {
+  if (!role) return 'Unknown'
+  return role.charAt(0).toUpperCase() + role.slice(1)
+}
+
+/**
+ * Map the project-level COST-BY-ROLE endpoint response into the shared
+ * `CostByRoleResult` so the existing `RunCostByRole` panel renders it unchanged.
+ *
+ * Unlike the run-level `costByRole` heuristic, this consumes the authoritative
+ * server aggregation (role = agent type, "unknown" bucket included per RG4). The
+ * total comes straight from the server roll-up. Bars scale against the largest
+ * single role so the dominant role fills the track.
+ */
+export function projectCostByRole(
+  data: ProjectCostByRoleResponse | null | undefined,
+): CostByRoleResult {
+  const total = data?.total_cost ?? 0
+  const rows = data?.roles ?? []
+
+  const maxRoleCost = Math.max(0, ...rows.map((r) => r.cost_usd ?? 0))
+
+  const roles: RoleCost[] = rows.map((r) => {
+    const costUsd = r.cost_usd ?? 0
+    return {
+      role: r.role,
+      label: projectRoleLabel(r.role),
+      costUsd,
+      tokensInput: r.tokens_input ?? 0,
+      tokensOutput: r.tokens_output ?? 0,
+      fraction: maxRoleCost > 0 ? costUsd / maxRoleCost : 0,
+    }
+  })
+
+  return {
+    roles,
+    total,
+    // The server is the source of truth, so the breakdown is authoritative even
+    // when empty (RG3: a period with no cost shows zero roles + zero total).
+    derivedFromStepsOnly: false,
   }
 }

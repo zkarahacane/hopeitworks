@@ -92,7 +92,9 @@ SELECT rs2.run_id,
        s.key    AS story_key,
        r.status,
        r.created_at AS started_at,
-       COALESCE(SUM(cr.cost_usd), 0)::DECIMAL(10,6) AS total_cost_usd
+       COALESCE(SUM(cr.cost_usd), 0)::DECIMAL(10,6) AS total_cost_usd,
+       COALESCE(SUM(cr.tokens_input), 0)::bigint    AS tokens_input,
+       COALESCE(SUM(cr.tokens_output), 0)::bigint   AS tokens_output
 FROM cost_records cr
 JOIN run_steps rs2 ON rs2.id = cr.run_step_id
 JOIN runs r ON r.id = rs2.run_id
@@ -149,4 +151,25 @@ JOIN runs r ON r.id = rs.run_id
 WHERE r.project_id = $1
   AND cr.agent_id IS NOT NULL
 GROUP BY cr.agent_id, a.name
+ORDER BY cost_usd DESC;
+
+-- name: ListCostsByProjectByRole :many
+-- Project-level per-role cost aggregation (the Overview "COST BY ROLE" widget).
+-- Mirrors ListCostsByProjectByAgent (same joins / project scope), but groups by
+-- the agent type (role) and DOES NOT drop unattributed cost: records with no
+-- agent_id are bucketed under the 'unknown' role and still counted in the total,
+-- so the rolled-up by-role total stays consistent with the by-agent total plus
+-- whatever could not be attributed. No status filter is applied.
+SELECT
+  COALESCE(a.type, 'unknown')      AS role,
+  SUM(cr.tokens_input)::bigint     AS tokens_input,
+  SUM(cr.tokens_output)::bigint    AS tokens_output,
+  SUM(cr.cost_usd)::DECIMAL(10,6)  AS cost_usd,
+  COUNT(DISTINCT rs.run_id)::int   AS runs_count
+FROM cost_records cr
+LEFT JOIN agents a ON a.id = cr.agent_id
+JOIN run_steps rs ON rs.id = cr.run_step_id
+JOIN runs r ON r.id = rs.run_id
+WHERE r.project_id = $1
+GROUP BY COALESCE(a.type, 'unknown')
 ORDER BY cost_usd DESC;

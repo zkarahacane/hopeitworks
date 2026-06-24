@@ -74,6 +74,9 @@ func (m *recordingCostRepoForCallback) CountCostsByProjectByRun(_ context.Contex
 func (m *recordingCostRepoForCallback) ListByProjectByAgent(_ context.Context, _ uuid.UUID) ([]model.AgentCostBreakdown, error) {
 	return nil, nil
 }
+func (m *recordingCostRepoForCallback) ListByProjectByRole(_ context.Context, _ uuid.UUID) ([]model.ProjectRoleCostBreakdown, error) {
+	return nil, nil
+}
 func (m *recordingCostRepoForCallback) ListCostsByRunByRole(_ context.Context, _ uuid.UUID) ([]model.RoleCostBreakdown, error) {
 	return nil, nil
 }
