@@ -22,6 +22,7 @@ type RunService struct {
 	jobQueue           port.JobQueue
 	eventPub           port.EventPublisher
 	containerMgr       port.ContainerManager
+	agentRuntime       port.AgentRuntime
 	agentRepo          port.AgentRepository
 	stackRepo          port.StackRepository
 }
@@ -52,6 +53,13 @@ func NewRunService(
 func (s *RunService) SetContainerManager(cm port.ContainerManager) {
 	s.containerMgr = cm
 }
+
+// SetAgentRuntime configures the execution substrate used to stop a step's
+// execution on cancel. When set, CancelRun stops via port.AgentRuntime (handle =
+// the persisted run_steps.container_id), making cancellation substrate-correct
+// for any adapter (Docker today, microsandbox later). nil falls back to the raw
+// ContainerManager (Docker), preserving back-compat.
+func (s *RunService) SetAgentRuntime(rt port.AgentRuntime) { s.agentRuntime = rt }
 
 // SetAgentRepo configures the agent repository for agent resolution at run launch.
 func (s *RunService) SetAgentRepo(repo port.AgentRepository) {
@@ -659,10 +667,9 @@ func (s *RunService) CancelRun(ctx context.Context, projectID, runID uuid.UUID) 
 	for _, step := range steps {
 		switch step.Status {
 		case model.StepStatusRunning, model.StepStatusWaitingApproval:
-			// Stop the container if one is running
-			if s.containerMgr != nil && step.ContainerID != nil && *step.ContainerID != "" {
-				_ = s.containerMgr.Stop(ctx, *step.ContainerID)
-			}
+			// Stop the live execution if one is running (substrate-correct: prefers
+			// the runtime adapter, falls back to the raw ContainerManager).
+			s.stopStepExecution(ctx, step.ContainerID)
 			if _, err := s.runRepo.UpdateRunStepStatus(ctx, step.ID, model.StepStatusCancelled, nil, &now, &cancelMsg); err != nil {
 				return nil, err
 			}
@@ -691,6 +698,24 @@ func (s *RunService) CancelRun(ctx context.Context, projectID, runID uuid.UUID) 
 	s.transitionStoryToBacklog(ctx, updated)
 
 	return updated, nil
+}
+
+// stopStepExecution stops a step's live execution by its persisted handle. It
+// prefers the substrate runtime (substrate-correct: a microVM handle is torn down
+// via its adapter, not the Docker daemon), falling back to the raw ContainerManager
+// when no runtime is configured. Best-effort: errors are swallowed (cancel must not
+// fail because teardown raced the natural exit).
+func (s *RunService) stopStepExecution(ctx context.Context, containerID *string) {
+	if containerID == nil || *containerID == "" {
+		return
+	}
+	if s.agentRuntime != nil {
+		_ = s.agentRuntime.Stop(ctx, port.RunHandle{ID: *containerID})
+		return
+	}
+	if s.containerMgr != nil {
+		_ = s.containerMgr.Stop(ctx, *containerID)
+	}
 }
 
 // transitionStoryToBacklog resets the run's story to backlog and publishes a

@@ -360,6 +360,7 @@ func run() error {
 	runService := service.NewRunService(runRepo, projectRepo, storyRepo, pipelineConfigRepo, jobQueue, eventRepo)
 	if containerMgr != nil {
 		runService.SetContainerManager(containerMgr)
+		runService.SetAgentRuntime(agentRuntime)
 	}
 	runService.SetAgentRepo(agentRepo)
 	runService.SetStackRepo(stackRepo)

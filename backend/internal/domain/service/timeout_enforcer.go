@@ -71,6 +71,16 @@ func (t *TimeoutEnforcer) Start(ctx context.Context) error {
 	}
 }
 
+// Substrate scope (ADR Stage 4): this reaper is Docker-shaped — it lists managed
+// executions via ContainerManager.ListContainers(managed_by=hopeitworks) and reads
+// the run_id label. DockerRuntime.Launch preserves those labels and persists the
+// real container id, so the Docker reaping contract holds through the substrate
+// dispatch with zero change. Reaping a NON-Docker substrate (listing managed
+// microVMs/pods) needs a runtime-level "list managed executions" capability and is
+// DEFERRED until a non-Docker substrate ships live (ADR Stage 4 / Decision §7#4).
+// CancelRun already stops via port.AgentRuntime (substrate-correct); orphan/timeout
+// listing remains Docker-bound for now.
+//
 // CheckTimeouts iterates active containers and enforces timeouts.
 // Containers that have run longer than their allowed timeout are stopped,
 // and their associated run steps and runs are marked as failed.

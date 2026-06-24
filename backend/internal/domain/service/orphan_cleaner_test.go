@@ -2,9 +2,11 @@ package service
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"github.com/google/uuid"
+	dockeradapter "github.com/zakari/hopeitworks/backend/internal/adapter/docker"
 	"github.com/zakari/hopeitworks/backend/internal/domain/model"
 	"github.com/zakari/hopeitworks/backend/internal/domain/port"
 	"github.com/zakari/hopeitworks/backend/pkg/errors"
@@ -259,5 +261,157 @@ func TestCleanupOrphans_ListContainersError(t *testing.T) {
 	err := cleaner.CleanupOrphans(context.Background())
 	if err == nil {
 		t.Fatal("expected error when ListContainers fails, got nil")
+	}
+}
+
+// reapableCM is a stateful fake port.ContainerManager that records containers on
+// Create (with the labels stamped by the caller) and filters them on
+// ListContainers / Remove. It is the shared substrate the contract test uses to
+// prove that a container launched through docker.Runtime is later reapable by
+// OrphanCleaner — the labels round-trip end-to-end, no special-casing.
+type reapableCM struct {
+	mu         sync.Mutex
+	seq        int
+	containers map[string]map[string]string // id -> labels
+	removed    []string
+}
+
+func newReapableCM() *reapableCM {
+	return &reapableCM{containers: map[string]map[string]string{}}
+}
+
+func (c *reapableCM) Create(_ context.Context, opts model.ContainerOpts) (string, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.seq++
+	id := uuid.NewString()
+	labels := make(map[string]string, len(opts.Labels))
+	for k, v := range opts.Labels {
+		labels[k] = v
+	}
+	c.containers[id] = labels
+	return id, nil
+}
+
+func (c *reapableCM) Start(_ context.Context, _ string) error { return nil }
+
+func (c *reapableCM) Stop(_ context.Context, _ string) error { return nil }
+
+func (c *reapableCM) Remove(_ context.Context, containerID string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.removed = append(c.removed, containerID)
+	delete(c.containers, containerID)
+	return nil
+}
+
+func (c *reapableCM) Wait(_ context.Context, _ string) (int, error) { return 0, nil }
+
+func (c *reapableCM) ListContainers(_ context.Context, filter map[string]string) ([]port.ContainerInfo, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	var out []port.ContainerInfo
+	for id, labels := range c.containers {
+		if labelsMatch(labels, filter) {
+			out = append(out, port.ContainerInfo{ID: id, Labels: labels})
+		}
+	}
+	return out, nil
+}
+
+func (c *reapableCM) ListRunningContainers(_ context.Context, _ map[string]string) ([]port.ContainerInfo, error) {
+	return nil, nil
+}
+
+func (c *reapableCM) CreateNetwork(_ context.Context, _ string, _ map[string]string) (string, error) {
+	return "", nil
+}
+func (c *reapableCM) RemoveNetwork(_ context.Context, _ string) error { return nil }
+func (c *reapableCM) ConnectContainer(_ context.Context, _, _ string, _ []string) error {
+	return nil
+}
+func (c *reapableCM) ListNetworks(_ context.Context, _ map[string]string) ([]model.NetworkInfo, error) {
+	return nil, nil
+}
+func (c *reapableCM) InspectHealth(_ context.Context, _ string) (string, error) {
+	return model.HealthRunning, nil
+}
+
+func (c *reapableCM) getRemoved() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	out := make([]string, len(c.removed))
+	copy(out, c.removed)
+	return out
+}
+
+// labelsMatch reports whether every key/value in filter is present in labels.
+func labelsMatch(labels, filter map[string]string) bool {
+	for k, v := range filter {
+		if labels[k] != v {
+			return false
+		}
+	}
+	return true
+}
+
+// TestOrphanCleaner_FindsContainerLaunchedViaDockerRuntime proves the reaper
+// contract end-to-end: a container launched through docker.Runtime.Launch carries
+// the managed_by/run_id labels (stamped via RunSpec.Labels), so OrphanCleaner finds
+// and removes it when its run_id is unknown (orphan) — and leaves it alone when the
+// run is active. This is the substrate-dispatch proof: the Docker reaping contract
+// holds through the port with zero special-casing.
+func TestOrphanCleaner_FindsContainerLaunchedViaDockerRuntime(t *testing.T) {
+	orphanRunID := uuid.New()
+	activeRunID := uuid.New()
+	stepID := uuid.New()
+
+	cm := newReapableCM()
+	rt := dockeradapter.NewRuntime(cm, "agent-net", discardLogger())
+
+	// Labels mirror buildAgentLabels: managed_by + run/step/story identity.
+	launch := func(runID uuid.UUID) port.RunHandle {
+		h, err := rt.Launch(context.Background(), port.RunSpec{
+			Image: "img",
+			Labels: map[string]string{
+				"managed_by": "hopeitworks",
+				"run_id":     runID.String(),
+				"step_id":    stepID.String(),
+				"story_key":  "S-1",
+			},
+		})
+		if err != nil {
+			t.Fatalf("launch via docker.Runtime failed: %v", err)
+		}
+		return h
+	}
+
+	orphanHandle := launch(orphanRunID)
+	activeHandle := launch(activeRunID)
+
+	runRepo := &mockRunRepo{
+		getRunFn: func(_ context.Context, id uuid.UUID) (*model.Run, error) {
+			if id == activeRunID {
+				return &model.Run{ID: activeRunID, Status: model.RunStatusRunning}, nil
+			}
+			// orphanRunID (and anything else) is unknown → orphan.
+			return nil, errors.NewNotFound("run", id)
+		},
+	}
+
+	cleaner := NewOrphanCleaner(cm, runRepo, discardLogger())
+	if err := cleaner.CleanupOrphans(context.Background()); err != nil {
+		t.Fatalf("CleanupOrphans returned error: %v", err)
+	}
+
+	removed := cm.getRemoved()
+	if len(removed) != 1 {
+		t.Fatalf("expected exactly 1 reaped container (the orphan), got %d: %v", len(removed), removed)
+	}
+	if removed[0] != orphanHandle.ID {
+		t.Errorf("expected orphan container %q reaped, got %q", orphanHandle.ID, removed[0])
+	}
+	if removed[0] == activeHandle.ID {
+		t.Errorf("active-run container %q must NOT be reaped", activeHandle.ID)
 	}
 }

@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/zakari/hopeitworks/backend/internal/domain/model"
+	"github.com/zakari/hopeitworks/backend/internal/domain/port"
 	"github.com/zakari/hopeitworks/backend/pkg/errors"
 )
 
@@ -2201,6 +2202,129 @@ func TestCancelRun_ResetsStoryToBacklog(t *testing.T) {
 	}
 	if !foundStoryBacklog {
 		t.Error("expected story.status_updated event with status backlog")
+	}
+}
+
+// mockAgentRuntime is a minimal port.AgentRuntime recording Stop handles. Only Stop
+// is exercised by CancelRun; the other methods satisfy the interface and are no-ops.
+type mockAgentRuntime struct {
+	stopHandles []port.RunHandle
+}
+
+func (m *mockAgentRuntime) Provision(_ context.Context, _ model.CapabilitySpec) (model.ProvisionResult, error) {
+	return model.ProvisionResult{}, nil
+}
+
+func (m *mockAgentRuntime) Launch(_ context.Context, _ port.RunSpec) (port.RunHandle, error) {
+	return port.RunHandle{}, nil
+}
+
+func (m *mockAgentRuntime) Wait(_ context.Context, _ port.RunHandle) (port.RunResult, error) {
+	return port.RunResult{}, nil
+}
+
+func (m *mockAgentRuntime) Stop(_ context.Context, h port.RunHandle) error {
+	m.stopHandles = append(m.stopHandles, h)
+	return nil
+}
+
+func (m *mockAgentRuntime) SupportedCapabilities() model.CapabilitySet {
+	return model.CapabilitySet{}
+}
+
+// TestCancelRun_StopsViaAgentRuntime asserts that, when an AgentRuntime is wired,
+// CancelRun stops the running step's execution through the runtime port (handle =
+// the persisted container_id) and does NOT touch the raw ContainerManager.
+func TestCancelRun_StopsViaAgentRuntime(t *testing.T) {
+	projectID := uuid.New()
+	runID := uuid.New()
+
+	containerID := "cid-1"
+	runRepo := &mockRunRepo{
+		getRunFn: func(_ context.Context, id uuid.UUID) (*model.Run, error) {
+			return &model.Run{ID: id, ProjectID: projectID, Status: model.RunStatusRunning}, nil
+		},
+		listRunStepsByRunFn: func(_ context.Context, _ uuid.UUID) ([]*model.RunStep, error) {
+			return []*model.RunStep{
+				{ID: uuid.New(), Status: model.StepStatusRunning, ContainerID: &containerID},
+			}, nil
+		},
+		updateRunStepStatusFn: func(_ context.Context, id uuid.UUID, status model.StepStatus, _, _ *time.Time, _ *string) (*model.RunStep, error) {
+			return &model.RunStep{ID: id, Status: status}, nil
+		},
+		updateRunStatusFn: func(_ context.Context, id uuid.UUID, status model.RunStatus, _, _, _ *time.Time, _ *string) (*model.Run, error) {
+			return &model.Run{ID: id, ProjectID: projectID, Status: status}, nil
+		},
+	}
+
+	mockRT := &mockAgentRuntime{}
+	containerMgr := &mockContainerManager{}
+
+	svc := newRunServiceForTest(runRepo, newMockProjectRepoForService())
+	// Wire BOTH: the runtime must win over the raw ContainerManager.
+	svc.SetContainerManager(containerMgr)
+	svc.SetAgentRuntime(mockRT)
+
+	result, err := svc.CancelRun(context.Background(), projectID, runID)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if result.Status != model.RunStatusCancelled {
+		t.Errorf("expected status cancelled, got %s", result.Status)
+	}
+
+	if len(mockRT.stopHandles) != 1 {
+		t.Fatalf("expected 1 runtime Stop call, got %d", len(mockRT.stopHandles))
+	}
+	if got := mockRT.stopHandles[0]; got != (port.RunHandle{ID: containerID}) {
+		t.Errorf("expected runtime Stop with handle %q, got %+v", containerID, got)
+	}
+	if calls := containerMgr.getStopCalls(); len(calls) != 0 {
+		t.Errorf("expected ContainerManager.Stop NOT called when runtime is present, got %d calls", len(calls))
+	}
+}
+
+// TestCancelRun_FallsBackToContainerManager asserts that, with no AgentRuntime
+// configured, CancelRun stops the running step through the raw ContainerManager
+// (Docker back-compat).
+func TestCancelRun_FallsBackToContainerManager(t *testing.T) {
+	projectID := uuid.New()
+	runID := uuid.New()
+
+	containerID := "cid-1"
+	runRepo := &mockRunRepo{
+		getRunFn: func(_ context.Context, id uuid.UUID) (*model.Run, error) {
+			return &model.Run{ID: id, ProjectID: projectID, Status: model.RunStatusRunning}, nil
+		},
+		listRunStepsByRunFn: func(_ context.Context, _ uuid.UUID) ([]*model.RunStep, error) {
+			return []*model.RunStep{
+				{ID: uuid.New(), Status: model.StepStatusRunning, ContainerID: &containerID},
+			}, nil
+		},
+		updateRunStepStatusFn: func(_ context.Context, id uuid.UUID, status model.StepStatus, _, _ *time.Time, _ *string) (*model.RunStep, error) {
+			return &model.RunStep{ID: id, Status: status}, nil
+		},
+		updateRunStatusFn: func(_ context.Context, id uuid.UUID, status model.RunStatus, _, _, _ *time.Time, _ *string) (*model.Run, error) {
+			return &model.Run{ID: id, ProjectID: projectID, Status: status}, nil
+		},
+	}
+
+	containerMgr := &mockContainerManager{}
+
+	svc := newRunServiceForTest(runRepo, newMockProjectRepoForService())
+	svc.SetContainerManager(containerMgr) // no runtime → fallback
+
+	result, err := svc.CancelRun(context.Background(), projectID, runID)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if result.Status != model.RunStatusCancelled {
+		t.Errorf("expected status cancelled, got %s", result.Status)
+	}
+
+	calls := containerMgr.getStopCalls()
+	if len(calls) != 1 || calls[0] != containerID {
+		t.Errorf("expected ContainerManager.Stop(%q) once, got %v", containerID, calls)
 	}
 }
 
