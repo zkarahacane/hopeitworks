@@ -74,6 +74,14 @@ test.describe('Project Detail — Tabbed Navigation', () => {
         body: JSON.stringify({ data: [], pagination: { total: 0, page: 1, per_page: 20 } }),
       })
     })
+
+    await page.route('**/api/v1/projects/p1/notifications', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([]),
+      })
+    })
   })
 
   test('shows project name and tabs on project detail page', async ({ page }) => {
@@ -129,6 +137,46 @@ test.describe('Project Detail — Tabbed Navigation', () => {
 
     await expect(page).toHaveURL('/projects/p1/agents')
     await expect(page.getByRole('heading', { name: 'Agents', exact: true })).toBeVisible()
+  })
+
+  // #293 — deep-link routing (direct access + refresh, legacy bookmarks, no 404)
+
+  test('RG1/RG2 direct access + refresh to /projects/:id stays Overview', async ({ page }) => {
+    await page.goto('/projects/p1')
+    await expect(page.getByTestId('project-overview-card')).toBeVisible()
+
+    await page.reload()
+    await expect(page).toHaveURL('/projects/p1')
+    await expect(page.getByTestId('project-overview-card')).toBeVisible()
+  })
+
+  test('RG3/RG4 direct access + refresh to /projects/:id/settings/notifications stays Notifications', async ({
+    page,
+  }) => {
+    await page.goto('/projects/p1/settings/notifications')
+    await expect(page.getByRole('heading', { name: 'Notification Channels' })).toBeVisible()
+
+    await page.reload()
+    await expect(page).toHaveURL('/projects/p1/settings/notifications')
+    await expect(page.getByRole('heading', { name: 'Notification Channels' })).toBeVisible()
+  })
+
+  test('RG5 legacy /projects/:id/overview lands on canonical Overview (no 404)', async ({
+    page,
+  }) => {
+    await page.goto('/projects/p1/overview')
+
+    await expect(page).toHaveURL('/projects/p1')
+    await expect(page.getByTestId('project-overview-card')).toBeVisible()
+  })
+
+  test('RG6 legacy /projects/:id/notifications lands on Notifications (no 404)', async ({
+    page,
+  }) => {
+    await page.goto('/projects/p1/notifications')
+
+    await expect(page).toHaveURL('/projects/p1/settings/notifications')
+    await expect(page.getByRole('heading', { name: 'Notification Channels' })).toBeVisible()
   })
 
   test('back button navigates to projects list', async ({ page }) => {
