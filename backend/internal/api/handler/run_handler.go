@@ -224,6 +224,7 @@ func toAPIRun(r *model.Run) Run {
 	if r.StoryKey != "" {
 		run.StoryKey = &r.StoryKey
 	}
+	run.CostUsd = r.CostUSD
 	return run
 }
 
@@ -311,6 +312,7 @@ func toAPIRunWithSteps(r *model.Run) RunWithSteps {
 	if r.StoryKey != "" {
 		rws.StoryKey = &r.StoryKey
 	}
+	rws.CostUsd = r.CostUSD
 	for i := range r.Steps {
 		rws.Steps[i] = toAPIRunStep(&r.Steps[i])
 	}

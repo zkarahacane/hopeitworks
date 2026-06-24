@@ -158,11 +158,11 @@ function formatDuration(run: RunSummary): string {
       <Column header="Cost">
         <template #body="{ data }">
           <span
-            v-if="data.total_cost_usd != null"
+            v-if="data.cost_usd != null"
             class="font-mono text-sm"
             :style="{ color: 'var(--p-text-muted-color)' }"
           >
-            {{ formatCostUSD(data.total_cost_usd) }}
+            {{ formatCostUSD(data.cost_usd) }}
           </span>
           <span v-else :style="{ color: 'var(--p-text-muted-color)' }">—</span>
         </template>

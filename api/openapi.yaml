@@ -3634,6 +3634,17 @@ components:
           minimum: 0
           maximum: 100
           description: Percentage of completed steps (0–100), computed at query time.
+        cost_usd:
+          type: number
+          format: double
+          minimum: 0
+          nullable: true
+          description: >
+            Total cost in USD aggregated across every cost record of the run's
+            steps, computed at query time. Null when the run has no cost record
+            yet (distinct from a real $0.00); a running run reports its cumulative
+            cost so far. Currently populated on list endpoints only.
+          example: 0.8145
         pipeline_config_snapshot:
           type: object
           additionalProperties: true

@@ -24,6 +24,8 @@ type runHandlerRunRepo struct {
 	getActiveRunByStoryFn func(ctx context.Context, storyID uuid.UUID) (*model.Run, error)
 	getRunFn              func(ctx context.Context, id uuid.UUID) (*model.Run, error)
 	updateRunStatusFn     func(ctx context.Context, id uuid.UUID, status model.RunStatus, startedAt, completedAt, pausedAt *time.Time, errMsg *string) (*model.Run, error)
+	listRunsByProjectFn   func(ctx context.Context, projectID uuid.UUID, limit, offset int32) ([]*model.Run, error)
+	countRunsByProjectFn  func(ctx context.Context, projectID uuid.UUID) (int64, error)
 }
 
 var _ port.RunRepository = (*runHandlerRunRepo)(nil)
@@ -49,7 +51,10 @@ func (m *runHandlerRunRepo) GetActiveRunByStory(ctx context.Context, storyID uui
 	}
 	return nil, nil
 }
-func (m *runHandlerRunRepo) ListRunsByProject(_ context.Context, _ uuid.UUID, _, _ int32) ([]*model.Run, error) {
+func (m *runHandlerRunRepo) ListRunsByProject(ctx context.Context, projectID uuid.UUID, limit, offset int32) ([]*model.Run, error) {
+	if m.listRunsByProjectFn != nil {
+		return m.listRunsByProjectFn(ctx, projectID, limit, offset)
+	}
 	return nil, nil
 }
 func (m *runHandlerRunRepo) ListRunsByStory(_ context.Context, _ uuid.UUID, _, _ int32) ([]*model.Run, error) {
@@ -67,7 +72,10 @@ func (m *runHandlerRunRepo) UpdateRunStatus(ctx context.Context, id uuid.UUID, s
 	}
 	return nil, nil
 }
-func (m *runHandlerRunRepo) CountRunsByProject(_ context.Context, _ uuid.UUID) (int64, error) {
+func (m *runHandlerRunRepo) CountRunsByProject(ctx context.Context, projectID uuid.UUID) (int64, error) {
+	if m.countRunsByProjectFn != nil {
+		return m.countRunsByProjectFn(ctx, projectID)
+	}
 	return 0, nil
 }
 func (m *runHandlerRunRepo) CountRunsByStory(_ context.Context, _ uuid.UUID) (int64, error) {
@@ -225,6 +233,109 @@ func setupRunHandler(
 ) *RunHandler {
 	svc := service.NewRunService(runRepo, &runHandlerProjectRepo{}, storyRepo, pipelineConfigRepo, jobQueue)
 	return NewRunHandler(svc)
+}
+
+// ── toAPIRun cost mapping tests (#290) ───────────────────────────────────────
+
+func float64Ptr(v float64) *float64 { return &v }
+
+// TestToAPIRun_CostMapping covers how the run's aggregated cost is surfaced on the
+// API Run type: a real value (RG1), nil when no cost record exists (RG2), and a
+// real zero kept distinct from nil (RG2 boundary).
+func TestToAPIRun_CostMapping(t *testing.T) {
+	tests := []struct {
+		name string
+		cost *float64
+		want *float64
+	}{
+		{name: "real cost is passed through (RG1)", cost: float64Ptr(0.8145), want: float64Ptr(0.8145)},
+		{name: "no cost record maps to nil (RG2)", cost: nil, want: nil},
+		{name: "real zero stays a non-nil zero (RG2 boundary)", cost: float64Ptr(0), want: float64Ptr(0)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			run := toAPIRun(&model.Run{
+				ID:        uuid.New(),
+				ProjectID: uuid.New(),
+				StoryID:   uuid.New(),
+				Status:    model.RunStatusCompleted,
+				CreatedAt: time.Now(),
+				UpdatedAt: time.Now(),
+				CostUSD:   tt.cost,
+			})
+			switch {
+			case tt.want == nil && run.CostUsd != nil:
+				t.Fatalf("expected nil cost_usd, got %v", *run.CostUsd)
+			case tt.want != nil && run.CostUsd == nil:
+				t.Fatalf("expected cost_usd %v, got nil", *tt.want)
+			case tt.want != nil && *run.CostUsd != *tt.want:
+				t.Fatalf("expected cost_usd %v, got %v", *tt.want, *run.CostUsd)
+			}
+		})
+	}
+}
+
+// TestListRunsByProjectHandler_CostInResponse proves the list endpoint serializes
+// per-run cost: the run with cost records reports the summed value (RG3), and the
+// run without any reports JSON null (RG2). The mock repo returns both runs from a
+// single ListRunsByProject call, so the response carries cost without an extra
+// per-run query (RG4 — one list call, no N+1).
+func TestListRunsByProjectHandler_CostInResponse(t *testing.T) {
+	projectID := uuid.New()
+	withCost := uuid.New()
+	withoutCost := uuid.New()
+
+	runRepo := &runHandlerRunRepo{
+		listRunsByProjectFn: func(_ context.Context, _ uuid.UUID, _, _ int32) ([]*model.Run, error) {
+			return []*model.Run{
+				{
+					ID: withCost, ProjectID: projectID, StoryID: uuid.New(),
+					Status: model.RunStatusCompleted, CreatedAt: time.Now(), UpdatedAt: time.Now(),
+					CostUSD: float64Ptr(0.8145),
+				},
+				{
+					ID: withoutCost, ProjectID: projectID, StoryID: uuid.New(),
+					Status: model.RunStatusPending, CreatedAt: time.Now(), UpdatedAt: time.Now(),
+					CostUSD: nil,
+				},
+			}, nil
+		},
+		countRunsByProjectFn: func(_ context.Context, _ uuid.UUID) (int64, error) { return 2, nil },
+	}
+
+	h := setupRunHandler(runRepo, &runHandlerStoryRepo{}, &runHandlerPipelineConfigRepo{}, &runHandlerJobQueue{})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects/"+projectID.String()+"/runs", nil)
+	rec := httptest.NewRecorder()
+
+	h.ListRunsByProject(rec, req, projectID, ListRunsByProjectParams{})
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+
+	var result struct {
+		Data []struct {
+			ID      string   `json:"id"`
+			CostUsd *float64 `json:"cost_usd"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&result); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if len(result.Data) != 2 {
+		t.Fatalf("expected 2 runs, got %d", len(result.Data))
+	}
+	byID := map[string]*float64{}
+	for _, run := range result.Data {
+		byID[run.ID] = run.CostUsd
+	}
+	if got := byID[withCost.String()]; got == nil || *got != 0.8145 {
+		t.Errorf("RG3: expected run with records to report 0.8145, got %v", got)
+	}
+	if got := byID[withoutCost.String()]; got != nil {
+		t.Errorf("RG2: expected run without records to report null, got %v", *got)
+	}
 }
 
 // ── LaunchRun handler tests ──────────────────────────────────────────────────
