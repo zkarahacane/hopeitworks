@@ -56,9 +56,9 @@ func TestDefaultGitProviderFactory_ForProjectID_GitHub(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Verify it returns a GhCliAdapter
-	if _, ok := provider.(*GhCliAdapter); !ok {
-		t.Fatalf("expected *GhCliAdapter, got %T", provider)
+	// Verify it returns the API-based GitHub adapter (no gh CLI dependency).
+	if _, ok := provider.(*GitHubAPIAdapter); !ok {
+		t.Fatalf("expected *GitHubAPIAdapter, got %T", provider)
 	}
 }
 
@@ -80,8 +80,8 @@ func TestDefaultGitProviderFactory_ForProjectID_EmptyDefaultsToGitHub(t *testing
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if _, ok := provider.(*GhCliAdapter); !ok {
-		t.Fatalf("expected *GhCliAdapter for empty git_provider, got %T", provider)
+	if _, ok := provider.(*GitHubAPIAdapter); !ok {
+		t.Fatalf("expected *GitHubAPIAdapter for empty git_provider, got %T", provider)
 	}
 }
 

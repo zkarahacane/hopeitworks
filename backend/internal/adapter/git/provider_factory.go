@@ -38,7 +38,10 @@ func (f *DefaultGitProviderFactory) ForProjectID(ctx context.Context, projectID 
 
 	switch project.GitProvider {
 	case "github", "":
-		return NewGhCliAdapter(f.runner, f.logger), nil
+		// API-based adapter (google/go-github) — no `gh` CLI dependency.
+		// GhCliAdapter is kept in the package as a fallback/reference.
+		token := resolveGitToken(project.GitTokenEnv)
+		return NewGitHubAPIAdapter("", token, f.runner, f.logger), nil
 	case "gitea":
 		token := resolveGitToken(project.GitTokenEnv)
 		baseURL := extractBaseURL(safeDeref(project.RepoURL))
