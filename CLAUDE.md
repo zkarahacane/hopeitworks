@@ -120,11 +120,16 @@ Devcontainer = code-only. Deux Docker stacks sur le même daemon :
 
 ### Substrat microsandbox (microVM) — Mac → VM Lima
 
-Le substrat agent par défaut est **Docker** (`SUBSTRATE=docker`, tourne partout). Le substrat
-durci **microsandbox** (microVM libkrun) est **Linux/KVM-only** : il a besoin de `/dev/kvm` et
-**Docker Desktop sur macOS ne l'expose pas aux conteneurs** (pas de nested-virt passthrough).
-Sur Mac, on le fait donc tourner dans une **VM Linux Lima** avec virtu imbriquée (Apple **M3+ /
-macOS 15+**) :
+Le **défaut code/CI est Docker** (`SUBSTRATE=docker`, tourne partout). Depuis la migration
+substrate-abstraction (ADR `docs/agent-substrate-abstraction-adr.md`), `agent_run` exécute **via
+`port.AgentRuntime`** : Docker est un adapter derrière le port, égal à microsandbox/exec. **En prod
+le substrat-policy est microsandbox** (`deploy/docker-compose.microsandbox.yml`, `SUBSTRATE=microsandbox`)
+— l'agent tourne dans un microVM durci ; `SUBSTRATE` est désormais **live-wired** (sélectionner
+microsandbox injecte vraiment l'adapter microVM ; sans `-tags microsandbox`, `Launch` renvoie
+`ErrNotBuilt` et le run échoue clairement). Le substrat durci **microsandbox** (microVM libkrun) est
+**Linux/KVM-only** : il a besoin de `/dev/kvm` et **Docker Desktop sur macOS ne l'expose pas aux
+conteneurs** (pas de nested-virt passthrough). Sur Mac, on le fait donc tourner dans une **VM Linux
+Lima** avec virtu imbriquée (Apple **M3+ / macOS 15+**) :
 
 ```bash
 brew install lima
