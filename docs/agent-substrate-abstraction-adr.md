@@ -1,12 +1,30 @@
 # ADR — Agent substrate abstraction: `port.AgentRuntime` as the one execution path, Docker as an adapter
 
-- **Status:** Proposed
-- **Date:** 2026-06-23
+- **Status:** Accepted — implemented. Stages 0–4 merged to `develop`; Stage 5 landed as policy + audit only (the legacy Docker log-stream retirement stays deferred, telemetry-gated — see Migration status).
+- **Date:** 2026-06-23 (accepted 2026-06-24)
 - **Deciders:** runtime/platform
 - **Supersedes for the runtime layer:** the incremental "branch-beside-Docker" approach prototyped in the `p3c` worktree (`.claude/worktrees/p3c/backend/internal/adapter/action/agent_run_substrate.go`).
 - **Builds on:** `docs/agent-runtime-capabilities-plan.md` (port generalisation §1.2, substrate-per-context §12–14, image-substring kill §1.3).
 
 > Convention note: `docs/` has no formal ADR directory or numbering scheme (flat `*.md`, plan/research files). This ADR follows that flat convention rather than inventing an `adr/NNNN-` tree.
+
+---
+
+## Migration status (as built)
+
+The staged migration of §4 is implemented on `develop`. Where the as-built result deviates from the original plan it is because of an explicit decision (recorded in §7) or an environment gate (no live non-Docker substrate / no KVM in CI / no telemetry feed here):
+
+| Stage | What landed | Notes |
+|---|---|---|
+| **0** | `buildAgentEnv` / `buildAgentLabels` extracted from `createContainer` | pure refactor; golden byte-identical |
+| **1** | `docker.Runtime` implements `port.AgentRuntime` (off the live path) + additive `RunSpec` fields (`Memory`/`CPUs`/`Network`/`Entrypoint`/`Cmd`/`Workdir`) | own docker-package golden |
+| **2** | `Execute` dispatches via the port; `main.go` injects `docker.Runtime` by default (`WithAgentRuntime`); legacy direct path kept as the nil-fallback | anti-drift test proves the callback (not `runtime.Wait`) is the outcome source — **not** the rejected P3c fork |
+| **3a** | token mint hoisted into the Action (minted once, all substrates); **dead revoke fixed** (revokes the real token on every exit path); provider-real `cost_usd` over the callback with the pricing table as fallback; **prompt audit** on the agnostic Postgres event bus | `CallbackSpec` added to `RunSpec` |
+| **3b** | crash reconciliation: `runtime.Wait` watched concurrently for crash detection; a **non-zero** process exit without a callback status (within a short grace) becomes a crash error instead of blocking the 2h timeout (§2d) | leak-free (buffered channels + deferred cancels), `-race` clean |
+| **4** | `CancelRun` stops via `port.AgentRuntime` (handle = persisted `container_id`), falling back to `ContainerManager`; Docker reaping contract proven end-to-end | **non-Docker reaping (listing managed microVMs/pods) is DEFERRED** until a non-Docker substrate ships live — it needs a runtime-level "list managed executions" capability the port does not yet have (Decision §7#4) |
+| **5** | microsandbox declared the **production-policy** substrate (`deploy/docker-compose.microsandbox.yml`, `SUBSTRATE=microsandbox`); docker stays the **dev/CI code default** | the Docker-specific log-stream retirement (drop `streamAndWait` / NDJSON cost / image-substring fallback) is **DEFERRED, telemetry-gated**: it must not land until telemetry confirms no `runtime_kind==""` runs remain. The prompt + logs are already audit-safe via the callback path (3a), so audit will survive that retirement when it happens. The microsandbox **default cannot be exercised in CI** (no KVM) — it is a deploy policy, validated in the Lima VM (`deploy/lima/`), not the code/CI default. |
+
+**Net:** `port.AgentRuntime` is the one execution path; Docker is an adapter behind it, equal to `exec`/microsandbox and a future K8s/OpenShift adapter (P4). microsandbox is the prod policy, selected by `SUBSTRATE` — never hard-coded in `agent_run`.
 
 ---
 

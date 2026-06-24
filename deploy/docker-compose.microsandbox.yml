@@ -1,5 +1,7 @@
 # docker-compose.microsandbox.yml — overlay that switches the api service to the
-# microVM (microsandbox) substrate. Compose it ON TOP of the base stack:
+# microVM (microsandbox) substrate. This overlay IS the production-policy substrate
+# (ADR "agent substrate abstraction", Decision §7#3): in prod the agent runs in a
+# hardened microVM. Compose it ON TOP of the base stack:
 #
 #   docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.microsandbox.yml up api
 #
@@ -11,15 +13,22 @@
 # REQUIREMENTS: the Docker HOST must expose /dev/kvm (bare-metal Linux with KVM,
 # or a nested-virt VM — see deploy/lima/microsandbox-vm.yaml). Docker Desktop on
 # macOS does NOT pass /dev/kvm through; run this from inside the Lima VM instead.
+#
+# The plain Docker substrate (base stack, SUBSTRATE=docker) stays the dev/CI
+# default — it runs anywhere without KVM. microsandbox is the prod policy, NOT a
+# hard-coded special case: every substrate is equal behind port.AgentRuntime and
+# the live one is chosen by SUBSTRATE.
 services:
   api:
     build:
       context: ../backend
       dockerfile: Dockerfile.microsandbox
     environment:
-      # Select the microVM substrate. The adapter is constructed; live agent_run
-      # still uses Docker until the P3c migration (this overlay does not change
-      # that), but SUBSTRATE drives selectSubstrate + the future wiring.
+      # Select the microVM substrate. As of the substrate-abstraction migration
+      # this is LIVE: SUBSTRATE=microsandbox injects the microsandbox adapter into
+      # agent_run via port.AgentRuntime, so the agent actually runs in a microVM.
+      # (A binary built without `-tags microsandbox` returns ErrNotBuilt at Launch
+      # and fails the run clearly instead of silently falling back to Docker.)
       SUBSTRATE: microsandbox
     # /dev/kvm is the load-bearing line: libkrun needs the KVM device node.
     devices:
