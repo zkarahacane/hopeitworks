@@ -1,15 +1,23 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import Tag from 'primevue/tag'
 import StatusBadge from '@/ui/primitives/StatusBadge.vue'
 import type { Project } from '@/stores/projects'
 import { formatRelativeDate } from '@/utils/formatDate'
 
-defineProps<{
+const props = defineProps<{
   project: Project
   activeRunCount?: number
   gateCount?: number
   storyCount?: number
 }>()
+
+// Singular vs plural label (RG3): "1 story" vs "N stories". A missing or zero
+// count renders the distinct "no stories" empty state below.
+const storyCountLabel = computed(() => {
+  const count = props.storyCount ?? 0
+  return `${count} ${count === 1 ? 'story' : 'stories'}`
+})
 
 const emit = defineEmits<{
   click: [projectId: string]
@@ -131,7 +139,7 @@ function onMouseLeave(e: MouseEvent) {
         color: var(--p-text-muted-color);
       "
     >
-      <span v-if="(storyCount ?? 0) > 0">{{ storyCount }} stories</span>
+      <span v-if="(storyCount ?? 0) > 0">{{ storyCountLabel }}</span>
       <span v-else style="opacity: 0.5">no stories</span>
       <span>updated {{ formatRelativeDate(project.updated_at) }}</span>
     </div>

@@ -174,13 +174,21 @@ func (m *mockUserRepoForHandler) UpdatePasswordHash(_ context.Context, _ uuid.UU
 func (m *mockUserRepoForHandler) Delete(_ context.Context, _ uuid.UUID) error { return nil }
 
 func setupHandler() (*ProjectHandler, *mockProjectRepo) {
+	h, repo, _ := setupHandlerWithStories()
+	return h, repo
+}
+
+// setupHandlerWithStories builds a ProjectHandler wired to a story repo so tests
+// can seed stories and assert the enriched story_count (#289).
+func setupHandlerWithStories() (*ProjectHandler, *mockProjectRepo, *mockStoryRepo) {
 	repo := newMockProjectRepo()
 	svc := service.NewProjectService(repo)
 	puRepo := newMockProjectUserRepoForHandler()
 	userRepo := newMockUserRepoForHandler()
 	puSvc := service.NewProjectUserService(puRepo, repo, userRepo)
-	handler := NewProjectHandler(svc, puSvc, nil)
-	return handler, repo
+	storyRepo := newMockStoryRepo()
+	handler := NewProjectHandler(svc, puSvc, nil, storyRepo)
+	return handler, repo, storyRepo
 }
 
 func TestCreateProject_AdminOnly(t *testing.T) {
@@ -318,7 +326,7 @@ func TestListProjects_NonAdmin_ReturnsAssigned(t *testing.T) {
 	puRepo := newMockProjectUserRepoForHandler()
 	userRepo := newMockUserRepoForHandler()
 	puSvc := service.NewProjectUserService(puRepo, repo, userRepo)
-	h := NewProjectHandler(svc, puSvc, nil)
+	h := NewProjectHandler(svc, puSvc, nil, newMockStoryRepo())
 
 	userID := uuid.New()
 
@@ -469,5 +477,169 @@ func TestDeleteProject_AdminOnly(t *testing.T) {
 
 	if rec.Code != http.StatusNoContent {
 		t.Errorf("expected 204 for admin, got %d", rec.Code)
+	}
+}
+
+// seedStories adds n backlog stories for the given project to the mock story repo.
+func seedStories(repo *mockStoryRepo, projectID uuid.UUID, n int) {
+	for i := 0; i < n; i++ {
+		id := uuid.New()
+		repo.stories[id] = &model.Story{
+			ID:        id,
+			ProjectID: projectID,
+			Key:       "S-" + id.String()[:8],
+			Title:     "story",
+			Status:    model.StoryStatusBacklog,
+		}
+	}
+}
+
+func listProjectsAsAdmin(t *testing.T, h *ProjectHandler) ProjectList {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects", nil)
+	ctx := middleware.SetUserContext(req.Context(), uuid.New(), model.RoleAdmin)
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.ListProjects(rec, req, ListProjectsParams{})
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+	var resp ProjectList
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	return resp
+}
+
+// TestListProjects_StoryCount covers RG1 (5 stories -> 5), RG2 (no stories -> 0),
+// and RG3 (exactly 1 story -> 1) for the project list endpoint (#289).
+func TestListProjects_StoryCount(t *testing.T) {
+	tests := []struct {
+		name       string
+		numStories int
+		want       int
+	}{
+		{name: "RG1 five stories", numStories: 5, want: 5},
+		{name: "RG2 no stories", numStories: 0, want: 0},
+		{name: "RG3 exactly one story", numStories: 1, want: 1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h, projectRepo, storyRepo := setupHandlerWithStories()
+
+			projectID := uuid.New()
+			projectRepo.projects[projectID] = &model.Project{
+				ID:           projectID,
+				Name:         "proj",
+				GitProvider:  "github",
+				AgentRuntime: "docker",
+			}
+			seedStories(storyRepo, projectID, tt.numStories)
+
+			resp := listProjectsAsAdmin(t, h)
+			if len(resp.Data) != 1 {
+				t.Fatalf("expected 1 project, got %d", len(resp.Data))
+			}
+			got := resp.Data[0].StoryCount
+			if got == nil {
+				t.Fatalf("expected story_count to be set, got nil")
+			}
+			if *got != tt.want {
+				t.Errorf("expected story_count %d, got %d", tt.want, *got)
+			}
+		})
+	}
+}
+
+// TestListProjects_StoryCount_PerProjectIsolation ensures counts are not leaked
+// across projects: each project reports only its own stories (#289).
+func TestListProjects_StoryCount_PerProjectIsolation(t *testing.T) {
+	h, projectRepo, storyRepo := setupHandlerWithStories()
+
+	withStories := uuid.New()
+	without := uuid.New()
+	projectRepo.projects[withStories] = &model.Project{ID: withStories, Name: "with", GitProvider: "github", AgentRuntime: "docker"}
+	projectRepo.projects[without] = &model.Project{ID: without, Name: "without", GitProvider: "github", AgentRuntime: "docker"}
+	seedStories(storyRepo, withStories, 3)
+
+	resp := listProjectsAsAdmin(t, h)
+
+	counts := make(map[uuid.UUID]int)
+	for _, p := range resp.Data {
+		if p.StoryCount == nil {
+			t.Fatalf("project %s missing story_count", p.Id)
+		}
+		counts[p.Id] = *p.StoryCount
+	}
+	if counts[withStories] != 3 {
+		t.Errorf("expected 3 stories for seeded project, got %d", counts[withStories])
+	}
+	if counts[without] != 0 {
+		t.Errorf("expected 0 stories for empty project, got %d", counts[without])
+	}
+}
+
+// TestListProjects_StoryCount_MatchesDetailCount proves RG4: the list's
+// story_count equals the count that backs the project detail's stories
+// pagination.total. Both go through StoryRepository.CountByProject (the same
+// query the StoryService.ListByProject uses for its total), so they agree (#289).
+func TestListProjects_StoryCount_MatchesDetailCount(t *testing.T) {
+	h, projectRepo, storyRepo := setupHandlerWithStories()
+
+	projectID := uuid.New()
+	projectRepo.projects[projectID] = &model.Project{ID: projectID, Name: "proj", GitProvider: "github", AgentRuntime: "docker"}
+	seedStories(storyRepo, projectID, 7)
+
+	// List story_count.
+	resp := listProjectsAsAdmin(t, h)
+	if len(resp.Data) != 1 || resp.Data[0].StoryCount == nil {
+		t.Fatalf("unexpected list response: %+v", resp.Data)
+	}
+	listCount := *resp.Data[0].StoryCount
+
+	// Detail count: the StoryService backs the detail view's stories
+	// pagination.total via the same repo. perPage=1 mirrors the front's call.
+	detail, err := service.NewStoryService(storyRepo).ListByProject(context.Background(), projectID, 1, 1)
+	if err != nil {
+		t.Fatalf("ListByProject failed: %v", err)
+	}
+	if listCount != int(detail.Total) {
+		t.Errorf("RG4 mismatch: list story_count=%d, detail total=%d", listCount, detail.Total)
+	}
+}
+
+// TestListProjects_StoryCount_DegradesOnError proves RG5: when the story count
+// fails, the project list still returns 200 (never 500 from the count alone)
+// and the failing project's story_count degrades to 0 (#289 regression).
+func TestListProjects_StoryCount_DegradesOnError(t *testing.T) {
+	h, projectRepo, storyRepo := setupHandlerWithStories()
+	storyRepo.countErr = errors.NewInternal("count stories", context.DeadlineExceeded)
+
+	projectID := uuid.New()
+	projectRepo.projects[projectID] = &model.Project{ID: projectID, Name: "proj", GitProvider: "github", AgentRuntime: "docker"}
+	seedStories(storyRepo, projectID, 4)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects", nil)
+	ctx := middleware.SetUserContext(req.Context(), uuid.New(), model.RoleAdmin)
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.ListProjects(rec, req, ListProjectsParams{})
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("RG5: expected 200 despite count failure, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+	var resp ProjectList
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if len(resp.Data) != 1 || resp.Data[0].StoryCount == nil {
+		t.Fatalf("unexpected list response: %+v", resp.Data)
+	}
+	if *resp.Data[0].StoryCount != 0 {
+		t.Errorf("RG5: expected story_count to degrade to 0, got %d", *resp.Data[0].StoryCount)
 	}
 }

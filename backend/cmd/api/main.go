@@ -129,7 +129,12 @@ func run() error {
 	// Circuit breaker service
 	circuitBreakerService := service.NewCircuitBreakerService(projectRepo, eventRepo, logger)
 
-	projectHandler := handler.NewProjectHandler(projectService, projectUserService, circuitBreakerService)
+	// Story repository (shared by story service and the project handler, which
+	// uses it to enrich each listed project with its story_count via the same
+	// CountByProject query that backs the project detail's stories total).
+	storyRepo := pgadapter.NewStoryRepo(queries)
+
+	projectHandler := handler.NewProjectHandler(projectService, projectUserService, circuitBreakerService, storyRepo)
 
 	// Run repository (shared by run service, pipeline executor, story/epic handlers,
 	// and other components).
@@ -140,7 +145,6 @@ func run() error {
 	epicService := service.NewEpicService(epicRepo)
 
 	// Story service
-	storyRepo := pgadapter.NewStoryRepo(queries)
 	storyService := service.NewStoryService(storyRepo)
 	storyHandler := handler.NewStoryHandler(storyService, runRepo)
 
