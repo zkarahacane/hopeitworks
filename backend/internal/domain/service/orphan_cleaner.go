@@ -31,6 +31,16 @@ func NewOrphanCleaner(
 	}
 }
 
+// Substrate scope (ADR Stage 4): this reaper is Docker-shaped — it lists managed
+// executions via ContainerManager.ListContainers(managed_by=hopeitworks) and reads
+// the run_id label. DockerRuntime.Launch preserves those labels and persists the
+// real container id, so the Docker reaping contract holds through the substrate
+// dispatch with zero change. Reaping a NON-Docker substrate (listing managed
+// microVMs/pods) needs a runtime-level "list managed executions" capability and is
+// DEFERRED until a non-Docker substrate ships live (ADR Stage 4 / Decision §7#4).
+// CancelRun already stops via port.AgentRuntime (substrate-correct); orphan/timeout
+// listing remains Docker-bound for now.
+//
 // CleanupOrphans removes containers not associated with active runs.
 // A container is considered an orphan if:
 //   - It has no run_id label
