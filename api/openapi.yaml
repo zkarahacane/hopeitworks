@@ -2516,6 +2516,14 @@ components:
           minimum: 1
           description: Threshold for consecutive failures before tripping
           example: 3
+        story_count:
+          type: integer
+          minimum: 0
+          description: >-
+            Total number of stories in the project. Best-effort: if the count
+            cannot be computed it degrades to 0 (the list never fails on the
+            count alone). Matches the detail view's stories pagination total.
+          example: 5
         created_at:
           type: string
           format: date-time

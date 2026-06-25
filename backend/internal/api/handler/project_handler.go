@@ -1,12 +1,15 @@
 package handler
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/google/uuid"
 	"github.com/zakari/hopeitworks/backend/internal/api/middleware"
+	"github.com/zakari/hopeitworks/backend/internal/domain/port"
 	"github.com/zakari/hopeitworks/backend/internal/domain/service"
 	"github.com/zakari/hopeitworks/backend/pkg/errors"
+	"github.com/zakari/hopeitworks/backend/pkg/log"
 )
 
 // ProjectHandler implements project-related HTTP handlers.
@@ -14,11 +17,34 @@ type ProjectHandler struct {
 	service        *service.ProjectService
 	userService    *service.ProjectUserService
 	circuitBreaker *service.CircuitBreakerService
+	storyRepo      port.StoryRepository
 }
 
-// NewProjectHandler creates a new ProjectHandler.
-func NewProjectHandler(svc *service.ProjectService, userSvc *service.ProjectUserService, cbSvc *service.CircuitBreakerService) *ProjectHandler {
-	return &ProjectHandler{service: svc, userService: userSvc, circuitBreaker: cbSvc}
+// NewProjectHandler creates a new ProjectHandler. storyRepo is used to enrich
+// each listed project with its story_count; it shares the same count query that
+// backs the project detail's stories pagination total, so the two always agree.
+// It may be nil in tests that do not exercise story_count, in which case the
+// count degrades to 0.
+func NewProjectHandler(svc *service.ProjectService, userSvc *service.ProjectUserService, cbSvc *service.CircuitBreakerService, storyRepo port.StoryRepository) *ProjectHandler {
+	return &ProjectHandler{service: svc, userService: userSvc, circuitBreaker: cbSvc, storyRepo: storyRepo}
+}
+
+// storyCountFor returns the total number of stories for a project. The count is
+// best-effort enrichment for the list view: a failure (or a missing repo) must
+// never fail the request, so it degrades to 0 and logs the error instead.
+func (h *ProjectHandler) storyCountFor(ctx context.Context, projectID uuid.UUID) int {
+	if h.storyRepo == nil {
+		return 0
+	}
+	count, err := h.storyRepo.CountByProject(ctx, projectID)
+	if err != nil {
+		log.FromContext(ctx).Error("failed to count stories for project, defaulting story_count to 0",
+			"project_id", projectID,
+			"error", err,
+		)
+		return 0
+	}
+	return int(count)
 }
 
 // checkProjectAccess verifies the current user has access to the given project.
@@ -66,7 +92,7 @@ func (h *ProjectHandler) ListProjects(w http.ResponseWriter, r *http.Request, pa
 		},
 	}
 	for i, p := range result.Projects {
-		resp.Data[i] = toAPIProject(p)
+		resp.Data[i] = toAPIProject(p, h.storyCountFor(r.Context(), p.ID))
 	}
 
 	writeJSON(w, http.StatusOK, resp)
@@ -111,7 +137,8 @@ func (h *ProjectHandler) CreateProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, toAPIProject(project))
+	// A freshly created project has no stories yet.
+	writeJSON(w, http.StatusCreated, toAPIProject(project, 0))
 }
 
 // GetProject handles GET /projects/{id}.
@@ -128,7 +155,7 @@ func (h *ProjectHandler) GetProject(w http.ResponseWriter, r *http.Request, id I
 		return
 	}
 
-	writeJSON(w, http.StatusOK, toAPIProject(project))
+	writeJSON(w, http.StatusOK, toAPIProject(project, h.storyCountFor(r.Context(), project.ID)))
 }
 
 // UpdateProject handles PUT /projects/{id}.
@@ -171,7 +198,7 @@ func (h *ProjectHandler) UpdateProject(w http.ResponseWriter, r *http.Request, i
 		return
 	}
 
-	writeJSON(w, http.StatusOK, toAPIProject(project))
+	writeJSON(w, http.StatusOK, toAPIProject(project, h.storyCountFor(r.Context(), project.ID)))
 }
 
 // DeleteProject handles DELETE /projects/{id}.

@@ -81,6 +81,60 @@ test.describe('Project List Page', () => {
     await expect(page.getByText('Create your first project')).toBeVisible()
   })
 
+  test('displays the real story count per card, with singular/plural and empty states (#289)', async ({
+    page,
+  }) => {
+    const projects = [
+      {
+        id: 'p-many',
+        name: 'Many Stories',
+        git_provider: 'github',
+        owner_id: 'u1',
+        story_count: 5,
+        created_at: '2026-02-10T10:00:00Z',
+        updated_at: '2026-02-10T10:00:00Z',
+      },
+      {
+        id: 'p-one',
+        name: 'One Story',
+        git_provider: 'github',
+        owner_id: 'u1',
+        story_count: 1,
+        created_at: '2026-02-11T10:00:00Z',
+        updated_at: '2026-02-11T10:00:00Z',
+      },
+      {
+        id: 'p-none',
+        name: 'Empty Project',
+        git_provider: 'github',
+        owner_id: 'u1',
+        story_count: 0,
+        created_at: '2026-02-12T10:00:00Z',
+        updated_at: '2026-02-12T10:00:00Z',
+      },
+    ]
+
+    await page.route('**/api/v1/projects*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: projects,
+          pagination: { total: 3, page: 1, per_page: 20 },
+        }),
+      })
+    })
+
+    await page.goto('/projects')
+
+    // RG1: a project with 5 stories shows "5 stories".
+    await expect(page.getByText('5 stories')).toBeVisible()
+    // RG3: a project with exactly 1 story uses the singular "1 story".
+    await expect(page.getByText('1 story', { exact: true })).toBeVisible()
+    // RG2: a project with no stories shows the distinct "no stories" state.
+    await expect(page.getByText('no stories', { exact: true })).toBeVisible()
+  })
+
   test('navigates to project detail when clicking a card', async ({ page }) => {
     const projects = [
       {

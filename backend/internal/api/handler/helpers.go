@@ -93,10 +93,13 @@ func mapCategoryToStatus(cat errors.ErrorCategory) int {
 	}
 }
 
-// toAPIProject converts a domain Project to the API Project type.
-func toAPIProject(p *model.Project) Project {
+// toAPIProject converts a domain Project to the API Project type. storyCount is
+// the total number of stories in the project; callers that do not compute it
+// (single-resource responses) pass 0.
+func toAPIProject(p *model.Project, storyCount int) Project {
 	gitProvider := ProjectGitProvider(p.GitProvider)
 	agentRuntime := ProjectAgentRuntime(p.AgentRuntime)
+	count := storyCount
 
 	proj := Project{
 		Id:                   p.ID,
@@ -108,6 +111,7 @@ func toAPIProject(p *model.Project) Project {
 		CircuitBreakerCount:  p.CircuitBreakerCount,
 		CircuitBreakerActive: p.CircuitBreakerActive,
 		CircuitBreakerMax:    p.CircuitBreakerMax,
+		StoryCount:           &count,
 		CreatedAt:            p.CreatedAt,
 		UpdatedAt:            p.UpdatedAt,
 	}

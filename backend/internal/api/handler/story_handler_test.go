@@ -20,6 +20,9 @@ import (
 // mockStoryRepo is a mock implementation of port.StoryRepository for handler tests.
 type mockStoryRepo struct {
 	stories map[uuid.UUID]*model.Story
+	// countErr, when set, is returned by CountByProject to exercise the
+	// best-effort graceful-degradation path of callers (#289).
+	countErr error
 }
 
 var _ port.StoryRepository = (*mockStoryRepo)(nil)
@@ -105,6 +108,9 @@ func (m *mockStoryRepo) ListByEpic(_ context.Context, epicID uuid.UUID, limit, o
 }
 
 func (m *mockStoryRepo) CountByProject(_ context.Context, projectID uuid.UUID) (int64, error) {
+	if m.countErr != nil {
+		return 0, m.countErr
+	}
 	count := int64(0)
 	for _, s := range m.stories {
 		if s.ProjectID == projectID {

@@ -18,6 +18,8 @@ export interface Project {
   default_model?: string
   owner_id: string
   circuit_breaker_active?: boolean
+  /** Total number of stories in the project (best-effort, degrades to 0). */
+  story_count?: number
   created_at: string
   updated_at: string
 }

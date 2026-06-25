@@ -50,6 +50,7 @@ const emit = defineEmits<{
         v-for="project in projects"
         :key="project.id"
         :project="project"
+        :story-count="project.story_count"
         @click="emit('projectClick', $event)"
       />
     </div>
