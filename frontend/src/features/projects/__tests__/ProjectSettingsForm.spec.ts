@@ -4,6 +4,7 @@ import { h, defineComponent } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
 import PrimeVue from 'primevue/config'
 import ProjectSettingsForm from '../ProjectSettingsForm.vue'
+import { useAuthStore } from '@/stores/auth'
 import type { Project } from '@/stores/projects'
 
 const baseProject: Project = {
@@ -36,16 +37,33 @@ const SelectStub = defineComponent({
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let wrapper: VueWrapper<any>
 
-function mountComponent(project: Project = baseProject, isSaving = false) {
+function mountComponent(
+  project: Project = baseProject,
+  isSaving = false,
+  opts: { role?: 'admin' | 'user'; isDeleting?: boolean } = {},
+) {
+  const pinia = createPinia()
+  setActivePinia(pinia)
+  if (opts.role) {
+    const auth = useAuthStore()
+    auth.user = {
+      id: 'u1',
+      email: 'u@test.dev',
+      name: 'U',
+      role: opts.role,
+    }
+  }
   wrapper = mount(ProjectSettingsForm, {
     props: {
       project,
       isSaving,
+      isDeleting: opts.isDeleting ?? false,
     },
     global: {
-      plugins: [PrimeVue, createPinia()],
+      plugins: [PrimeVue, pinia],
       stubs: {
         Select: SelectStub,
+        teleport: true,
       },
     },
   })
@@ -140,5 +158,40 @@ describe('ProjectSettingsForm', () => {
     mountComponent(baseProject, true)
     const saveBtn = wrapper.find('[data-testid="save-settings-btn"]')
     expect(saveBtn.exists()).toBe(true)
+  })
+
+  // RG6: admin gating of the danger zone
+  it('hides the danger zone for non-admin users', () => {
+    mountComponent(baseProject, false, { role: 'user' })
+    expect(wrapper.find('[data-testid="project-danger-zone"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="open-delete-dialog-btn"]').exists()).toBe(false)
+  })
+
+  it('hides the danger zone when no user is authenticated', () => {
+    mountComponent()
+    expect(wrapper.find('[data-testid="project-danger-zone"]').exists()).toBe(false)
+  })
+
+  it('shows the danger zone with a delete button for admins (RG1)', () => {
+    mountComponent(baseProject, false, { role: 'admin' })
+    expect(wrapper.find('[data-testid="project-danger-zone"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="open-delete-dialog-btn"]').exists()).toBe(true)
+  })
+
+  it('opens the delete dialog when the danger-zone button is clicked', async () => {
+    mountComponent(baseProject, false, { role: 'admin' })
+    const dialog = wrapper.findComponent({ name: 'ProjectDeleteDialog' })
+    expect(dialog.props('visible')).toBe(false)
+    await wrapper.find('[data-testid="open-delete-dialog-btn"]').trigger('click')
+    await flushPromises()
+    expect(dialog.props('visible')).toBe(true)
+  })
+
+  it('re-emits delete when the dialog confirms', async () => {
+    mountComponent(baseProject, false, { role: 'admin' })
+    const dialog = wrapper.findComponent({ name: 'ProjectDeleteDialog' })
+    dialog.vm.$emit('confirm')
+    await flushPromises()
+    expect(wrapper.emitted('delete')).toBeDefined()
   })
 })

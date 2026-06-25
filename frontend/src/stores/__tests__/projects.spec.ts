@@ -5,12 +5,14 @@ import { useProjectsStore } from '../projects'
 const mockGet = vi.fn()
 const mockPost = vi.fn()
 const mockPut = vi.fn()
+const mockDelete = vi.fn()
 
 vi.mock('@/api/client', () => ({
   apiClient: {
     GET: (...args: unknown[]) => mockGet(...args),
     POST: (...args: unknown[]) => mockPost(...args),
     PUT: (...args: unknown[]) => mockPut(...args),
+    DELETE: (...args: unknown[]) => mockDelete(...args),
   },
 }))
 
@@ -20,6 +22,7 @@ describe('useProjectsStore', () => {
     mockGet.mockReset()
     mockPost.mockReset()
     mockPut.mockReset()
+    mockDelete.mockReset()
   })
 
   it('starts with default state', () => {
@@ -301,5 +304,51 @@ describe('useProjectsStore', () => {
     await expect(store.updateProject('p1', { name: 'X' })).rejects.toThrow(
       'Failed to update project',
     )
+  })
+
+  // RG1: deleteProject calls DELETE /projects/{id} and resolves on 204
+  it('deleteProject calls DELETE with the project id and resolves on success', async () => {
+    mockDelete.mockResolvedValue({ data: undefined, error: undefined })
+
+    const store = useProjectsStore()
+    await expect(store.deleteProject('p1')).resolves.toBeUndefined()
+    expect(mockDelete).toHaveBeenCalledWith('/projects/{id}', {
+      params: { path: { id: 'p1' } },
+    })
+  })
+
+  it('deleteProject removes the project from local state when present', async () => {
+    mockDelete.mockResolvedValue({ data: undefined, error: undefined })
+
+    const store = useProjectsStore()
+    store.items = [
+      { id: 'p1', name: 'A', owner_id: 'u1', created_at: 'x', updated_at: 'x' },
+      { id: 'p2', name: 'B', owner_id: 'u1', created_at: 'x', updated_at: 'x' },
+    ]
+    await store.deleteProject('p1')
+    expect(store.items.map((p) => p.id)).toEqual(['p2'])
+  })
+
+  // RG5: error path — throws and leaves state untouched (project preserved)
+  it('deleteProject throws with API error message and keeps state on failure', async () => {
+    mockDelete.mockResolvedValue({
+      data: undefined,
+      error: { error: { code: 'NOT_FOUND', message: 'Project not found' } },
+    })
+
+    const store = useProjectsStore()
+    store.items = [{ id: 'p1', name: 'A', owner_id: 'u1', created_at: 'x', updated_at: 'x' }]
+    await expect(store.deleteProject('p1')).rejects.toThrow('Project not found')
+    expect(store.items.map((p) => p.id)).toEqual(['p1'])
+  })
+
+  it('deleteProject throws fallback message when API error has no message', async () => {
+    mockDelete.mockResolvedValue({
+      data: undefined,
+      error: { error: { code: 'INTERNAL' } },
+    })
+
+    const store = useProjectsStore()
+    await expect(store.deleteProject('p1')).rejects.toThrow('Failed to delete project')
   })
 })

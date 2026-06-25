@@ -113,6 +113,17 @@ export const useProjectsStore = defineStore('projects', () => {
     return data as Project
   }
 
+  /** Delete a project via the API and drop it from local state if present */
+  async function deleteProject(id: string): Promise<void> {
+    const { error: apiError } = await apiClient.DELETE('/projects/{id}', {
+      params: { path: { id } },
+    })
+    if (apiError) {
+      throw new Error(getApiErrorMessage(apiError, 'Failed to delete project'))
+    }
+    items.value = items.value.filter((p) => p.id !== id)
+  }
+
   /** Reset store state to initial values */
   function reset() {
     items.value = []
@@ -120,5 +131,15 @@ export const useProjectsStore = defineStore('projects', () => {
     error.value = null
   }
 
-  return { items, pagination, isLoading, error, fetchProjects, createProject, updateProject, reset }
+  return {
+    items,
+    pagination,
+    isLoading,
+    error,
+    fetchProjects,
+    createProject,
+    updateProject,
+    deleteProject,
+    reset,
+  }
 })
