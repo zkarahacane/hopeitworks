@@ -12,6 +12,7 @@ import {
   STAGE_BACKLOG_COLUMN,
   STAGE_DONE_COLUMN,
   STAGE_FAILED_COLUMN,
+  STAGE_RUNNING_ENTRY,
 } from '@/stores/stories'
 import { statusTokenSeverity } from '@/utils/statusToken'
 import { useRuntimeStream } from '@/stores/runtimeStream'
@@ -197,12 +198,26 @@ const grouped = computed<Record<string, Story[]>>(() => {
     ? stageColumn
     : (boardColumn as (s: Story) => string)
   const fallback = viewMode.value === 'detail' ? STAGE_BACKLOG_COLUMN : 'backlog'
+  // The pipeline entry (first) stage lane, used to host running stories the
+  // executor has not yet stamped with a current_stage. Empty pipeline → no lane.
+  const entryStageKey = stages.value[0]?.name
 
   for (const story of props.stories) {
     let key = place(story)
+    // Running-without-stage resolves to the pipeline entry lane (cohérent with
+    // "running"). Degenerate fallback: an empty pipeline has no stage lane, so the
+    // card goes to the Done lane — never Backlog while running (the AC invariant).
+    if (key === STAGE_RUNNING_ENTRY) {
+      key = entryStageKey ?? STAGE_DONE_COLUMN
+    }
     // In détail mode a card whose stage name is not a known column (e.g. the
-    // pipeline changed) falls back to the entry lane so it never vanishes.
-    if (!(key in result)) key = fallback
+    // pipeline was edited/renamed, leaving a stale current_stage). A *running*
+    // story routes to the entry lane (like the running+NULL sentinel) so it never
+    // lands in Backlog while running (the RG3 invariant). Any other unknown key
+    // (non-running) falls back to Backlog so the card never vanishes.
+    if (!(key in result)) {
+      key = story.status === 'running' ? (entryStageKey ?? STAGE_DONE_COLUMN) : fallback
+    }
     result[key]!.push(story)
   }
   return result

@@ -57,6 +57,13 @@ export type KanbanColumn = 'backlog' | 'in_progress' | 'blocked' | 'done' | 'fai
 export const STAGE_DONE_COLUMN = '__done__'
 export const STAGE_FAILED_COLUMN = '__failed__'
 export const STAGE_BACKLOG_COLUMN = '__backlog__'
+/**
+ * Sentinel for a running story with no live `current_stage` (the executor has not
+ * stamped a stage yet). The détail board has no generic "running" lane, so the
+ * board resolves this sentinel to the pipeline's entry (first) stage. A running
+ * story must never land in the Backlog lane.
+ */
+export const STAGE_RUNNING_ENTRY = '__running_entry__'
 
 /**
  * Pure function — derives the macro (lifecycle) kanban column for a story.
@@ -81,9 +88,10 @@ export function boardColumn(story: Story): KanbanColumn {
  *
  * Terminal lifecycle states win over the live stage: a done/failed story sits in
  * its terminal lane regardless of any stale `current_stage`. Otherwise the story
- * is placed in its `current_stage` (a PipelineGroup name). A story with no live
- * stage (no run yet, or stage cleared at completion) falls back to the backlog
- * entry lane.
+ * is placed in its `current_stage` (a PipelineGroup name). A running story with no
+ * live stage yet (executor has not stamped one) returns STAGE_RUNNING_ENTRY,
+ * which the board resolves to the pipeline entry stage — never the Backlog lane.
+ * Any other stageless story (backlog before its first run) falls back to Backlog.
  *
  * The returned key is either a stage name (matched against the pipeline's stage
  * names by the board) or one of the STAGE_* sentinels.
@@ -92,6 +100,7 @@ export function stageColumn(story: Story): string {
   if (story.status === 'done') return STAGE_DONE_COLUMN
   if (story.status === 'failed') return STAGE_FAILED_COLUMN
   if (story.current_stage) return story.current_stage
+  if (story.status === 'running') return STAGE_RUNNING_ENTRY
   return STAGE_BACKLOG_COLUMN
 }
 
