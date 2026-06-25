@@ -4,6 +4,7 @@ import { ref, computed, h, defineComponent } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
 import PrimeVue from 'primevue/config'
 import ToastService from 'primevue/toastservice'
+import type { Agent } from '@/stores/agents'
 import AgentListView from '../AgentListView.vue'
 
 /** A promise whose resolution is controlled by the test (in-flight window). */
@@ -15,38 +16,36 @@ function deferred<T>() {
   return { promise, resolve }
 }
 
+const mockPush = vi.fn()
+
 vi.mock('vue-router', () => ({
   useRoute: () => ({ params: { id: 'proj-1' } }),
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: mockPush }),
 }))
 
 const mockFetchAgents = vi.fn()
-const mockAgents = ref<unknown[]>([
-  {
-    id: 'a1',
-    name: 'Implement Agent',
-    model: 'claude-opus-4-6',
-    image: 'img:1',
-    template_content: '',
-    scope: 'project',
-    project_id: 'proj-1',
-    created_at: '2026-01-01T00:00:00Z',
-    updated_at: '2026-01-01T00:00:00Z',
-  },
-])
+const mockRetry = vi.fn()
+const mockAgents = ref<Agent[]>([])
+const mockIsLoading = ref(false)
+const mockError = ref<string | null>(null)
 
 vi.mock('@/composables/useAgents', () => ({
   useAgents: () => ({
     agents: computed(() => mockAgents.value),
-    isLoading: computed(() => false),
-    error: computed(() => null),
+    pagination: computed(() => null),
+    isLoading: computed(() => mockIsLoading.value),
+    error: computed(() => mockError.value),
     fetchAgents: mockFetchAgents,
-    retry: vi.fn(),
+    retry: mockRetry,
   }),
 }))
 
+const mockUser = ref<{ role: string } | null>(null)
+
 vi.mock('@/composables/useAuth', () => ({
-  useAuth: () => ({ user: ref({ role: 'admin' }) }),
+  useAuth: () => ({
+    user: computed(() => mockUser.value),
+  }),
 }))
 
 // Capture the accept callback handed to PrimeVue's confirm.require so the test
@@ -82,6 +81,46 @@ const AgentTableStub = defineComponent({
   },
 })
 
+/** Stub the EmptyState so we can assert the single CTA testid through it. */
+const AgentEmptyStateStub = defineComponent({
+  name: 'AgentEmptyState',
+  props: ['isAdmin'],
+  emits: ['createClick'],
+  setup(props, { emit }) {
+    return () =>
+      h(
+        'div',
+        { 'data-testid': 'empty-state' },
+        props.isAdmin
+          ? [
+              h(
+                'button',
+                {
+                  'data-testid': 'empty-create-agent-button',
+                  onClick: () => emit('createClick'),
+                },
+                'New Agent',
+              ),
+            ]
+          : ['No agents'],
+      )
+  },
+})
+
+const sampleAgents: Agent[] = [
+  {
+    id: 'a1',
+    name: 'Implement Agent',
+    model: 'claude-opus-4-6',
+    image: 'ghcr.io/org/agent:latest',
+    template_content: 'You are a developer...',
+    scope: 'project',
+    project_id: 'proj-1',
+    created_at: '2026-01-15T10:00:00Z',
+    updated_at: '2026-01-15T10:00:00Z',
+  },
+]
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let wrapper: VueWrapper<any>
 
@@ -91,10 +130,11 @@ function mountComponent() {
       plugins: [PrimeVue, ToastService, createPinia()],
       stubs: {
         AgentTable: AgentTableStub,
-        AgentEmptyState: true,
+        AgentEmptyState: AgentEmptyStateStub,
         ConfirmDialog: true,
         Toast: true,
         Skeleton: true,
+        Message: true,
       },
     },
   })
@@ -105,12 +145,30 @@ function deleteTrigger() {
   return wrapper.find('[data-testid="delete-a1"]')
 }
 
+/** Count visible "New Agent" buttons across the whole view (header + CTA). */
+function newAgentButtons() {
+  return wrapper.findAll('button').filter((b) => b.text().includes('New Agent'))
+}
+
+function resetState() {
+  setActivePinia(createPinia())
+  capturedAccept = null
+  mockPush.mockReset()
+  mockFetchAgents.mockReset()
+  mockRetry.mockReset()
+  mockDeleteAgent.mockReset()
+  mockAgents.value = []
+  mockIsLoading.value = false
+  mockError.value = null
+  mockUser.value = null
+}
+
 describe('AgentListView — delete double-click guard (#295)', () => {
   beforeEach(() => {
-    setActivePinia(createPinia())
-    capturedAccept = null
-    mockFetchAgents.mockReset()
-    mockDeleteAgent.mockReset()
+    resetState()
+    // The guard suite operates on a populated table as an admin.
+    mockUser.value = { role: 'admin' }
+    mockAgents.value = sampleAgents
   })
 
   afterEach(() => {
@@ -170,5 +228,94 @@ describe('AgentListView — delete double-click guard (#295)', () => {
     capturedAccept!()
     await flushPromises()
     expect(mockDeleteAgent).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('AgentListView — empty-state CTA disambiguation (#304)', () => {
+  beforeEach(() => {
+    resetState()
+  })
+
+  afterEach(() => {
+    wrapper?.unmount()
+  })
+
+  it('fetches agents on mount', () => {
+    mountComponent()
+    expect(mockFetchAgents).toHaveBeenCalled()
+  })
+
+  it('RG1: admin + 0 agent shows the empty state with exactly one New Agent button (the CTA), header hidden', async () => {
+    mockUser.value = { role: 'admin' }
+    mockAgents.value = []
+    mountComponent()
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('[data-testid="empty-state"]').exists()).toBe(true)
+    // Header button must be gone in empty state.
+    expect(wrapper.find('[data-testid="create-agent-button"]').exists()).toBe(false)
+    // Exactly one "New Agent" button in the DOM, and it is the CTA.
+    expect(newAgentButtons()).toHaveLength(1)
+    expect(wrapper.find('[data-testid="empty-create-agent-button"]').exists()).toBe(true)
+  })
+
+  it('RG1: clicking the empty-state CTA navigates to the create page', async () => {
+    mockUser.value = { role: 'admin' }
+    mockAgents.value = []
+    mountComponent()
+    await wrapper.vm.$nextTick()
+
+    await wrapper.find('[data-testid="empty-create-agent-button"]').trigger('click')
+
+    expect(mockPush).toHaveBeenCalledWith({
+      name: 'agent-create',
+      params: { id: 'proj-1' },
+    })
+  })
+
+  it('RG2: non-admin + 0 agent shows no New Agent button at all', async () => {
+    mockUser.value = { role: 'member' }
+    mockAgents.value = []
+    mountComponent()
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('[data-testid="empty-state"]').exists()).toBe(true)
+    expect(newAgentButtons()).toHaveLength(0)
+    expect(wrapper.find('[data-testid="create-agent-button"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="empty-create-agent-button"]').exists()).toBe(false)
+  })
+
+  it('non-regression: admin with agents shows the header button (no empty state)', async () => {
+    mockUser.value = { role: 'admin' }
+    mockAgents.value = sampleAgents
+    mountComponent()
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('[data-testid="empty-state"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="agent-table"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="create-agent-button"]').exists()).toBe(true)
+    expect(newAgentButtons()).toHaveLength(1)
+  })
+
+  it('non-regression: admin while loading shows the header button (no empty state)', async () => {
+    mockUser.value = { role: 'admin' }
+    mockAgents.value = []
+    mockIsLoading.value = true
+    mountComponent()
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('[data-testid="empty-state"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="create-agent-button"]').exists()).toBe(true)
+  })
+
+  it('non-regression: admin on error shows the header button (no empty state)', async () => {
+    mockUser.value = { role: 'admin' }
+    mockAgents.value = []
+    mockError.value = 'boom'
+    mountComponent()
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('[data-testid="empty-state"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="create-agent-button"]').exists()).toBe(true)
   })
 })

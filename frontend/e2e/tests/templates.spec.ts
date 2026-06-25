@@ -298,7 +298,13 @@ test.describe('Agent List Page', () => {
       await expect(
         page.getByText('No agents found for this project.'),
       ).toBeVisible()
-      await expect(page.getByRole('button', { name: 'New Agent' })).toBeVisible()
+      // In empty state the header button is hidden, so the EmptyState CTA is the
+      // single "New Agent" button — getByRole no longer hits strict-mode (#304).
+      const cta = page.getByTestId('empty-create-agent-button')
+      await expect(cta).toBeVisible()
+      await expect(page.getByRole('button', { name: 'New Agent' })).toHaveCount(1)
+      await cta.click()
+      await expect(page).toHaveURL(`/projects/${PROJECT_ID}/agents/new`)
     })
   })
 })
