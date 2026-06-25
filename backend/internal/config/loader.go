@@ -45,6 +45,11 @@ func setDefaults(cfg *pkgconfig.Config) {
 	if cfg.Docker.APIContainerName == "" {
 		cfg.Docker.APIContainerName = "hopeitworks-api"
 	}
+	// East-West run isolation is the default (by design): the agent is single-homed
+	// on its own per-run network and the API is attached per-run to preserve the
+	// callback. The DOCKER_ISOLATE_RUNS env var (applied later, after this) is the
+	// override and still wins in both directions — set it to "false"/"0" to opt out.
+	cfg.Docker.IsolateRuns = true
 }
 
 func applyEnvOverrides(cfg *pkgconfig.Config) {

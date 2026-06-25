@@ -290,3 +290,40 @@ func TestLoad_SubstrateInvalidRejected(t *testing.T) {
 		t.Fatal("Load() should reject an unknown substrate kind")
 	}
 }
+
+func TestLoad_IsolateRunsDefaultsToTrue(t *testing.T) {
+	t.Setenv("DOCKER_ISOLATE_RUNS", "")
+	t.Setenv("DOCKER_API_CONTAINER", "")
+	cfg, err := Load(writeConfig(t, minimalDB))
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if !cfg.Docker.IsolateRuns {
+		t.Errorf("Docker.IsolateRuns = %v, want true (East-West isolation is the default)", cfg.Docker.IsolateRuns)
+	}
+	if cfg.Docker.APIContainerName != "hopeitworks-api" {
+		t.Errorf("Docker.APIContainerName = %q, want hopeitworks-api default", cfg.Docker.APIContainerName)
+	}
+}
+
+func TestLoad_IsolateRunsEnvOverrideOff(t *testing.T) {
+	t.Setenv("DOCKER_ISOLATE_RUNS", "false")
+	cfg, err := Load(writeConfig(t, minimalDB))
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if cfg.Docker.IsolateRuns {
+		t.Errorf("Docker.IsolateRuns = %v, want false from DOCKER_ISOLATE_RUNS=false override", cfg.Docker.IsolateRuns)
+	}
+}
+
+func TestLoad_APIContainerEnvOverride(t *testing.T) {
+	t.Setenv("DOCKER_API_CONTAINER", "hopeitworks-test-api")
+	cfg, err := Load(writeConfig(t, minimalDB))
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if cfg.Docker.APIContainerName != "hopeitworks-test-api" {
+		t.Errorf("Docker.APIContainerName = %q, want hopeitworks-test-api from env override", cfg.Docker.APIContainerName)
+	}
+}
