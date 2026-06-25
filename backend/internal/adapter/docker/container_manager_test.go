@@ -789,6 +789,27 @@ func TestConnectContainer_Error(t *testing.T) {
 	}
 }
 
+func TestConnectContainer_IdempotentAlreadyAttached(t *testing.T) {
+	// Docker reports an already-attached endpoint as Conflict (409) or, on older
+	// daemons, Forbidden (403). Both must be treated as a no-op success so
+	// re-connecting the API to a per-run network (a retried isolated Launch) does
+	// not fail — symmetric with RemoveNetwork/DisconnectContainer idempotency.
+	cases := map[string]error{
+		"conflict (409)":  errdefs.Conflict(errors.New("endpoint with name api already exists in network n")),
+		"forbidden (403)": errdefs.Forbidden(errors.New("endpoint already exists in network n")),
+	}
+	for name, connectErr := range cases {
+		t.Run(name, func(t *testing.T) {
+			mock := &mockDockerClient{netConnectErr: connectErr}
+			mgr := newTestManager(mock)
+
+			if err := mgr.ConnectContainer(context.Background(), "n", "ctr-1", []string{"api"}); err != nil {
+				t.Fatalf("expected nil for already-attached endpoint (idempotent), got %v", err)
+			}
+		})
+	}
+}
+
 func TestListNetworks_Success(t *testing.T) {
 	created := time.Unix(1700000000, 0)
 	mock := &mockDockerClient{
