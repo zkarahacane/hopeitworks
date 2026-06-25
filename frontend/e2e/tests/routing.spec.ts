@@ -84,11 +84,125 @@ test.describe('Application Routing', () => {
       await expect(page).toHaveURL('/projects/123')
     })
 
-    test('should render Run Detail view at /runs/456', async ({ page }) => {
-      await page.goto('/runs/456')
+    test.describe('Run Detail view at /runs/456', () => {
+      // A minimal RunWithSteps payload matching api/openapi.yaml. The Run schema
+      // has no `story_title` — the Run Detail <h1> only shows a custom title when
+      // a HITL request carries one, so an empty `steps` array means no human gate
+      // → no HITL fetch → the header falls back to "Run Detail" (RG4).
+      const runMock = () => ({
+        id: '00000000-0000-0000-0000-000000000456',
+        project_id: '00000000-0000-0000-0000-000000000001',
+        story_id: '00000000-0000-0000-0000-000000000002',
+        status: 'running' as const,
+        progress: 0,
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+        steps: [],
+      })
 
-      await expect(page.locator('h1')).toHaveText('Run Detail')
-      await expect(page).toHaveURL('/runs/456')
+      // The view title is via getByRole('heading', { name: 'Run Detail' }) so the
+      // assertion is unambiguous even if other headings exist on the page.
+      const runDetailHeading = (page: import('@playwright/test').Page) =>
+        page.getByRole('heading', { name: 'Run Detail' })
+
+      // Stub the secondary run-scoped costs call so it resolves deterministically
+      // instead of hanging on an unmocked network request (RG5). The SSE stream
+      // is already stubbed by the shared fixture.
+      const stubCosts = async (page: import('@playwright/test').Page) => {
+        await page.route('**/api/v1/projects/**/runs/**/costs*', async (route) => {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+              run_id: '00000000-0000-0000-0000-000000000456',
+              total_cost: 0,
+              steps: [],
+            }),
+          })
+        })
+      }
+
+      test('RG1: mocked run (200) → renders heading and keeps URL stable', async ({ page }) => {
+        await stubCosts(page)
+        await page.route('**/api/v1/runs/456*', async (route) => {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify(runMock()),
+          })
+        })
+
+        await page.goto('/runs/456')
+
+        await expect(runDetailHeading(page)).toBeVisible()
+        await expect(page).toHaveURL('/runs/456')
+      })
+
+      test('RG2: deferred run response → heading and skeleton visible immediately', async ({
+        page,
+      }) => {
+        await stubCosts(page)
+        let release: () => void = () => {}
+        const gate = new Promise<void>((resolve) => {
+          release = resolve
+        })
+        await page.route('**/api/v1/runs/456*', async (route) => {
+          // Hold the response open so the view stays in its loading state.
+          await gate
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify(runMock()),
+          })
+        })
+
+        await page.goto('/runs/456')
+
+        // Title is independent of loading; skeleton is shown while the run loads.
+        await expect(runDetailHeading(page)).toBeVisible()
+        await expect(page.locator('.p-skeleton').first()).toBeVisible()
+
+        release()
+      })
+
+      test('RG3: run error (500) → heading stays, error Message + Retry shown', async ({
+        page,
+      }) => {
+        await stubCosts(page)
+        await page.route('**/api/v1/runs/456*', async (route) => {
+          await route.fulfill({
+            status: 500,
+            contentType: 'application/json',
+            body: JSON.stringify({ error: { code: 'INTERNAL', message: 'boom' } }),
+          })
+        })
+
+        await page.goto('/runs/456')
+
+        await expect(runDetailHeading(page)).toBeVisible()
+        // useRunDetail throws Error('Failed to load run'); the view renders it in
+        // an error Message with a Retry button (RunDetailView.vue error branch).
+        await expect(page.getByText('Failed to load run')).toBeVisible()
+        await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible()
+      })
+
+      test('RG4: run without a story title → heading falls back to "Run Detail"', async ({
+        page,
+      }) => {
+        await stubCosts(page)
+        await page.route('**/api/v1/runs/456*', async (route) => {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify(runMock()),
+          })
+        })
+
+        await page.goto('/runs/456')
+
+        await expect(runDetailHeading(page)).toBeVisible()
+        await expect(page).toHaveURL('/runs/456')
+      })
     })
 
     test('should render Approvals view at /approvals', async ({ page }) => {
