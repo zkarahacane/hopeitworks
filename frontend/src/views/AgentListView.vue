@@ -30,6 +30,13 @@ const { agents, isLoading, error, fetchAgents, retry } = useAgents(projectId)
 // dialog's accept) only fires one DELETE (#295). Other rows stay clickable.
 const deleteGuard = useInFlightGuard()
 
+// True once loaded with no agents and no error: the EmptyState (with its own
+// create CTA) is shown, so the header button is hidden to avoid a duplicate
+// "New Agent" button (#304).
+const showEmptyState = computed(
+  () => !isLoading.value && !error.value && agents.value.length === 0,
+)
+
 onMounted(() => {
   fetchAgents()
 })
@@ -89,7 +96,7 @@ function isDeleting(agentId: string): boolean {
         </p>
       </div>
       <Button
-        v-if="isAdmin"
+        v-if="isAdmin && !showEmptyState"
         label="New Agent"
         icon="pi pi-plus"
         severity="success"
@@ -116,7 +123,7 @@ function isDeleting(agentId: string): boolean {
 
     <!-- Empty state -->
     <AgentEmptyState
-      v-else-if="!isLoading && !error && agents.length === 0"
+      v-else-if="showEmptyState"
       :is-admin="isAdmin"
       @create-click="handleCreateClick"
     />

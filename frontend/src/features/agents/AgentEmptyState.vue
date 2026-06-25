@@ -22,6 +22,7 @@ const emit = defineEmits<{
       label="New Agent"
       icon="pi pi-plus"
       severity="success"
+      data-testid="empty-create-agent-button"
       @click="emit('createClick')"
     />
   </div>
