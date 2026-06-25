@@ -86,20 +86,37 @@ const RunPipelineViewStub = defineComponent({
   name: 'RunPipelineView',
   props: ['run', 'steps'],
   emits: ['step-selected'],
-  setup(_, { emit }) {
+  setup(props, { emit }) {
+    // Root click selects the first step (running) — keeps existing tests stable.
+    // A per-step button lets tests select any step (e.g. the seed/pending one).
+    return () =>
+      h(
+        'div',
+        {
+          'data-testid': 'run-pipeline-view',
+          onClick: () => emit('step-selected', props.steps?.[0]),
+        },
+        (props.steps ?? []).map((s: { id: string }) =>
+          h('button', {
+            'data-testid': `select-${s.id}`,
+            onClick: (e: Event) => {
+              e.stopPropagation()
+              emit('step-selected', s)
+            },
+          }),
+        ),
+      )
+  },
+})
+const LogStreamPanelStub = defineComponent({
+  name: 'LogStreamPanel',
+  props: ['lines', 'status', 'active', 'stepStatus'],
+  setup(props) {
     return () =>
       h('div', {
-        'data-testid': 'run-pipeline-view',
-        onClick: () =>
-          emit('step-selected', {
-            id: 'step-1',
-            run_id: 'run-1',
-            step_name: 'dev-story',
-            step_order: 0,
-            action: 'agent_run',
-            status: 'running',
-            created_at: '2026-02-17T10:00:00Z',
-          }),
+        'data-testid': 'log-stream-panel',
+        'data-active': String(props.active),
+        'data-step-status': props.stepStatus ?? '',
       })
   },
 })
@@ -184,7 +201,7 @@ function mountView() {
         HitlGateCard: HitlGateCardStub,
         RunCostByRole: true,
         StepTimeline: true,
-        LogStreamPanel: true,
+        LogStreamPanel: LogStreamPanelStub,
         LiveProgress: true,
         Toast: true,
         Skeleton: true,
@@ -386,5 +403,61 @@ describe('RunDetailView', () => {
     const pipelineView = wrapper.findComponent(RunPipelineViewStub)
     expect(pipelineView.props('run')).toEqual(run)
     expect(pipelineView.props('steps')).toEqual(run.steps)
+  })
+
+  // ── STREAM panel selection wiring (#297) ────────────────────────────────────────
+  it('marks the STREAM panel inactive when no step runs and none is selected (RG3)', () => {
+    // All steps pending → no running step + nothing selected yet → no target.
+    mockRun.value = makeRun({
+      status: 'pending',
+      steps: [
+        {
+          id: 'step-1',
+          run_id: 'run-1',
+          step_name: 'dev-story',
+          step_order: 0,
+          action: 'agent_run',
+          status: 'pending',
+          created_at: '2026-02-17T10:00:00Z',
+        },
+      ],
+    })
+    mountView()
+    const panel = wrapper.find('[data-testid="log-stream-panel"]')
+    expect(panel.attributes('data-active')).toBe('false')
+    expect(panel.attributes('data-step-status')).toBe('')
+  })
+
+  it('marks the STREAM panel active + forwards step status when a seed step is selected (RG1)', async () => {
+    // No running step; user selects a pending (seed) step → panel must be active
+    // with its status so the panel can render "No logs available", not idle.
+    mockRun.value = makeRun({
+      status: 'pending',
+      steps: [
+        {
+          id: 'step-seed',
+          run_id: 'run-1',
+          step_name: 'setup',
+          step_order: 0,
+          action: 'git_branch',
+          status: 'pending',
+          created_at: '2026-02-17T10:00:00Z',
+        },
+      ],
+    })
+    mountView()
+    await wrapper.find('[data-testid="select-step-seed"]').trigger('click')
+    await flushPromises()
+    const panel = wrapper.find('[data-testid="log-stream-panel"]')
+    expect(panel.attributes('data-active')).toBe('true')
+    expect(panel.attributes('data-step-status')).toBe('pending')
+  })
+
+  it('targets the running step (active) for the STREAM panel by default (RG2)', () => {
+    mockRun.value = makeRun() // step-1 is running
+    mountView()
+    const panel = wrapper.find('[data-testid="log-stream-panel"]')
+    expect(panel.attributes('data-active')).toBe('true')
+    expect(panel.attributes('data-step-status')).toBe('running')
   })
 })

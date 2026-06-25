@@ -13,16 +13,27 @@ import type { LogLine } from '@/ui/composed/LogViewer.vue'
  * from BOTH the connection status AND whether a stream is even expected
  * (`active`) and whether any lines have arrived. Clear states:
  *
- *   idle      — no active stream (no step selected) → neutral message
+ *   idle      — nothing selected at all → "No step selected" (RG3)
  *   connecting— stream active, opening, nothing yet
  *   streaming — open + receiving (blinking caret)
  *   waiting   — open but no lines yet (agent quiet) — NOT "no output"
- *   closed    — stream ended (shows whatever was captured)
- *   error     — connection error
+ *   empty     — a non-terminal step IS selected but has no lines → "No logs
+ *               available" (RG1, #297) — distinct from idle/no-selection
+ *   closed    — terminal step ended with no captured output → "No output was
+ *               captured", OR a finished SSE stream (shows captured lines)
+ *   error     — connection error (RG4)
+ *
+ * `active` means "a step is targeted" (selection), NOT "the stream is live".
+ * When the optional `stepStatus` is provided, the empty/closed distinction is
+ * driven by the STEP status (terminal vs non-terminal) rather than the SSE
+ * status, so a non-running selected step never shows a perpetual "Connecting…".
  *
  * Fully prop-driven (lines + status in) so Run Detail and the DAG inspector can
  * both mount it. ANSI rendered via the shared formatLogLine (ansi-to-html).
  */
+/** Step status the panel may be targeting (subset relevant to the stream). */
+type StepStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
+
 const props = withDefaults(
   defineProps<{
     /** Captured log lines (ANSI allowed). */
@@ -30,12 +41,21 @@ const props = withDefaults(
     /** SSE connection status from the host composable. */
     status: SSEStatus
     /**
-     * Whether a stream is expected at all. False when nothing is selected — so
-     * we show "idle" instead of a misleading "no output". Default true.
+     * Whether a step is targeted at all. False when nothing is selected — so
+     * we show "idle" ("No step selected") instead of a misleading "no output".
+     * Default true.
      */
     active?: boolean
+    /**
+     * Status of the targeted step, when known. Drives the empty/closed split:
+     * a terminal step (completed/failed/cancelled) with no lines shows "No
+     * output was captured" (closed); a non-terminal selected step with no lines
+     * shows "No logs available" (empty, RG1). When omitted, the panel falls
+     * back to deriving everything from the SSE status (legacy callers).
+     */
+    stepStatus?: StepStatus | null
   }>(),
-  { active: true },
+  { active: true, stepStatus: null },
 )
 
 const emit = defineEmits<{
@@ -47,16 +67,45 @@ const autoScroll = ref(true)
 
 const hasLines = computed(() => props.lines.length > 0)
 
+const isTerminalStep = computed(
+  () =>
+    props.stepStatus === 'completed' ||
+    props.stepStatus === 'failed' ||
+    props.stepStatus === 'cancelled',
+)
+const isRunningStep = computed(() => props.stepStatus === 'running')
+
 /** Derived lifecycle — the single source of truth for what the panel shows. */
 const lifecycle = computed(() => {
+  // RG3: nothing is targeted → neutral "No step selected".
   if (!props.active) return 'idle'
+
+  // RG2: lines have arrived → live stream (or terminal recap when SSE closed).
+  if (hasLines.value) {
+    if (props.status === 'error') return 'error'
+    if (props.status === 'closed') return 'closed'
+    return 'streaming'
+  }
+
+  // No lines yet. A connection error always wins (RG4).
+  if (props.status === 'error') return 'error'
+
+  // When the step status is known, it (not the SSE phase) decides the empty
+  // distinction — a non-running step must not show a perpetual "Connecting…".
+  if (props.stepStatus !== null) {
+    if (isTerminalStep.value) return 'closed' // Q1: terminal, no output captured
+    if (isRunningStep.value) {
+      return props.status === 'connecting' ? 'connecting' : 'waiting'
+    }
+    return 'empty' // RG1: selected (pending/seed) non-terminal step, no logs
+  }
+
+  // Legacy callers (no stepStatus): derive purely from the SSE status.
   switch (props.status) {
     case 'connecting':
-      return hasLines.value ? 'streaming' : 'connecting'
+      return 'connecting'
     case 'open':
-      return hasLines.value ? 'streaming' : 'waiting'
-    case 'error':
-      return 'error'
+      return 'waiting'
     case 'closed':
       return 'closed'
     default:
@@ -72,6 +121,7 @@ const STATE_META: Record<
   connecting: { label: 'Connecting…', tone: 'queued' },
   waiting: { label: 'Connected — waiting for output…', tone: 'running' },
   streaming: { label: 'Live', tone: 'running' },
+  empty: { label: 'No logs', tone: 'queued' },
   closed: { label: 'Stream ended', tone: 'done' },
   error: { label: 'Connection error', tone: 'failed' },
 }
@@ -90,6 +140,8 @@ const emptyMessage = computed(() => {
       return 'Connecting to the log stream…'
     case 'waiting':
       return 'Connected. Waiting for the agent to emit output…'
+    case 'empty':
+      return 'No logs available'
     case 'error':
       return 'Could not connect to the log stream'
     case 'closed':
