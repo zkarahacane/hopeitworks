@@ -222,6 +222,17 @@ func numericToFloat64(n pgtype.Numeric) float64 {
 	return f
 }
 
+// numericToFloat64Ptr converts a nullable Postgres numeric to *float64, returning
+// nil when the value is SQL NULL. Unlike numericToFloat64 (which collapses NULL to
+// 0), this preserves the distinction between "no value" (nil) and a real 0.
+func numericToFloat64Ptr(n pgtype.Numeric) *float64 {
+	if !n.Valid || n.Int == nil {
+		return nil
+	}
+	f := numericToFloat64(n)
+	return &f
+}
+
 // isUniqueViolation checks if a pgx error is a unique constraint violation.
 func isUniqueViolation(err error) bool {
 	// pgx wraps postgres errors; check for SQLSTATE 23505

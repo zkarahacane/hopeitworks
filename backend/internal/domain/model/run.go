@@ -50,6 +50,10 @@ type Run struct {
 	UpdatedAt              time.Time
 	Steps                  []RunStep
 	Progress               int // computed, not persisted
+	// CostUSD is the run's total cost in USD aggregated over its steps' cost
+	// records, computed at query time on list endpoints. nil means no cost record
+	// exists yet (rendered as "—"); a non-nil value (including 0) is a real total.
+	CostUSD *float64
 }
 
 // ComputeProgress computes the run progress as a percentage (0–100)

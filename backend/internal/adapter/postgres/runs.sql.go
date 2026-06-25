@@ -429,7 +429,13 @@ func (q *Queries) ListRunsByProject(ctx context.Context, arg ListRunsByProjectPa
 const listRunsByProjectWithStoryKey = `-- name: ListRunsByProjectWithStoryKey :many
 SELECT r.id, r.project_id, r.story_id, r.status, r.pipeline_config_snapshot,
        r.started_at, r.completed_at, r.error_message, r.created_at, r.updated_at,
-       r.paused_at, r.metadata, COALESCE(s.key, '') AS story_key
+       r.paused_at, r.metadata, COALESCE(s.key, '') AS story_key,
+       (
+           SELECT SUM(cr.cost_usd)::DECIMAL(10,6)
+           FROM cost_records cr
+           JOIN run_steps rs ON rs.id = cr.run_step_id
+           WHERE rs.run_id = r.id
+       ) AS cost_usd
 FROM runs r
 LEFT JOIN stories s ON s.id = r.story_id
 WHERE r.project_id = $1
@@ -457,8 +463,13 @@ type ListRunsByProjectWithStoryKeyRow struct {
 	PausedAt               pgtype.Timestamptz `json:"paused_at"`
 	Metadata               []byte             `json:"metadata"`
 	StoryKey               string             `json:"story_key"`
+	CostUsd                pgtype.Numeric     `json:"cost_usd"`
 }
 
+// cost_usd is the run's total cost aggregated over every cost record of its
+// steps. SUM without COALESCE so it is NULL when the run has no cost record yet
+// (distinct from a real $0.00); the subquery keeps this a single, N+1-free
+// query whose ORDER BY / LIMIT / OFFSET are unaffected.
 func (q *Queries) ListRunsByProjectWithStoryKey(ctx context.Context, arg ListRunsByProjectWithStoryKeyParams) ([]ListRunsByProjectWithStoryKeyRow, error) {
 	rows, err := q.db.Query(ctx, listRunsByProjectWithStoryKey, arg.ProjectID, arg.Limit, arg.Offset)
 	if err != nil {
@@ -482,6 +493,7 @@ func (q *Queries) ListRunsByProjectWithStoryKey(ctx context.Context, arg ListRun
 			&i.PausedAt,
 			&i.Metadata,
 			&i.StoryKey,
+			&i.CostUsd,
 		); err != nil {
 			return nil, err
 		}
@@ -533,9 +545,18 @@ func (q *Queries) ListRunsByStatus(ctx context.Context, status string) ([]Run, e
 }
 
 const listRunsByStory = `-- name: ListRunsByStory :many
-SELECT id, project_id, story_id, status, pipeline_config_snapshot, started_at, completed_at, error_message, created_at, updated_at, paused_at, metadata FROM runs
-WHERE story_id = $1
-ORDER BY created_at DESC
+SELECT r.id, r.project_id, r.story_id, r.status, r.pipeline_config_snapshot,
+       r.started_at, r.completed_at, r.error_message, r.created_at, r.updated_at,
+       r.paused_at, r.metadata,
+       (
+           SELECT SUM(cr.cost_usd)::DECIMAL(10,6)
+           FROM cost_records cr
+           JOIN run_steps rs ON rs.id = cr.run_step_id
+           WHERE rs.run_id = r.id
+       ) AS cost_usd
+FROM runs r
+WHERE r.story_id = $1
+ORDER BY r.created_at DESC
 LIMIT $2 OFFSET $3
 `
 
@@ -545,15 +566,33 @@ type ListRunsByStoryParams struct {
 	Offset  int32     `json:"offset"`
 }
 
-func (q *Queries) ListRunsByStory(ctx context.Context, arg ListRunsByStoryParams) ([]Run, error) {
+type ListRunsByStoryRow struct {
+	ID                     uuid.UUID          `json:"id"`
+	ProjectID              uuid.UUID          `json:"project_id"`
+	StoryID                uuid.UUID          `json:"story_id"`
+	Status                 string             `json:"status"`
+	PipelineConfigSnapshot []byte             `json:"pipeline_config_snapshot"`
+	StartedAt              pgtype.Timestamptz `json:"started_at"`
+	CompletedAt            pgtype.Timestamptz `json:"completed_at"`
+	ErrorMessage           pgtype.Text        `json:"error_message"`
+	CreatedAt              time.Time          `json:"created_at"`
+	UpdatedAt              time.Time          `json:"updated_at"`
+	PausedAt               pgtype.Timestamptz `json:"paused_at"`
+	Metadata               []byte             `json:"metadata"`
+	CostUsd                pgtype.Numeric     `json:"cost_usd"`
+}
+
+// cost_usd mirrors ListRunsByProjectWithStoryKey: SUM without COALESCE → NULL
+// when no cost record exists for the run, numeric (incl. 0) otherwise.
+func (q *Queries) ListRunsByStory(ctx context.Context, arg ListRunsByStoryParams) ([]ListRunsByStoryRow, error) {
 	rows, err := q.db.Query(ctx, listRunsByStory, arg.StoryID, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Run{}
+	items := []ListRunsByStoryRow{}
 	for rows.Next() {
-		var i Run
+		var i ListRunsByStoryRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.ProjectID,
@@ -567,6 +606,7 @@ func (q *Queries) ListRunsByStory(ctx context.Context, arg ListRunsByStoryParams
 			&i.UpdatedAt,
 			&i.PausedAt,
 			&i.Metadata,
+			&i.CostUsd,
 		); err != nil {
 			return nil, err
 		}

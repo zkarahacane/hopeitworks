@@ -15,6 +15,9 @@ export interface RunSummary {
   updated_at: string
   project_name?: string
   story_key?: string
+  // Total run cost in USD (aggregated server-side over the run's steps); null
+  // when the run has no cost record yet, distinct from a real $0.00.
+  cost_usd?: number | null
 }
 
 /**
