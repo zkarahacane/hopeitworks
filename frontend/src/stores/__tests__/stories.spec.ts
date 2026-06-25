@@ -2,10 +2,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import {
   useStoriesStore,
+  boardColumn,
   stageColumn,
   STAGE_BACKLOG_COLUMN,
   STAGE_DONE_COLUMN,
   STAGE_FAILED_COLUMN,
+  STAGE_RUNNING_ENTRY,
   type Story,
 } from '../stories'
 
@@ -444,8 +446,21 @@ describe('stageColumn', () => {
     expect(stageColumn(makeStory({ status: 'running', current_stage: 'In Dev' }))).toBe('In Dev')
   })
 
-  it('falls back to the backlog lane when no stage is set', () => {
+  it('falls back to the backlog lane when no stage is set (backlog story)', () => {
     expect(stageColumn(makeStory({ status: 'backlog' }))).toBe(STAGE_BACKLOG_COLUMN)
+  })
+
+  it('RG2 (#300): a running story without a stage routes to the running-entry sentinel, not Backlog', () => {
+    const story = makeStory({ status: 'running', current_stage: null })
+    const col = stageColumn(story)
+    expect(col).toBe(STAGE_RUNNING_ENTRY)
+    expect(col).not.toBe(STAGE_BACKLOG_COLUMN)
+  })
+
+  it('RG3 (#300): a running+NULL story is in_progress (macro) AND off the backlog lane (détail)', () => {
+    const story = makeStory({ status: 'running', current_stage: null })
+    expect(boardColumn(story)).toBe('in_progress')
+    expect(stageColumn(story)).not.toBe(STAGE_BACKLOG_COLUMN)
   })
 
   it('sends done stories to the done lane regardless of stage', () => {
