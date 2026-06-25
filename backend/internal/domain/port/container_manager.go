@@ -62,6 +62,13 @@ type ContainerManager interface {
 	// registering DNS aliases for it on that network. aliases may be nil/empty.
 	ConnectContainer(ctx context.Context, networkNameOrID, containerID string, aliases []string) error
 
+	// DisconnectContainer detaches a container from a network. It is idempotent: a
+	// container (or network) that is already absent / not attached is treated as
+	// success (returns nil). Used by East-West run isolation to detach the API
+	// container before removing a per-run network (otherwise Docker rejects the
+	// removal with "network has active endpoints").
+	DisconnectContainer(ctx context.Context, networkNameOrID, containerID string) error
+
 	// ListNetworks lists managed Docker networks matching the given label
 	// filter (e.g. managed_by=hopeitworks). An empty/nil filter lists all.
 	ListNetworks(ctx context.Context, labelFilter map[string]string) ([]model.NetworkInfo, error)

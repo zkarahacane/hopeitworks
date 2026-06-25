@@ -35,17 +35,32 @@ type Runtime struct {
 	// attached to every execution. It is NEVER a per-run identity — the per-run
 	// isolated network arrives via RunSpec.Network and maps to ExtraNetworks.
 	networkName string
+	// isolateRuns opts into East-West run isolation (DOCKER_ISOLATE_RUNS). When
+	// true AND a per-run network is supplied on the spec, that per-run network
+	// becomes the agent's PRIMARY (and only) network: the shared agent network is
+	// NOT attached, so agents from different runs no longer share an L2 segment.
+	// When false (default) the shared network stays primary and the per-run
+	// network is an extra attachment — byte-identical to before.
+	isolateRuns bool
 	logger      *slog.Logger
 }
 
-// NewRuntime constructs the Docker substrate adapter. containerMgr is the
-// low-level container CRUD dependency; networkName is the shared agent network
-// every execution attaches to (deployment config, never per-run).
+// NewRuntime constructs the Docker substrate adapter with East-West run isolation
+// DISABLED. containerMgr is the low-level container CRUD dependency; networkName
+// is the shared agent network every execution attaches to (deployment config,
+// never per-run). Use NewRuntimeWithIsolation to opt into isolation.
 func NewRuntime(containerMgr port.ContainerManager, networkName string, logger *slog.Logger) *Runtime {
+	return NewRuntimeWithIsolation(containerMgr, networkName, false, logger)
+}
+
+// NewRuntimeWithIsolation constructs the Docker substrate adapter and configures
+// East-West run isolation. When isolateRuns is true, an execution carrying a
+// per-run network is single-homed on it (the shared networkName is not attached).
+func NewRuntimeWithIsolation(containerMgr port.ContainerManager, networkName string, isolateRuns bool, logger *slog.Logger) *Runtime {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Runtime{containerMgr: containerMgr, networkName: networkName, logger: logger}
+	return &Runtime{containerMgr: containerMgr, networkName: networkName, isolateRuns: isolateRuns, logger: logger}
 }
 
 // Launch builds ContainerOpts from the agnostic spec, creates and starts the
@@ -70,10 +85,18 @@ func (r *Runtime) Launch(ctx context.Context, spec port.RunSpec) (port.RunHandle
 		Entrypoint:  spec.Entrypoint, // nil for an agent launch
 		Cmd:         spec.Cmd,        // nil for an agent launch
 	}
-	// Per-run isolated network: dual-home the execution. Empty Name leaves the
-	// container single-homed on the shared network, keeping ContainerOpts
-	// byte-identical to the no-Environment case.
-	if spec.Network.Name != "" {
+	switch {
+	case r.isolateRuns && spec.Network.Name != "":
+		// East-West isolation: the per-run network is the PRIMARY and only network.
+		// The shared agent network is NOT attached, so two agents from different
+		// runs never share an L2 segment. The API container is attached to this
+		// per-run network out-of-band (SidecarManager) so the callback still works.
+		opts.NetworkName = spec.Network.Name
+		opts.Aliases = spec.Network.Aliases
+	case spec.Network.Name != "":
+		// Default (dual-home): keep the shared network primary and attach the
+		// per-run network as an extra. Empty Name leaves the container single-homed
+		// on the shared network — byte-identical to the no-Environment case.
 		opts.ExtraNetworks = []string{spec.Network.Name}
 		opts.Aliases = spec.Network.Aliases
 	}

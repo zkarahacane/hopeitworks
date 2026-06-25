@@ -123,6 +123,10 @@ func (m *mockContainerManager) ConnectContainer(_ context.Context, _, _ string, 
 	return nil
 }
 
+func (m *mockContainerManager) DisconnectContainer(_ context.Context, _, _ string) error {
+	return nil
+}
+
 func (m *mockContainerManager) ListNetworks(_ context.Context, _ map[string]string) ([]model.NetworkInfo, error) {
 	return nil, nil
 }

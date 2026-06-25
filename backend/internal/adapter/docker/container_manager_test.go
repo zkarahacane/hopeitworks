@@ -41,12 +41,15 @@ type mockDockerClient struct {
 	listOpts dockercontainer.ListOptions
 
 	// Network captured args.
-	netCreateName string
-	netCreateOpts network.CreateOptions
-	netRemoveID   string
-	netConnectNet string
-	netConnectCtr string
-	netConnectCfg *network.EndpointSettings
+	netCreateName    string
+	netCreateOpts    network.CreateOptions
+	netRemoveID      string
+	netConnectNet    string
+	netConnectCtr    string
+	netConnectCfg    *network.EndpointSettings
+	netDisconnectNet string
+	netDisconnectCtr string
+	netDisconnectFrc bool
 
 	// Configurable return values.
 	createResp     dockercontainer.CreateResponse
@@ -59,14 +62,15 @@ type mockDockerClient struct {
 	listContainers []dockercontainer.Summary
 	listErr        error
 
-	netCreateResp network.CreateResponse
-	netCreateErr  error
-	netRemoveErr  error
-	netConnectErr error
-	netList       []network.Summary
-	netListErr    error
-	inspectResp   dockercontainer.InspectResponse
-	inspectErr    error
+	netCreateResp    network.CreateResponse
+	netCreateErr     error
+	netRemoveErr     error
+	netConnectErr    error
+	netDisconnectErr error
+	netList          []network.Summary
+	netListErr       error
+	inspectResp      dockercontainer.InspectResponse
+	inspectErr       error
 }
 
 func (m *mockDockerClient) ContainerCreate(
@@ -141,6 +145,13 @@ func (m *mockDockerClient) NetworkConnect(_ context.Context, networkID, containe
 	m.netConnectCtr = containerID
 	m.netConnectCfg = config
 	return m.netConnectErr
+}
+
+func (m *mockDockerClient) NetworkDisconnect(_ context.Context, networkID, containerID string, force bool) error {
+	m.netDisconnectNet = networkID
+	m.netDisconnectCtr = containerID
+	m.netDisconnectFrc = force
+	return m.netDisconnectErr
 }
 
 func (m *mockDockerClient) NetworkList(_ context.Context, _ network.ListOptions) ([]network.Summary, error) {

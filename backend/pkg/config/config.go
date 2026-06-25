@@ -85,6 +85,20 @@ type DockerConfig struct {
 	// CallbackBaseURL is the base URL agent containers use to call back to the API
 	// (e.g., "http://api:8080"). Set via CALLBACK_BASE_URL env var.
 	CallbackBaseURL string `yaml:"callback_base_url"`
+	// IsolateRuns opts into East-West run isolation: the agent leaves the shared
+	// AgentNetwork and is single-homed on its own per-run network instead, so two
+	// agents from different runs/projects can no longer reach each other on a
+	// shared L2 segment. The API container is attached to each per-run network so
+	// the callback (http://api:8080) keeps working; Internet egress stays open.
+	// Defaults to false: with it off, behaviour is byte-identical to today (the
+	// shared AgentNetwork remains the agent's primary network). Set via the
+	// DOCKER_ISOLATE_RUNS env var.
+	IsolateRuns bool `yaml:"isolate_runs"`
+	// APIContainerName is the name (or id) of the platform API container, used to
+	// attach/detach it to per-run networks when IsolateRuns is enabled. Defaults to
+	// "hopeitworks-api" (the compose service container name). Set via the
+	// DOCKER_API_CONTAINER env var.
+	APIContainerName string `yaml:"api_container_name"`
 }
 
 // LogConfig holds logging settings.

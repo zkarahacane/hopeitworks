@@ -114,6 +114,10 @@ func (f *fakeRuntimeCM) ConnectContainer(_ context.Context, _, _ string, _ []str
 	return nil
 }
 
+func (f *fakeRuntimeCM) DisconnectContainer(_ context.Context, _, _ string) error {
+	return nil
+}
+
 func (f *fakeRuntimeCM) ListNetworks(_ context.Context, _ map[string]string) ([]model.NetworkInfo, error) {
 	return nil, nil
 }
@@ -282,6 +286,76 @@ func TestRuntime_Launch_WithRunNetwork(t *testing.T) {
 	}
 	if got := opts.Aliases[runNet]; got != "agent" {
 		t.Errorf("expected Aliases[%s]=agent, got %q (full: %v)", runNet, got, opts.Aliases)
+	}
+}
+
+// TestRuntime_Launch_Isolated_RunNetworkPrimary proves East-West isolation: with
+// the flag ON and a per-run network supplied, the agent is SINGLE-HOMED on the
+// per-run network — it becomes the primary NetworkName and the shared agent
+// network is NOT attached (no ExtraNetworks), so two agents from different runs
+// never share an L2 segment.
+func TestRuntime_Launch_Isolated_RunNetworkPrimary(t *testing.T) {
+	cm := &fakeRuntimeCM{}
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
+	rt := NewRuntimeWithIsolation(cm, runtimeSharedNetwork, true, logger)
+
+	const runNet = "hopeitworks-run-isolated"
+	spec := legacyAgentSpec()
+	spec.Network = port.RunNetwork{Name: runNet, Aliases: map[string]string{runNet: "agent"}}
+
+	if _, err := rt.Launch(context.Background(), spec); err != nil {
+		t.Fatalf("Launch returned error: %v", err)
+	}
+
+	created, _, _, _, _ := cm.snapshot()
+	if len(created) != 1 {
+		t.Fatalf("expected 1 create call, got %d", len(created))
+	}
+	opts := created[0]
+
+	// Primary network is the per-run network, NOT the shared one.
+	if opts.NetworkName != runNet {
+		t.Errorf("expected primary NetworkName %q (per-run), got %q", runNet, opts.NetworkName)
+	}
+	// The shared agent network must not appear anywhere.
+	if opts.NetworkName == runtimeSharedNetwork {
+		t.Errorf("agent must NOT be on the shared network %q under isolation", runtimeSharedNetwork)
+	}
+	for _, n := range opts.ExtraNetworks {
+		if n == runtimeSharedNetwork {
+			t.Errorf("shared network %q leaked into ExtraNetworks: %v", runtimeSharedNetwork, opts.ExtraNetworks)
+		}
+	}
+	// Single-homed: no extra attachments at all (the per-run net is primary).
+	if len(opts.ExtraNetworks) != 0 {
+		t.Errorf("expected no ExtraNetworks under isolation, got %v", opts.ExtraNetworks)
+	}
+	if got := opts.Aliases[runNet]; got != "agent" {
+		t.Errorf("expected Aliases[%s]=agent, got %q", runNet, got)
+	}
+}
+
+// TestRuntime_Launch_Isolated_NoRunNetwork_FallsBack proves the isolation flag is
+// inert without a per-run network on the spec: the agent stays on the shared
+// network exactly like the default. (In the live flow the SidecarManager always
+// supplies a per-run network under isolation, so this only guards the edge case.)
+func TestRuntime_Launch_Isolated_NoRunNetwork_FallsBack(t *testing.T) {
+	cm := &fakeRuntimeCM{}
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
+	rt := NewRuntimeWithIsolation(cm, runtimeSharedNetwork, true, logger)
+
+	spec := legacyAgentSpec() // zero Network
+
+	if _, err := rt.Launch(context.Background(), spec); err != nil {
+		t.Fatalf("Launch returned error: %v", err)
+	}
+	created, _, _, _, _ := cm.snapshot()
+	opts := created[0]
+	if opts.NetworkName != runtimeSharedNetwork {
+		t.Errorf("expected fallback to shared network %q, got %q", runtimeSharedNetwork, opts.NetworkName)
+	}
+	if len(opts.ExtraNetworks) != 0 {
+		t.Errorf("expected no ExtraNetworks, got %v", opts.ExtraNetworks)
 	}
 }
 

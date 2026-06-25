@@ -40,6 +40,11 @@ func setDefaults(cfg *pkgconfig.Config) {
 	if cfg.Substrate.Kind == "" {
 		cfg.Substrate.Kind = pkgconfig.SubstrateDocker
 	}
+	// East-West isolation needs to know the API container to attach to each per-run
+	// network. Default to the compose service container name.
+	if cfg.Docker.APIContainerName == "" {
+		cfg.Docker.APIContainerName = "hopeitworks-api"
+	}
 }
 
 func applyEnvOverrides(cfg *pkgconfig.Config) {
@@ -83,6 +88,12 @@ func applyEnvOverrides(cfg *pkgconfig.Config) {
 	}
 	if v := os.Getenv("CALLBACK_BASE_URL"); v != "" {
 		cfg.Docker.CallbackBaseURL = v
+	}
+	if v := os.Getenv("DOCKER_ISOLATE_RUNS"); v != "" {
+		cfg.Docker.IsolateRuns = strings.EqualFold(v, "true") || v == "1"
+	}
+	if v := os.Getenv("DOCKER_API_CONTAINER"); v != "" {
+		cfg.Docker.APIContainerName = v
 	}
 	if v := os.Getenv("SUBSTRATE"); v != "" {
 		cfg.Substrate.Kind = v

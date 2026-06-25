@@ -330,6 +330,9 @@ func (c *reapableCM) RemoveNetwork(_ context.Context, _ string) error { return n
 func (c *reapableCM) ConnectContainer(_ context.Context, _, _ string, _ []string) error {
 	return nil
 }
+func (c *reapableCM) DisconnectContainer(_ context.Context, _, _ string) error {
+	return nil
+}
 func (c *reapableCM) ListNetworks(_ context.Context, _ map[string]string) ([]model.NetworkInfo, error) {
 	return nil, nil
 }

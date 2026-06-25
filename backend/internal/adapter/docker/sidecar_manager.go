@@ -72,6 +72,20 @@ type SidecarManager struct {
 	containers port.ContainerManager
 	logger     *slog.Logger
 
+	// isolateRuns opts into East-West run isolation (DOCKER_ISOLATE_RUNS). When
+	// true, Launch ALWAYS creates the per-run network (even with zero sidecars)
+	// and attaches the API container to it (alias "api") so the agent — single-
+	// homed on this per-run network instead of the shared agent network — can
+	// still reach the callback. Cleanup/rollback/GC detach the API before removing
+	// the network. When false (default), behaviour is byte-identical to before:
+	// no per-run network unless there are sidecars, and the API is never touched.
+	isolateRuns bool
+	// apiContainerName is the name (or id) of the platform API container the
+	// SidecarManager attaches to / detaches from each per-run network when
+	// isolateRuns is enabled. Empty disables the attach (no-op) so an unset
+	// identity can never break a run silently.
+	apiContainerName string
+
 	// Tunables (defaulted in the constructor) kept as fields for testability.
 	readinessTimeout  time.Duration
 	readinessInterval time.Duration
@@ -82,13 +96,28 @@ type SidecarManager struct {
 	now func() time.Time
 }
 
+// apiNetworkAlias is the DNS alias the API container is registered under on each
+// per-run network, so the agent's CALLBACK_URL (http://api:8080) resolves there.
+const apiNetworkAlias = "api"
+
 // NewDockerSidecarManager builds a SidecarManager backed by the given
-// ContainerManager. The ContainerManager is reused for both networks and
-// containers — no second Docker client is created.
+// ContainerManager, with East-West run isolation DISABLED. The ContainerManager
+// is reused for both networks and containers — no second Docker client is
+// created. Use NewDockerSidecarManagerWithIsolation to opt into isolation.
 func NewDockerSidecarManager(containers port.ContainerManager, logger *slog.Logger) *SidecarManager {
+	return NewDockerSidecarManagerWithIsolation(containers, false, "", logger)
+}
+
+// NewDockerSidecarManagerWithIsolation builds a SidecarManager and configures
+// East-West run isolation. When isolateRuns is true, every run gets its own
+// network and the API container (apiContainerName) is attached to it so the
+// callback keeps working while the agent leaves the shared agent network.
+func NewDockerSidecarManagerWithIsolation(containers port.ContainerManager, isolateRuns bool, apiContainerName string, logger *slog.Logger) *SidecarManager {
 	return &SidecarManager{
 		containers:        containers,
 		logger:            logger,
+		isolateRuns:       isolateRuns,
+		apiContainerName:  apiContainerName,
 		readinessTimeout:  defaultReadinessTimeout,
 		readinessInterval: defaultReadinessInterval,
 		runningGrace:      defaultRunningGrace,
@@ -109,6 +138,45 @@ func networkName(runID uuid.UUID) string {
 	return sidecarNetworkPrefix + runID.String()
 }
 
+// connectAPI attaches the platform API container to a per-run network (alias
+// "api") so the isolated agent's callback (http://api:8080) resolves there. It is
+// a no-op unless run isolation is enabled AND an API container name is
+// configured, so a build with the flag off — or a misconfigured identity — never
+// adds an API endpoint and never errors. Returns an error only when a configured
+// connect fails (so Launch can roll back rather than start an agent with no path
+// to the callback).
+func (s *SidecarManager) connectAPI(ctx context.Context, netName string) error {
+	if !s.isolateRuns || s.apiContainerName == "" {
+		return nil
+	}
+	if err := s.containers.ConnectContainer(ctx, netName, s.apiContainerName, []string{apiNetworkAlias}); err != nil {
+		return fmt.Errorf("connecting API container %s to run network %s: %w", s.apiContainerName, netName, err)
+	}
+	s.logger.Debug("API attached to run network",
+		slog.String("network", netName),
+		slog.String("api_container", s.apiContainerName),
+	)
+	return nil
+}
+
+// disconnectAPI detaches the platform API container from a per-run network. It
+// MUST run before RemoveNetwork or Docker rejects the removal ("network has
+// active endpoints"). Best-effort and idempotent: a no-op when isolation is off /
+// no API name is configured, and DisconnectContainer treats an already-absent
+// endpoint as success, so it is safe to call from rollback, Cleanup and GC alike.
+func (s *SidecarManager) disconnectAPI(ctx context.Context, netNameOrID string) {
+	if !s.isolateRuns || s.apiContainerName == "" {
+		return
+	}
+	if err := s.containers.DisconnectContainer(ctx, netNameOrID, s.apiContainerName); err != nil {
+		s.logger.Warn("detach API from run network failed",
+			slog.String("network", netNameOrID),
+			slog.String("api_container", s.apiContainerName),
+			slog.String("error", err.Error()),
+		)
+	}
+}
+
 // Launch brings up the Environment's services on a fresh per-run network. It is
 // nil-safe (nil/empty env -> empty context, no side effects) and rolls back
 // atomically on any error.
@@ -119,8 +187,14 @@ func (s *SidecarManager) Launch(ctx context.Context, runID uuid.UUID, env *model
 		ServiceAddrs: map[string]string{},
 	}
 
-	// Nil-safe: nothing to do.
-	if env == nil || len(env.Services) == 0 {
+	hasServices := env != nil && len(env.Services) > 0
+
+	// Nil-safe: with run isolation OFF and no services there is nothing to do —
+	// byte-identical to before. With isolation ON we ALWAYS create the per-run
+	// network (and attach the API) even when there are no sidecars, because the
+	// agent is single-homed on it and would otherwise have no path to the
+	// callback or to Internet egress.
+	if !hasServices && !s.isolateRuns {
 		return sc, nil
 	}
 
@@ -135,11 +209,21 @@ func (s *SidecarManager) Launch(ctx context.Context, runID uuid.UUID, env *model
 	}
 	sc.NetworkName = netName
 
-	for _, svc := range env.Services {
-		if err := s.launchService(ctx, sc, runID, svc); err != nil {
-			// Rollback atomically: tear down everything started so far.
-			s.rollback(ctx, sc)
-			return nil, err
+	// East-West isolation: attach the API container to this per-run network BEFORE
+	// the agent starts (otherwise its first callback would fail to resolve "api").
+	// On failure, roll back so we never leak a half-wired network.
+	if err := s.connectAPI(ctx, netName); err != nil {
+		s.rollback(ctx, sc)
+		return nil, err
+	}
+
+	if hasServices {
+		for _, svc := range env.Services {
+			if err := s.launchService(ctx, sc, runID, svc); err != nil {
+				// Rollback atomically: tear down everything started so far.
+				s.rollback(ctx, sc)
+				return nil, err
+			}
 		}
 	}
 
@@ -261,6 +345,8 @@ func (s *SidecarManager) rollback(ctx context.Context, sc *port.SidecarContext) 
 
 	s.teardownContainers(tctx, sc)
 	if sc.NetworkName != "" {
+		// Detach the API BEFORE removing the network (active endpoints block it).
+		s.disconnectAPI(tctx, sc.NetworkName)
 		if err := s.containers.RemoveNetwork(tctx, sc.NetworkName); err != nil {
 			s.logger.Warn("rollback: remove network failed",
 				slog.String("network", sc.NetworkName),
@@ -324,6 +410,8 @@ func (s *SidecarManager) Cleanup(ctx context.Context, sc *port.SidecarContext) e
 
 	s.teardownContainers(tctx, sc)
 	if sc.NetworkName != "" {
+		// Detach the API BEFORE removing the network (active endpoints block it).
+		s.disconnectAPI(tctx, sc.NetworkName)
 		if err := s.containers.RemoveNetwork(tctx, sc.NetworkName); err != nil {
 			s.logger.Warn("cleanup: remove network failed",
 				slog.String("network", sc.NetworkName),
@@ -400,6 +488,9 @@ func (s *SidecarManager) gcNetworks(ctx context.Context, cutoff time.Time) error
 			// Too recent: a run may still be starting up. Keep it.
 			continue
 		}
+		// Detach the API BEFORE removing the network (active endpoints block it).
+		// No-op when isolation is off; idempotent when the run already cleaned up.
+		s.disconnectAPI(ctx, n.ID)
 		if err := s.containers.RemoveNetwork(ctx, n.ID); err != nil {
 			s.logger.Warn("gc: remove orphan network failed",
 				slog.String("network", n.Name),

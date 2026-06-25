@@ -24,6 +24,15 @@ type AgentConfig struct {
 	DefaultCPUs float64
 	// NetworkName is the Docker network for agent containers.
 	NetworkName string
+	// IsolateRuns mirrors cfg.Docker.IsolateRuns (DOCKER_ISOLATE_RUNS). When true,
+	// the agent is single-homed on its per-run network instead of the shared
+	// NetworkName, so the per-run network must ALWAYS be created — even for a
+	// project with no sidecars. The Action therefore launches the SidecarManager
+	// unconditionally under this flag; the manager creates the network and wires
+	// the API callback in. When false, behaviour is unchanged (no per-run network
+	// unless there are sidecars). The substrate (docker.Runtime) is configured with
+	// the same flag so it makes the per-run network primary.
+	IsolateRuns bool
 	// LogTailLines is the number of log lines to keep for error context.
 	LogTailLines int
 	// CrashGrace bounds how long the Action waits for a callback status AFTER the
@@ -212,8 +221,14 @@ func (a *AgentRunAction) Execute(ctx context.Context, runCtx *model.RunContext) 
 
 	// Launch sidecars on a per-run isolated network. Nil-safe: env==nil or no
 	// services yields a nil sidecarCtx and is a no-op. Fail-fast on launch error.
+	//
+	// Under East-West run isolation we launch the SidecarManager even when there
+	// are no sidecars: the manager must still create the per-run network (and wire
+	// the API callback into it) because the agent is single-homed on it. The
+	// manager's Launch is a no-op only when isolation is OFF and there are no
+	// services, so the guard here mirrors that to avoid a pointless call.
 	var sidecarCtx *port.SidecarContext
-	if env != nil && len(env.Services) > 0 {
+	if (env != nil && len(env.Services) > 0) || a.config.IsolateRuns {
 		sc, launchErr := a.sidecarMgr.Launch(ctx, runCtx.Run.ID, env)
 		if launchErr != nil {
 			return fmt.Errorf("launch sidecars: %w", launchErr)
@@ -400,11 +415,18 @@ func (a *AgentRunAction) createContainer(
 		Labels:      a.buildAgentLabels(runCtx, story),
 	}
 
-	// Dual-home the agent container: it keeps its shared NetworkName (API callback
-	// / egress) AND attaches to the run network so it can reach the sidecars by
-	// their service-name DNS alias. Only set when a run network actually exists,
-	// so a project without an Environment keeps identical ContainerOpts.
-	if sidecarCtx != nil && sidecarCtx.NetworkName != "" {
+	switch {
+	case a.config.IsolateRuns && sidecarCtx != nil && sidecarCtx.NetworkName != "":
+		// East-West isolation: the per-run network is the agent's primary and only
+		// network; the shared network is dropped so agents from different runs never
+		// share an L2 segment. The API is attached to the per-run network by the
+		// SidecarManager, keeping the callback reachable.
+		opts.NetworkName = sidecarCtx.NetworkName
+	case sidecarCtx != nil && sidecarCtx.NetworkName != "":
+		// Dual-home (default): keep the shared NetworkName (API callback / egress)
+		// AND attach to the run network so the agent can reach sidecars by their
+		// service-name DNS alias. Only set when a run network actually exists, so a
+		// project without an Environment keeps identical ContainerOpts.
 		opts.ExtraNetworks = []string{sidecarCtx.NetworkName}
 	}
 

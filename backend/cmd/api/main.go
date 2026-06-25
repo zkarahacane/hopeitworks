@@ -233,7 +233,7 @@ func run() error {
 	// container manager the agent_run/runService wiring below is disabled anyway.
 	var agentRuntime port.AgentRuntime
 	if containerMgr != nil {
-		agentRuntime = selectSubstrate(cfg.Substrate.Kind, stackRepo, containerMgr, cfg.Docker.AgentNetwork, logger)
+		agentRuntime = selectSubstrate(cfg.Substrate.Kind, stackRepo, containerMgr, cfg.Docker.AgentNetwork, cfg.Docker.IsolateRuns, logger)
 	} else {
 		logger.Warn("substrate selection skipped: no container manager available, agent runs disabled", "substrate", cfg.Substrate.Kind)
 	}
@@ -304,9 +304,15 @@ func run() error {
 				DefaultMemory: 4294967296, // 4GB
 				DefaultCPUs:   2.0,
 				NetworkName:   cfg.Docker.AgentNetwork,
+				IsolateRuns:   cfg.Docker.IsolateRuns,
 				LogTailLines:  50,
 			}
-			sidecarMgr = dockeradapter.NewDockerSidecarManager(containerMgr, logger)
+			sidecarMgr = dockeradapter.NewDockerSidecarManagerWithIsolation(
+				containerMgr, cfg.Docker.IsolateRuns, cfg.Docker.APIContainerName, logger)
+			if cfg.Docker.IsolateRuns {
+				logger.Info("East-West run isolation enabled: agents are single-homed on their per-run network; API attached per-run",
+					"api_container", cfg.Docker.APIContainerName)
+			}
 
 			agentRunAction := actionadapter.NewAgentRunAction(
 				containerMgr, logStreamer, eventRepo,
@@ -602,7 +608,7 @@ func stackCatalogueFromConfig(entries []pkgconfig.StackConfig, logger *slog.Logg
 // build returns microsandbox.ErrNotBuilt, so selecting microsandbox without that
 // build fails the run clearly rather than silently falling back to Docker.
 // enabled=true lets the tagged build launch microVMs; the fallback build ignores it.
-func selectSubstrate(kind string, stacks port.StackRepository, containerMgr port.ContainerManager, networkName string, logger *slog.Logger) port.AgentRuntime {
+func selectSubstrate(kind string, stacks port.StackRepository, containerMgr port.ContainerManager, networkName string, isolateRuns bool, logger *slog.Logger) port.AgentRuntime {
 	switch kind {
 	case pkgconfig.SubstrateMicrosandbox:
 		logger.Info("substrate selected", "substrate", pkgconfig.SubstrateMicrosandbox)
@@ -612,7 +618,9 @@ func selectSubstrate(kind string, stacks port.StackRepository, containerMgr port
 		return rt
 	default:
 		logger.Info("substrate selected", "substrate", pkgconfig.SubstrateDocker)
-		return dockeradapter.NewRuntime(containerMgr, networkName, logger)
+		// isolateRuns makes the Docker adapter single-home the agent on its per-run
+		// network (East-West isolation) instead of dual-homing on the shared network.
+		return dockeradapter.NewRuntimeWithIsolation(containerMgr, networkName, isolateRuns, logger)
 	}
 }
 
