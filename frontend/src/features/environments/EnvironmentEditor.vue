@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { useToast } from 'primevue/usetoast'
+import { useConfirm } from 'primevue/useconfirm'
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
 import MultiSelect from 'primevue/multiselect'
 import Select from 'primevue/select'
 import Message from 'primevue/message'
 import ProgressSpinner from 'primevue/progressspinner'
+import ConfirmDialog from 'primevue/confirmdialog'
 import { useEnvironmentEditor } from '@/composables/useEnvironmentEditor'
 import { useInFlightGuard } from '@/composables/useInFlightGuard'
 
@@ -14,6 +16,7 @@ const props = defineProps<{
 }>()
 
 const toast = useToast()
+const confirm = useConfirm()
 // Guard the Delete button against double-click while the DELETE is in flight (#295).
 const deleteGuard = useInFlightGuard()
 
@@ -54,21 +57,30 @@ async function handleSave() {
   }
 }
 
-async function handleDelete() {
+function handleDelete() {
   if (deleteGuard.isBusy()) return
-  if (!window.confirm('Delete the environment configuration for this project?')) return
-  await deleteGuard.run(async () => {
-    const ok = await remove()
-    if (ok) {
-      toast.add({ severity: 'success', summary: 'Environment deleted', life: 3000 })
-    } else {
-      toast.add({ severity: 'error', summary: 'Failed to delete environment', life: 4000 })
-    }
+  confirm.require({
+    message:
+      'Delete the environment configuration for this project? This cannot be undone.',
+    header: 'Delete Environment',
+    icon: 'pi pi-exclamation-triangle',
+    acceptClass: 'p-button-danger',
+    // Guard the deletion body against double-click while the DELETE is in flight (#295).
+    accept: () =>
+      deleteGuard.run(async () => {
+        const ok = await remove()
+        if (ok) {
+          toast.add({ severity: 'success', summary: 'Environment deleted', life: 3000 })
+        } else {
+          toast.add({ severity: 'error', summary: 'Failed to delete environment', life: 4000 })
+        }
+      }),
   })
 }
 </script>
 
 <template>
+  <ConfirmDialog />
   <div class="flex flex-col gap-6 p-6">
     <!-- Loading -->
     <div v-if="isLoading" class="flex items-center justify-center p-12">
