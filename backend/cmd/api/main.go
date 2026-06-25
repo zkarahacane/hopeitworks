@@ -224,13 +224,19 @@ func run() error {
 		logger.Warn("docker container manager unavailable, timeout enforcer and orphan cleaner disabled", "error", err)
 	}
 
-	// Substrate selection. The substrate is the execution backend that realises an
-	// agent run via port.AgentRuntime. selectSubstrate returns the alternative
-	// adapter (microsandbox) when SUBSTRATE selects one, or nil for the Docker
-	// default. As of Stage 2 the live agent_run flow dispatches THROUGH the port:
-	// when nil here, the agent_run wiring below injects docker.Runtime so Docker is
-	// an adapter behind the port, not a special path.
-	agentRuntime := selectSubstrate(cfg.Substrate.Kind, stackRepo, logger)
+	// Substrate selection. selectSubstrate returns the AgentRuntime adapter for the
+	// configured SUBSTRATE: the alternative adapter (microsandbox) when selected,
+	// otherwise the Docker adapter (docker.Runtime) by default — so the live
+	// agent_run flow ALWAYS dispatches THROUGH port.AgentRuntime; Docker is an
+	// adapter behind the port, not a special path. It needs the Docker container
+	// manager (sidecars, logs), so it is only built when one is available; with no
+	// container manager the agent_run/runService wiring below is disabled anyway.
+	var agentRuntime port.AgentRuntime
+	if containerMgr != nil {
+		agentRuntime = selectSubstrate(cfg.Substrate.Kind, stackRepo, containerMgr, cfg.Docker.AgentNetwork, logger)
+	} else {
+		logger.Warn("substrate selection skipped: no container manager available, agent runs disabled", "substrate", cfg.Substrate.Kind)
+	}
 
 	// HITL repository (created early because hitl_gate action needs it)
 	hitlRepo := pgadapter.NewHITLRepo(queries)
@@ -301,15 +307,6 @@ func run() error {
 				LogTailLines:  50,
 			}
 			sidecarMgr = dockeradapter.NewDockerSidecarManager(containerMgr, logger)
-
-			// Default substrate = Docker-as-adapter: when no alternative substrate
-			// was selected (SUBSTRATE=docker), route the live path through
-			// DockerRuntime. It emits byte-identical ContainerOpts, so behaviour is
-			// unchanged — Docker is no longer a special path, it is an adapter behind
-			// the port.
-			if agentRuntime == nil {
-				agentRuntime = dockeradapter.NewRuntime(containerMgr, agentCfg.NetworkName, logger)
-			}
 
 			agentRunAction := actionadapter.NewAgentRunAction(
 				containerMgr, logStreamer, eventRepo,
@@ -590,21 +587,22 @@ func stackCatalogueFromConfig(entries []pkgconfig.StackConfig, logger *slog.Logg
 	return out
 }
 
-// selectSubstrate logs the configured execution substrate and, for the
-// microsandbox kind, constructs its AgentRuntime adapter. As of Stage 2 of the
-// substrate-abstraction migration the returned runtime IS wired into the live
-// agent_run flow: the caller injects it via WithAgentRuntime and Execute
-// dispatches through port.AgentRuntime. Returns the alternative adapter
-// (microsandbox) when one is selected, or nil for the docker default — nil tells
-// the caller to inject docker.Runtime, so Docker is an adapter behind the port,
-// not a special path.
+// selectSubstrate logs the configured execution substrate and constructs its
+// AgentRuntime adapter. As of Stage 2 of the substrate-abstraction migration the
+// returned runtime IS wired into the live agent_run flow: the caller injects it
+// via WithAgentRuntime and Execute dispatches through port.AgentRuntime. Returns
+// the alternative adapter (microsandbox) when SUBSTRATE selects one, otherwise the
+// Docker adapter (docker.Runtime) by default — so Docker is an adapter behind the
+// port, not a special path. The caller invokes it only when containerMgr is
+// non-nil (guaranteed by the concrete *ContainerManager nil check at the call
+// site, which avoids the typed-nil-interface trap).
 //
 // The microsandbox adapter's live half (Launch/Wait/Stop) is real only in a
 // binary built with `-tags microsandbox` on a KVM/HVF host (P3b); the default
 // build returns microsandbox.ErrNotBuilt, so selecting microsandbox without that
 // build fails the run clearly rather than silently falling back to Docker.
 // enabled=true lets the tagged build launch microVMs; the fallback build ignores it.
-func selectSubstrate(kind string, stacks port.StackRepository, logger *slog.Logger) port.AgentRuntime {
+func selectSubstrate(kind string, stacks port.StackRepository, containerMgr port.ContainerManager, networkName string, logger *slog.Logger) port.AgentRuntime {
 	switch kind {
 	case pkgconfig.SubstrateMicrosandbox:
 		logger.Info("substrate selected", "substrate", pkgconfig.SubstrateMicrosandbox)
@@ -614,7 +612,7 @@ func selectSubstrate(kind string, stacks port.StackRepository, logger *slog.Logg
 		return rt
 	default:
 		logger.Info("substrate selected", "substrate", pkgconfig.SubstrateDocker)
-		return nil
+		return dockeradapter.NewRuntime(containerMgr, networkName, logger)
 	}
 }
 
