@@ -118,31 +118,15 @@ Devcontainer = code-only. Deux Docker stacks sur le même daemon :
 ./scripts/e2e-stack.sh up              # → utiliser le host
 ```
 
-### Substrat microsandbox (microVM) — Mac → VM Lima
+### Substrat microsandbox (microVM) — parqué
 
-Le **défaut code/CI est Docker** (`SUBSTRATE=docker`, tourne partout). Depuis la migration
-substrate-abstraction (ADR `docs/agent-substrate-abstraction-adr.md`), `agent_run` exécute **via
-`port.AgentRuntime`** : Docker est un adapter derrière le port, égal à microsandbox/exec. **En prod
-le substrat-policy est microsandbox** (`deploy/docker-compose.microsandbox.yml`, `SUBSTRATE=microsandbox`)
-— l'agent tourne dans un microVM durci ; `SUBSTRATE` est désormais **live-wired** (sélectionner
-microsandbox injecte vraiment l'adapter microVM ; sans `-tags microsandbox`, `Launch` renvoie
-`ErrNotBuilt` et le run échoue clairement). Le substrat durci **microsandbox** (microVM libkrun) est
-**Linux/KVM-only** : il a besoin de `/dev/kvm` et **Docker Desktop sur macOS ne l'expose pas aux
-conteneurs** (pas de nested-virt passthrough). Sur Mac, on le fait donc tourner dans une **VM Linux
-Lima** avec virtu imbriquée (Apple **M3+ / macOS 15+**) :
+Le **défaut code/CI est Docker** (`SUBSTRATE=docker`, tourne partout). `agent_run` exécute **via
+`port.AgentRuntime`** : Docker est un adapter derrière le port (ADR `docs/agent-substrate-abstraction-adr.md`).
 
-```bash
-brew install lima
-limactl start ./deploy/lima/microsandbox-vm.yaml --name microsandbox --tty=false
-# → VM Linux : /dev/kvm fonctionnel + Docker + microsandbox installés
-limactl shell microsandbox          # entrer dans la VM (y déployer la stack agent-test, SUBSTRATE=microsandbox)
-limactl stop microsandbox           # libérer la RAM   |   limactl delete microsandbox
-```
-
-- Le code SDK microsandbox est derrière `//go:build microsandbox` → build par défaut/CI inchangé ;
-  l'image se build via `backend/Dockerfile.microsandbox` (CGO, glibc 2.39 / ubuntu:24.04).
-- Lima **auto-forwarde** les ports de la VM vers `localhost` du Mac (0 conf réseau).
-- Détails + runbook + pièges : [`deploy/lima/README.md`](deploy/lima/README.md).
-- Validé sur Apple M4 Pro / macOS 26 : `KVM_CREATE_VM` ✓, `msb run` boote un vrai microVM.
+Le substrat **microsandbox** (microVM libkrun) est désormais **écarté du chemin critique**
+(ADR `docs/agent-environment-provisioning-adr.md` §5.1) : l'adapter Go reste **parqué derrière
+`//go:build microsandbox`** (build par défaut/CI inchangé, `Launch` renvoie `ErrNotBuilt` sans le
+tag), mais l'infra de provisioning autour (Lima VM, `Dockerfile.microsandbox`,
+`docker-compose.microsandbox.yml`, harness smoke) a été **retirée**.
 
 Seed credentials: `admin@hopeitworks.dev` / `admin1234`

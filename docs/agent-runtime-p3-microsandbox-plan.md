@@ -1,5 +1,7 @@
 # Plan P3 — Adapter de substrat microsandbox (microVM)
 
+> **SUPERSEDED (2026-06-25)** par docs/agent-environment-provisioning-adr.md — microsandbox écarté du chemin critique ; conservé pour traçabilité.
+
 > Sous-phase finale de la refonte runtime (`docs/agent-runtime-capabilities-plan.md`, décision actée #14 : 1er adapter de substrat = **microsandbox** / libkrun microVM). Établi par un workflow de design read-only (recherche API microsandbox + cartographie codebase) le 2026-06-23.
 >
 > **État** : P3a (squelette) **mergé**. P3b (appels microVM réels via le SDK Go, derrière `//go:build microsandbox`) **implémenté** sur `feat/p3b-microsandbox` — build par défaut inchangé (fallback `ErrNotBuilt`), SDK `github.com/superradcompany/microsandbox/sdk/go v0.5.9` pinné, Dockerfile.microsandbox + override compose `/dev/kvm`, harness de validation `cmd/microsandbox-smoke` + test taggé. Le build taggé exige un host KVM/HVF avec libkrun (cgo) — non exerçable en CI. P3c (bascule du flow live `agent_run`→`AgentRuntime`) reste à faire.
