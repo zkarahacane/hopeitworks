@@ -33,5 +33,8 @@ export function useProjects() {
     retry,
     createProject,
     updateProject,
+    // Exposed raw (not wrapped in useAsyncAction) so callers can await the
+    // throw and branch redirect-on-success vs toast-on-error (RG4/RG5).
+    deleteProject: store.deleteProject,
   }
 }
