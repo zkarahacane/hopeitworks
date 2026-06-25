@@ -63,15 +63,16 @@ services:
       DOCKER_HOST: tcp://socket-proxy:2375
       # Compose names this network "<project>_agent-network" (project = compose dir, "deploy").
       DOCKER_AGENT_NETWORK: ${DOCKER_AGENT_NETWORK:-deploy_agent-network}
-      # --- East-West run isolation (opt-in, OFF by default) ---
+      # --- East-West run isolation (ON by default — by design) ---
       # When DOCKER_ISOLATE_RUNS=true the agent leaves the shared agent-network and is
       # single-homed on its own per-run network (hopeitworks-run-<id>); the API container
       # (DOCKER_API_CONTAINER) is attached to each per-run network so the callback below
       # (http://api:8080) keeps working, while Internet egress stays open. Two agents from
-      # different runs can then no longer reach each other on a shared L2 segment. Default
-      # off = today's behaviour exactly (agent dual-homed via agent-network). agent-network
-      # is kept (transition) and CALLBACK_BASE_URL is unchanged under this mode (Option A).
-      DOCKER_ISOLATE_RUNS: ${DOCKER_ISOLATE_RUNS:-false}
+      # different runs can then no longer reach each other on a shared L2 segment.
+      # DOCKER_API_CONTAINER MUST match this service's container_name (hopeitworks-api),
+      # otherwise the per-run API attach (and thus every callback) breaks. agent-network is
+      # kept (transition) and CALLBACK_BASE_URL is unchanged under this mode (Option A).
+      DOCKER_ISOLATE_RUNS: ${DOCKER_ISOLATE_RUNS:-true}
       DOCKER_API_CONTAINER: ${DOCKER_API_CONTAINER:-hopeitworks-api}
       AGENT_IMAGE: ${AGENT_IMAGE:-hopeitworks/agent-go-node:latest}
       CLAUDE_MD_PATH: ${CLAUDE_MD_PATH:-agent/claude-md}
