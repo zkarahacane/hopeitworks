@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onBeforeUnmount } from 'vue'
+import { computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import Skeleton from 'primevue/skeleton'
 import Message from 'primevue/message'
@@ -20,6 +20,19 @@ const stream = useRuntimeStream()
 
 // Recent runs (cross-project, limit 20 so dedup still gives enough)
 const { runs, isLoading: runsLoading, error: runsError, refresh: refreshRuns } = useRecentRuns({ limit: 20 })
+
+// Seed the runtime stream with REST timing so elapsed renders for runs that were
+// already running before this view opened (no `run.started` SSE captured). The
+// stream stays authoritative: hydration never overwrites a live `startedAt`.
+watch(
+  runs,
+  (list) => {
+    for (const run of list) {
+      stream.hydrateRunStartedAt(run.id, run.started_at, run.completed_at, run.status)
+    }
+  },
+  { immediate: true },
+)
 
 // Projects (prefetch to prime the store; projects ref not used directly in this view)
 const { fetchProjects } = useProjects()
@@ -61,6 +74,16 @@ function formatElapsed(s: number): string {
   const m = Math.floor(s / 60)
   const sec = s % 60
   return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
+}
+
+/**
+ * Live elapsed string for a running run. Returns the placeholder when the run
+ * has no known start (pending / not yet hydrated) so we never show "00:00" for
+ * a run whose duration is simply unknown.
+ */
+function displayElapsed(run: RunSummary): string {
+  if (!run.started_at) return '—'
+  return formatElapsed(stream.runElapsedSeconds(run.id))
 }
 
 function navigateToRun(run: RunSummary) {
@@ -197,7 +220,7 @@ function navigateToApproval(item: typeof hitlStore.pendingItems[0]) {
 
             <span class="text-xs shrink-0 font-mono" style="color: var(--p-text-muted-color)">
               <template v-if="run.status === 'running'">
-                {{ formatElapsed(stream.runElapsedSeconds(run.id)) }}
+                {{ displayElapsed(run) }}
               </template>
               <template v-else>
                 {{ formatRelativeDate(run.started_at || run.created_at) }}

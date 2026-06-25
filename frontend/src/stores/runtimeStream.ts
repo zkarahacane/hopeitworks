@@ -261,6 +261,33 @@ export const useRuntimeStream = defineStore('runtimeStream', () => {
     clock.value = nowMs
   }
 
+  /**
+   * Seed a run's timing from a REST source (e.g. list endpoints carry
+   * `started_at`/`completed_at`) so elapsed derivation works for runs that were
+   * already running before this client opened — i.e. before any `run.started`
+   * SSE event could be captured.
+   *
+   * Idempotent and SSE-deferential: it only fills `startedAt`/`finishedAt`/`status`
+   * that are not already known from the live stream. A non-null SSE `startedAt`
+   * stays authoritative and is never overwritten. Pass a null/empty `startedAt`
+   * (e.g. a pending run) and nothing is seeded — the run keeps signalling "no
+   * duration" so callers can render a placeholder instead of 00:00.
+   */
+  function hydrateRunStartedAt(
+    runId: string,
+    startedAt: string | null | undefined,
+    completedAt?: string | null,
+    status?: string | null,
+  ): void {
+    if (!runId || !startedAt) return
+    const r = ensureRun(state, runId)
+    if (!r.startedAt) r.startedAt = startedAt
+    if (!r.finishedAt && completedAt) r.finishedAt = completedAt
+    // Only adopt a REST status while the run has no live signal yet (still the
+    // default 'pending'); never clobber a status the stream has already moved on.
+    if (status && r.status === 'pending') r.status = status
+  }
+
   /** Reset all tracked signals (e.g. on project switch). */
   function reset(): void {
     state.runs = {}
@@ -332,6 +359,7 @@ export const useRuntimeStream = defineStore('runtimeStream', () => {
     ingest,
     tick,
     reset,
+    hydrateRunStartedAt,
     // getters
     runSignal,
     stepSignal,

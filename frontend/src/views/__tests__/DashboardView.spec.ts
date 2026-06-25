@@ -8,7 +8,9 @@
  * the full component (which requires SSE, Pinia stores, etc.) to keep tests fast
  * and deterministic.
  */
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { setActivePinia, createPinia } from 'pinia'
+import { useRuntimeStream } from '@/stores/runtimeStream'
 import type { RunSummary } from '@/features/runs/composables/useRecentRuns'
 
 // ── Replicated dedup logic (mirrors DashboardView.vue `dedupedRuns` computed) ──
@@ -133,5 +135,87 @@ describe('DashboardView — dedupedRuns (fix #5)', () => {
     expect(ids).toContain('c1')   // newer of S-C
     expect(ids).not.toContain('a1')
     expect(ids).not.toContain('c2')
+  })
+})
+
+// ── #294 — Live Runs elapsed rendering ────────────────────────────────────────
+// Mirrors DashboardView.vue: the view hydrates the runtime stream from REST
+// (`hydrateRunStartedAt`) on load, then renders elapsed via `displayElapsed`,
+// which yields the "—" placeholder for runs with no known start. We exercise the
+// exact same wiring against the real store so the rendered string is covered.
+
+function formatElapsed(s: number): string {
+  const m = Math.floor(s / 60)
+  const sec = s % 60
+  return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
+}
+
+describe('DashboardView — Live Runs elapsed rendering (#294)', () => {
+  const NOW = new Date('2026-06-17T10:03:00Z')
+  const START = '2026-06-17T10:00:00Z'
+
+  let stream: ReturnType<typeof useRuntimeStream>
+
+  // displayElapsed mirrors DashboardView.vue exactly (placeholder when no start).
+  function displayElapsed(run: RunSummary): string {
+    if (!run.started_at) return '—'
+    return formatElapsed(stream.runElapsedSeconds(run.id))
+  }
+
+  // hydrateOnLoad mirrors the view's `watch(runs, ...)` REST-seeding step.
+  function hydrateOnLoad(runs: RunSummary[]): void {
+    for (const run of runs) {
+      stream.hydrateRunStartedAt(run.id, run.started_at, run.completed_at, run.status)
+    }
+  }
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.useFakeTimers()
+    vi.setSystemTime(NOW)
+    stream = useRuntimeStream()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  // RG2: a run running for 3min, known only via REST, renders ~03:00 on load.
+  it('RG2: running run from REST renders real elapsed, not 00:00', () => {
+    const run = makeRun({ id: 'r1', status: 'running', started_at: START })
+    hydrateOnLoad([run])
+    stream.tick(NOW.getTime())
+    expect(displayElapsed(run)).toBe('03:00')
+    expect(displayElapsed(run)).not.toBe('00:00')
+  })
+
+  // RG3: a pending run with no started_at renders the placeholder, never 00:00.
+  it('RG3: run without started_at renders the placeholder', () => {
+    const run = makeRun({ id: 'r1', status: 'pending', started_at: undefined })
+    hydrateOnLoad([run])
+    stream.tick(NOW.getTime())
+    expect(displayElapsed(run)).toBe('—')
+  })
+
+  // RG4: dashboard elapsed matches the list duration (same started_at source).
+  it('RG4: dashboard elapsed matches the list duration within ±1s', () => {
+    const run = makeRun({ id: 'r1', status: 'running', started_at: START })
+    hydrateOnLoad([run])
+    stream.tick(NOW.getTime())
+    const listSecs = Math.floor((NOW.getTime() - new Date(START).getTime()) / 1000)
+    expect(displayElapsed(run)).toBe(formatElapsed(listSecs))
+  })
+
+  // RG5: a terminal run hydrated from REST shows a frozen elapsed.
+  it('RG5: terminal run renders frozen completed_at - started_at', () => {
+    const run = makeRun({
+      id: 'r1',
+      status: 'running', // running branch is what renders displayElapsed
+      started_at: START,
+      completed_at: '2026-06-17T10:00:45Z',
+    })
+    hydrateOnLoad([run])
+    stream.tick(new Date('2026-06-17T11:00:00Z').getTime())
+    expect(displayElapsed(run)).toBe('00:45')
   })
 })
