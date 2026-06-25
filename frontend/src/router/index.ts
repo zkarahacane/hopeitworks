@@ -1,4 +1,4 @@
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import LoginView from '@/views/LoginView.vue'
 import ForgotPasswordView from '@/views/ForgotPasswordView.vue'
 import ResetPasswordView from '@/views/ResetPasswordView.vue'
@@ -17,9 +17,9 @@ import NotFoundView from '@/views/NotFoundView.vue'
 import ProjectOverview from '@/features/projects/ProjectOverview.vue'
 import { setupAuthGuard, setupAdminGuard } from './guards'
 
-const router = createRouter({
-  history: createWebHistory(import.meta.env.BASE_URL),
-  routes: [
+/** Route table — exported so tests can resolve against the real routes without
+ *  importing the configured singleton (which pulls in the api client → router cycle). */
+export const routes: RouteRecordRaw[] = [
     {
       path: '/login',
       name: 'login',
@@ -59,6 +59,11 @@ const router = createRouter({
           path: '',
           name: 'project-overview',
           component: ProjectOverview,
+        },
+        {
+          // Legacy/bookmarked deep-link: redirect to the canonical overview (/projects/:id).
+          path: 'overview',
+          redirect: (to) => ({ name: 'project-overview', params: { id: to.params.id } }),
         },
         {
           path: 'board',
@@ -135,6 +140,11 @@ const router = createRouter({
           name: 'project-notifications',
           component: () => import('@/views/NotificationSettingsView.vue'),
         },
+        {
+          // Legacy/bookmarked deep-link: redirect to the canonical settings/notifications.
+          path: 'notifications',
+          redirect: (to) => ({ name: 'project-notifications', params: { id: to.params.id } }),
+        },
       ],
     },
     {
@@ -189,7 +199,11 @@ const router = createRouter({
       component: NotFoundView,
       meta: { requiresAuth: false },
     },
-  ],
+]
+
+const router = createRouter({
+  history: createWebHistory(import.meta.env.BASE_URL),
+  routes,
 })
 
 setupAuthGuard(router)
