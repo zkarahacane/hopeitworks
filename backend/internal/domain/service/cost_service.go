@@ -273,6 +273,36 @@ func (s *CostService) GetProjectCostsByAgent(ctx context.Context, projectID uuid
 	return s.costRepo.ListByProjectByAgent(ctx, projectID)
 }
 
+// GetProjectCostsByRole returns the project-level per-role cost breakdown for
+// the Overview "COST BY ROLE" widget plus the roll-up totals. The totals are
+// summed from the per-role rows (the "unknown" bucket included), so the widget
+// total stays consistent with the bars and includes unattributed cost (RG4).
+func (s *CostService) GetProjectCostsByRole(ctx context.Context, projectID uuid.UUID) (*model.ProjectCostByRole, error) {
+	if _, err := s.projectRepo.GetByID(ctx, projectID); err != nil {
+		return nil, err
+	}
+
+	roles, err := s.costRepo.ListByProjectByRole(ctx, projectID)
+	if err != nil {
+		return nil, err
+	}
+
+	var totalCost float64
+	var totalInput, totalOutput int64
+	for _, role := range roles {
+		totalCost += role.CostUSD
+		totalInput += role.TokensInput
+		totalOutput += role.TokensOutput
+	}
+
+	return &model.ProjectCostByRole{
+		TotalCost:   totalCost,
+		TotalInput:  totalInput,
+		TotalOutput: totalOutput,
+		Roles:       roles,
+	}, nil
+}
+
 // GetStoryCosts returns aggregated cost data for a story across all runs.
 func (s *CostService) GetStoryCosts(ctx context.Context, projectID, storyID uuid.UUID) (*model.StoryCostSummary, error) {
 	// Verify story exists and belongs to project

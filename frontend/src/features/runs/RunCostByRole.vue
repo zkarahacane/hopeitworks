@@ -23,6 +23,15 @@ const props = withDefaults(
 )
 
 const hasRoles = computed(() => props.breakdown.roles.length > 0)
+
+// When the breakdown is authoritative (server aggregation) but empty, show a
+// neutral empty state. The "unavailable" wording is only for the run-level
+// heuristic that could not attribute steps to roles (derivedFromStepsOnly).
+const emptyMessage = computed(() =>
+  props.breakdown.derivedFromStepsOnly
+    ? 'Per-role breakdown unavailable yet.'
+    : 'No per-role cost in this period.',
+)
 </script>
 
 <template>
@@ -84,13 +93,13 @@ const hasRoles = computed(() => props.breakdown.roles.length > 0)
       </div>
     </div>
 
-    <!-- Graceful gap note: total present but no per-step breakdown to attribute. -->
+    <!-- Empty state: either an authoritative empty period or the run-level gap. -->
     <p
       v-else
       :style="{ color: 'var(--p-text-muted-color)', fontSize: '0.8rem' }"
       data-testid="cost-by-role-empty"
     >
-      Per-role breakdown unavailable yet.
+      {{ emptyMessage }}
     </p>
 
     <!-- Total this run (real rollup — fix #3). -->

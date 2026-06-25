@@ -30,6 +30,7 @@ type mockCostRepo struct {
 	listCostsByProjectByRunPaginatedFn func(ctx context.Context, projectID uuid.UUID, since time.Time, limit, offset int32) ([]model.RunCostRow, error)
 	countCostsByProjectByRunFn         func(ctx context.Context, projectID uuid.UUID, since time.Time) (int64, error)
 	listByProjectByAgentFn             func(ctx context.Context, projectID uuid.UUID) ([]model.AgentCostBreakdown, error)
+	listByProjectByRoleFn              func(ctx context.Context, projectID uuid.UUID) ([]model.ProjectRoleCostBreakdown, error)
 	listCostsByRunByRoleFn             func(ctx context.Context, runID uuid.UUID) ([]model.RoleCostBreakdown, error)
 	sumTokensByRunFn                   func(ctx context.Context, runID uuid.UUID) (int64, int64, error)
 
@@ -127,6 +128,13 @@ func (m *mockCostRepo) ListByProjectByAgent(ctx context.Context, projectID uuid.
 		return m.listByProjectByAgentFn(ctx, projectID)
 	}
 	return []model.AgentCostBreakdown{}, nil
+}
+
+func (m *mockCostRepo) ListByProjectByRole(ctx context.Context, projectID uuid.UUID) ([]model.ProjectRoleCostBreakdown, error) {
+	if m.listByProjectByRoleFn != nil {
+		return m.listByProjectByRoleFn(ctx, projectID)
+	}
+	return []model.ProjectRoleCostBreakdown{}, nil
 }
 
 func (m *mockCostRepo) ListCostsByRunByRole(ctx context.Context, runID uuid.UUID) ([]model.RoleCostBreakdown, error) {
@@ -950,6 +958,158 @@ func TestGetProjectCostsByAgent_RepoError(t *testing.T) {
 
 	_, err := svc.GetProjectCostsByAgent(context.Background(), projectID)
 	assert.Error(t, err)
+}
+
+// --- GetProjectCostsByRole tests ---
+
+// TestGetProjectCostsByRole_Success_TotalsMatchByAgent (RG1) proves the project
+// by-role total equals the by-agent total when every cost is attributed to an
+// agent: the two endpoints aggregate the same attributed records, just grouped
+// differently, so their roll-ups must be identical.
+func TestGetProjectCostsByRole_Success_TotalsMatchByAgent(t *testing.T) {
+	projectID := uuid.New()
+	projectRepo := &mockProjectRepoForCost{
+		project: &model.Project{ID: projectID, Name: "test"},
+	}
+
+	// Same underlying attributed cost, expressed both per-agent and per-role.
+	byAgent := []model.AgentCostBreakdown{
+		{AgentID: uuid.New(), AgentName: "dev-story", TokensInput: 500000, TokensOutput: 100000, CostUSD: 12.50, RunsCount: 3},
+		{AgentID: uuid.New(), AgentName: "code-review", TokensInput: 200000, TokensOutput: 50000, CostUSD: 5.25, RunsCount: 2},
+	}
+	byRole := []model.ProjectRoleCostBreakdown{
+		{Role: "implement", TokensInput: 500000, TokensOutput: 100000, CostUSD: 12.50, RunsCount: 3},
+		{Role: "review", TokensInput: 200000, TokensOutput: 50000, CostUSD: 5.25, RunsCount: 2},
+	}
+	costRepo := &mockCostRepo{
+		listByProjectByAgentFn: func(_ context.Context, _ uuid.UUID) ([]model.AgentCostBreakdown, error) {
+			return byAgent, nil
+		},
+		listByProjectByRoleFn: func(_ context.Context, _ uuid.UUID) ([]model.ProjectRoleCostBreakdown, error) {
+			return byRole, nil
+		},
+	}
+	svc := newTestCostService(costRepo, projectRepo, nil, nil)
+
+	roleResult, err := svc.GetProjectCostsByRole(context.Background(), projectID)
+	require.NoError(t, err)
+	require.Len(t, roleResult.Roles, 2)
+	assert.Equal(t, "implement", roleResult.Roles[0].Role)
+	assert.InDelta(t, 12.50, roleResult.Roles[0].CostUSD, 0.001)
+	assert.Equal(t, int32(3), roleResult.Roles[0].RunsCount)
+
+	// RG1: by-role total == by-agent total.
+	agentResult, err := svc.GetProjectCostsByAgent(context.Background(), projectID)
+	require.NoError(t, err)
+	var agentTotal float64
+	var agentInput, agentOutput int64
+	for _, a := range agentResult {
+		agentTotal += a.CostUSD
+		agentInput += a.TokensInput
+		agentOutput += a.TokensOutput
+	}
+	assert.InDelta(t, agentTotal, roleResult.TotalCost, 0.001, "by-role total must equal by-agent total")
+	assert.Equal(t, agentInput, roleResult.TotalInput)
+	assert.Equal(t, agentOutput, roleResult.TotalOutput)
+}
+
+// TestGetProjectCostsByRole_UnknownBucketCountedInTotal (RG4) proves cost with
+// no agent attribution lands in the "unknown" role and is counted in the total.
+func TestGetProjectCostsByRole_UnknownBucketCountedInTotal(t *testing.T) {
+	projectID := uuid.New()
+	projectRepo := &mockProjectRepoForCost{
+		project: &model.Project{ID: projectID, Name: "test"},
+	}
+	costRepo := &mockCostRepo{
+		listByProjectByRoleFn: func(_ context.Context, _ uuid.UUID) ([]model.ProjectRoleCostBreakdown, error) {
+			return []model.ProjectRoleCostBreakdown{
+				{Role: "implement", TokensInput: 100000, TokensOutput: 20000, CostUSD: 4.00, RunsCount: 1},
+				{Role: "unknown", TokensInput: 30000, TokensOutput: 5000, CostUSD: 1.50, RunsCount: 1},
+			}, nil
+		},
+	}
+	svc := newTestCostService(costRepo, projectRepo, nil, nil)
+
+	result, err := svc.GetProjectCostsByRole(context.Background(), projectID)
+	require.NoError(t, err)
+	require.Len(t, result.Roles, 2)
+	// The unknown bucket is present and contributes to the total.
+	assert.Equal(t, "unknown", result.Roles[1].Role)
+	assert.InDelta(t, 5.50, result.TotalCost, 0.001, "unknown cost must be counted in the total")
+	assert.Equal(t, int64(130000), result.TotalInput)
+	assert.Equal(t, int64(25000), result.TotalOutput)
+}
+
+// TestGetProjectCostsByRole_Empty (RG3) proves a project with no cost returns an
+// empty role list and zero totals rather than an error.
+func TestGetProjectCostsByRole_Empty(t *testing.T) {
+	projectID := uuid.New()
+	projectRepo := &mockProjectRepoForCost{
+		project: &model.Project{ID: projectID, Name: "test"},
+	}
+	svc := newTestCostService(&mockCostRepo{}, projectRepo, nil, nil)
+
+	result, err := svc.GetProjectCostsByRole(context.Background(), projectID)
+	require.NoError(t, err)
+	assert.Empty(t, result.Roles)
+	assert.Equal(t, float64(0), result.TotalCost)
+	assert.Equal(t, int64(0), result.TotalInput)
+	assert.Equal(t, int64(0), result.TotalOutput)
+}
+
+func TestGetProjectCostsByRole_ProjectNotFound(t *testing.T) {
+	projectRepo := &mockProjectRepoForCost{err: errors.NewNotFound("project", uuid.New())}
+	svc := newTestCostService(&mockCostRepo{}, projectRepo, nil, nil)
+
+	_, err := svc.GetProjectCostsByRole(context.Background(), uuid.New())
+	assert.Error(t, err)
+	domErr, ok := err.(*errors.DomainError)
+	assert.True(t, ok)
+	assert.Equal(t, errors.CategoryNotFound, domErr.Category)
+}
+
+func TestGetProjectCostsByRole_RepoError(t *testing.T) {
+	projectID := uuid.New()
+	projectRepo := &mockProjectRepoForCost{
+		project: &model.Project{ID: projectID, Name: "test"},
+	}
+	costRepo := &mockCostRepo{
+		listByProjectByRoleFn: func(_ context.Context, _ uuid.UUID) ([]model.ProjectRoleCostBreakdown, error) {
+			return nil, errors.NewInternal("db error", nil)
+		},
+	}
+	svc := newTestCostService(costRepo, projectRepo, nil, nil)
+
+	_, err := svc.GetProjectCostsByRole(context.Background(), projectID)
+	assert.Error(t, err)
+}
+
+// TestGetProjectCostRuns_MapsTokens (RG2) proves the per-run token sums flow
+// through the service into the run rows (so the Recent Runs table shows real
+// tokens, not 0).
+func TestGetProjectCostRuns_MapsTokens(t *testing.T) {
+	projectID := uuid.New()
+	projectRepo := &mockProjectRepoForCost{
+		project: &model.Project{ID: projectID, Name: "test"},
+	}
+	runID := uuid.New()
+	costRepo := &mockCostRepo{
+		listCostsByProjectByRunPaginatedFn: func(_ context.Context, _ uuid.UUID, _ time.Time, _, _ int32) ([]model.RunCostRow, error) {
+			return []model.RunCostRow{
+				{RunID: runID, StoryKey: "S-01", Status: "completed", StartedAt: time.Now(), TotalCostUSD: 5.0, TokensInput: 120000, TokensOutput: 30000},
+			}, nil
+		},
+		countCostsByProjectByRunFn: func(_ context.Context, _ uuid.UUID, _ time.Time) (int64, error) {
+			return 1, nil
+		},
+	}
+	svc := newTestCostService(costRepo, projectRepo, nil, nil)
+
+	rows, _, err := svc.GetProjectCostRuns(context.Background(), projectID, "7d", 1, 20)
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	assert.Equal(t, int64(120000), rows[0].TokensInput)
+	assert.Equal(t, int64(30000), rows[0].TokensOutput)
 }
 
 // --- parsePeriod tests ---

@@ -229,6 +229,8 @@ func (r *CostRepo) ListCostsByProjectByRunPaginated(ctx context.Context, project
 			Status:       row.Status,
 			StartedAt:    row.StartedAt,
 			TotalCostUSD: numericToFloat64(row.TotalCostUsd),
+			TokensInput:  row.TokensInput,
+			TokensOutput: row.TokensOutput,
 		}
 	}
 	return results, nil
@@ -285,6 +287,26 @@ func (r *CostRepo) ListByProjectByAgent(ctx context.Context, projectID uuid.UUID
 		results[i] = model.AgentCostBreakdown{
 			AgentID:      agentID,
 			AgentName:    row.AgentName,
+			TokensInput:  row.TokensInput,
+			TokensOutput: row.TokensOutput,
+			CostUSD:      numericToFloat64(row.CostUsd),
+			RunsCount:    row.RunsCount,
+		}
+	}
+	return results, nil
+}
+
+// ListByProjectByRole returns cost breakdown by role (agent type) for a project.
+func (r *CostRepo) ListByProjectByRole(ctx context.Context, projectID uuid.UUID) ([]model.ProjectRoleCostBreakdown, error) {
+	rows, err := r.queries.ListCostsByProjectByRole(ctx, projectID)
+	if err != nil {
+		return nil, apperrors.NewInternal("failed to list costs by project by role", err)
+	}
+
+	results := make([]model.ProjectRoleCostBreakdown, len(rows))
+	for i, row := range rows {
+		results[i] = model.ProjectRoleCostBreakdown{
+			Role:         row.Role,
 			TokensInput:  row.TokensInput,
 			TokensOutput: row.TokensOutput,
 			CostUSD:      numericToFloat64(row.CostUsd),

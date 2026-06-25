@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import Button from 'primevue/button'
 import Message from 'primevue/message'
@@ -16,7 +16,6 @@ import CostChart from '@/features/costs/CostChart.vue'
 import RunCostTable from '@/features/costs/RunCostTable.vue'
 import AgentCostTable from '@/features/costs/AgentCostTable.vue'
 import RunCostByRole from '@/features/runs/RunCostByRole.vue'
-import type { CostByRoleResult } from '@/utils/costByRole'
 
 const route = useRoute()
 const router = useRouter()
@@ -27,6 +26,7 @@ const {
   summary,
   chartData,
   runs,
+  byRoleBreakdown,
   isLoading,
   error,
   fetchAll,
@@ -56,19 +56,6 @@ function budgetPercent(total: number, limit: number): number {
   if (limit <= 0) return 0
   return Math.min((total / limit) * 100, 100)
 }
-
-// Backend #6 gap: per-role endpoint not available at dashboard level; showing graceful fallback.
-// RunCostRow has no per-step breakdown, so we cannot attribute costs to roles.
-// We pass an empty roles array which triggers RunCostByRole's "Per-role breakdown unavailable yet" message,
-// while the real rolled-up total is still shown in the footer.
-const dashboardTotal = computed(() =>
-  runs.value.reduce((s, r) => s + (r.total_cost_usd ?? 0), 0),
-)
-const byRoleBreakdown = computed<CostByRoleResult>(() => ({
-  roles: [],
-  total: dashboardTotal.value,
-  derivedFromStepsOnly: true,
-}))
 </script>
 
 <template>
@@ -184,7 +171,7 @@ const byRoleBreakdown = computed<CostByRoleResult>(() => ({
               <!-- Spend-over-time chart (green line) -->
               <CostChart :data="chartData" :is-loading="isLoading" data-testid="cost-chart" />
 
-              <!-- By Role panel — graceful fallback (Backend #6 gap) -->
+              <!-- COST BY ROLE — wired to the project-level by-role endpoint -->
               <RunCostByRole
                 :breakdown="byRoleBreakdown"
                 :loading="isLoading"

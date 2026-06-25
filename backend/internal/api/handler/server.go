@@ -394,6 +394,11 @@ func (s *Server) GetProjectCostsByAgent(w http.ResponseWriter, r *http.Request, 
 	s.costs.GetProjectCostsByAgent(w, r, projectID)
 }
 
+// GetProjectCostsByRole delegates to CostHandler.
+func (s *Server) GetProjectCostsByRole(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath) {
+	s.costs.GetProjectCostsByRole(w, r, projectID)
+}
+
 // GetProjectCostChart delegates to CostHandler.
 func (s *Server) GetProjectCostChart(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, params GetProjectCostChartParams) {
 	s.costs.GetProjectCostChart(w, r, projectID, params)

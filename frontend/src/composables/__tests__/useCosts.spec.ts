@@ -37,8 +37,20 @@ const runsData = [
     status: 'completed',
     started_at: '2026-02-10T10:00:00Z',
     total_cost_usd: 0.01234,
+    tokens_input: 120000,
+    tokens_output: 30000,
   },
 ]
+
+const byRoleData = {
+  total_cost: 17.75,
+  total_tokens_input: 700000,
+  total_tokens_output: 150000,
+  roles: [
+    { role: 'implement', tokens_input: 500000, tokens_output: 100000, cost_usd: 12.5, runs_count: 3 },
+    { role: 'review', tokens_input: 200000, tokens_output: 50000, cost_usd: 5.25, runs_count: 2 },
+  ],
+}
 
 function mockSuccessResponses() {
   mockGet
@@ -48,6 +60,7 @@ function mockSuccessResponses() {
       data: { data: runsData, pagination: { total: 1, page: 1, per_page: 20 } },
       error: undefined,
     })
+    .mockResolvedValueOnce({ data: byRoleData, error: undefined })
 }
 
 describe('useCosts', () => {
@@ -65,12 +78,12 @@ describe('useCosts', () => {
     expect(error.value).toBeNull()
   })
 
-  it('fetchAll calls all three endpoints with the current period', async () => {
+  it('fetchAll calls all four endpoints with the current period', async () => {
     mockSuccessResponses()
     const { fetchAll } = useCosts('proj-1')
     await fetchAll()
 
-    expect(mockGet).toHaveBeenCalledTimes(3)
+    expect(mockGet).toHaveBeenCalledTimes(4)
     expect(mockGet).toHaveBeenCalledWith('/projects/{projectId}/costs/summary', {
       params: { path: { projectId: 'proj-1' }, query: { period: '7d' } },
     })
@@ -80,16 +93,35 @@ describe('useCosts', () => {
     expect(mockGet).toHaveBeenCalledWith('/projects/{projectId}/costs/runs', {
       params: { path: { projectId: 'proj-1' }, query: { period: '7d' } },
     })
+    expect(mockGet).toHaveBeenCalledWith('/projects/{projectId}/costs/by-role', {
+      params: { path: { projectId: 'proj-1' } },
+    })
   })
 
-  it('fetchAll populates summary, chartData and runs on success', async () => {
+  it('fetchAll populates summary, chartData, runs and byRole on success', async () => {
     mockSuccessResponses()
-    const { summary, chartData: cd, runs, fetchAll } = useCosts('proj-1')
+    const { summary, chartData: cd, runs, byRole, fetchAll } = useCosts('proj-1')
     await fetchAll()
 
     expect(summary.value).toEqual(summaryData)
     expect(cd.value).toEqual(chartData)
     expect(runs.value).toEqual(runsData)
+    expect(byRole.value).toEqual(byRoleData)
+  })
+
+  it('byRoleBreakdown maps the by-role endpoint into the shared CostByRoleResult', async () => {
+    mockSuccessResponses()
+    const { byRoleBreakdown, fetchAll } = useCosts('proj-1')
+    await fetchAll()
+
+    // RG1: roles present + total equals the server roll-up.
+    expect(byRoleBreakdown.value.total).toBe(17.75)
+    expect(byRoleBreakdown.value.roles.map((r) => r.role)).toEqual(['implement', 'review'])
+    const impl = byRoleBreakdown.value.roles.find((r) => r.role === 'implement')!
+    expect(impl.costUsd).toBe(12.5)
+    // Bars scale against the largest role.
+    expect(impl.fraction).toBe(1)
+    expect(byRoleBreakdown.value.derivedFromStepsOnly).toBe(false)
   })
 
   it('isLoading is true during fetch and false after', async () => {
@@ -126,6 +158,7 @@ describe('useCosts', () => {
       .mockResolvedValueOnce({ data: summaryData, error: undefined })
       .mockResolvedValueOnce({ data: undefined, error: { code: 'INTERNAL', message: 'chart error' } })
       .mockResolvedValueOnce({ data: { data: [], pagination: { total: 0, page: 1, per_page: 20 } }, error: undefined })
+      .mockResolvedValueOnce({ data: byRoleData, error: undefined })
 
     const { error, isLoading, fetchAll } = useCosts('proj-1')
     await fetchAll()
@@ -139,6 +172,7 @@ describe('useCosts', () => {
       .mockResolvedValueOnce({ data: summaryData, error: undefined })
       .mockResolvedValueOnce({ data: [], error: undefined })
       .mockResolvedValueOnce({ data: undefined, error: { code: 'INTERNAL', message: 'runs error' } })
+      .mockResolvedValueOnce({ data: byRoleData, error: undefined })
 
     const { error, isLoading, fetchAll } = useCosts('proj-1')
     await fetchAll()
@@ -147,13 +181,22 @@ describe('useCosts', () => {
     expect(isLoading.value).toBe(false)
   })
 
-  it('setPeriod updates period and re-fetches with new period', async () => {
-    mockSuccessResponses()
-    // Second call set for 30d
+  it('sets error when by-role API returns an error (RG5)', async () => {
     mockGet
       .mockResolvedValueOnce({ data: summaryData, error: undefined })
-      .mockResolvedValueOnce({ data: [], error: undefined })
+      .mockResolvedValueOnce({ data: chartData, error: undefined })
       .mockResolvedValueOnce({ data: { data: [], pagination: { total: 0, page: 1, per_page: 20 } }, error: undefined })
+      .mockResolvedValueOnce({ data: undefined, error: { code: 'INTERNAL', message: 'role error' } })
+
+    const { error, isLoading, fetchAll } = useCosts('proj-1')
+    await fetchAll()
+
+    expect(error.value).toBe('Failed to load cost by role')
+    expect(isLoading.value).toBe(false)
+  })
+
+  it('setPeriod updates period and re-fetches with new period', async () => {
+    mockSuccessResponses()
 
     const { period, setPeriod } = useCosts('proj-1')
 
@@ -167,6 +210,7 @@ describe('useCosts', () => {
       .mockResolvedValueOnce({ data: summaryData, error: undefined })
       .mockResolvedValueOnce({ data: [], error: undefined })
       .mockResolvedValueOnce({ data: { data: [], pagination: { total: 0, page: 1, per_page: 20 } }, error: undefined })
+      .mockResolvedValueOnce({ data: byRoleData, error: undefined })
 
     await setPeriod('30d')
     expect(period.value).toBe('30d')

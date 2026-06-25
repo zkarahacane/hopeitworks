@@ -191,4 +191,28 @@ type RunCostRow struct {
 	Status       string
 	StartedAt    time.Time
 	TotalCostUSD float64
+	TokensInput  int64
+	TokensOutput int64
+}
+
+// ProjectRoleCostBreakdown aggregates cost data per role (agent type) across all
+// runs of a project, for the Overview "COST BY ROLE" widget. Role is the agent
+// type the cost was attributed to, or "unknown" for unattributed cost records.
+type ProjectRoleCostBreakdown struct {
+	Role         string
+	TokensInput  int64
+	TokensOutput int64
+	CostUSD      float64
+	RunsCount    int32
+}
+
+// ProjectCostByRole holds the project-level per-role cost breakdown plus the
+// roll-up totals across all roles. The total is the sum of the per-role costs
+// (unknown role included), so the widget total stays consistent with the bars
+// it renders.
+type ProjectCostByRole struct {
+	TotalCost   float64
+	TotalInput  int64
+	TotalOutput int64
+	Roles       []ProjectRoleCostBreakdown
 }

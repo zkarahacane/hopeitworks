@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { costByRole } from '../costByRole'
+import { costByRole, projectCostByRole } from '../costByRole'
 import type { RunCostDetail } from '@/features/runs/composables/useRunCosts'
+import type { components } from '@/api/schema'
+
+type ProjectCostByRole = components['schemas']['ProjectCostByRole']
 
 function detail(steps: RunCostDetail['steps'], total: number): RunCostDetail {
   return { run_id: 'run-1', total_cost: total, steps }
@@ -79,5 +82,74 @@ describe('costByRole', () => {
       ),
     )
     expect(r.roles.map((x) => x.role)).toEqual(['dev', 'review'])
+  })
+})
+
+describe('projectCostByRole', () => {
+  function payload(
+    roles: ProjectCostByRole['roles'],
+    total: number,
+    input = 0,
+    output = 0,
+  ): ProjectCostByRole {
+    return { total_cost: total, total_tokens_input: input, total_tokens_output: output, roles }
+  }
+
+  it('returns an empty authoritative breakdown for null data (RG3)', () => {
+    const r = projectCostByRole(null)
+    expect(r.roles).toEqual([])
+    expect(r.total).toBe(0)
+    // Authoritative (server) data, so NOT the "unavailable" run-level gap.
+    expect(r.derivedFromStepsOnly).toBe(false)
+  })
+
+  it('maps server roles to bars and keeps the server roll-up total (RG1)', () => {
+    const r = projectCostByRole(
+      payload(
+        [
+          { role: 'implement', tokens_input: 500000, tokens_output: 100000, cost_usd: 12.5, runs_count: 3 },
+          { role: 'review', tokens_input: 200000, tokens_output: 50000, cost_usd: 5.25, runs_count: 2 },
+        ],
+        17.75,
+        700000,
+        150000,
+      ),
+    )
+    expect(r.total).toBe(17.75)
+    expect(r.roles.map((x) => x.role)).toEqual(['implement', 'review'])
+    const impl = r.roles.find((x) => x.role === 'implement')!
+    const review = r.roles.find((x) => x.role === 'review')!
+    expect(impl.label).toBe('Implement')
+    expect(impl.costUsd).toBe(12.5)
+    // Bars scale against the largest role.
+    expect(impl.fraction).toBe(1)
+    expect(review.fraction).toBeCloseTo(0.42, 2)
+  })
+
+  it('keeps the unknown bucket as its own bar (RG4)', () => {
+    const r = projectCostByRole(
+      payload(
+        [
+          { role: 'implement', tokens_input: 100000, tokens_output: 20000, cost_usd: 4.0, runs_count: 1 },
+          { role: 'unknown', tokens_input: 30000, tokens_output: 5000, cost_usd: 1.5, runs_count: 1 },
+        ],
+        5.5,
+        130000,
+        25000,
+      ),
+    )
+    const unknown = r.roles.find((x) => x.role === 'unknown')
+    expect(unknown).toBeDefined()
+    expect(unknown!.label).toBe('Unknown')
+    expect(unknown!.costUsd).toBe(1.5)
+    // RG4: the unknown bucket is part of the (server) total.
+    expect(r.total).toBe(5.5)
+  })
+
+  it('treats an empty roles array as an authoritative empty period (RG3)', () => {
+    const r = projectCostByRole(payload([], 0))
+    expect(r.roles).toEqual([])
+    expect(r.total).toBe(0)
+    expect(r.derivedFromStepsOnly).toBe(false)
   })
 })

@@ -1995,6 +1995,25 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /projects/{projectId}/costs/by-role:
+    get:
+      operationId: getProjectCostsByRole
+      summary: Get cost breakdown aggregated by role for a project with roll-up totals
+      tags: [costs]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+      responses:
+        "200":
+          description: Per-role cost breakdown plus project totals
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectCostByRole"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /hitl-requests/{hitlRequestId}/reject:
     post:
       operationId: rejectHITLRequest
@@ -4510,6 +4529,63 @@ components:
           type: integer
           format: int32
           example: 5
+
+    ProjectRoleCostBreakdown:
+      type: object
+      description: Cost aggregated for a single role (agent type) across all runs of a project.
+      required:
+        - role
+        - tokens_input
+        - tokens_output
+        - cost_usd
+        - runs_count
+      properties:
+        role:
+          type: string
+          description: Agent type the cost was attributed to (implement, retry, review, merge, custom), or "unknown" for unattributed cost.
+          example: implement
+        tokens_input:
+          type: integer
+          format: int64
+          example: 500000
+        tokens_output:
+          type: integer
+          format: int64
+          example: 100000
+        cost_usd:
+          type: number
+          format: double
+          example: 12.50
+        runs_count:
+          type: integer
+          format: int32
+          example: 5
+
+    ProjectCostByRole:
+      type: object
+      description: Project-level per-role cost breakdown plus roll-up totals computed across all roles (unknown bucket included).
+      required:
+        - total_cost
+        - total_tokens_input
+        - total_tokens_output
+        - roles
+      properties:
+        total_cost:
+          type: number
+          format: double
+          example: 17.75
+        total_tokens_input:
+          type: integer
+          format: int64
+          example: 700000
+        total_tokens_output:
+          type: integer
+          format: int64
+          example: 150000
+        roles:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProjectRoleCostBreakdown"
 
     # ── Shared ─────────────────────────────────────────────────────────
     Pagination:
