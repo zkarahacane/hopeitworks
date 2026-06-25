@@ -1,8 +1,14 @@
 <script setup lang="ts">
-import { useRouter } from 'vue-router'
+import { computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import Button from 'primevue/button'
 
 const router = useRouter()
+const route = useRoute()
+
+// Path the user tried to reach. Rendered via {{ }} interpolation only
+// (never v-html), so a raw URL is auto-escaped and cannot inject markup.
+const requestedPath = computed(() => route.fullPath)
 </script>
 
 <template>
@@ -40,7 +46,7 @@ const router = useRouter()
           class="text-sm"
           :style="{ color: 'var(--p-text-muted-color)', fontFamily: 'var(--font-mono, monospace)' }"
         >
-          /settings now lives under your profile.
+          We couldn't find <code>{{ requestedPath }}</code>.
         </p>
       </div>
 
@@ -49,13 +55,7 @@ const router = useRouter()
         <Button
           label="Go to dashboard"
           icon="pi pi-home"
-          severity="secondary"
           @click="router.push('/')"
-        />
-        <Button
-          label="Profile & settings"
-          icon="pi pi-user"
-          @click="router.push({ name: 'profile' })"
         />
       </div>
     </div>
