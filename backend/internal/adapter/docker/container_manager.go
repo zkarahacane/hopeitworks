@@ -31,6 +31,7 @@ type dockerClient interface {
 	NetworkCreate(ctx context.Context, name string, options network.CreateOptions) (network.CreateResponse, error)
 	NetworkRemove(ctx context.Context, networkID string) error
 	NetworkConnect(ctx context.Context, networkID, containerID string, config *network.EndpointSettings) error
+	NetworkDisconnect(ctx context.Context, networkID, containerID string, force bool) error
 	NetworkList(ctx context.Context, options network.ListOptions) ([]network.Summary, error)
 }
 
@@ -344,13 +345,27 @@ func (m *ContainerManager) RemoveNetwork(ctx context.Context, nameOrID string) e
 }
 
 // ConnectContainer attaches a container to a network, optionally registering DNS
-// aliases for it on that network.
+// aliases for it on that network. It is idempotent: a container already attached
+// to the network is treated as success, so re-attaching the API to a per-run
+// network (e.g. a retried Launch under East-West isolation) is a no-op rather than
+// an error — symmetric with DisconnectContainer's IsNotFound handling.
 func (m *ContainerManager) ConnectContainer(ctx context.Context, networkNameOrID, containerID string, aliases []string) error {
 	var cfg *network.EndpointSettings
 	if len(aliases) > 0 {
 		cfg = &network.EndpointSettings{Aliases: aliases}
 	}
 	if err := m.client.NetworkConnect(ctx, networkNameOrID, containerID, cfg); err != nil {
+		// Docker reports an already-attached endpoint as Conflict (409) or, on
+		// older daemons, Forbidden (403 -> PermissionDenied): "endpoint with name
+		// ... already exists in network ...". Treat it as a no-op success so
+		// connectAPI is genuinely re-entrant.
+		if cerrdefs.IsConflict(err) || cerrdefs.IsPermissionDenied(err) {
+			m.logger.Debug("connect: container already attached to network",
+				slog.String("container_id", containerID),
+				slog.String("network", networkNameOrID),
+			)
+			return nil
+		}
 		return apperrors.NewContainerError(
 			fmt.Sprintf("failed to connect container %s to network %s: %v", containerID, networkNameOrID, err),
 			err,
@@ -358,6 +373,32 @@ func (m *ContainerManager) ConnectContainer(ctx context.Context, networkNameOrID
 	}
 
 	m.logger.Debug("container connected to network",
+		slog.String("container_id", containerID),
+		slog.String("network", networkNameOrID),
+	)
+	return nil
+}
+
+// DisconnectContainer detaches a container from a network (force=true so a
+// stopped/already-half-detached endpoint is still cleared). It is idempotent: a
+// missing network or container is treated as success, so detaching the API from
+// a per-run network is safe to call repeatedly from rollback/Cleanup/GC.
+func (m *ContainerManager) DisconnectContainer(ctx context.Context, networkNameOrID, containerID string) error {
+	if err := m.client.NetworkDisconnect(ctx, networkNameOrID, containerID, true); err != nil {
+		if cerrdefs.IsNotFound(err) {
+			m.logger.Debug("disconnect: network or container already absent",
+				slog.String("container_id", containerID),
+				slog.String("network", networkNameOrID),
+			)
+			return nil
+		}
+		return apperrors.NewContainerError(
+			fmt.Sprintf("failed to disconnect container %s from network %s: %v", containerID, networkNameOrID, err),
+			err,
+		)
+	}
+
+	m.logger.Debug("container disconnected from network",
 		slog.String("container_id", containerID),
 		slog.String("network", networkNameOrID),
 	)

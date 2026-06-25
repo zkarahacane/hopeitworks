@@ -22,7 +22,7 @@ func TestSelectSubstrate(t *testing.T) {
 	// special path. containerMgr is stored, not dereferenced at construction, so a
 	// nil one is safe for this routing test.
 	t.Run("docker default returns the Docker adapter (docker.Runtime)", func(t *testing.T) {
-		got := selectSubstrate(pkgconfig.SubstrateDocker, nil, nil, "agent-net", quietLogger())
+		got := selectSubstrate(pkgconfig.SubstrateDocker, nil, nil, "agent-net", false, quietLogger())
 		if got == nil {
 			t.Fatal("selectSubstrate(docker) = nil, want *docker.Runtime")
 		}
@@ -34,14 +34,14 @@ func TestSelectSubstrate(t *testing.T) {
 	t.Run("unknown kind falls through to the docker default (docker.Runtime)", func(t *testing.T) {
 		// validate() rejects unknown kinds at load time; the factory itself
 		// defaults defensively so it never panics on an unexpected value.
-		got := selectSubstrate("k8s", nil, nil, "agent-net", quietLogger())
+		got := selectSubstrate("k8s", nil, nil, "agent-net", false, quietLogger())
 		if _, ok := got.(*dockeradapter.Runtime); !ok {
 			t.Fatalf("selectSubstrate(unknown) = %T, want *docker.Runtime", got)
 		}
 	})
 
 	t.Run("microsandbox constructs the scaffold AgentRuntime", func(t *testing.T) {
-		got := selectSubstrate(pkgconfig.SubstrateMicrosandbox, nil, nil, "", quietLogger())
+		got := selectSubstrate(pkgconfig.SubstrateMicrosandbox, nil, nil, "", false, quietLogger())
 		if got == nil {
 			t.Fatal("selectSubstrate(microsandbox) = nil, want a scaffold adapter")
 		}

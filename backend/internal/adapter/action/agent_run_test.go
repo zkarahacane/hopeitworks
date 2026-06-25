@@ -123,6 +123,10 @@ func (m *mockContainerManager) ConnectContainer(_ context.Context, _, _ string, 
 	return nil
 }
 
+func (m *mockContainerManager) DisconnectContainer(_ context.Context, _, _ string) error {
+	return nil
+}
+
 func (m *mockContainerManager) ListNetworks(_ context.Context, _ map[string]string) ([]model.NetworkInfo, error) {
 	return nil, nil
 }
@@ -683,6 +687,39 @@ func newAgentRunFixture(t *testing.T) *agentRunFixture {
 	)
 
 	return f
+}
+
+// setIsolateRuns rebuilds f.action with the given East-West isolation flag,
+// reusing the same mocks. It keeps the legacy path (no AgentRuntime injected) so
+// createContainer is exercised — the second security-critical network path.
+func (f *agentRunFixture) setIsolateRuns(t *testing.T, isolate bool) {
+	t.Helper()
+	agentCfg := action.AgentConfig{
+		DefaultMemory: 4294967296,
+		DefaultCPUs:   2.0,
+		NetworkName:   testNetwork,
+		IsolateRuns:   isolate,
+		LogTailLines:  50,
+	}
+	f.action = action.NewAgentRunAction(
+		f.containerMgr,
+		f.logStreamer,
+		f.eventPub,
+		f.storyRepo,
+		f.projectRepo,
+		f.runRepo,
+		f.environmentRepo,
+		f.sidecarMgr,
+		f.stackRepo,
+		&mockTemplateRenderer{},
+		f.costSvc,
+		agentCfg,
+		testLogger(),
+		nil, // apiKeySvc - legacy mode
+		nil, // tokenStore - legacy mode
+		nil, // statusStore - legacy mode
+		"",  // callbackURL - legacy mode
+	)
 }
 
 func (f *agentRunFixture) newRunContext() *model.RunContext {
@@ -1313,6 +1350,103 @@ func TestAgentRunAction_WithEnvironment_SidecarWiring(t *testing.T) {
 	}
 	if len(opts.ExtraNetworks) != 1 || opts.ExtraNetworks[0] != runNetwork {
 		t.Errorf("expected ExtraNetworks=[%s], got %v", runNetwork, opts.ExtraNetworks)
+	}
+}
+
+// TestAgentRunAction_Legacy_RunNetworkIsolation is the action-package pendant of
+// the docker-package TestRuntime_Launch_Isolated_RunNetworkPrimary: it covers the
+// SECOND security-critical path, the legacy createContainer (a.runtime == nil),
+// for both isolation states. It closes the silent-regression hole where a future
+// re-dual-home of the isolated branch would break East-West isolation without
+// failing any test.
+//
+// Both cases run the live legacy path (the fixture injects no AgentRuntime) with a
+// project that HAS an Environment, so sidecarCtx.NetworkName is non-empty.
+func TestAgentRunAction_Legacy_RunNetworkIsolation(t *testing.T) {
+	tests := []struct {
+		name        string
+		isolateRuns bool
+		// wantPrimary is the expected opts.NetworkName.
+		wantPrimary func(runNet string) string
+		// wantExtra is the expected opts.ExtraNetworks.
+		wantExtra func(runNet string) []string
+	}{
+		{
+			name:        "default dual-homes on shared network",
+			isolateRuns: false,
+			wantPrimary: func(_ string) string { return testNetwork },
+			wantExtra:   func(runNet string) []string { return []string{runNet} },
+		},
+		{
+			name:        "isolated single-homes on per-run network",
+			isolateRuns: true,
+			wantPrimary: func(runNet string) string { return runNet },
+			wantExtra:   func(_ string) []string { return nil },
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newAgentRunFixture(t)
+			f.setIsolateRuns(t, tt.isolateRuns)
+
+			runNetwork := "hopeitworks-run-" + f.runID.String()
+			env := &model.Environment{
+				ProjectID: f.projectID,
+				Services: []model.EnvironmentService{
+					{Name: "db", Image: "postgres:16", Env: map[string]string{"POSTGRES_PASSWORD": "x"}},
+				},
+			}
+			f.environmentRepo.getByProjectIDFn = func(_ context.Context, _ uuid.UUID) (*model.Environment, error) {
+				return env, nil
+			}
+			f.sidecarMgr.launchFn = func(_ context.Context, runID uuid.UUID, _ *model.Environment) (*port.SidecarContext, error) {
+				return &port.SidecarContext{
+					RunID:        runID,
+					NetworkName:  runNetwork,
+					ContainerIDs: map[string]string{"db": "sidecar-db"},
+					ServiceAddrs: map[string]string{"db": "db"},
+				}, nil
+			}
+
+			if err := f.action.Execute(context.Background(), f.newRunContext()); err != nil {
+				t.Fatalf("expected no error, got %v", err)
+			}
+
+			f.containerMgr.mu.Lock()
+			createCalls := f.containerMgr.createCalls
+			f.containerMgr.mu.Unlock()
+			if len(createCalls) != 1 {
+				t.Fatalf("expected 1 create call, got %d", len(createCalls))
+			}
+			opts := createCalls[0]
+
+			if got, want := opts.NetworkName, tt.wantPrimary(runNetwork); got != want {
+				t.Errorf("primary NetworkName: got %q, want %q", got, want)
+			}
+			wantExtra := tt.wantExtra(runNetwork)
+			if len(opts.ExtraNetworks) != len(wantExtra) {
+				t.Fatalf("ExtraNetworks: got %v, want %v", opts.ExtraNetworks, wantExtra)
+			}
+			for i := range wantExtra {
+				if opts.ExtraNetworks[i] != wantExtra[i] {
+					t.Errorf("ExtraNetworks[%d]: got %q, want %q", i, opts.ExtraNetworks[i], wantExtra[i])
+				}
+			}
+
+			// Under isolation the SHARED network must appear NOWHERE (primary or extra):
+			// that is the East-West invariant the agent is single-homed on its run net.
+			if tt.isolateRuns {
+				if opts.NetworkName == testNetwork {
+					t.Errorf("isolated agent must NOT be on the shared network %q", testNetwork)
+				}
+				for _, n := range opts.ExtraNetworks {
+					if n == testNetwork {
+						t.Errorf("shared network %q leaked into ExtraNetworks: %v", testNetwork, opts.ExtraNetworks)
+					}
+				}
+			}
+		})
 	}
 }
 

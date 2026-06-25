@@ -41,12 +41,15 @@ type mockDockerClient struct {
 	listOpts dockercontainer.ListOptions
 
 	// Network captured args.
-	netCreateName string
-	netCreateOpts network.CreateOptions
-	netRemoveID   string
-	netConnectNet string
-	netConnectCtr string
-	netConnectCfg *network.EndpointSettings
+	netCreateName    string
+	netCreateOpts    network.CreateOptions
+	netRemoveID      string
+	netConnectNet    string
+	netConnectCtr    string
+	netConnectCfg    *network.EndpointSettings
+	netDisconnectNet string
+	netDisconnectCtr string
+	netDisconnectFrc bool
 
 	// Configurable return values.
 	createResp     dockercontainer.CreateResponse
@@ -59,14 +62,15 @@ type mockDockerClient struct {
 	listContainers []dockercontainer.Summary
 	listErr        error
 
-	netCreateResp network.CreateResponse
-	netCreateErr  error
-	netRemoveErr  error
-	netConnectErr error
-	netList       []network.Summary
-	netListErr    error
-	inspectResp   dockercontainer.InspectResponse
-	inspectErr    error
+	netCreateResp    network.CreateResponse
+	netCreateErr     error
+	netRemoveErr     error
+	netConnectErr    error
+	netDisconnectErr error
+	netList          []network.Summary
+	netListErr       error
+	inspectResp      dockercontainer.InspectResponse
+	inspectErr       error
 }
 
 func (m *mockDockerClient) ContainerCreate(
@@ -141,6 +145,13 @@ func (m *mockDockerClient) NetworkConnect(_ context.Context, networkID, containe
 	m.netConnectCtr = containerID
 	m.netConnectCfg = config
 	return m.netConnectErr
+}
+
+func (m *mockDockerClient) NetworkDisconnect(_ context.Context, networkID, containerID string, force bool) error {
+	m.netDisconnectNet = networkID
+	m.netDisconnectCtr = containerID
+	m.netDisconnectFrc = force
+	return m.netDisconnectErr
 }
 
 func (m *mockDockerClient) NetworkList(_ context.Context, _ network.ListOptions) ([]network.Summary, error) {
@@ -775,6 +786,27 @@ func TestConnectContainer_Error(t *testing.T) {
 	var domainErr *apperrors.DomainError
 	if !errors.As(err, &domainErr) {
 		t.Fatalf("expected DomainError, got %T", err)
+	}
+}
+
+func TestConnectContainer_IdempotentAlreadyAttached(t *testing.T) {
+	// Docker reports an already-attached endpoint as Conflict (409) or, on older
+	// daemons, Forbidden (403). Both must be treated as a no-op success so
+	// re-connecting the API to a per-run network (a retried isolated Launch) does
+	// not fail — symmetric with RemoveNetwork/DisconnectContainer idempotency.
+	cases := map[string]error{
+		"conflict (409)":  errdefs.Conflict(errors.New("endpoint with name api already exists in network n")),
+		"forbidden (403)": errdefs.Forbidden(errors.New("endpoint already exists in network n")),
+	}
+	for name, connectErr := range cases {
+		t.Run(name, func(t *testing.T) {
+			mock := &mockDockerClient{netConnectErr: connectErr}
+			mgr := newTestManager(mock)
+
+			if err := mgr.ConnectContainer(context.Background(), "n", "ctr-1", []string{"api"}); err != nil {
+				t.Fatalf("expected nil for already-attached endpoint (idempotent), got %v", err)
+			}
+		})
 	}
 }
 

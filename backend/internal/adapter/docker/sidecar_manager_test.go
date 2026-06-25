@@ -26,6 +26,8 @@ type mockContainerManager struct {
 	startedIDs      []string
 	stoppedIDs      []string
 	removedIDs      []string
+	connectedAPI    []apiNetAttach // network<-container pairs passed to ConnectContainer
+	disconnectedAPI []apiNetAttach // network<-container pairs passed to DisconnectContainer
 
 	// Hooks. Defaults are "succeed".
 	createNetworkFn func(name string) (string, error)
@@ -33,9 +35,18 @@ type mockContainerManager struct {
 	startFn         func(id string) error
 	inspectHealthFn func(id string) (string, error)
 	removeNetworkFn func(nameOrID string) error
+	connectFn       func(net, ctr string, aliases []string) error
 	listNetworksFn  func() ([]model.NetworkInfo, error)
 	listContainerFn func() ([]port.ContainerInfo, error)
 	listRunningFn   func() ([]port.ContainerInfo, error)
+}
+
+// apiNetAttach records one (network, container, aliases) attach/detach call so
+// the East-West isolation tests can assert the API was wired in and torn down.
+type apiNetAttach struct {
+	network   string
+	container string
+	aliases   []string
 }
 
 func newMockCM() *mockContainerManager {
@@ -122,8 +133,45 @@ func (m *mockContainerManager) RemoveNetwork(_ context.Context, nameOrID string)
 	return nil
 }
 
-func (m *mockContainerManager) ConnectContainer(_ context.Context, _, _ string, _ []string) error {
+func (m *mockContainerManager) ConnectContainer(_ context.Context, networkNameOrID, containerID string, aliases []string) error {
+	m.mu.Lock()
+	m.connectedAPI = append(m.connectedAPI, apiNetAttach{network: networkNameOrID, container: containerID, aliases: aliases})
+	m.mu.Unlock()
+	if m.connectFn != nil {
+		return m.connectFn(networkNameOrID, containerID, aliases)
+	}
 	return nil
+}
+
+func (m *mockContainerManager) DisconnectContainer(_ context.Context, networkNameOrID, containerID string) error {
+	m.mu.Lock()
+	m.disconnectedAPI = append(m.disconnectedAPI, apiNetAttach{network: networkNameOrID, container: containerID})
+	m.mu.Unlock()
+	return nil
+}
+
+func (m *mockContainerManager) getConnectedAPI() []apiNetAttach {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]apiNetAttach, len(m.connectedAPI))
+	copy(out, m.connectedAPI)
+	return out
+}
+
+func (m *mockContainerManager) getDisconnectedAPI() []apiNetAttach {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]apiNetAttach, len(m.disconnectedAPI))
+	copy(out, m.disconnectedAPI)
+	return out
+}
+
+func (m *mockContainerManager) getRemovedNetworks() []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]string, len(m.removedNetworks))
+	copy(out, m.removedNetworks)
+	return out
 }
 
 func (m *mockContainerManager) ListNetworks(_ context.Context, _ map[string]string) ([]model.NetworkInfo, error) {
@@ -539,6 +587,195 @@ func TestSidecarListOrphanNetworks(t *testing.T) {
 	}
 	if len(orphans) != 1 || orphans[0].ID != "n-orphan" {
 		t.Errorf("expected only n-orphan, got %v", orphans)
+	}
+}
+
+// testAPIContainer is the API container name the East-West isolation tests
+// configure the SidecarManager with.
+const testAPIContainer = "hopeitworks-api"
+
+// newIsolatedSidecarManager builds a SidecarManager with East-West run isolation
+// enabled and fast test timings.
+func newIsolatedSidecarManager(cm *mockContainerManager) *SidecarManager {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
+	s := NewDockerSidecarManagerWithIsolation(cm, true, testAPIContainer, logger)
+	s.readinessTimeout = 200 * time.Millisecond
+	s.readinessInterval = 5 * time.Millisecond
+	s.runningGrace = 0
+	return s
+}
+
+// TestSidecarLaunch_Isolated_NoServices_CreatesNetworkAndConnectsAPI proves the
+// core of East-West isolation: with the flag ON and a project that has NO
+// sidecars (nil env), Launch STILL creates the per-run network and attaches the
+// API container to it (alias "api"), so the single-homed agent can reach the
+// callback. (With the flag off this is a no-op — see TestSidecarLaunch_NilEnv_NoOp.)
+func TestSidecarLaunch_Isolated_NoServices_CreatesNetworkAndConnectsAPI(t *testing.T) {
+	cm := newMockCM()
+	s := newIsolatedSidecarManager(cm)
+
+	runID := uuid.New()
+	sc, err := s.Launch(context.Background(), runID, nil)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	wantNet := networkName(runID)
+	if sc.NetworkName != wantNet {
+		t.Errorf("expected per-run network %q created, got %q", wantNet, sc.NetworkName)
+	}
+	if len(cm.createdNetworks) != 1 || cm.createdNetworks[0] != wantNet {
+		t.Errorf("expected network %q created, got %v", wantNet, cm.createdNetworks)
+	}
+	// No sidecar containers created.
+	if len(cm.createdOpts) != 0 {
+		t.Errorf("expected no sidecar containers, got %d", len(cm.createdOpts))
+	}
+	// API connected to the per-run network with alias "api".
+	conn := cm.getConnectedAPI()
+	if len(conn) != 1 {
+		t.Fatalf("expected exactly 1 API connect, got %d (%v)", len(conn), conn)
+	}
+	if conn[0].network != wantNet || conn[0].container != testAPIContainer {
+		t.Errorf("API connect mismatch: got net=%q ctr=%q, want net=%q ctr=%q",
+			conn[0].network, conn[0].container, wantNet, testAPIContainer)
+	}
+	if len(conn[0].aliases) != 1 || conn[0].aliases[0] != apiNetworkAlias {
+		t.Errorf("expected API alias [%q], got %v", apiNetworkAlias, conn[0].aliases)
+	}
+}
+
+// TestSidecarLaunch_Isolated_WithServices_ConnectsAPIBeforeSidecars proves that
+// with services present the per-run network is created, the API is attached, AND
+// the sidecars come up on the same per-run network.
+func TestSidecarLaunch_Isolated_WithServices_ConnectsAPIBeforeSidecars(t *testing.T) {
+	cm := newMockCM() // defaults: create ok, start ok, health=healthy
+	s := newIsolatedSidecarManager(cm)
+
+	runID := uuid.New()
+	sc, err := s.Launch(context.Background(), runID, pgEnv())
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	wantNet := networkName(runID)
+	if sc.NetworkName != wantNet {
+		t.Errorf("expected per-run network %q, got %q", wantNet, sc.NetworkName)
+	}
+	conn := cm.getConnectedAPI()
+	if len(conn) != 1 || conn[0].network != wantNet || conn[0].container != testAPIContainer {
+		t.Errorf("expected API connected to %q, got %v", wantNet, conn)
+	}
+	// Sidecar landed on the per-run network.
+	if len(cm.createdOpts) != 1 || cm.createdOpts[0].NetworkName != wantNet {
+		t.Errorf("expected sidecar on %q, got %v", wantNet, cm.createdOpts)
+	}
+}
+
+// TestSidecarCleanup_Isolated_DetachesAPIBeforeRemove proves Cleanup detaches the
+// API from the per-run network BEFORE removing it (otherwise Docker rejects the
+// removal with "network has active endpoints").
+func TestSidecarCleanup_Isolated_DetachesAPIBeforeRemove(t *testing.T) {
+	cm := newMockCM()
+	s := newIsolatedSidecarManager(cm)
+
+	runID := uuid.New()
+	sc, err := s.Launch(context.Background(), runID, nil)
+	if err != nil {
+		t.Fatalf("launch error: %v", err)
+	}
+
+	if err := s.Cleanup(context.Background(), sc); err != nil {
+		t.Fatalf("cleanup error: %v", err)
+	}
+
+	wantNet := networkName(runID)
+	disc := cm.getDisconnectedAPI()
+	if len(disc) != 1 || disc[0].network != wantNet || disc[0].container != testAPIContainer {
+		t.Fatalf("expected API detached from %q, got %v", wantNet, disc)
+	}
+	removed := cm.getRemovedNetworks()
+	if len(removed) != 1 || removed[0] != wantNet {
+		t.Fatalf("expected network %q removed, got %v", wantNet, removed)
+	}
+}
+
+// TestSidecarLaunch_Isolated_TwoRuns_DistinctNetworks proves two distinct runs
+// get two distinct per-run networks (no shared segment between agents).
+func TestSidecarLaunch_Isolated_TwoRuns_DistinctNetworks(t *testing.T) {
+	cm := newMockCM()
+	s := newIsolatedSidecarManager(cm)
+
+	runA := uuid.New()
+	runB := uuid.New()
+	scA, errA := s.Launch(context.Background(), runA, nil)
+	scB, errB := s.Launch(context.Background(), runB, nil)
+	if errA != nil || errB != nil {
+		t.Fatalf("launch errors: %v / %v", errA, errB)
+	}
+
+	if scA.NetworkName == scB.NetworkName {
+		t.Fatalf("expected distinct per-run networks, both were %q", scA.NetworkName)
+	}
+	if scA.NetworkName != networkName(runA) || scB.NetworkName != networkName(runB) {
+		t.Errorf("network names not run-scoped: A=%q B=%q", scA.NetworkName, scB.NetworkName)
+	}
+	if len(cm.createdNetworks) != 2 {
+		t.Errorf("expected 2 networks created, got %v", cm.createdNetworks)
+	}
+}
+
+// TestSidecarLaunch_Isolated_APIConnectFails_RollsBack proves a failed API
+// connect rolls the launch back: the half-wired network is detached + removed and
+// the error surfaces, so we never start an agent that cannot reach the callback.
+func TestSidecarLaunch_Isolated_APIConnectFails_RollsBack(t *testing.T) {
+	cm := newMockCM()
+	cm.connectFn = func(_, _ string, _ []string) error {
+		return errors.New("docker connect refused")
+	}
+	s := newIsolatedSidecarManager(cm)
+
+	runID := uuid.New()
+	sc, err := s.Launch(context.Background(), runID, nil)
+	if err == nil {
+		t.Fatal("expected Launch to fail when API connect fails")
+	}
+	if sc != nil {
+		t.Errorf("expected nil context on failure, got %v", sc)
+	}
+	// Rollback removed the network it had created.
+	wantNet := networkName(runID)
+	removed := cm.getRemovedNetworks()
+	if len(removed) != 1 || removed[0] != wantNet {
+		t.Errorf("expected rollback to remove %q, got %v", wantNet, removed)
+	}
+}
+
+// TestSidecarGC_Isolated_DetachesAPIBeforeRemove proves the periodic network GC
+// also detaches the API before removing an orphan per-run network.
+func TestSidecarGC_Isolated_DetachesAPIBeforeRemove(t *testing.T) {
+	now := time.Date(2026, 6, 23, 12, 0, 0, 0, time.UTC)
+	cm := newMockCM()
+	cm.listNetworksFn = func() ([]model.NetworkInfo, error) {
+		return []model.NetworkInfo{
+			{ID: "net-old", Name: "hopeitworks-run-old", Labels: map[string]string{labelRunID: "run-old"}, CreatedAt: now.Add(-2 * time.Hour)},
+		}, nil
+	}
+	cm.listRunningFn = func() ([]port.ContainerInfo, error) { return nil, nil }
+	s := newIsolatedSidecarManager(cm)
+	s.now = func() time.Time { return now }
+
+	if err := s.GC(context.Background(), 30*time.Minute); err != nil {
+		t.Fatalf("GC error: %v", err)
+	}
+
+	disc := cm.getDisconnectedAPI()
+	if len(disc) != 1 || disc[0].network != "net-old" || disc[0].container != testAPIContainer {
+		t.Fatalf("expected API detached from net-old during GC, got %v", disc)
+	}
+	removed := cm.getRemovedNetworks()
+	if len(removed) != 1 || removed[0] != "net-old" {
+		t.Fatalf("expected net-old removed, got %v", removed)
 	}
 }
 
