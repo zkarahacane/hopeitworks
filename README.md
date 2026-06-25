@@ -180,11 +180,10 @@ by the `SUBSTRATE` config:
 | **exec** (`SUBSTRATE=exec`) | Local inner-loop — runs the harness as a child process, no container, fastest/in-process debuggable; dev-only | — |
 | **K8s / OpenShift** | Future (P4) — addable behind the same port (RuntimeClass gVisor / Kata), no domain change | — |
 
-microsandbox is **Linux/KVM-only** and cannot run inside Docker Desktop on macOS (no nested-virt
-passthrough). On macOS, run the agent stack inside a Linux VM with nested virtualization (Apple
-**M3+ / macOS 15+**) — see [`deploy/lima/README.md`](deploy/lima/README.md) for a one-command,
-reproducible setup. (Selecting microsandbox requires the `microsandbox` build tag; otherwise the
-adapter is built as a clear no-op stub.)
+microsandbox is **Linux/KVM-only** and is currently **parked off the critical path** (see
+`docs/agent-environment-provisioning-adr.md`): the Go adapter stays behind the `microsandbox`
+build tag — selecting it requires that tag, otherwise the adapter is built as a clear no-op stub —
+and the Lima / microVM provisioning infra has been removed.
 
 ### Image vs services — the agent image is *where it runs*, sidecars are *what it talks to*
 
