@@ -146,9 +146,13 @@ const { lines: streamLines, sseStatus: streamStatus } = useStepLogs(
   runId.value,
   streamStepId,
 )
-const streamActive = computed(
-  () => activeStep.value?.status === 'running' || streamLines.value.length > 0,
-)
+// `active` for the panel means "a step is targeted" (selection), not "the
+// stream is live". A seed step selected with no logs must still be treated as
+// selected so the panel shows "No logs available" rather than "No step
+// selected" (#297). The empty/closed/live distinction is derived inside the
+// panel from `streamStepStatus` + lines + SSE status.
+const streamActive = computed(() => activeStep.value !== null)
+const streamStepStatus = computed(() => activeStep.value?.status ?? null)
 const streamContainerLabel = computed(() => {
   const id = activeStep.value?.container_id
   if (!id) return null
@@ -418,6 +422,7 @@ watch(runId, () => {
               :lines="streamLines"
               :status="streamStatus"
               :active="streamActive"
+              :step-status="streamStepStatus"
             />
           </div>
         </div>
