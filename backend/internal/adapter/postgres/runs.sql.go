@@ -493,6 +493,45 @@ func (q *Queries) ListRunsByProjectWithStoryKey(ctx context.Context, arg ListRun
 	return items, nil
 }
 
+const listRunsByStatus = `-- name: ListRunsByStatus :many
+SELECT id, project_id, story_id, status, pipeline_config_snapshot, started_at, completed_at, error_message, created_at, updated_at, paused_at, metadata FROM runs
+WHERE status = $1
+ORDER BY created_at ASC
+`
+
+func (q *Queries) ListRunsByStatus(ctx context.Context, status string) ([]Run, error) {
+	rows, err := q.db.Query(ctx, listRunsByStatus, status)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Run{}
+	for rows.Next() {
+		var i Run
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProjectID,
+			&i.StoryID,
+			&i.Status,
+			&i.PipelineConfigSnapshot,
+			&i.StartedAt,
+			&i.CompletedAt,
+			&i.ErrorMessage,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.PausedAt,
+			&i.Metadata,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRunsByStory = `-- name: ListRunsByStory :many
 SELECT id, project_id, story_id, status, pipeline_config_snapshot, started_at, completed_at, error_message, created_at, updated_at, paused_at, metadata FROM runs
 WHERE story_id = $1
@@ -537,6 +576,33 @@ func (q *Queries) ListRunsByStory(ctx context.Context, arg ListRunsByStoryParams
 		return nil, err
 	}
 	return items, nil
+}
+
+const markRunOrphanedIfRunning = `-- name: MarkRunOrphanedIfRunning :execrows
+UPDATE runs
+SET status = 'failed',
+    completed_at = $2,
+    error_message = $3,
+    updated_at = now()
+WHERE id = $1 AND status = 'running'
+`
+
+type MarkRunOrphanedIfRunningParams struct {
+	ID           uuid.UUID          `json:"id"`
+	CompletedAt  pgtype.Timestamptz `json:"completed_at"`
+	ErrorMessage pgtype.Text        `json:"error_message"`
+}
+
+// Conditionally fail a run only while it is still running. The status='running'
+// guard makes orphan reconciliation TOCTOU-safe: a run that transitioned to a
+// terminal state between the reconciler's snapshot and this write is left intact
+// (0 rows affected).
+func (q *Queries) MarkRunOrphanedIfRunning(ctx context.Context, arg MarkRunOrphanedIfRunningParams) (int64, error) {
+	result, err := q.db.Exec(ctx, markRunOrphanedIfRunning, arg.ID, arg.CompletedAt, arg.ErrorMessage)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const updateRunMetadata = `-- name: UpdateRunMetadata :exec

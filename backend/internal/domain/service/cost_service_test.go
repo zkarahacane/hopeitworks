@@ -244,6 +244,12 @@ func (m *mockRunRepoForCost) ListRunsByProject(_ context.Context, _ uuid.UUID, _
 func (m *mockRunRepoForCost) ListRunsByStory(_ context.Context, _ uuid.UUID, _, _ int32) ([]*model.Run, error) {
 	return nil, nil
 }
+func (m *mockRunRepoForCost) ListRunsByStatus(_ context.Context, _ model.RunStatus) ([]*model.Run, error) {
+	return nil, nil
+}
+func (m *mockRunRepoForCost) MarkRunOrphanedIfRunning(_ context.Context, _ uuid.UUID, _ time.Time, _ string) (bool, error) {
+	return false, nil
+}
 func (m *mockRunRepoForCost) UpdateRunStatus(_ context.Context, _ uuid.UUID, _ model.RunStatus, _, _, _ *time.Time, _ *string) (*model.Run, error) {
 	return nil, nil
 }

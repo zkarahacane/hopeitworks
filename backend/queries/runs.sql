@@ -48,6 +48,23 @@ WHERE story_id = $1 AND status IN ('pending', 'running', 'paused')
 ORDER BY created_at DESC
 LIMIT 1;
 
+-- name: ListRunsByStatus :many
+SELECT * FROM runs
+WHERE status = $1
+ORDER BY created_at ASC;
+
+-- name: MarkRunOrphanedIfRunning :execrows
+-- Conditionally fail a run only while it is still running. The status='running'
+-- guard makes orphan reconciliation TOCTOU-safe: a run that transitioned to a
+-- terminal state between the reconciler's snapshot and this write is left intact
+-- (0 rows affected).
+UPDATE runs
+SET status = 'failed',
+    completed_at = $2,
+    error_message = $3,
+    updated_at = now()
+WHERE id = $1 AND status = 'running';
+
 -- name: UpdateRunMetadata :exec
 UPDATE runs SET metadata = $2, updated_at = now() WHERE id = $1;
 

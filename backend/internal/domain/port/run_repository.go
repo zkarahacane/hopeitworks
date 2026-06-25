@@ -27,6 +27,14 @@ type RunRepository interface {
 	GetDAGNodeRunInfoByStories(ctx context.Context, storyIDs []uuid.UUID) (map[uuid.UUID]model.DAGNodeRunInfo, error)
 	ListRunsByProject(ctx context.Context, projectID uuid.UUID, limit, offset int32) ([]*model.Run, error)
 	ListRunsByStory(ctx context.Context, storyID uuid.UUID, limit, offset int32) ([]*model.Run, error)
+	// ListRunsByStatus returns all runs in the given status, oldest first.
+	// Used by orphan reconciliation to enumerate running runs from the DB.
+	ListRunsByStatus(ctx context.Context, status model.RunStatus) ([]*model.Run, error)
+	// MarkRunOrphanedIfRunning fails a run (status=failed, completed_at, error_message)
+	// ONLY while it is still running. Returns true if a row was updated, false if the
+	// run had already transitioned to a terminal state (TOCTOU-safe; used by orphan
+	// reconciliation so a concurrently-completed run is never overwritten).
+	MarkRunOrphanedIfRunning(ctx context.Context, id uuid.UUID, completedAt time.Time, errorMsg string) (bool, error)
 	UpdateRunStatus(ctx context.Context, id uuid.UUID, status model.RunStatus, startedAt, completedAt, pausedAt *time.Time, errorMsg *string) (*model.Run, error)
 	// UpdateRunMetadata persists the run's metadata map to the DB.
 	// Used to survive HITL suspend/resume by flushing in-memory mutations after each step.

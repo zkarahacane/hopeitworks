@@ -115,6 +115,12 @@ func (m *runRepoForCallback) ListRunsByProject(_ context.Context, _ uuid.UUID, _
 func (m *runRepoForCallback) ListRunsByStory(_ context.Context, _ uuid.UUID, _, _ int32) ([]*model.Run, error) {
 	return nil, nil
 }
+func (m *runRepoForCallback) ListRunsByStatus(_ context.Context, _ model.RunStatus) ([]*model.Run, error) {
+	return nil, nil
+}
+func (m *runRepoForCallback) MarkRunOrphanedIfRunning(_ context.Context, _ uuid.UUID, _ time.Time, _ string) (bool, error) {
+	return false, nil
+}
 func (m *runRepoForCallback) UpdateRunStatus(_ context.Context, id uuid.UUID, status model.RunStatus, _, _, _ *time.Time, _ *string) (*model.Run, error) {
 	return &model.Run{ID: id, Status: status}, nil
 }

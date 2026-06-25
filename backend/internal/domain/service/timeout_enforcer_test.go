@@ -16,15 +16,16 @@ import (
 
 // mockContainerManager implements port.ContainerManager for testing.
 type mockContainerManager struct {
-	mu          sync.Mutex
-	listFn      func(ctx context.Context, labels map[string]string) ([]port.ContainerInfo, error)
-	stopCalls   []string
-	stopFn      func(ctx context.Context, containerID string) error
-	removeCalls []string
-	removeFn    func(ctx context.Context, containerID string) error
-	createFn    func(ctx context.Context, opts model.ContainerOpts) (string, error)
-	startFn     func(ctx context.Context, containerID string) error
-	waitFn      func(ctx context.Context, containerID string) (int, error)
+	mu            sync.Mutex
+	listFn        func(ctx context.Context, labels map[string]string) ([]port.ContainerInfo, error)
+	listRunningFn func(ctx context.Context, labels map[string]string) ([]port.ContainerInfo, error)
+	stopCalls     []string
+	stopFn        func(ctx context.Context, containerID string) error
+	removeCalls   []string
+	removeFn      func(ctx context.Context, containerID string) error
+	createFn      func(ctx context.Context, opts model.ContainerOpts) (string, error)
+	startFn       func(ctx context.Context, containerID string) error
+	waitFn        func(ctx context.Context, containerID string) (int, error)
 }
 
 func (m *mockContainerManager) ListContainers(ctx context.Context, labels map[string]string) ([]port.ContainerInfo, error) {
@@ -75,7 +76,10 @@ func (m *mockContainerManager) Wait(ctx context.Context, containerID string) (in
 	return 0, nil
 }
 
-func (m *mockContainerManager) ListRunningContainers(_ context.Context, _ map[string]string) ([]port.ContainerInfo, error) {
+func (m *mockContainerManager) ListRunningContainers(ctx context.Context, labels map[string]string) ([]port.ContainerInfo, error) {
+	if m.listRunningFn != nil {
+		return m.listRunningFn(ctx, labels)
+	}
 	return nil, nil
 }
 
@@ -181,7 +185,7 @@ func TestCheckTimeouts_ContainerExceedsTimeout(t *testing.T) {
 		Name: "test-project",
 	})
 
-	enforcer := NewTimeoutEnforcer(containerMgr, runRepo, projectRepo, discardLogger(), 30*time.Minute, 30*time.Second)
+	enforcer := NewTimeoutEnforcer(containerMgr, runRepo, projectRepo, discardLogger(), 30*time.Minute, 30*time.Second, nil)
 
 	err := enforcer.CheckTimeouts(context.Background())
 	if err != nil {
@@ -258,7 +262,7 @@ func TestCheckTimeouts_ContainerWithinTimeout(t *testing.T) {
 		Name: "test-project",
 	})
 
-	enforcer := NewTimeoutEnforcer(containerMgr, runRepo, projectRepo, discardLogger(), 30*time.Minute, 30*time.Second)
+	enforcer := NewTimeoutEnforcer(containerMgr, runRepo, projectRepo, discardLogger(), 30*time.Minute, 30*time.Second, nil)
 
 	err := enforcer.CheckTimeouts(context.Background())
 	if err != nil {
@@ -328,7 +332,7 @@ func TestCheckTimeouts_ProjectTimeoutOverridesDefault(t *testing.T) {
 		MaxContainerTimeout: &projectTimeout,
 	})
 
-	enforcer := NewTimeoutEnforcer(containerMgr, runRepo, projectRepo, discardLogger(), 30*time.Minute, 30*time.Second)
+	enforcer := NewTimeoutEnforcer(containerMgr, runRepo, projectRepo, discardLogger(), 30*time.Minute, 30*time.Second, nil)
 
 	err := enforcer.CheckTimeouts(context.Background())
 	if err != nil {
@@ -392,7 +396,7 @@ func TestCheckTimeouts_ProjectTimeoutNotExceeded(t *testing.T) {
 		MaxContainerTimeout: &projectTimeout,
 	})
 
-	enforcer := NewTimeoutEnforcer(containerMgr, runRepo, projectRepo, discardLogger(), 30*time.Minute, 30*time.Second)
+	enforcer := NewTimeoutEnforcer(containerMgr, runRepo, projectRepo, discardLogger(), 30*time.Minute, 30*time.Second, nil)
 
 	err := enforcer.CheckTimeouts(context.Background())
 	if err != nil {
@@ -464,7 +468,7 @@ func TestCheckTimeouts_MultipleContainers(t *testing.T) {
 		Name: "test-project",
 	})
 
-	enforcer := NewTimeoutEnforcer(containerMgr, runRepo, projectRepo, discardLogger(), 30*time.Minute, 30*time.Second)
+	enforcer := NewTimeoutEnforcer(containerMgr, runRepo, projectRepo, discardLogger(), 30*time.Minute, 30*time.Second, nil)
 
 	err := enforcer.CheckTimeouts(context.Background())
 	if err != nil {
@@ -521,7 +525,7 @@ func TestCheckTimeouts_StopFailureContinues(t *testing.T) {
 		Name: "test-project",
 	})
 
-	enforcer := NewTimeoutEnforcer(containerMgr, runRepo, projectRepo, discardLogger(), 30*time.Minute, 30*time.Second)
+	enforcer := NewTimeoutEnforcer(containerMgr, runRepo, projectRepo, discardLogger(), 30*time.Minute, 30*time.Second, nil)
 
 	// Should not panic or return error even though Stop fails
 	err := enforcer.CheckTimeouts(context.Background())
@@ -549,7 +553,7 @@ func TestCheckTimeouts_SkipsMissingLabels(t *testing.T) {
 	runRepo := &mockRunRepo{}
 	projectRepo := newMockProjectRepoForService()
 
-	enforcer := NewTimeoutEnforcer(containerMgr, runRepo, projectRepo, discardLogger(), 30*time.Minute, 30*time.Second)
+	enforcer := NewTimeoutEnforcer(containerMgr, runRepo, projectRepo, discardLogger(), 30*time.Minute, 30*time.Second, nil)
 
 	err := enforcer.CheckTimeouts(context.Background())
 	if err != nil {
@@ -603,7 +607,7 @@ func TestCheckTimeouts_NilStartedAt(t *testing.T) {
 		Name: "test-project",
 	})
 
-	enforcer := NewTimeoutEnforcer(containerMgr, runRepo, projectRepo, discardLogger(), 30*time.Minute, 30*time.Second)
+	enforcer := NewTimeoutEnforcer(containerMgr, runRepo, projectRepo, discardLogger(), 30*time.Minute, 30*time.Second, nil)
 
 	err := enforcer.CheckTimeouts(context.Background())
 	if err != nil {
@@ -625,7 +629,7 @@ func TestStart_StopsOnContextCancellation(t *testing.T) {
 	runRepo := &mockRunRepo{}
 	projectRepo := newMockProjectRepoForService()
 
-	enforcer := NewTimeoutEnforcer(containerMgr, runRepo, projectRepo, discardLogger(), 30*time.Minute, 50*time.Millisecond)
+	enforcer := NewTimeoutEnforcer(containerMgr, runRepo, projectRepo, discardLogger(), 30*time.Minute, 50*time.Millisecond, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 

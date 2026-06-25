@@ -203,6 +203,30 @@ func (r *RunRepo) ListRunsByStory(ctx context.Context, storyID uuid.UUID, limit,
 	return runs, nil
 }
 
+func (r *RunRepo) ListRunsByStatus(ctx context.Context, status model.RunStatus) ([]*model.Run, error) {
+	rows, err := r.queries.ListRunsByStatus(ctx, string(status))
+	if err != nil {
+		return nil, apperrors.NewInternal("failed to list runs by status", err)
+	}
+	runs := make([]*model.Run, len(rows))
+	for i, row := range rows {
+		runs[i] = toDomainRun(row)
+	}
+	return runs, nil
+}
+
+func (r *RunRepo) MarkRunOrphanedIfRunning(ctx context.Context, id uuid.UUID, completedAt time.Time, errorMsg string) (bool, error) {
+	affected, err := r.queries.MarkRunOrphanedIfRunning(ctx, MarkRunOrphanedIfRunningParams{
+		ID:           id,
+		CompletedAt:  pgtype.Timestamptz{Time: completedAt, Valid: true},
+		ErrorMessage: pgtype.Text{String: errorMsg, Valid: true},
+	})
+	if err != nil {
+		return false, apperrors.NewInternal("failed to mark run orphaned", err)
+	}
+	return affected > 0, nil
+}
+
 func (r *RunRepo) UpdateRunStatus(ctx context.Context, id uuid.UUID, status model.RunStatus, startedAt, completedAt, pausedAt *time.Time, errorMsg *string) (*model.Run, error) {
 	params := UpdateRunStatusParams{
 		ID:     id,

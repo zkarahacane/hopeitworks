@@ -20,6 +20,8 @@ type mockRunRepo struct {
 	getActiveRunByStoryFn    func(ctx context.Context, storyID uuid.UUID) (*model.Run, error)
 	listRunsByProjectFn      func(ctx context.Context, projectID uuid.UUID, limit, offset int32) ([]*model.Run, error)
 	listRunsByStoryFn        func(ctx context.Context, storyID uuid.UUID, limit, offset int32) ([]*model.Run, error)
+	listRunsByStatusFn       func(ctx context.Context, status model.RunStatus) ([]*model.Run, error)
+	markRunOrphanedFn        func(ctx context.Context, id uuid.UUID, completedAt time.Time, errorMsg string) (bool, error)
 	updateRunStatusFn        func(ctx context.Context, id uuid.UUID, status model.RunStatus, startedAt, completedAt, pausedAt *time.Time, errorMsg *string) (*model.Run, error)
 	countRunsByProjectFn     func(ctx context.Context, projectID uuid.UUID) (int64, error)
 	countRunsByStoryFn       func(ctx context.Context, storyID uuid.UUID) (int64, error)
@@ -61,6 +63,18 @@ func (m *mockRunRepo) ListRunsByStory(ctx context.Context, storyID uuid.UUID, li
 		return m.listRunsByStoryFn(ctx, storyID, limit, offset)
 	}
 	return nil, nil
+}
+func (m *mockRunRepo) ListRunsByStatus(ctx context.Context, status model.RunStatus) ([]*model.Run, error) {
+	if m.listRunsByStatusFn != nil {
+		return m.listRunsByStatusFn(ctx, status)
+	}
+	return nil, nil
+}
+func (m *mockRunRepo) MarkRunOrphanedIfRunning(ctx context.Context, id uuid.UUID, completedAt time.Time, errorMsg string) (bool, error) {
+	if m.markRunOrphanedFn != nil {
+		return m.markRunOrphanedFn(ctx, id, completedAt, errorMsg)
+	}
+	return true, nil
 }
 func (m *mockRunRepo) UpdateRunStatus(ctx context.Context, id uuid.UUID, status model.RunStatus, startedAt, completedAt, pausedAt *time.Time, errorMsg *string) (*model.Run, error) {
 	if m.updateRunStatusFn != nil {

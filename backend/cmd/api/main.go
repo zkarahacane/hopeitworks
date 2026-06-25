@@ -377,10 +377,21 @@ func run() error {
 			logger.Error("orphan cleanup failed on startup", "error", err)
 		}
 
+		// Reconcile DB run statuses against live containers: runs left `running`
+		// by a previous crash (container gone) are marked failed so they leave
+		// "Active runs". Runs once at boot, then on every watchdog tick below.
+		orphanReconciler := service.NewOrphanReconciler(
+			containerMgr, runRepo, logger, service.DefaultOrphanGraceWindow,
+		)
+		if err := orphanReconciler.ReconcileOrphanedRuns(appCtx); err != nil {
+			logger.Error("orphan run reconciliation failed on startup", "error", err)
+		}
+
 		timeoutEnforcer := service.NewTimeoutEnforcer(
 			containerMgr, runRepo, projectRepo, logger,
 			30*time.Minute, // default container timeout
 			30*time.Second, // check interval
+			orphanReconciler,
 		)
 		go func() {
 			if err := timeoutEnforcer.Start(appCtx); err != nil && err != context.Canceled {

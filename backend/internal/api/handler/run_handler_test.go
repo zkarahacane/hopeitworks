@@ -55,6 +55,12 @@ func (m *runHandlerRunRepo) ListRunsByProject(_ context.Context, _ uuid.UUID, _,
 func (m *runHandlerRunRepo) ListRunsByStory(_ context.Context, _ uuid.UUID, _, _ int32) ([]*model.Run, error) {
 	return nil, nil
 }
+func (m *runHandlerRunRepo) ListRunsByStatus(_ context.Context, _ model.RunStatus) ([]*model.Run, error) {
+	return nil, nil
+}
+func (m *runHandlerRunRepo) MarkRunOrphanedIfRunning(_ context.Context, _ uuid.UUID, _ time.Time, _ string) (bool, error) {
+	return false, nil
+}
 func (m *runHandlerRunRepo) UpdateRunStatus(ctx context.Context, id uuid.UUID, status model.RunStatus, startedAt, completedAt, pausedAt *time.Time, errMsg *string) (*model.Run, error) {
 	if m.updateRunStatusFn != nil {
 		return m.updateRunStatusFn(ctx, id, status, startedAt, completedAt, pausedAt, errMsg)
