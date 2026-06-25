@@ -60,9 +60,12 @@ Mécanique :
    le réseau Docker (substrat `docker`) ou containers-in-Pod (substrat `kubernetes`).
 3. La plateforme **injecte les conn-strings** au démarrage de l'agent (env vars / bundle
    fetch-at-startup, P1).
-4. L'agent tourne **non-privilégié, sans socket** ; il n'a accès qu'au **réseau qu'on lui
-   donne** : ses services déclarés + une **allowlist egress** (pour taper npm/pypi/crates).
-   Le reste est coupé (réseau Docker dédié + règles egress / NetworkPolicy).
+4. L'agent tourne **non-privilégié, sans socket**, sur son **réseau par-run** (services
+   déclarés joignables par DNS). Par **défaut l'egress est ouvert** — l'agent doit pouvoir
+   **faire de la recherche web** (docs, exemples, APIs de libs), capacité utile pour un agent
+   de confiance. **L'allowlist egress stricte est un mode durci, gated par le modèle de menace
+   (§6)** : posée seulement pour du code non-fiable / multi-tenant, et là la recherche web
+   passe par un **outil médié** par la plateforme, pas par de l'egress brut.
 
 **Un seul déclencheur : l'environnement est défini en amont et approuvé par le user.** L'env
 liste `postgres` → la plateforme le déploie *avant* le lancement → l'agent lit `DATABASE_URL`.
@@ -181,8 +184,18 @@ L'isolation n'est plus un choix de substrat mais une réponse au modèle de mena
   Aucun substrat durci nécessaire.
 - **Code non-fiable / multi-tenant** (images communautaires, code généré arbitraire,
   plusieurs tenants sur les mêmes nœuds) → ajouter **gVisor** (RuntimeClass) sur le
-  conteneur consommateur, *pour ces workloads-là uniquement*. **Jamais besoin de microVM** —
+  conteneur consommateur **+ allowlist egress stricte** (proxy-sidecar + réseau internal →
+  NetworkPolicy sur K8s), *pour ces workloads-là uniquement*. **Jamais besoin de microVM** —
   plus personne ne fait de nested containers dans l'agent.
+
+> **Egress : ouvert par défaut, durci à la demande.** Une allowlist stricte **tue la recherche
+> web** de l'agent — capacité voulue pour un agent de confiance. L'egress reste donc **ouvert**
+> tant que le code est de confiance ; il se restreint *uniquement* pour du non-fiable (où l'on
+> ne veut justement pas qu'un code arbitraire atteigne des domaines quelconques = exfiltration),
+> la recherche web passant alors par un **outil médié**. Design capturé (proxy-sidecar HTTP/CONNECT
+> allowlist par domaine ; K8s = même proxy + NetworkPolicy egress ; allowlist obligatoire = API
+> modèle + git + registries + callback, dont host Gitea/callback dynamiques) — à implémenter
+> **quand le modèle de menace le demandera, pas avant**.
 
 ## 7. Portefeuille de substrats résultant
 
@@ -250,7 +263,8 @@ est **structurellement déjà respectée**.
   compilation → traiter en **un seul lot**).
 - **MISSING** : adapter `kubernetes` (L, **différé** — voir périmètre) ; **reaping
   substrate-aware** (M, **point dur** : les 3 reapers sont Docker-only) ; **egress allowlist
-  par run** (M) ; champ config `RuntimeClass` (S) ; broker testcontainers (L, dernier).
+  par run** (M, **différée** — threat-model-gated §6 : casse la recherche web, inutile en
+  trusted) ; champ config `RuntimeClass` (S) ; broker testcontainers (L, dernier).
   *(provisioning dynamique `provision_dependency` — **écarté**, voir §3 : env = contrat figé.)*
 - **Pièges** : (a) `run_steps.container_id` est générique mais les reapers le comparent aux
   conteneurs **Docker** → un Pod K8s serait un faux-orphelin ; (b) `selectSubstrate` renvoie
@@ -259,10 +273,20 @@ est **structurellement déjà respectée**.
 ### 9.1 Périmètre court terme : **Docker-first**
 
 L'adapter `kubernetes` est **mis de côté pour l'instant**. Focus : durcir et compléter le
-chemin **Docker**. Séquence non-cassante : (1) **unifier le chemin Docker** (injecter un
-`docker.Runtime` non-nil au lieu de `nil`) ; (2) **egress allowlist par run** ; (3) **cleanup
-microsandbox** (un seul lot). L'adapter K8s + reaping agnostique + `RuntimeClass` viendront
-quand le chemin OpenShift sera priorisé.
+chemin **Docker**. Séquence : (1) ✅ **unifier le chemin Docker** (PR #322) ; (2) ✅
+**isolation East-West opt-in** (`DOCKER_ISOLATE_RUNS` : l'agent est retiré du réseau partagé
+`agent-network` et n'est plus que sur son réseau par-run ; l'API est attachée à chaque réseau
+par-run pour le callback ; les agents **ne se voient plus** entre runs/projets ; egress
+Internet **reste ouvert**. PR #323) ; (3) **cleanup microsandbox** (un seul lot). L'**egress
+allowlist (North-South) reste différée** (threat-model-gated, §6 — casse la recherche web,
+sans intérêt en trusted). L'adapter K8s + reaping agnostique + `RuntimeClass` viendront quand
+le chemin OpenShift sera priorisé.
+
+> **East-West ≠ North-South.** L'isolation East-West (agent↔agent, cross-projet) est posée
+> **maintenant** (cheap, défense-en-profondeur, blast-radius), opt-in. L'egress North-South
+> (allowlist Internet) reste **ouvert** par défaut (recherche web) et ne se ferme que pour du
+> code non-fiable — où, de toute façon, seule l'isolation **kernel/microVM** contient une
+> évasion host (une NetworkPolicy ne survit pas à une évasion kernel).
 
 ## 10. Liens
 
