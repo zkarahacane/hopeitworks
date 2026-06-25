@@ -8,10 +8,17 @@ import Button from 'primevue/button'
 import type { Agent, AgentScope } from '@/stores/agents'
 import AgentChip from '@/ui/primitives/AgentChip.vue'
 
-const props = defineProps<{
-  agents: Agent[]
-  isAdmin: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    agents: Agent[]
+    isAdmin: boolean
+    /** Returns true while the DELETE for an agent id is in flight (#295). */
+    isDeleting?: (agentId: string) => boolean
+  }>(),
+  {
+    isDeleting: () => false,
+  },
+)
 
 const emit = defineEmits<{
   rowClick: [agentId: string]
@@ -112,6 +119,8 @@ function handleRowClick(event: { data: Agent }) {
               severity="danger"
               title="Delete agent"
               data-testid="delete-agent-button"
+              :loading="props.isDeleting((data as Agent).id)"
+              :disabled="props.isDeleting((data as Agent).id)"
               @click.stop="emit('delete', (data as Agent).id)"
             />
           </div>
