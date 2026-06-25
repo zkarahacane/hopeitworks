@@ -1,3 +1,8 @@
+//go:build dockerlive
+
+// Live Docker integration test for East-West run isolation. Excluded from the
+// default build/CI (needs a real Docker daemon AND pre-pulled images, which fresh
+// CI runners lack). Run locally with: go test -tags dockerlive ./internal/adapter/docker/...
 package docker
 
 import (
