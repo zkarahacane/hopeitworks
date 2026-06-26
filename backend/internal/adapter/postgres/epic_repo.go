@@ -114,11 +114,93 @@ func toDomainEpic(e Epic) *model.Epic {
 		ProjectID: e.ProjectID,
 		Name:      e.Name,
 		Status:    e.Status,
+		Source:    e.Source,
+		SyncedAt:  timeFromTimestamptz(e.SyncedAt),
 		CreatedAt: e.CreatedAt,
 		UpdatedAt: e.UpdatedAt,
 	}
 	if e.Description.Valid {
 		epic.Description = &e.Description.String
 	}
+	if e.ExternalID.Valid {
+		epic.ExternalID = &e.ExternalID.String
+	}
+	if e.SourceUrl.Valid {
+		epic.SourceURL = &e.SourceUrl.String
+	}
 	return epic
+}
+
+// GetBySourceRef resolves an epic by (project, source, external_id).
+func (r *EpicRepo) GetBySourceRef(ctx context.Context, projectID uuid.UUID, source, externalID string) (*model.Epic, error) {
+	row, err := r.queries.GetEpicBySourceRef(ctx, GetEpicBySourceRefParams{
+		ProjectID:  projectID,
+		Source:     source,
+		ExternalID: pgtype.Text{String: externalID, Valid: true},
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, apperrors.NewNotFound("epic", externalID)
+		}
+		return nil, apperrors.NewInternal("failed to get epic by source ref", err)
+	}
+	return toDomainEpic(row), nil
+}
+
+// GetByName resolves an epic by (project, name) — backs source-guarded adoption.
+func (r *EpicRepo) GetByName(ctx context.Context, projectID uuid.UUID, name string) (*model.Epic, error) {
+	row, err := r.queries.GetEpicByName(ctx, GetEpicByNameParams{
+		ProjectID: projectID,
+		Name:      name,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, apperrors.NewNotFound("epic", name)
+		}
+		return nil, apperrors.NewInternal("failed to get epic by name", err)
+	}
+	return toDomainEpic(row), nil
+}
+
+// CreateFromImport inserts an epic with service-computed provenance + status.
+func (r *EpicRepo) CreateFromImport(ctx context.Context, epic *model.Epic) (*model.Epic, error) {
+	row, err := r.queries.CreateEpicFromImport(ctx, CreateEpicFromImportParams{
+		ProjectID:   epic.ProjectID,
+		Name:        epic.Name,
+		Description: textFromStringPtr(epic.Description),
+		Status:      epic.Status,
+		Source:      epic.Source,
+		ExternalID:  textFromStringPtr(epic.ExternalID),
+		SourceUrl:   textFromStringPtr(epic.SourceURL),
+	})
+	if err != nil {
+		if isUniqueViolation(err) {
+			return nil, apperrors.NewConflict("epic", epic.Name)
+		}
+		return nil, apperrors.NewInternal("failed to create epic from import", err)
+	}
+	return toDomainEpic(row), nil
+}
+
+// UpdateFromImport overwrites the import-managed columns with merged values.
+func (r *EpicRepo) UpdateFromImport(ctx context.Context, epic *model.Epic) (*model.Epic, error) {
+	row, err := r.queries.UpdateEpicFromImport(ctx, UpdateEpicFromImportParams{
+		ID:          epic.ID,
+		Name:        epic.Name,
+		Description: textFromStringPtr(epic.Description),
+		Status:      epic.Status,
+		Source:      epic.Source,
+		ExternalID:  textFromStringPtr(epic.ExternalID),
+		SourceUrl:   textFromStringPtr(epic.SourceURL),
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, apperrors.NewNotFound("epic", epic.ID)
+		}
+		if isUniqueViolation(err) {
+			return nil, apperrors.NewConflict("epic", epic.Name)
+		}
+		return nil, apperrors.NewInternal("failed to update epic from import", err)
+	}
+	return toDomainEpic(row), nil
 }

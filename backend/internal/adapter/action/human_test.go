@@ -160,6 +160,18 @@ func (m *humanMockStoryRepo) GetByID(ctx context.Context, id uuid.UUID) (*model.
 func (m *humanMockStoryRepo) GetByKey(_ context.Context, _ uuid.UUID, _ string) (*model.Story, error) {
 	return nil, nil
 }
+func (m *humanMockStoryRepo) GetBySourceRef(_ context.Context, _ uuid.UUID, _, _ string) (*model.Story, error) {
+	return nil, nil
+}
+func (m *humanMockStoryRepo) CreateFromImport(_ context.Context, s *model.Story) (*model.Story, error) {
+	return s, nil
+}
+func (m *humanMockStoryRepo) UpdateFromImport(_ context.Context, s *model.Story) (*model.Story, error) {
+	return s, nil
+}
+func (m *humanMockStoryRepo) UpdateProvenanceOnly(_ context.Context, s *model.Story) (*model.Story, error) {
+	return s, nil
+}
 func (m *humanMockStoryRepo) ListByProject(_ context.Context, _ uuid.UUID, _, _ int32) ([]*model.Story, error) {
 	return nil, nil
 }

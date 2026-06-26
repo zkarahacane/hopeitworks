@@ -26,7 +26,7 @@ func (q *Queries) CountEpicsByProject(ctx context.Context, projectID uuid.UUID) 
 const createEpic = `-- name: CreateEpic :one
 INSERT INTO epics (project_id, name, description, status)
 VALUES ($1, $2, $3, $4)
-RETURNING id, project_id, name, description, status, created_at, updated_at
+RETURNING id, project_id, name, description, status, created_at, updated_at, source, external_id, source_url, synced_at
 `
 
 type CreateEpicParams struct {
@@ -52,6 +52,53 @@ func (q *Queries) CreateEpic(ctx context.Context, arg CreateEpicParams) (Epic, e
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Source,
+		&i.ExternalID,
+		&i.SourceUrl,
+		&i.SyncedAt,
+	)
+	return i, err
+}
+
+const createEpicFromImport = `-- name: CreateEpicFromImport :one
+INSERT INTO epics (project_id, name, description, status, source, external_id, source_url, synced_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, now())
+RETURNING id, project_id, name, description, status, created_at, updated_at, source, external_id, source_url, synced_at
+`
+
+type CreateEpicFromImportParams struct {
+	ProjectID   uuid.UUID   `json:"project_id"`
+	Name        string      `json:"name"`
+	Description pgtype.Text `json:"description"`
+	Status      string      `json:"status"`
+	Source      string      `json:"source"`
+	ExternalID  pgtype.Text `json:"external_id"`
+	SourceUrl   pgtype.Text `json:"source_url"`
+}
+
+func (q *Queries) CreateEpicFromImport(ctx context.Context, arg CreateEpicFromImportParams) (Epic, error) {
+	row := q.db.QueryRow(ctx, createEpicFromImport,
+		arg.ProjectID,
+		arg.Name,
+		arg.Description,
+		arg.Status,
+		arg.Source,
+		arg.ExternalID,
+		arg.SourceUrl,
+	)
+	var i Epic
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.Name,
+		&i.Description,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Source,
+		&i.ExternalID,
+		&i.SourceUrl,
+		&i.SyncedAt,
 	)
 	return i, err
 }
@@ -66,7 +113,7 @@ func (q *Queries) DeleteEpic(ctx context.Context, id uuid.UUID) error {
 }
 
 const getEpic = `-- name: GetEpic :one
-SELECT id, project_id, name, description, status, created_at, updated_at FROM epics WHERE id = $1
+SELECT id, project_id, name, description, status, created_at, updated_at, source, external_id, source_url, synced_at FROM epics WHERE id = $1
 `
 
 func (q *Queries) GetEpic(ctx context.Context, id uuid.UUID) (Epic, error) {
@@ -80,12 +127,80 @@ func (q *Queries) GetEpic(ctx context.Context, id uuid.UUID) (Epic, error) {
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Source,
+		&i.ExternalID,
+		&i.SourceUrl,
+		&i.SyncedAt,
+	)
+	return i, err
+}
+
+const getEpicByName = `-- name: GetEpicByName :one
+SELECT id, project_id, name, description, status, created_at, updated_at, source, external_id, source_url, synced_at FROM epics
+WHERE project_id = $1 AND name = $2
+LIMIT 1
+`
+
+type GetEpicByNameParams struct {
+	ProjectID uuid.UUID `json:"project_id"`
+	Name      string    `json:"name"`
+}
+
+// Name lookup backing source-guarded adoption: a markdown/github epic attaches to
+// an existing same-name epic instead of tripping epics_uq_project_name.
+func (q *Queries) GetEpicByName(ctx context.Context, arg GetEpicByNameParams) (Epic, error) {
+	row := q.db.QueryRow(ctx, getEpicByName, arg.ProjectID, arg.Name)
+	var i Epic
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.Name,
+		&i.Description,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Source,
+		&i.ExternalID,
+		&i.SourceUrl,
+		&i.SyncedAt,
+	)
+	return i, err
+}
+
+const getEpicBySourceRef = `-- name: GetEpicBySourceRef :one
+SELECT id, project_id, name, description, status, created_at, updated_at, source, external_id, source_url, synced_at FROM epics
+WHERE project_id = $1 AND source = $2 AND external_id = $3
+LIMIT 1
+`
+
+type GetEpicBySourceRefParams struct {
+	ProjectID  uuid.UUID   `json:"project_id"`
+	Source     string      `json:"source"`
+	ExternalID pgtype.Text `json:"external_id"`
+}
+
+// Resolves an epic by its stable provenance identity (project, source, external_id).
+func (q *Queries) GetEpicBySourceRef(ctx context.Context, arg GetEpicBySourceRefParams) (Epic, error) {
+	row := q.db.QueryRow(ctx, getEpicBySourceRef, arg.ProjectID, arg.Source, arg.ExternalID)
+	var i Epic
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.Name,
+		&i.Description,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Source,
+		&i.ExternalID,
+		&i.SourceUrl,
+		&i.SyncedAt,
 	)
 	return i, err
 }
 
 const listEpicsByProject = `-- name: ListEpicsByProject :many
-SELECT id, project_id, name, description, status, created_at, updated_at FROM epics
+SELECT id, project_id, name, description, status, created_at, updated_at, source, external_id, source_url, synced_at FROM epics
 WHERE project_id = $1
 ORDER BY created_at DESC
 LIMIT $2 OFFSET $3
@@ -114,6 +229,10 @@ func (q *Queries) ListEpicsByProject(ctx context.Context, arg ListEpicsByProject
 			&i.Status,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Source,
+			&i.ExternalID,
+			&i.SourceUrl,
+			&i.SyncedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -132,7 +251,7 @@ SET name = COALESCE($1, name),
     status = COALESCE($3, status),
     updated_at = now()
 WHERE id = $4
-RETURNING id, project_id, name, description, status, created_at, updated_at
+RETURNING id, project_id, name, description, status, created_at, updated_at, source, external_id, source_url, synced_at
 `
 
 type UpdateEpicParams struct {
@@ -158,6 +277,63 @@ func (q *Queries) UpdateEpic(ctx context.Context, arg UpdateEpicParams) (Epic, e
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Source,
+		&i.ExternalID,
+		&i.SourceUrl,
+		&i.SyncedAt,
+	)
+	return i, err
+}
+
+const updateEpicFromImport = `-- name: UpdateEpicFromImport :one
+UPDATE epics SET
+    name        = $1,
+    description = $2,
+    status      = $3,
+    source      = $4,
+    external_id = $5,
+    source_url  = $6,
+    synced_at   = now(),
+    updated_at  = now()
+WHERE id = $7
+RETURNING id, project_id, name, description, status, created_at, updated_at, source, external_id, source_url, synced_at
+`
+
+type UpdateEpicFromImportParams struct {
+	Name        string      `json:"name"`
+	Description pgtype.Text `json:"description"`
+	Status      string      `json:"status"`
+	Source      string      `json:"source"`
+	ExternalID  pgtype.Text `json:"external_id"`
+	SourceUrl   pgtype.Text `json:"source_url"`
+	ID          uuid.UUID   `json:"id"`
+}
+
+// The SERVICE has merged every value (preserve-on-absent description, promote-only
+// status, source-guarded provenance).
+func (q *Queries) UpdateEpicFromImport(ctx context.Context, arg UpdateEpicFromImportParams) (Epic, error) {
+	row := q.db.QueryRow(ctx, updateEpicFromImport,
+		arg.Name,
+		arg.Description,
+		arg.Status,
+		arg.Source,
+		arg.ExternalID,
+		arg.SourceUrl,
+		arg.ID,
+	)
+	var i Epic
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.Name,
+		&i.Description,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Source,
+		&i.ExternalID,
+		&i.SourceUrl,
+		&i.SyncedAt,
 	)
 	return i, err
 }

@@ -62,3 +62,61 @@ RETURNING *;
 
 -- name: DeleteStory :exec
 DELETE FROM stories WHERE id = $1;
+
+-- name: GetStoryBySourceRef :one
+-- Resolves a remote-sourced story by its stable provenance identity. Used by the
+-- planning importer for non-author-owned keys (e.g. github_projects); markdown
+-- resolution stays on GetStoryByKey.
+SELECT * FROM stories
+WHERE project_id = @project_id AND source = @source AND external_id = @external_id
+LIMIT 1;
+
+-- name: CreateStoryFromImport :one
+-- Import-create: the SERVICE has computed every value (status projection, epic
+-- resolution, provenance). target_files is deliberately ABSENT (never written by
+-- import — DB default applies); current_stage is executor-owned.
+INSERT INTO stories (
+    project_id, epic_id, key, title, objective, acceptance_criteria,
+    scope, depends_on, status, source, external_id, source_url,
+    synced_at, last_import_hash
+) VALUES (
+    @project_id, @epic_id, @key, @title, @objective, @acceptance_criteria,
+    @scope, @depends_on, @status, @source, @external_id, @source_url,
+    now(), @last_import_hash
+)
+RETURNING *;
+
+-- name: UpdateStoryFromImport :one
+-- Import-update for an UNLOCKED row: the SERVICE has already merged every value
+-- (preserve-on-absent for spec fields, set-once epic_id, promote-only status).
+-- current_stage / target_files are deliberately ABSENT (executor-owned).
+UPDATE stories SET
+    title               = @title,
+    objective           = @objective,
+    acceptance_criteria = @acceptance_criteria,
+    scope               = @scope,
+    depends_on          = @depends_on,
+    status              = @status,
+    epic_id             = @epic_id,
+    source              = @source,
+    external_id         = @external_id,
+    source_url          = @source_url,
+    synced_at           = now(),
+    last_import_hash    = @last_import_hash,
+    updated_at          = now()
+WHERE id = @id
+RETURNING *;
+
+-- name: UpdateStoryProvenanceOnly :one
+-- Locked rows (running/failed/in-stage): cosmetic title + provenance refresh only.
+-- Crucially does NOT touch last_import_hash, so the deferred spec change is
+-- re-applied on the FIRST re-import after the run terminates.
+UPDATE stories SET
+    title       = @title,
+    source      = @source,
+    external_id = @external_id,
+    source_url  = @source_url,
+    synced_at   = now(),
+    updated_at  = now()
+WHERE id = @id
+RETURNING *;

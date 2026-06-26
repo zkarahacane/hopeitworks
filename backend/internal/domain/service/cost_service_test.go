@@ -203,6 +203,18 @@ func (m *mockStoryRepoForCost) GetByID(_ context.Context, id uuid.UUID) (*model.
 func (m *mockStoryRepoForCost) GetByKey(_ context.Context, _ uuid.UUID, _ string) (*model.Story, error) {
 	return m.story, m.err
 }
+func (m *mockStoryRepoForCost) GetBySourceRef(_ context.Context, _ uuid.UUID, _, _ string) (*model.Story, error) {
+	return nil, nil
+}
+func (m *mockStoryRepoForCost) CreateFromImport(_ context.Context, s *model.Story) (*model.Story, error) {
+	return s, nil
+}
+func (m *mockStoryRepoForCost) UpdateFromImport(_ context.Context, s *model.Story) (*model.Story, error) {
+	return s, nil
+}
+func (m *mockStoryRepoForCost) UpdateProvenanceOnly(_ context.Context, s *model.Story) (*model.Story, error) {
+	return s, nil
+}
 func (m *mockStoryRepoForCost) ListByProject(_ context.Context, _ uuid.UUID, _, _ int32) ([]*model.Story, error) {
 	return nil, nil
 }

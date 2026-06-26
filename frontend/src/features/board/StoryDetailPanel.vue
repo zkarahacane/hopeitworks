@@ -8,6 +8,7 @@ import RunLaunchButton from '@/features/runs/RunLaunchButton.vue'
 import StoryEditorForm from './StoryEditorForm.vue'
 import { useStoryEditor } from '@/composables/useStoryEditor'
 import StatusBadge from '@/ui/primitives/StatusBadge.vue'
+import SourceBadge from '@/ui/primitives/SourceBadge.vue'
 
 const props = defineProps<{
   story: Story | null
@@ -80,6 +81,7 @@ async function handleSave() {
             :value="story.scope"
             :severity="scopeSeverityMap[story.scope] ?? 'secondary'"
           />
+          <SourceBadge :source="story.source" :source-url="story.source_url" />
         </div>
         <div class="flex items-center gap-2">
           <Button
@@ -116,6 +118,29 @@ async function handleSave() {
       <!-- Read mode -->
       <template v-else>
         <h2 class="m-0" style="font-size: 1.25rem; font-weight: 600">{{ story.title }}</h2>
+
+        <!-- Source deep-link (imported stories) -->
+        <div v-if="story.source_url" class="flex items-center gap-2">
+          <i
+            class="pi pi-external-link"
+            style="font-size: 0.8rem; color: var(--p-text-muted-color)"
+            aria-hidden="true"
+          />
+          <a
+            :href="story.source_url"
+            target="_blank"
+            rel="noopener"
+            data-testid="story-source-link"
+            style="
+              font-size: 0.82rem;
+              color: var(--p-primary-color);
+              text-decoration: underline;
+              word-break: break-all;
+            "
+          >
+            {{ story.source_url }}
+          </a>
+        </div>
 
         <div v-if="story.objective" class="flex flex-col gap-1">
           <h3

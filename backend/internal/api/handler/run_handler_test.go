@@ -127,6 +127,18 @@ func (m *runHandlerStoryRepo) GetByID(ctx context.Context, id uuid.UUID) (*model
 func (m *runHandlerStoryRepo) GetByKey(_ context.Context, _ uuid.UUID, _ string) (*model.Story, error) {
 	return nil, nil
 }
+func (m *runHandlerStoryRepo) GetBySourceRef(_ context.Context, _ uuid.UUID, _, _ string) (*model.Story, error) {
+	return nil, nil
+}
+func (m *runHandlerStoryRepo) CreateFromImport(_ context.Context, s *model.Story) (*model.Story, error) {
+	return s, nil
+}
+func (m *runHandlerStoryRepo) UpdateFromImport(_ context.Context, s *model.Story) (*model.Story, error) {
+	return s, nil
+}
+func (m *runHandlerStoryRepo) UpdateProvenanceOnly(_ context.Context, s *model.Story) (*model.Story, error) {
+	return s, nil
+}
 func (m *runHandlerStoryRepo) ListByProject(_ context.Context, _ uuid.UUID, _, _ int32) ([]*model.Story, error) {
 	return nil, nil
 }

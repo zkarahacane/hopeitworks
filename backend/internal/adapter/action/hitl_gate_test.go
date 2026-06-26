@@ -246,6 +246,18 @@ func (m *hitlMockStoryRepo) GetByID(ctx context.Context, id uuid.UUID) (*model.S
 func (m *hitlMockStoryRepo) GetByKey(_ context.Context, _ uuid.UUID, _ string) (*model.Story, error) {
 	return nil, nil
 }
+func (m *hitlMockStoryRepo) GetBySourceRef(_ context.Context, _ uuid.UUID, _, _ string) (*model.Story, error) {
+	return nil, nil
+}
+func (m *hitlMockStoryRepo) CreateFromImport(_ context.Context, s *model.Story) (*model.Story, error) {
+	return s, nil
+}
+func (m *hitlMockStoryRepo) UpdateFromImport(_ context.Context, s *model.Story) (*model.Story, error) {
+	return s, nil
+}
+func (m *hitlMockStoryRepo) UpdateProvenanceOnly(_ context.Context, s *model.Story) (*model.Story, error) {
+	return s, nil
+}
 func (m *hitlMockStoryRepo) ListByProject(_ context.Context, _ uuid.UUID, _, _ int32) ([]*model.Story, error) {
 	return nil, nil
 }

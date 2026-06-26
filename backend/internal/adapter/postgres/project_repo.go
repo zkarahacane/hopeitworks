@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math"
 	"math/big"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -192,6 +193,16 @@ func uuidFromPtr(u *uuid.UUID) pgtype.UUID {
 		return pgtype.UUID{Valid: false}
 	}
 	return pgtype.UUID{Bytes: *u, Valid: true}
+}
+
+// timeFromTimestamptz converts a nullable Postgres timestamptz to *time.Time,
+// returning nil for SQL NULL. Used to read planning provenance synced_at.
+func timeFromTimestamptz(t pgtype.Timestamptz) *time.Time {
+	if !t.Valid {
+		return nil
+	}
+	v := t.Time
+	return &v
 }
 
 func numericFromFloat64Ptr(f *float64) pgtype.Numeric {

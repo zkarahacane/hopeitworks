@@ -47,6 +47,14 @@ type Story struct {
 	// the executor at stage boundaries. Nil means no stage (backlog before the first
 	// run, or after run completion).
 	CurrentStage *string
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	// Planning provenance (see port.SourceKind). Source is the origin discriminator
+	// ("manual" | "markdown" | "github_projects"); the pointer fields are nil for
+	// in-app/seed rows. These are import-managed; the run engine never writes them.
+	Source         string     // port.SourceManual / SourceMarkdown / SourceGitHub
+	ExternalID     *string    // remote node id (github_projects) or key (markdown); nil for manual
+	SourceURL      *string    // deep-link to the source item; nil for manual/markdown
+	SyncedAt       *time.Time // last successful import touch
+	LastImportHash *string    // sha256 of the last normalized import payload (no-op gate)
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 }

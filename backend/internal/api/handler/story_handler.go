@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/zakari/hopeitworks/backend/internal/adapter/markdown"
 	"github.com/zakari/hopeitworks/backend/internal/domain/model"
 	"github.com/zakari/hopeitworks/backend/internal/domain/port"
 	"github.com/zakari/hopeitworks/backend/internal/domain/service"
@@ -15,15 +14,17 @@ import (
 
 // StoryHandler implements story-related HTTP handlers.
 type StoryHandler struct {
-	service *service.StoryService
-	runRepo port.RunRepository
+	service        *service.StoryService
+	runRepo        port.RunRepository
+	planningImport *service.PlanningImportService
 }
 
 // NewStoryHandler creates a new StoryHandler. runRepo is used to populate each
 // story's latest_run for the live board; it may be nil in tests that don't
-// exercise that field.
-func NewStoryHandler(svc *service.StoryService, runRepo port.RunRepository) *StoryHandler {
-	return &StoryHandler{service: svc, runRepo: runRepo}
+// exercise that field. planningImport backs the (deprecated) /stories/import
+// shim, routed through the central markdown connector.
+func NewStoryHandler(svc *service.StoryService, runRepo port.RunRepository, planningImport *service.PlanningImportService) *StoryHandler {
+	return &StoryHandler{service: svc, runRepo: runRepo, planningImport: planningImport}
 }
 
 // ListStories handles GET /projects/{projectId}/stories.
@@ -194,8 +195,12 @@ func (h *StoryHandler) DeleteStory(w http.ResponseWriter, r *http.Request, _ Pro
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// ImportStories handles POST /projects/{projectId}/stories/import.
-// Only admin users can import stories.
+// ImportStories handles POST /projects/{projectId}/stories/import (admin only).
+//
+// Deprecated: use POST /projects/{projectId}/planning/import with source=markdown.
+// The legacy request/response contract is preserved byte-for-byte; the path is a
+// thin shim that routes through the central markdown planning connector, so it now
+// inherits the explicit-status projection and idempotent (hash no-op) behaviour.
 func (h *StoryHandler) ImportStories(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath) {
 	if !requireAdmin(w, r) {
 		return
@@ -211,29 +216,17 @@ func (h *StoryHandler) ImportStories(w http.ResponseWriter, r *http.Request, pro
 		return
 	}
 
-	parsed := markdown.ParseStoryMarkdown(req.Content)
-	inputs := make([]service.ImportStoryInput, len(parsed))
-	for i, p := range parsed {
-		inputs[i] = service.ImportStoryInput{
-			Key:                p.Key,
-			Title:              p.Title,
-			Epic:               p.Epic,
-			DependsOn:          p.DependsOn,
-			Scope:              p.Scope,
-			Status:             p.Status,
-			AcceptanceCriteria: p.AcceptanceCriteria,
-			ParseError:         p.ParseError,
-		}
-	}
-
-	result, err := h.service.Import(r.Context(), projectID, inputs)
+	summary, err := h.planningImport.Import(r.Context(), projectID, port.ImportConfig{
+		Source:   port.SourceMarkdown,
+		Markdown: &port.MarkdownConfig{Content: req.Content},
+	})
 	if err != nil {
 		writeErrorResponse(w, err)
 		return
 	}
 
-	apiErrors := make([]ImportStoryError, len(result.Errors))
-	for i, e := range result.Errors {
+	apiErrors := make([]ImportStoryError, len(summary.Errors))
+	for i, e := range summary.Errors {
 		apiErrors[i] = ImportStoryError{
 			Key:     e.Key,
 			Message: e.Message,
@@ -242,9 +235,9 @@ func (h *StoryHandler) ImportStories(w http.ResponseWriter, r *http.Request, pro
 	}
 
 	resp := ImportStoriesResult{
-		Imported: result.Imported,
-		Updated:  result.Updated,
-		Failed:   result.Failed,
+		Imported: summary.StoriesCreated,
+		Updated:  summary.StoriesUpdated,
+		Failed:   summary.Failed,
 		Errors:   apiErrors,
 	}
 
@@ -285,6 +278,14 @@ func toAPIStory(s *model.Story, latest *model.LatestRun) Story {
 	if s.DependsOn != nil {
 		story.DependsOn = &s.DependsOn
 	}
+	// Planning provenance (read-only) — replaces the old git_provider heuristic.
+	if s.Source != "" {
+		src := StorySource(s.Source)
+		story.Source = &src
+	}
+	story.ExternalId = s.ExternalID
+	story.SourceUrl = s.SourceURL
+	story.SyncedAt = s.SyncedAt
 	story.LatestRun = toAPILatestRun(latest)
 	return story
 }

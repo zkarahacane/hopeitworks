@@ -83,6 +83,33 @@ func (m *mockEpicRepo) Delete(_ context.Context, id uuid.UUID) error {
 	return nil
 }
 
+func (m *mockEpicRepo) GetBySourceRef(_ context.Context, projectID uuid.UUID, source, externalID string) (*model.Epic, error) {
+	for _, e := range m.epics {
+		if e.ProjectID == projectID && e.Source == source && e.ExternalID != nil && *e.ExternalID == externalID {
+			return e, nil
+		}
+	}
+	return nil, errors.NewNotFound("epic", externalID)
+}
+
+func (m *mockEpicRepo) GetByName(_ context.Context, projectID uuid.UUID, name string) (*model.Epic, error) {
+	for _, e := range m.epics {
+		if e.ProjectID == projectID && e.Name == name {
+			return e, nil
+		}
+	}
+	return nil, errors.NewNotFound("epic", name)
+}
+
+func (m *mockEpicRepo) CreateFromImport(ctx context.Context, e *model.Epic) (*model.Epic, error) {
+	return m.Create(ctx, e)
+}
+
+func (m *mockEpicRepo) UpdateFromImport(_ context.Context, e *model.Epic) (*model.Epic, error) {
+	m.epics[e.ID] = e
+	return e, nil
+}
+
 // errorStoryRepo is a mock that always returns an error on ListByEpic.
 type errorStoryRepo struct {
 	mockStoryRepo

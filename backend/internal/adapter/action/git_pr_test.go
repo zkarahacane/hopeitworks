@@ -86,6 +86,18 @@ func (m *prMockStoryRepo) Create(_ context.Context, _ *model.Story) (*model.Stor
 func (m *prMockStoryRepo) GetByKey(_ context.Context, _ uuid.UUID, _ string) (*model.Story, error) {
 	return nil, nil
 }
+func (m *prMockStoryRepo) GetBySourceRef(_ context.Context, _ uuid.UUID, _, _ string) (*model.Story, error) {
+	return nil, nil
+}
+func (m *prMockStoryRepo) CreateFromImport(_ context.Context, s *model.Story) (*model.Story, error) {
+	return s, nil
+}
+func (m *prMockStoryRepo) UpdateFromImport(_ context.Context, s *model.Story) (*model.Story, error) {
+	return s, nil
+}
+func (m *prMockStoryRepo) UpdateProvenanceOnly(_ context.Context, s *model.Story) (*model.Story, error) {
+	return s, nil
+}
 func (m *prMockStoryRepo) ListByProject(_ context.Context, _ uuid.UUID, _, _ int32) ([]*model.Story, error) {
 	return nil, nil
 }

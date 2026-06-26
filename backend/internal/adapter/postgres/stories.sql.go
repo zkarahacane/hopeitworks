@@ -74,7 +74,7 @@ func (q *Queries) CountStoriesByStatus(ctx context.Context, arg CountStoriesBySt
 const createStory = `-- name: CreateStory :one
 INSERT INTO stories (project_id, epic_id, key, title, objective, target_files, depends_on, scope, status, acceptance_criteria)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-RETURNING id, project_id, epic_id, key, title, objective, target_files, depends_on, scope, status, acceptance_criteria, created_at, updated_at, current_stage
+RETURNING id, project_id, epic_id, key, title, objective, target_files, depends_on, scope, status, acceptance_criteria, created_at, updated_at, current_stage, source, external_id, source_url, synced_at, last_import_hash
 `
 
 type CreateStoryParams struct {
@@ -119,6 +119,84 @@ func (q *Queries) CreateStory(ctx context.Context, arg CreateStoryParams) (Story
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CurrentStage,
+		&i.Source,
+		&i.ExternalID,
+		&i.SourceUrl,
+		&i.SyncedAt,
+		&i.LastImportHash,
+	)
+	return i, err
+}
+
+const createStoryFromImport = `-- name: CreateStoryFromImport :one
+INSERT INTO stories (
+    project_id, epic_id, key, title, objective, acceptance_criteria,
+    scope, depends_on, status, source, external_id, source_url,
+    synced_at, last_import_hash
+) VALUES (
+    $1, $2, $3, $4, $5, $6,
+    $7, $8, $9, $10, $11, $12,
+    now(), $13
+)
+RETURNING id, project_id, epic_id, key, title, objective, target_files, depends_on, scope, status, acceptance_criteria, created_at, updated_at, current_stage, source, external_id, source_url, synced_at, last_import_hash
+`
+
+type CreateStoryFromImportParams struct {
+	ProjectID          uuid.UUID   `json:"project_id"`
+	EpicID             pgtype.UUID `json:"epic_id"`
+	Key                string      `json:"key"`
+	Title              string      `json:"title"`
+	Objective          pgtype.Text `json:"objective"`
+	AcceptanceCriteria pgtype.Text `json:"acceptance_criteria"`
+	Scope              pgtype.Text `json:"scope"`
+	DependsOn          []byte      `json:"depends_on"`
+	Status             string      `json:"status"`
+	Source             string      `json:"source"`
+	ExternalID         pgtype.Text `json:"external_id"`
+	SourceUrl          pgtype.Text `json:"source_url"`
+	LastImportHash     pgtype.Text `json:"last_import_hash"`
+}
+
+// Import-create: the SERVICE has computed every value (status projection, epic
+// resolution, provenance). target_files is deliberately ABSENT (never written by
+// import — DB default applies); current_stage is executor-owned.
+func (q *Queries) CreateStoryFromImport(ctx context.Context, arg CreateStoryFromImportParams) (Story, error) {
+	row := q.db.QueryRow(ctx, createStoryFromImport,
+		arg.ProjectID,
+		arg.EpicID,
+		arg.Key,
+		arg.Title,
+		arg.Objective,
+		arg.AcceptanceCriteria,
+		arg.Scope,
+		arg.DependsOn,
+		arg.Status,
+		arg.Source,
+		arg.ExternalID,
+		arg.SourceUrl,
+		arg.LastImportHash,
+	)
+	var i Story
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.EpicID,
+		&i.Key,
+		&i.Title,
+		&i.Objective,
+		&i.TargetFiles,
+		&i.DependsOn,
+		&i.Scope,
+		&i.Status,
+		&i.AcceptanceCriteria,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.CurrentStage,
+		&i.Source,
+		&i.ExternalID,
+		&i.SourceUrl,
+		&i.SyncedAt,
+		&i.LastImportHash,
 	)
 	return i, err
 }
@@ -133,7 +211,7 @@ func (q *Queries) DeleteStory(ctx context.Context, id uuid.UUID) error {
 }
 
 const getStory = `-- name: GetStory :one
-SELECT id, project_id, epic_id, key, title, objective, target_files, depends_on, scope, status, acceptance_criteria, created_at, updated_at, current_stage FROM stories WHERE id = $1
+SELECT id, project_id, epic_id, key, title, objective, target_files, depends_on, scope, status, acceptance_criteria, created_at, updated_at, current_stage, source, external_id, source_url, synced_at, last_import_hash FROM stories WHERE id = $1
 `
 
 func (q *Queries) GetStory(ctx context.Context, id uuid.UUID) (Story, error) {
@@ -154,12 +232,17 @@ func (q *Queries) GetStory(ctx context.Context, id uuid.UUID) (Story, error) {
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CurrentStage,
+		&i.Source,
+		&i.ExternalID,
+		&i.SourceUrl,
+		&i.SyncedAt,
+		&i.LastImportHash,
 	)
 	return i, err
 }
 
 const getStoryByKey = `-- name: GetStoryByKey :one
-SELECT id, project_id, epic_id, key, title, objective, target_files, depends_on, scope, status, acceptance_criteria, created_at, updated_at, current_stage FROM stories WHERE project_id = $1 AND key = $2
+SELECT id, project_id, epic_id, key, title, objective, target_files, depends_on, scope, status, acceptance_criteria, created_at, updated_at, current_stage, source, external_id, source_url, synced_at, last_import_hash FROM stories WHERE project_id = $1 AND key = $2
 `
 
 type GetStoryByKeyParams struct {
@@ -185,12 +268,59 @@ func (q *Queries) GetStoryByKey(ctx context.Context, arg GetStoryByKeyParams) (S
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CurrentStage,
+		&i.Source,
+		&i.ExternalID,
+		&i.SourceUrl,
+		&i.SyncedAt,
+		&i.LastImportHash,
+	)
+	return i, err
+}
+
+const getStoryBySourceRef = `-- name: GetStoryBySourceRef :one
+SELECT id, project_id, epic_id, key, title, objective, target_files, depends_on, scope, status, acceptance_criteria, created_at, updated_at, current_stage, source, external_id, source_url, synced_at, last_import_hash FROM stories
+WHERE project_id = $1 AND source = $2 AND external_id = $3
+LIMIT 1
+`
+
+type GetStoryBySourceRefParams struct {
+	ProjectID  uuid.UUID   `json:"project_id"`
+	Source     string      `json:"source"`
+	ExternalID pgtype.Text `json:"external_id"`
+}
+
+// Resolves a remote-sourced story by its stable provenance identity. Used by the
+// planning importer for non-author-owned keys (e.g. github_projects); markdown
+// resolution stays on GetStoryByKey.
+func (q *Queries) GetStoryBySourceRef(ctx context.Context, arg GetStoryBySourceRefParams) (Story, error) {
+	row := q.db.QueryRow(ctx, getStoryBySourceRef, arg.ProjectID, arg.Source, arg.ExternalID)
+	var i Story
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.EpicID,
+		&i.Key,
+		&i.Title,
+		&i.Objective,
+		&i.TargetFiles,
+		&i.DependsOn,
+		&i.Scope,
+		&i.Status,
+		&i.AcceptanceCriteria,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.CurrentStage,
+		&i.Source,
+		&i.ExternalID,
+		&i.SourceUrl,
+		&i.SyncedAt,
+		&i.LastImportHash,
 	)
 	return i, err
 }
 
 const listStoriesByEpic = `-- name: ListStoriesByEpic :many
-SELECT id, project_id, epic_id, key, title, objective, target_files, depends_on, scope, status, acceptance_criteria, created_at, updated_at, current_stage FROM stories
+SELECT id, project_id, epic_id, key, title, objective, target_files, depends_on, scope, status, acceptance_criteria, created_at, updated_at, current_stage, source, external_id, source_url, synced_at, last_import_hash FROM stories
 WHERE epic_id = $1
 ORDER BY created_at DESC
 LIMIT $2 OFFSET $3
@@ -226,6 +356,11 @@ func (q *Queries) ListStoriesByEpic(ctx context.Context, arg ListStoriesByEpicPa
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.CurrentStage,
+			&i.Source,
+			&i.ExternalID,
+			&i.SourceUrl,
+			&i.SyncedAt,
+			&i.LastImportHash,
 		); err != nil {
 			return nil, err
 		}
@@ -238,7 +373,7 @@ func (q *Queries) ListStoriesByEpic(ctx context.Context, arg ListStoriesByEpicPa
 }
 
 const listStoriesByProject = `-- name: ListStoriesByProject :many
-SELECT id, project_id, epic_id, key, title, objective, target_files, depends_on, scope, status, acceptance_criteria, created_at, updated_at, current_stage FROM stories
+SELECT id, project_id, epic_id, key, title, objective, target_files, depends_on, scope, status, acceptance_criteria, created_at, updated_at, current_stage, source, external_id, source_url, synced_at, last_import_hash FROM stories
 WHERE project_id = $1
 ORDER BY created_at DESC
 LIMIT $2 OFFSET $3
@@ -274,6 +409,11 @@ func (q *Queries) ListStoriesByProject(ctx context.Context, arg ListStoriesByPro
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.CurrentStage,
+			&i.Source,
+			&i.ExternalID,
+			&i.SourceUrl,
+			&i.SyncedAt,
+			&i.LastImportHash,
 		); err != nil {
 			return nil, err
 		}
@@ -286,7 +426,7 @@ func (q *Queries) ListStoriesByProject(ctx context.Context, arg ListStoriesByPro
 }
 
 const listStoriesByStatus = `-- name: ListStoriesByStatus :many
-SELECT id, project_id, epic_id, key, title, objective, target_files, depends_on, scope, status, acceptance_criteria, created_at, updated_at, current_stage FROM stories
+SELECT id, project_id, epic_id, key, title, objective, target_files, depends_on, scope, status, acceptance_criteria, created_at, updated_at, current_stage, source, external_id, source_url, synced_at, last_import_hash FROM stories
 WHERE project_id = $1 AND status = ANY($2::text[])
 ORDER BY created_at DESC
 LIMIT $3 OFFSET $4
@@ -328,6 +468,11 @@ func (q *Queries) ListStoriesByStatus(ctx context.Context, arg ListStoriesByStat
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.CurrentStage,
+			&i.Source,
+			&i.ExternalID,
+			&i.SourceUrl,
+			&i.SyncedAt,
+			&i.LastImportHash,
 		); err != nil {
 			return nil, err
 		}
@@ -351,7 +496,7 @@ SET title = COALESCE($1, title),
     epic_id = COALESCE($8, epic_id),
     updated_at = now()
 WHERE id = $9
-RETURNING id, project_id, epic_id, key, title, objective, target_files, depends_on, scope, status, acceptance_criteria, created_at, updated_at, current_stage
+RETURNING id, project_id, epic_id, key, title, objective, target_files, depends_on, scope, status, acceptance_criteria, created_at, updated_at, current_stage, source, external_id, source_url, synced_at, last_import_hash
 `
 
 type UpdateStoryParams struct {
@@ -394,6 +539,11 @@ func (q *Queries) UpdateStory(ctx context.Context, arg UpdateStoryParams) (Story
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CurrentStage,
+		&i.Source,
+		&i.ExternalID,
+		&i.SourceUrl,
+		&i.SyncedAt,
+		&i.LastImportHash,
 	)
 	return i, err
 }
@@ -403,7 +553,7 @@ UPDATE stories
 SET current_stage = $1,
     updated_at = now()
 WHERE id = $2
-RETURNING id, project_id, epic_id, key, title, objective, target_files, depends_on, scope, status, acceptance_criteria, created_at, updated_at, current_stage
+RETURNING id, project_id, epic_id, key, title, objective, target_files, depends_on, scope, status, acceptance_criteria, created_at, updated_at, current_stage, source, external_id, source_url, synced_at, last_import_hash
 `
 
 type UpdateStoryCurrentStageParams struct {
@@ -429,6 +579,144 @@ func (q *Queries) UpdateStoryCurrentStage(ctx context.Context, arg UpdateStoryCu
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CurrentStage,
+		&i.Source,
+		&i.ExternalID,
+		&i.SourceUrl,
+		&i.SyncedAt,
+		&i.LastImportHash,
+	)
+	return i, err
+}
+
+const updateStoryFromImport = `-- name: UpdateStoryFromImport :one
+UPDATE stories SET
+    title               = $1,
+    objective           = $2,
+    acceptance_criteria = $3,
+    scope               = $4,
+    depends_on          = $5,
+    status              = $6,
+    epic_id             = $7,
+    source              = $8,
+    external_id         = $9,
+    source_url          = $10,
+    synced_at           = now(),
+    last_import_hash    = $11,
+    updated_at          = now()
+WHERE id = $12
+RETURNING id, project_id, epic_id, key, title, objective, target_files, depends_on, scope, status, acceptance_criteria, created_at, updated_at, current_stage, source, external_id, source_url, synced_at, last_import_hash
+`
+
+type UpdateStoryFromImportParams struct {
+	Title              string      `json:"title"`
+	Objective          pgtype.Text `json:"objective"`
+	AcceptanceCriteria pgtype.Text `json:"acceptance_criteria"`
+	Scope              pgtype.Text `json:"scope"`
+	DependsOn          []byte      `json:"depends_on"`
+	Status             string      `json:"status"`
+	EpicID             pgtype.UUID `json:"epic_id"`
+	Source             string      `json:"source"`
+	ExternalID         pgtype.Text `json:"external_id"`
+	SourceUrl          pgtype.Text `json:"source_url"`
+	LastImportHash     pgtype.Text `json:"last_import_hash"`
+	ID                 uuid.UUID   `json:"id"`
+}
+
+// Import-update for an UNLOCKED row: the SERVICE has already merged every value
+// (preserve-on-absent for spec fields, set-once epic_id, promote-only status).
+// current_stage / target_files are deliberately ABSENT (executor-owned).
+func (q *Queries) UpdateStoryFromImport(ctx context.Context, arg UpdateStoryFromImportParams) (Story, error) {
+	row := q.db.QueryRow(ctx, updateStoryFromImport,
+		arg.Title,
+		arg.Objective,
+		arg.AcceptanceCriteria,
+		arg.Scope,
+		arg.DependsOn,
+		arg.Status,
+		arg.EpicID,
+		arg.Source,
+		arg.ExternalID,
+		arg.SourceUrl,
+		arg.LastImportHash,
+		arg.ID,
+	)
+	var i Story
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.EpicID,
+		&i.Key,
+		&i.Title,
+		&i.Objective,
+		&i.TargetFiles,
+		&i.DependsOn,
+		&i.Scope,
+		&i.Status,
+		&i.AcceptanceCriteria,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.CurrentStage,
+		&i.Source,
+		&i.ExternalID,
+		&i.SourceUrl,
+		&i.SyncedAt,
+		&i.LastImportHash,
+	)
+	return i, err
+}
+
+const updateStoryProvenanceOnly = `-- name: UpdateStoryProvenanceOnly :one
+UPDATE stories SET
+    title       = $1,
+    source      = $2,
+    external_id = $3,
+    source_url  = $4,
+    synced_at   = now(),
+    updated_at  = now()
+WHERE id = $5
+RETURNING id, project_id, epic_id, key, title, objective, target_files, depends_on, scope, status, acceptance_criteria, created_at, updated_at, current_stage, source, external_id, source_url, synced_at, last_import_hash
+`
+
+type UpdateStoryProvenanceOnlyParams struct {
+	Title      string      `json:"title"`
+	Source     string      `json:"source"`
+	ExternalID pgtype.Text `json:"external_id"`
+	SourceUrl  pgtype.Text `json:"source_url"`
+	ID         uuid.UUID   `json:"id"`
+}
+
+// Locked rows (running/failed/in-stage): cosmetic title + provenance refresh only.
+// Crucially does NOT touch last_import_hash, so the deferred spec change is
+// re-applied on the FIRST re-import after the run terminates.
+func (q *Queries) UpdateStoryProvenanceOnly(ctx context.Context, arg UpdateStoryProvenanceOnlyParams) (Story, error) {
+	row := q.db.QueryRow(ctx, updateStoryProvenanceOnly,
+		arg.Title,
+		arg.Source,
+		arg.ExternalID,
+		arg.SourceUrl,
+		arg.ID,
+	)
+	var i Story
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.EpicID,
+		&i.Key,
+		&i.Title,
+		&i.Objective,
+		&i.TargetFiles,
+		&i.DependsOn,
+		&i.Scope,
+		&i.Status,
+		&i.AcceptanceCriteria,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.CurrentStage,
+		&i.Source,
+		&i.ExternalID,
+		&i.SourceUrl,
+		&i.SyncedAt,
+		&i.LastImportHash,
 	)
 	return i, err
 }

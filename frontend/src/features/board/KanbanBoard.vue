@@ -17,6 +17,7 @@ import {
 import { statusTokenSeverity } from '@/utils/statusToken'
 import { useRuntimeStream } from '@/stores/runtimeStream'
 import StatusBadge from '@/ui/primitives/StatusBadge.vue'
+import SourceBadge from '@/ui/primitives/SourceBadge.vue'
 import ContainerChip from '@/ui/primitives/ContainerChip.vue'
 import CostTicker from '@/ui/primitives/CostTicker.vue'
 
@@ -344,6 +345,11 @@ function columnSeverity(severityKey: string) {
               </span>
             </div>
             <span class="card-title">{{ story.title }}</span>
+
+            <!-- ── Provenance badge (imported stories) ───────────────────────── -->
+            <div v-if="story.source && story.source !== 'manual'" class="flex">
+              <SourceBadge :source="story.source" :source-url="story.source_url" />
+            </div>
 
             <!-- ── BACKLOG: dependency hint ────────────────────────────────── -->
             <div

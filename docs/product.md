@@ -63,10 +63,88 @@ Project → Epic → Story → Run → Step
   - **Détail** : une colonne par stage du pipeline (dans l'ordre), encadrée par les voies Backlog et Done/Failed
   - Une carte se place dans son `current_stage`, avancé en temps réel par le runtime
 - Sélecteur d'epic et filtrage des stories
-- Import de stories depuis des fichiers markdown
+- Import de stories et d'epics via les connecteurs de planning (voir ci-dessous)
 - Éditeur de stories (création et édition dans l'UI)
 - Epics avec calcul de DAG et visualisation des dépendances
 - Lancement d'un epic entier avec exécution parallèle
+
+### Planning connectors
+
+**Principe** : la plateforme est une couche d'exécution agnostique au planning. Les connecteurs permettent d'importer un plan externe (epics + stories) dans la base interne, sans écriture retour ni synchronisation continue.
+
+#### Sources disponibles en v1
+
+Deux sources **input-only** :
+
+1. **Markdown générique** — fichier `.md` avec frontmatter YAML par bloc (`key`, `epic`, `status`, `scope`, `depends_on`) + titre H1. Ce n'est PAS le format BMAD riche : il s'agit du format frontmatter minimal existant (`parser.go`).
+2. **GitHub Projects v2** — board lu via GraphQL avec un PAT (classic avec `read:project`, ou fine-grained pour les projets d'organisation). L'URL du projet est saisie dans le dialog ; le token vient de la variable d'env configurée sur le projet (jamais saisi dans l'UI).
+
+#### Modèle de données : provenance par item
+
+Chaque story et epic porte quatre champs de provenance :
+
+| Champ | Rôle |
+|---|---|
+| `source` | `manual` \| `markdown` \| `github_projects` |
+| `external_id` | markdown : la `key` ; github : le node_id opaque de l'issue (jamais le numéro) |
+| `source_url` | markdown : vide ; github : URL de l'issue/PR |
+| `synced_at` | horodatage du dernier import ayant touché la ligne |
+
+Le badge de provenance (`SourceBadge`) remplace l'ancienne heuristique `git_provider` de `BoardView`. Il affiche : **In-app** (manual), **Markdown** (markdown), **GitHub Projects** (github_projects). Quand `source_url` est renseignée, le badge est un lien vers l'item d'origine.
+
+#### Import one-way (pas de write-back)
+
+- L'import est **unidirectionnel** : la plateforme lit la source, normalise, upsert. Aucune écriture retour vers GitHub Projects ou le fichier markdown.
+- Le board est une **projection générée** du plan importé, pas un miroir live.
+
+#### Re-import réconciliatoire (jamais destructif)
+
+- Re-importer réconcilie (crée / met à jour) — ne supprime jamais un item. Un item supprimé en amont est conservé (il est peut-être en cours d'exécution).
+- **Idempotence vraie** : si le contenu n'a pas changé (hash SHA-256 identique), la ligne n'est pas touchée (`updated_at` inchangé). Le résultat affiche `N unchanged`.
+
+#### Mapping de statut
+
+L'importeur ne pose que deux statuts de planning : `backlog` ou `done`. Les statuts d'exécution (`running`, `failed`, `current_stage`) sont gérés par le runtime et jamais produits par l'import.
+
+| Source | Règle de mapping vers `done` | Tout le reste |
+|---|---|---|
+| **Markdown** | Littéral `done` uniquement (case-insensitive, trimmed) | `backlog` — y compris `in_progress`, `running`, `wip`, `closed`, vide… |
+| **GitHub Projects** | Option de statut dans `done_options` (case-insensitive) — **défaut `[]`** = tout est `backlog` sauf config explicite | `backlog` — y compris `CLOSED`+`NOT_PLANNED`, "In Progress", "Blocked", OPEN… |
+
+`done` sur une story existante n'est appliqué que si `status == 'backlog' && current_stage == null` (jamais pendant ou après une exécution). `running`/`failed` ne sont jamais produits par aucune source externe.
+
+#### Nouveaux comportements
+
+- **Le champ `epic` du frontmatter Markdown crée désormais des epics** : `epic: Auth` crée ou adopte un epic nommé "Auth" (l'ancien importeur ignorait ce champ).
+- **Clobber de statut supprimé** : l'ancienne logique qui écrasait le statut à l'import (lignes 137-138/154-155 de `story_import.go`) est retirée. Le statut n'est plus écrasé.
+- **Enrichissement in-app préservé** : `objective`, `target_files`, `acceptance_criteria` renseignés via l'UI ne sont jamais mis à null par un re-import dont la source ne porte pas ces champs.
+- **`epic_id` est set-once** : une story rattachée à un epic n'est jamais déplacée vers un autre epic par un re-import.
+
+#### Résolution des identités
+
+| Source | Résolution à la mise à jour |
+|---|---|
+| Markdown | Par `(project_id, key)` — une ligne `manual` backfillée se soigne elle-même en `markdown` au premier re-import |
+| GitHub Projects | Par `(project_id, source, external_id)` — le node_id opaque est stable même si le numéro d'issue change |
+
+#### UI
+
+- **Dialog sélecteur de source** (admin only) : bouton "Import planning" / "Re-import" dans le header du board ou en CTA de l'état vide.
+- **Sélecteur de source** (`SelectButton`) : Markdown | GitHub Projects.
+- **Onglet Markdown** : drop-zone + prévisualisation locale (parsing client-side avant tout appel API).
+- **Onglet GitHub Projects** : champs `project_url` (requis), `status_field` (défaut "Status"), `done_options` (défaut vide), `epic_issue_type` (défaut "Epic").
+- **Preview dry-run** : bouton "Preview" — POST `dry_run: true` — affiche un tableau par item (clé, type, action [create/update/skip/lock/fail], statut mappé, lien source, raison).
+- **Import** : bouton "Import" — POST `dry_run: false` — le board se rafraîchit automatiquement.
+- **Badge de provenance** : chaque carte du board affiche le badge source ; `source_url` est un lien externe vers l'item d'origine.
+- **Re-import admin-gated** : `POST /planning/import` requiert le rôle admin. Sur `403`, message inline.
+
+#### Limites v1 connues
+
+- **Edition amont mid-run gelée** : si une story est en cours d'exécution, le re-import ne met pas à jour son titre/spec (gelé). La modification est réappliquée automatiquement au **premier re-import après la fin du run**. Pas de badge "drift" ni de file d'attente de changements pendants.
+- **`DependsOn` GitHub et ancestry multi-niveau différés** : seul le parent direct (`parent.id`) est importé en v1 ; le parcours jusqu'à l'epic ancêtre le plus proche et les dépendances natives GitHub sont différés.
+- **Pas de sync sauvegardée/planifiée** : la config GitHub (URL, done_options…) n'est pas persistée ; chaque re-import ressaisit l'URL. Un endpoint `GET /projects/{id}/planning` et un scheduler de sync sont différés.
+- **`/stories/import` déprécié** : l'ancien endpoint est maintenu pour compatibilité (redirige vers le nouveau service) mais déprécié — utiliser `POST /projects/{id}/planning/import` avec `source: markdown`.
+- **Concurrence** : deux imports simultanés du même projet sont last-writer-wins sur les champs cosmétiques. Le verrou row-level (`running`/`failed`/`current_stage`) protège les stories en cours d'exécution.
 
 ### Exécution de pipeline
 - Lancement d'une story : substrat isolé → agent code → branche → PR

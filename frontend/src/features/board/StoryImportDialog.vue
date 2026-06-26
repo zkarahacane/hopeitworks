@@ -1,12 +1,15 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { computed, ref } from 'vue'
 import Dialog from 'primevue/dialog'
 import Button from 'primevue/button'
 import Tag from 'primevue/tag'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Message from 'primevue/message'
-import { useStoryImport } from '@/composables/useStoryImport'
+import SelectButton from 'primevue/selectbutton'
+import InputText from 'primevue/inputtext'
+import AutoComplete from 'primevue/autocomplete'
+import { usePlanningImport, type PlanningSource } from '@/composables/usePlanningImport'
 
 const props = defineProps<{
   visible: boolean
@@ -19,17 +22,30 @@ const emit = defineEmits<{
 }>()
 
 const {
+  source,
+  canSubmit,
   fileContent,
   fileName,
   parsedPreview,
-  importResult,
   fileError,
-  apiError,
-  isImporting,
   selectFile,
-  importStories,
+  projectUrl,
+  statusField,
+  doneOptions,
+  epicIssueType,
+  result,
+  committed,
+  apiError,
+  isLoading,
+  preview,
+  commit,
   reset,
-} = useStoryImport()
+} = usePlanningImport()
+
+const sourceOptions: { label: string; value: PlanningSource }[] = [
+  { label: 'Markdown', value: 'markdown' },
+  { label: 'GitHub Projects', value: 'github_projects' },
+]
 
 const isDragging = ref(false)
 const fileInputRef = ref<HTMLInputElement | null>(null)
@@ -38,6 +54,28 @@ const validStories = computed(() => parsedPreview.value.filter((s) => s.valid))
 const invalidStories = computed(() => parsedPreview.value.filter((s) => !s.valid))
 const validCount = computed(() => validStories.value.length)
 const invalidCount = computed(() => invalidStories.value.length)
+
+/** PrimeVue Tag severity for each per-node import action. */
+const actionSeverity: Record<string, 'success' | 'info' | 'warn' | 'secondary' | 'danger'> = {
+  create: 'success',
+  update: 'info',
+  lock: 'warn',
+  skip: 'secondary',
+  fail: 'danger',
+}
+
+/** A compact tally summarising the result counts (created / updated / unchanged / locked / failed). */
+const tally = computed(() => {
+  const r = result.value
+  if (!r) return null
+  return {
+    created: r.epics_created + r.stories_created,
+    updated: r.epics_updated + r.stories_updated,
+    skipped: r.skipped,
+    locked: r.locked,
+    failed: r.failed,
+  }
+})
 
 function triggerFileInput() {
   fileInputRef.value?.click()
@@ -60,8 +98,16 @@ function handleFileInput(event: Event) {
   target.value = ''
 }
 
+async function handlePreview() {
+  await preview(props.projectId)
+}
+
 async function handleImport() {
-  await importStories(props.projectId)
+  const r = await commit(props.projectId)
+  if (r) {
+    // Tell the host to refresh the board immediately; the result panel stays open.
+    emit('imported')
+  }
 }
 
 function handleImportAnother() {
@@ -69,9 +115,6 @@ function handleImportAnother() {
 }
 
 function handleClose() {
-  if (importResult.value) {
-    emit('imported')
-  }
   reset()
   emit('update:visible', false)
 }
@@ -81,13 +124,27 @@ function handleClose() {
   <Dialog
     :visible="visible"
     modal
-    header="Import Stories"
-    class="w-full max-w-2xl"
+    header="Import planning"
+    class="w-full max-w-3xl"
     @update:visible="handleClose"
   >
     <div class="flex flex-col gap-4">
-      <!-- Step 1: Upload zone -->
-      <div v-if="!fileContent && !importResult">
+      <!-- ── Source picker ───────────────────────────────────────────────────── -->
+      <div class="flex flex-col gap-1">
+        <span style="font-size: 0.78rem; color: var(--p-text-muted-color)">Source</span>
+        <SelectButton
+          v-model="source"
+          :options="sourceOptions"
+          option-label="label"
+          option-value="value"
+          :allow-empty="false"
+          aria-label="Import source"
+          data-testid="source-picker"
+        />
+      </div>
+
+      <!-- ── Markdown source ─────────────────────────────────────────────────── -->
+      <div v-if="source === 'markdown'" class="flex flex-col gap-3" data-testid="markdown-panel">
         <div
           class="flex flex-col items-center justify-center gap-3 p-8 border-2 border-dashed rounded-lg cursor-pointer"
           :style="{
@@ -115,100 +172,184 @@ function handleClose() {
           data-testid="file-input"
           @change="handleFileInput"
         />
-        <small v-if="fileError" :style="{ color: 'var(--status-failed-color)' }" data-testid="file-error">{{
-          fileError
-        }}</small>
+        <small
+          v-if="fileError"
+          :style="{ color: 'var(--status-failed-color)' }"
+          data-testid="file-error"
+        >{{ fileError }}</small>
+
+        <!-- Local (client-side) parse preview -->
+        <div v-if="fileContent" class="flex flex-col gap-2">
+          <div class="flex items-center gap-2">
+            <Tag :value="`${validCount} stories detected`" severity="info" />
+            <Tag v-if="invalidCount > 0" :value="`${invalidCount} invalid`" severity="warn" />
+          </div>
+          <DataTable
+            v-if="validStories.length > 0"
+            :value="validStories"
+            size="small"
+            data-testid="preview-table"
+          >
+            <Column field="key" header="Key" />
+            <Column field="title" header="Title" />
+            <Column field="scope" header="Scope" />
+          </DataTable>
+          <div v-if="invalidStories.length > 0" data-testid="invalid-stories">
+            <h4 class="text-sm font-semibold mb-2" style="color: var(--p-text-muted-color)">
+              Invalid stories
+            </h4>
+            <ul class="list-disc pl-5 text-sm">
+              <li
+                v-for="(story, idx) in invalidStories"
+                :key="idx"
+                :style="{ color: 'var(--status-failed-color)' }"
+              >
+                {{ story.key }}: {{ story.error }}
+              </li>
+            </ul>
+          </div>
+        </div>
       </div>
 
-      <!-- Step 2: Preview -->
-      <div v-if="fileContent && !importResult">
-        <div class="flex items-center gap-2 mb-4">
-          <Tag :value="`${validCount} stories detected`" severity="info" />
-          <Tag
-            v-if="invalidCount > 0"
-            :value="`${invalidCount} invalid`"
-            severity="warn"
+      <!-- ── GitHub Projects source ──────────────────────────────────────────── -->
+      <div v-else class="flex flex-col gap-3" data-testid="github-panel">
+        <div class="flex flex-col gap-1">
+          <label for="gh-project-url" style="font-size: 0.78rem; color: var(--p-text-muted-color)">
+            Project URL
+          </label>
+          <InputText
+            id="gh-project-url"
+            v-model="projectUrl"
+            placeholder="https://github.com/orgs/<org>/projects/<n>"
+            class="w-full"
+            data-testid="github-project-url"
           />
+        </div>
+        <div class="flex flex-wrap gap-3">
+          <div class="flex flex-col gap-1">
+            <label for="gh-status-field" style="font-size: 0.78rem; color: var(--p-text-muted-color)">
+              Status field
+            </label>
+            <InputText
+              id="gh-status-field"
+              v-model="statusField"
+              placeholder="Status"
+              data-testid="github-status-field"
+            />
+          </div>
+          <div class="flex flex-col gap-1">
+            <label for="gh-epic-type" style="font-size: 0.78rem; color: var(--p-text-muted-color)">
+              Epic issue type
+            </label>
+            <InputText
+              id="gh-epic-type"
+              v-model="epicIssueType"
+              placeholder="Epic"
+              data-testid="github-epic-issue-type"
+            />
+          </div>
+        </div>
+        <div class="flex flex-col gap-1">
+          <label for="gh-done-options" style="font-size: 0.78rem; color: var(--p-text-muted-color)">
+            Done options
+          </label>
+          <AutoComplete
+            v-model="doneOptions"
+            input-id="gh-done-options"
+            multiple
+            :typeahead="false"
+            placeholder="Type a status option (e.g. Done) and press Enter"
+            class="w-full"
+            data-testid="github-done-options"
+          />
+          <small style="color: var(--p-text-muted-color)">
+            Status option names that mean "done". Leave empty to map everything to backlog.
+          </small>
+        </div>
+      </div>
+
+      <!-- ── Import decisions (dry-run preview or committed result) ─────────────── -->
+      <div v-if="result" class="flex flex-col gap-2" data-testid="import-result">
+        <div class="flex items-center gap-2 flex-wrap" data-testid="preview-tally">
+          <span style="font-weight: 600; font-size: 0.85rem">
+            {{ committed ? 'Imported' : 'Preview' }}
+          </span>
+          <Tag v-if="tally" :value="`${tally.created} created`" severity="success" />
+          <Tag v-if="tally" :value="`${tally.updated} updated`" severity="info" />
+          <Tag v-if="tally && tally.skipped > 0" :value="`${tally.skipped} unchanged`" severity="secondary" />
+          <Tag v-if="tally && tally.locked > 0" :value="`${tally.locked} locked`" severity="warn" />
+          <Tag v-if="tally && tally.failed > 0" :value="`${tally.failed} failed`" severity="danger" />
         </div>
 
         <DataTable
-          v-if="validStories.length > 0"
-          :value="validStories"
+          :value="result.items"
           size="small"
-          data-testid="preview-table"
+          data-testid="preview-result-table"
         >
           <Column field="key" header="Key" />
-          <Column field="title" header="Title" />
-          <Column field="scope" header="Scope" />
+          <Column field="kind" header="Kind" />
+          <Column header="Action">
+            <template #body="{ data }">
+              <Tag :value="data.action" :severity="actionSeverity[data.action] ?? 'secondary'" />
+            </template>
+          </Column>
+          <Column field="mapped_status" header="Status" />
+          <Column header="Source">
+            <template #body="{ data }">
+              <a
+                v-if="data.source_url"
+                :href="data.source_url"
+                target="_blank"
+                rel="noopener"
+                data-testid="item-source-link"
+              >
+                <i class="pi pi-external-link" style="font-size: 0.75rem" aria-hidden="true" /> open
+              </a>
+              <span v-else style="color: var(--p-text-muted-color)">—</span>
+            </template>
+          </Column>
+          <Column field="reason" header="Reason" />
         </DataTable>
-
-        <div v-if="invalidStories.length > 0" class="mt-4" data-testid="invalid-stories">
-          <h4 class="text-sm font-semibold mb-2" style="color: var(--p-text-muted-color)">
-            Invalid stories
-          </h4>
-          <ul class="list-disc pl-5 text-sm">
-            <li v-for="(story, idx) in invalidStories" :key="idx" :style="{ color: 'var(--status-failed-color)' }">
-              {{ story.key }}: {{ story.error }}
-            </li>
-          </ul>
-        </div>
-
-        <Message v-if="apiError" severity="error" :closable="false" class="mt-4" data-testid="api-error">
-          {{ apiError }}
-        </Message>
       </div>
 
-      <!-- Step 3: Result -->
-      <div v-if="importResult" data-testid="import-result">
-        <div class="flex items-center gap-2 mb-4">
-          <Tag :value="`${importResult.imported} created`" severity="success" />
-          <Tag :value="`${importResult.updated} updated`" severity="info" />
-          <Tag
-            v-if="importResult.failed > 0"
-            :value="`${importResult.failed} failed`"
-            severity="danger"
-          />
-        </div>
-
-        <div v-if="importResult.errors.length > 0" class="mt-2" data-testid="import-errors">
-          <h4 class="text-sm font-semibold mb-2" style="color: var(--p-text-muted-color)">
-            Errors
-          </h4>
-          <ul class="list-disc pl-5 text-sm">
-            <li v-for="(err, idx) in importResult.errors" :key="idx" :style="{ color: 'var(--status-failed-color)' }">
-              {{ err.key }}: {{ err.message }}
-            </li>
-          </ul>
-        </div>
-      </div>
+      <Message v-if="apiError" severity="error" :closable="false" data-testid="api-error">
+        {{ apiError }}
+      </Message>
     </div>
 
     <template #footer>
-      <!-- Step 1 footer: no buttons needed (upload zone is interactive) -->
-
-      <!-- Step 2 footer: Cancel + Import -->
-      <div v-if="fileContent && !importResult" class="flex justify-end gap-2">
-        <Button label="Cancel" severity="secondary" text @click="handleClose" />
+      <!-- Committed: only Close + Import another -->
+      <div v-if="committed" class="flex justify-end gap-2">
         <Button
-          label="Import"
-          icon="pi pi-upload"
-          :loading="isImporting"
-          :disabled="validCount === 0"
-          data-testid="import-button"
-          @click="handleImport"
-        />
-      </div>
-
-      <!-- Step 3 footer: Import Another + Close -->
-      <div v-if="importResult" class="flex justify-end gap-2">
-        <Button
-          label="Import Another File"
+          label="Import another"
           severity="secondary"
           text
           data-testid="import-another-button"
           @click="handleImportAnother"
         />
         <Button label="Close" data-testid="close-button" @click="handleClose" />
+      </div>
+
+      <!-- Configuring / previewing -->
+      <div v-else class="flex justify-end gap-2">
+        <Button label="Cancel" severity="secondary" text data-testid="cancel-button" @click="handleClose" />
+        <Button
+          label="Preview"
+          icon="pi pi-eye"
+          severity="secondary"
+          :loading="isLoading"
+          :disabled="!canSubmit"
+          data-testid="preview-button"
+          @click="handlePreview"
+        />
+        <Button
+          label="Import"
+          icon="pi pi-upload"
+          :loading="isLoading"
+          :disabled="!canSubmit"
+          data-testid="import-button"
+          @click="handleImport"
+        />
       </div>
     </template>
   </Dialog>

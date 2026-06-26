@@ -242,6 +242,103 @@ func (r *StoryRepo) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
+// GetBySourceRef resolves a remote-sourced story by (project, source, external_id).
+func (r *StoryRepo) GetBySourceRef(ctx context.Context, projectID uuid.UUID, source, externalID string) (*model.Story, error) {
+	row, err := r.queries.GetStoryBySourceRef(ctx, GetStoryBySourceRefParams{
+		ProjectID:  projectID,
+		Source:     source,
+		ExternalID: pgtype.Text{String: externalID, Valid: true},
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, apperrors.NewNotFound("story", externalID)
+		}
+		return nil, apperrors.NewInternal("failed to get story by source ref", err)
+	}
+	return toDomainStory(row)
+}
+
+// CreateFromImport inserts a story with the import-managed columns the service
+// already computed. target_files / current_stage are intentionally not written.
+func (r *StoryRepo) CreateFromImport(ctx context.Context, story *model.Story) (*model.Story, error) {
+	dependsOn, err := marshalJSONB(story.DependsOn)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.queries.CreateStoryFromImport(ctx, CreateStoryFromImportParams{
+		ProjectID:          story.ProjectID,
+		EpicID:             uuidFromPtr(story.EpicID),
+		Key:                story.Key,
+		Title:              story.Title,
+		Objective:          textFromStringPtr(story.Objective),
+		AcceptanceCriteria: textFromStringPtr(story.AcceptanceCriteria),
+		Scope:              textFromStringPtr(story.Scope),
+		DependsOn:          dependsOn,
+		Status:             story.Status,
+		Source:             story.Source,
+		ExternalID:         textFromStringPtr(story.ExternalID),
+		SourceUrl:          textFromStringPtr(story.SourceURL),
+		LastImportHash:     textFromStringPtr(story.LastImportHash),
+	})
+	if err != nil {
+		if isUniqueViolation(err) {
+			return nil, apperrors.NewConflict("story", story.Key)
+		}
+		return nil, apperrors.NewInternal("failed to create story from import", err)
+	}
+	return toDomainStory(row)
+}
+
+// UpdateFromImport overwrites the import-managed columns of an unlocked story.
+func (r *StoryRepo) UpdateFromImport(ctx context.Context, story *model.Story) (*model.Story, error) {
+	dependsOn, err := marshalJSONB(story.DependsOn)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.queries.UpdateStoryFromImport(ctx, UpdateStoryFromImportParams{
+		ID:                 story.ID,
+		Title:              story.Title,
+		Objective:          textFromStringPtr(story.Objective),
+		AcceptanceCriteria: textFromStringPtr(story.AcceptanceCriteria),
+		Scope:              textFromStringPtr(story.Scope),
+		DependsOn:          dependsOn,
+		Status:             story.Status,
+		EpicID:             uuidFromPtr(story.EpicID),
+		Source:             story.Source,
+		ExternalID:         textFromStringPtr(story.ExternalID),
+		SourceUrl:          textFromStringPtr(story.SourceURL),
+		LastImportHash:     textFromStringPtr(story.LastImportHash),
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, apperrors.NewNotFound("story", story.ID)
+		}
+		if isUniqueViolation(err) {
+			return nil, apperrors.NewConflict("story", story.Key)
+		}
+		return nil, apperrors.NewInternal("failed to update story from import", err)
+	}
+	return toDomainStory(row)
+}
+
+// UpdateProvenanceOnly refreshes a locked story's title + provenance only.
+func (r *StoryRepo) UpdateProvenanceOnly(ctx context.Context, story *model.Story) (*model.Story, error) {
+	row, err := r.queries.UpdateStoryProvenanceOnly(ctx, UpdateStoryProvenanceOnlyParams{
+		ID:         story.ID,
+		Title:      story.Title,
+		Source:     story.Source,
+		ExternalID: textFromStringPtr(story.ExternalID),
+		SourceUrl:  textFromStringPtr(story.SourceURL),
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, apperrors.NewNotFound("story", story.ID)
+		}
+		return nil, apperrors.NewInternal("failed to update story provenance", err)
+	}
+	return toDomainStory(row)
+}
+
 // toDomainStory maps a sqlc-generated Story to a domain Story.
 func toDomainStory(s Story) (*model.Story, error) {
 	targetFiles, err := unmarshalJSONBStringSlice(s.TargetFiles)
@@ -260,6 +357,8 @@ func toDomainStory(s Story) (*model.Story, error) {
 		Status:      s.Status,
 		TargetFiles: targetFiles,
 		DependsOn:   dependsOn,
+		Source:      s.Source,
+		SyncedAt:    timeFromTimestamptz(s.SyncedAt),
 		CreatedAt:   s.CreatedAt,
 		UpdatedAt:   s.UpdatedAt,
 	}
@@ -278,6 +377,15 @@ func toDomainStory(s Story) (*model.Story, error) {
 	}
 	if s.CurrentStage.Valid {
 		story.CurrentStage = &s.CurrentStage.String
+	}
+	if s.ExternalID.Valid {
+		story.ExternalID = &s.ExternalID.String
+	}
+	if s.SourceUrl.Valid {
+		story.SourceURL = &s.SourceUrl.String
+	}
+	if s.LastImportHash.Valid {
+		story.LastImportHash = &s.LastImportHash.String
 	}
 	return story, nil
 }

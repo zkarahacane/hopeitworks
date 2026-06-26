@@ -90,6 +90,18 @@ func (m *mockEpicRepoForEpicRun) Update(_ context.Context, epic *model.Epic) (*m
 func (m *mockEpicRepoForEpicRun) Delete(_ context.Context, _ uuid.UUID) error {
 	return nil
 }
+func (m *mockEpicRepoForEpicRun) GetBySourceRef(_ context.Context, _ uuid.UUID, _, _ string) (*model.Epic, error) {
+	return nil, nil
+}
+func (m *mockEpicRepoForEpicRun) GetByName(_ context.Context, _ uuid.UUID, _ string) (*model.Epic, error) {
+	return nil, nil
+}
+func (m *mockEpicRepoForEpicRun) CreateFromImport(_ context.Context, e *model.Epic) (*model.Epic, error) {
+	return e, nil
+}
+func (m *mockEpicRepoForEpicRun) UpdateFromImport(_ context.Context, e *model.Epic) (*model.Epic, error) {
+	return e, nil
+}
 
 // mockStoryRepoForEpicRun implements port.StoryRepository for testing.
 type mockStoryRepoForEpicRun struct {
@@ -131,6 +143,18 @@ func (m *mockStoryRepoForEpicRun) UpdateStoryCurrentStage(_ context.Context, id 
 }
 func (m *mockStoryRepoForEpicRun) Delete(_ context.Context, _ uuid.UUID) error {
 	return nil
+}
+func (m *mockStoryRepoForEpicRun) GetBySourceRef(_ context.Context, _ uuid.UUID, _, _ string) (*model.Story, error) {
+	return nil, nil
+}
+func (m *mockStoryRepoForEpicRun) CreateFromImport(_ context.Context, s *model.Story) (*model.Story, error) {
+	return s, nil
+}
+func (m *mockStoryRepoForEpicRun) UpdateFromImport(_ context.Context, s *model.Story) (*model.Story, error) {
+	return s, nil
+}
+func (m *mockStoryRepoForEpicRun) UpdateProvenanceOnly(_ context.Context, s *model.Story) (*model.Story, error) {
+	return s, nil
 }
 
 func TestLaunchEpicRun_HappyPath(t *testing.T) {

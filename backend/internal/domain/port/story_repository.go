@@ -25,4 +25,20 @@ type StoryRepository interface {
 	// clears the stage (NULL). Advanced by the executor at stage boundaries.
 	UpdateStoryCurrentStage(ctx context.Context, id uuid.UUID, currentStage *string) (*model.Story, error)
 	Delete(ctx context.Context, id uuid.UUID) error
+
+	// --- Planning import (provenance-aware upsert) ---
+
+	// GetBySourceRef resolves a remote-sourced story by its stable provenance
+	// identity (project, source, external_id). Returns a NotFound DomainError when
+	// absent. Markdown resolution uses GetByKey; this is the github_projects path.
+	GetBySourceRef(ctx context.Context, projectID uuid.UUID, source, externalID string) (*model.Story, error)
+	// CreateFromImport inserts a story whose import-managed columns the service has
+	// already computed. Never writes target_files/current_stage (executor-owned).
+	CreateFromImport(ctx context.Context, s *model.Story) (*model.Story, error)
+	// UpdateFromImport overwrites the import-managed columns of an UNLOCKED story
+	// with the service-computed merged values (advances last_import_hash).
+	UpdateFromImport(ctx context.Context, s *model.Story) (*model.Story, error)
+	// UpdateProvenanceOnly refreshes a LOCKED story's cosmetic title + provenance
+	// only. It deliberately does NOT advance last_import_hash.
+	UpdateProvenanceOnly(ctx context.Context, s *model.Story) (*model.Story, error)
 }

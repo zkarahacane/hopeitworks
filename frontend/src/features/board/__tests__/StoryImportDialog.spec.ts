@@ -3,55 +3,53 @@ import { mount, type VueWrapper } from '@vue/test-utils'
 import { h, defineComponent, ref } from 'vue'
 import PrimeVue from 'primevue/config'
 import StoryImportDialog from '../StoryImportDialog.vue'
+import type { PlanningImportResult } from '@/composables/usePlanningImport'
 
 vi.mock('@/api/client', () => ({
-  apiClient: {
-    GET: vi.fn(),
-    PUT: vi.fn(),
-    POST: vi.fn(),
-  },
+  apiClient: { GET: vi.fn(), PUT: vi.fn(), POST: vi.fn() },
 }))
 
-// Mutable state used by composable mock
+// ── Mutable state shared with the usePlanningImport mock ──────────────────────
 const mockState = {
+  source: ref<'markdown' | 'github_projects'>('markdown'),
+  canSubmit: ref(false),
   fileContent: ref<string | null>(null),
   fileName: ref<string | null>(null),
   parsedPreview: ref<{ key: string; title: string; scope?: string; valid: boolean; error?: string }[]>([]),
-  importResult: ref<{ imported: number; updated: number; failed: number; errors: { key: string; message: string; code: string }[] } | null>(null),
   fileError: ref<string | null>(null),
+  projectUrl: ref(''),
+  statusField: ref('Status'),
+  doneOptions: ref<string[]>([]),
+  epicIssueType: ref('Epic'),
+  result: ref<PlanningImportResult | null>(null),
+  committed: ref(false),
   apiError: ref<string | null>(null),
-  isImporting: ref(false),
+  isLoading: ref(false),
 }
 
 const mockSelectFile = vi.fn()
-const mockImportStories = vi.fn()
-const mockReset = vi.fn().mockImplementation(() => {
-  mockState.fileContent.value = null
-  mockState.fileName.value = null
-  mockState.parsedPreview.value = []
-  mockState.importResult.value = null
-  mockState.fileError.value = null
-  mockState.apiError.value = null
-  mockState.isImporting.value = false
-})
-const mockParseMarkdownPreview = vi.fn()
+const mockPreview = vi.fn()
+const mockCommit = vi.fn()
+const mockReset = vi.fn()
 
-vi.mock('@/composables/useStoryImport', () => ({
-  useStoryImport: () => ({
+vi.mock('@/composables/usePlanningImport', () => ({
+  usePlanningImport: () => ({
     ...mockState,
     selectFile: mockSelectFile,
-    importStories: mockImportStories,
+    preview: mockPreview,
+    commit: mockCommit,
     reset: mockReset,
-    parseMarkdownPreview: mockParseMarkdownPreview,
+    parseMarkdownPreview: vi.fn(),
+    buildBody: vi.fn(),
   }),
 }))
 
-/** Stub Dialog to render inline instead of teleporting */
+/** Stub Dialog to render inline instead of teleporting. */
 const DialogStub = defineComponent({
   name: 'DialogStub',
   props: ['visible', 'modal', 'header', 'class'],
   emits: ['update:visible'],
-  setup(props, { slots, emit }) {
+  setup(props, { slots }) {
     return () => {
       if (!props.visible) return null
       return h('div', { class: 'p-dialog' }, [
@@ -63,51 +61,51 @@ const DialogStub = defineComponent({
   },
 })
 
+function emptyResult(overrides: Partial<PlanningImportResult> = {}): PlanningImportResult {
+  return {
+    source: 'markdown',
+    dry_run: true,
+    epics_created: 0,
+    epics_updated: 0,
+    stories_created: 0,
+    stories_updated: 0,
+    skipped: 0,
+    locked: 0,
+    failed: 0,
+    errors: [],
+    warnings: [],
+    items: [],
+    ...overrides,
+  }
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let wrapper: VueWrapper<any>
 
 beforeEach(() => {
-  // Reset all mock state
+  mockState.source.value = 'markdown'
+  mockState.canSubmit.value = false
   mockState.fileContent.value = null
   mockState.fileName.value = null
   mockState.parsedPreview.value = []
-  mockState.importResult.value = null
   mockState.fileError.value = null
+  mockState.projectUrl.value = ''
+  mockState.statusField.value = 'Status'
+  mockState.doneOptions.value = []
+  mockState.epicIssueType.value = 'Epic'
+  mockState.result.value = null
+  mockState.committed.value = false
   mockState.apiError.value = null
-  mockState.isImporting.value = false
+  mockState.isLoading.value = false
   vi.clearAllMocks()
-  mockReset.mockImplementation(() => {
-    mockState.fileContent.value = null
-    mockState.fileName.value = null
-    mockState.parsedPreview.value = []
-    mockState.importResult.value = null
-    mockState.fileError.value = null
-    mockState.apiError.value = null
-    mockState.isImporting.value = false
-  })
-
-  // Mock FileReader for any direct usage
-  vi.stubGlobal(
-    'FileReader',
-    function MockFileReader(this: { readAsText: ReturnType<typeof vi.fn>; onload: null }) {
-      this.readAsText = vi.fn()
-      this.onload = null
-    } as unknown as typeof FileReader,
-  )
 })
 
 function mountComponent(props: Partial<{ visible: boolean; projectId: string }> = {}) {
   wrapper = mount(StoryImportDialog, {
-    props: {
-      visible: true,
-      projectId: 'p1',
-      ...props,
-    },
+    props: { visible: true, projectId: 'p1', ...props },
     global: {
       plugins: [PrimeVue],
-      stubs: {
-        Dialog: DialogStub,
-      },
+      stubs: { Dialog: DialogStub },
     },
   })
   return wrapper
@@ -118,146 +116,129 @@ describe('StoryImportDialog', () => {
     wrapper?.unmount()
   })
 
-  describe('Step 1: Upload zone', () => {
-    it('renders upload zone when no file is selected', () => {
+  it('renders the source picker', () => {
+    mountComponent()
+    expect(wrapper.find('[data-testid="source-picker"]').exists()).toBe(true)
+  })
+
+  describe('source switching', () => {
+    it('shows the markdown drop-zone by default', () => {
       mountComponent()
+      expect(wrapper.find('[data-testid="markdown-panel"]').exists()).toBe(true)
       expect(wrapper.find('[data-testid="drop-zone"]').exists()).toBe(true)
-      expect(wrapper.text()).toContain('Drag & drop a .md file here')
+      expect(wrapper.find('[data-testid="github-panel"]').exists()).toBe(false)
     })
 
-    it('renders file input accepting .md files', () => {
+    it('shows the GitHub form when source is github_projects', async () => {
+      mockState.source.value = 'github_projects'
       mountComponent()
-      const fileInput = wrapper.find('[data-testid="file-input"]')
-      expect(fileInput.exists()).toBe(true)
-      expect(fileInput.attributes('accept')).toBe('.md')
-    })
-
-    it('does not show file error initially', () => {
-      mountComponent()
-      expect(wrapper.find('[data-testid="file-error"]').exists()).toBe(false)
-    })
-
-    it('shows file error when fileError is set', async () => {
-      mountComponent()
-      mockState.fileError.value = 'Only .md files are supported'
       await wrapper.vm.$nextTick()
-      expect(wrapper.find('[data-testid="file-error"]').exists()).toBe(true)
-      expect(wrapper.find('[data-testid="file-error"]').text()).toBe('Only .md files are supported')
-    })
-
-    it('does not show preview table', () => {
-      mountComponent()
-      expect(wrapper.find('[data-testid="preview-table"]').exists()).toBe(false)
-    })
-
-    it('does not show import result', () => {
-      mountComponent()
-      expect(wrapper.find('[data-testid="import-result"]').exists()).toBe(false)
+      expect(wrapper.find('[data-testid="github-panel"]').exists()).toBe(true)
+      expect(wrapper.find('[data-testid="github-project-url"]').exists()).toBe(true)
+      expect(wrapper.find('[data-testid="github-status-field"]').exists()).toBe(true)
+      expect(wrapper.find('[data-testid="github-done-options"]').exists()).toBe(true)
+      expect(wrapper.find('[data-testid="markdown-panel"]').exists()).toBe(false)
     })
   })
 
-  describe('Step 2: Preview', () => {
+  describe('preview table binding', () => {
+    it('renders the decision table + tally bound to result.items', async () => {
+      mockState.result.value = emptyResult({
+        stories_created: 1,
+        locked: 1,
+        items: [
+          { key: 'S-1', kind: 'story', action: 'create', mapped_status: 'backlog', reason: 'new' },
+          { key: 'S-2', kind: 'story', action: 'lock', mapped_status: 'backlog', reason: 'running' },
+        ],
+      })
+      mountComponent()
+      await wrapper.vm.$nextTick()
+      expect(wrapper.find('[data-testid="preview-result-table"]').exists()).toBe(true)
+      expect(wrapper.find('[data-testid="preview-tally"]').exists()).toBe(true)
+      expect(wrapper.text()).toContain('S-1')
+      expect(wrapper.text()).toContain('S-2')
+      expect(wrapper.text()).toContain('1 locked')
+    })
+
+    it('does not render the decision table before a preview', () => {
+      mountComponent()
+      expect(wrapper.find('[data-testid="preview-result-table"]').exists()).toBe(false)
+    })
+  })
+
+  describe('actions', () => {
+    it('disables Preview / Import until canSubmit', () => {
+      mountComponent()
+      expect(wrapper.find('[data-testid="preview-button"]').attributes('disabled')).toBeDefined()
+      expect(wrapper.find('[data-testid="import-button"]').attributes('disabled')).toBeDefined()
+    })
+
+    it('calls preview(projectId) on the Preview button', async () => {
+      mockState.canSubmit.value = true
+      mockState.fileContent.value = '# x'
+      mountComponent()
+      await wrapper.find('[data-testid="preview-button"]').trigger('click')
+      expect(mockPreview).toHaveBeenCalledWith('p1')
+    })
+
+    it('commits and emits imported when Import succeeds', async () => {
+      mockState.canSubmit.value = true
+      mockState.fileContent.value = '# x'
+      mockCommit.mockResolvedValue(emptyResult({ dry_run: false, stories_created: 1 }))
+      mountComponent()
+      await wrapper.find('[data-testid="import-button"]').trigger('click')
+      expect(mockCommit).toHaveBeenCalledWith('p1')
+      await wrapper.vm.$nextTick()
+      expect(wrapper.emitted('imported')).toBeTruthy()
+    })
+
+    it('does NOT emit imported when commit fails (returns null)', async () => {
+      mockState.canSubmit.value = true
+      mockState.fileContent.value = '# x'
+      mockCommit.mockResolvedValue(null)
+      mountComponent()
+      await wrapper.find('[data-testid="import-button"]').trigger('click')
+      await wrapper.vm.$nextTick()
+      expect(wrapper.emitted('imported')).toBeFalsy()
+    })
+  })
+
+  describe('committed footer', () => {
     beforeEach(() => {
-      mockState.fileContent.value = '---\nkey: S-01\n---\n# Story One\n'
-      mockState.parsedPreview.value = [{ key: 'S-01', title: 'Story One', valid: true }]
+      mockState.committed.value = true
+      mockState.result.value = emptyResult({ dry_run: false })
     })
 
-    it('renders preview table when fileContent is set', async () => {
+    it('shows Close + Import another and hides Preview/Import', () => {
       mountComponent()
-      await wrapper.vm.$nextTick()
-      expect(wrapper.find('[data-testid="drop-zone"]').exists()).toBe(false)
-      expect(wrapper.find('[data-testid="preview-table"]').exists()).toBe(true)
+      expect(wrapper.find('[data-testid="close-button"]').exists()).toBe(true)
+      expect(wrapper.find('[data-testid="import-another-button"]').exists()).toBe(true)
+      expect(wrapper.find('[data-testid="preview-button"]').exists()).toBe(false)
     })
 
-    it('disables Import button when all parsed stories are invalid', async () => {
-      mockState.parsedPreview.value = [
-        { key: '(unknown)', title: '(no title)', valid: false, error: 'Missing key in frontmatter' },
-      ]
+    it('Close resets and emits update:visible false', async () => {
       mountComponent()
-      await wrapper.vm.$nextTick()
-      const importButton = wrapper.find('[data-testid="import-button"]')
-      expect(importButton.exists()).toBe(true)
-      expect(importButton.attributes('disabled')).toBeDefined()
+      await wrapper.find('[data-testid="close-button"]').trigger('click')
+      expect(mockReset).toHaveBeenCalled()
+      const events = wrapper.emitted('update:visible') as unknown[][]
+      expect(events[0]).toEqual([false])
     })
+  })
 
-    it('enables Import button when at least one valid story exists', async () => {
-      mountComponent()
-      await wrapper.vm.$nextTick()
-      const importButton = wrapper.find('[data-testid="import-button"]')
-      expect(importButton.exists()).toBe(true)
-      expect(importButton.attributes('disabled')).toBeUndefined()
-    })
-
-    it('shows invalid stories section when invalid stories exist', async () => {
-      mockState.parsedPreview.value = [
-        { key: 'S-01', title: 'Valid', valid: true },
-        { key: '(unknown)', title: '(no title)', valid: false, error: 'Missing key in frontmatter' },
-      ]
-      mountComponent()
-      await wrapper.vm.$nextTick()
-      expect(wrapper.find('[data-testid="invalid-stories"]').exists()).toBe(true)
-    })
-
-    it('shows api error message when apiError is set', async () => {
-      mockState.apiError.value = 'Import failed. Please try again.'
+  describe('errors', () => {
+    it('shows the api error message when apiError is set', async () => {
+      mockState.apiError.value = 'Source reachable but unusable.'
       mountComponent()
       await wrapper.vm.$nextTick()
       expect(wrapper.find('[data-testid="api-error"]').exists()).toBe(true)
-    })
-  })
-
-  describe('Step 3: Result', () => {
-    beforeEach(() => {
-      mockState.importResult.value = { imported: 3, updated: 1, failed: 0, errors: [] }
+      expect(wrapper.find('[data-testid="api-error"]').text()).toContain('unusable')
     })
 
-    it('renders summary tags when importResult is set', async () => {
+    it('shows the file error in the markdown panel', async () => {
+      mockState.fileError.value = 'Only .md files are supported'
       mountComponent()
       await wrapper.vm.$nextTick()
-      expect(wrapper.find('[data-testid="import-result"]').exists()).toBe(true)
-      expect(wrapper.text()).toContain('3 created')
-      expect(wrapper.text()).toContain('1 updated')
-    })
-
-    it('does not render upload zone in Step 3', async () => {
-      mountComponent()
-      await wrapper.vm.$nextTick()
-      expect(wrapper.find('[data-testid="drop-zone"]').exists()).toBe(false)
-    })
-
-    it('"Import Another File" triggers reset and returns to Step 1', async () => {
-      mountComponent()
-      await wrapper.vm.$nextTick()
-
-      const importAnotherButton = wrapper.find('[data-testid="import-another-button"]')
-      expect(importAnotherButton.exists()).toBe(true)
-      await importAnotherButton.trigger('click')
-      await wrapper.vm.$nextTick()
-
-      expect(mockReset).toHaveBeenCalled()
-      // After reset, importResult is null so Step 1 should be visible
-      expect(wrapper.find('[data-testid="drop-zone"]').exists()).toBe(true)
-    })
-
-    it('"Close" emits imported and update:visible false', async () => {
-      mountComponent()
-      await wrapper.vm.$nextTick()
-
-      const closeButton = wrapper.find('[data-testid="close-button"]')
-      expect(closeButton.exists()).toBe(true)
-      await closeButton.trigger('click')
-
-      expect(wrapper.emitted('imported')).toBeTruthy()
-      expect(wrapper.emitted('update:visible')).toBeTruthy()
-      const updateEvents = wrapper.emitted('update:visible') as unknown[][]
-      expect(updateEvents[0]).toEqual([false])
-    })
-  })
-
-  describe('dialog header', () => {
-    it('has correct header text', () => {
-      mountComponent()
-      expect(wrapper.text()).toContain('Import Stories')
+      expect(wrapper.find('[data-testid="file-error"]').text()).toBe('Only .md files are supported')
     })
   })
 
@@ -265,15 +246,6 @@ describe('StoryImportDialog', () => {
     it('renders nothing when visible is false', () => {
       mountComponent({ visible: false })
       expect(wrapper.find('.p-dialog').exists()).toBe(false)
-    })
-  })
-
-  describe('emits', () => {
-    it('emits update:visible false when dialog close is triggered', async () => {
-      mountComponent()
-      const dialog = wrapper.findComponent({ name: 'DialogStub' })
-      await dialog.vm.$emit('update:visible', false)
-      expect(wrapper.emitted('update:visible')).toBeTruthy()
     })
   })
 })

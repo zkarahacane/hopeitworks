@@ -21,6 +21,7 @@ import (
 	hbadapter "github.com/zakari/hopeitworks/backend/internal/adapter/handlebars"
 	memoryadapter "github.com/zakari/hopeitworks/backend/internal/adapter/memory"
 	microsandboxadapter "github.com/zakari/hopeitworks/backend/internal/adapter/microsandbox"
+	planningadapter "github.com/zakari/hopeitworks/backend/internal/adapter/planning"
 	pgadapter "github.com/zakari/hopeitworks/backend/internal/adapter/postgres"
 	riveradapter "github.com/zakari/hopeitworks/backend/internal/adapter/river"
 	smtpadapter "github.com/zakari/hopeitworks/backend/internal/adapter/smtp"
@@ -144,9 +145,16 @@ func run() error {
 	epicRepo := pgadapter.NewEpicRepo(queries)
 	epicService := service.NewEpicService(epicRepo)
 
+	// Planning import (one-way connector): a source factory resolves the adapter
+	// per kind (markdown live; github_projects wired in Phase 3), and the service
+	// owns every upsert decision. Backs both POST /planning/import and the legacy
+	// /stories/import shim below.
+	planningFactory := planningadapter.NewFactory(projectRepo, logger)
+	planningImportService := service.NewPlanningImportService(storyRepo, epicRepo, planningFactory)
+
 	// Story service
 	storyService := service.NewStoryService(storyRepo)
-	storyHandler := handler.NewStoryHandler(storyService, runRepo)
+	storyHandler := handler.NewStoryHandler(storyService, runRepo, planningImportService)
 
 	// Scheduler service (DAG computation, pure domain service)
 	schedulerService := service.NewSchedulerService()
@@ -467,7 +475,10 @@ func run() error {
 	epicRunService := service.NewEpicRunService(epicRunRepo, storyRepo, epicRepo, schedulerService, parallelGroupExecutor, eventRepo, logger)
 	epicRunHandler := handler.NewEpicRunHandler(epicRunService)
 
-	server := handler.NewServer(authHandler, projectHandler, userHandler, profileHandler, epicHandler, storyHandler, agentHandler, stackHandler, runHandler, pipelineConfigHandler, hitlHandler, costHandler, notificationHandler, epicRunHandler, environmentHandler, apiKeyHandler)
+	// Planning import handler (POST /projects/{projectId}/planning/import).
+	planningHandler := handler.NewPlanningHandler(planningImportService)
+
+	server := handler.NewServer(authHandler, projectHandler, userHandler, profileHandler, epicHandler, storyHandler, agentHandler, stackHandler, runHandler, pipelineConfigHandler, hitlHandler, costHandler, notificationHandler, epicRunHandler, environmentHandler, apiKeyHandler, planningHandler)
 
 	// Project user handler
 	projectUserHandler := handler.NewProjectUserHandler(projectUserService)
