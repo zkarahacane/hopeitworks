@@ -491,6 +491,274 @@ func TestPlanningImport_EmptyBoardIsZeroImport(t *testing.T) {
 	}
 }
 
+// --- epic promote-only: in_progress frozen, backlog→done promoted (§16.4) ----
+
+func TestPlanningImport_EpicPromoteOnly(t *testing.T) {
+	ctx := context.Background()
+	projectID := uuid.New()
+
+	t.Run("in_progress not touched by import even when raw maps done", func(t *testing.T) {
+		stories := newMockStoryRepo()
+		epics := newMockEpicRepo()
+
+		epicID := uuid.New()
+		epics.epics[epicID] = &model.Epic{
+			ID: epicID, ProjectID: projectID, Name: "E-1",
+			Status: model.EpicStatusInProgress, Source: string(port.SourceMarkdown),
+			ExternalID: storyStrPtr("E-1"),
+		}
+
+		// Raw "done" would project to done, but in_progress must be frozen.
+		res := &port.FetchResult{Epics: []port.ImportedEpic{{
+			Ref: port.SourceRef{Source: port.SourceMarkdown, ExternalID: "E-1"},
+			Key: "E-1", Name: "E-1", RawStatus: "done",
+		}}}
+		svc := newImportSvc(stories, epics, port.SourceMarkdown, res)
+		sum, err := svc.Import(ctx, projectID, mdConfig())
+		if err != nil {
+			t.Fatalf("Import: %v", err)
+		}
+		if sum.Failed != 0 {
+			t.Fatalf("expected no failures, got %d: %v", sum.Failed, sum.Errors)
+		}
+		got := epics.epics[epicID]
+		if got.Status != model.EpicStatusInProgress {
+			t.Errorf("in_progress epic must not be touched by import, got %q", got.Status)
+		}
+		// The epic must not have been counted as updated either.
+		if sum.EpicsUpdated != 0 {
+			t.Errorf("in_progress epic must not count as EpicsUpdated, got %d", sum.EpicsUpdated)
+		}
+	})
+
+	t.Run("backlog promoted to done when raw maps done", func(t *testing.T) {
+		stories := newMockStoryRepo()
+		epics := newMockEpicRepo()
+
+		epicID := uuid.New()
+		epics.epics[epicID] = &model.Epic{
+			ID: epicID, ProjectID: projectID, Name: "E-2",
+			Status: model.EpicStatusBacklog, Source: string(port.SourceMarkdown),
+			ExternalID: storyStrPtr("E-2"),
+		}
+
+		res := &port.FetchResult{Epics: []port.ImportedEpic{{
+			Ref: port.SourceRef{Source: port.SourceMarkdown, ExternalID: "E-2"},
+			Key: "E-2", Name: "E-2", RawStatus: "done",
+		}}}
+		svc := newImportSvc(stories, epics, port.SourceMarkdown, res)
+		sum, err := svc.Import(ctx, projectID, mdConfig())
+		if err != nil {
+			t.Fatalf("Import: %v", err)
+		}
+		if sum.Failed != 0 {
+			t.Fatalf("expected no failures, got %d: %v", sum.Failed, sum.Errors)
+		}
+		got := epics.epics[epicID]
+		if got.Status != model.EpicStatusDone {
+			t.Errorf("backlog epic with done raw status must be promoted to done, got %q", got.Status)
+		}
+		if sum.EpicsUpdated != 1 {
+			t.Errorf("expected EpicsUpdated=1, got %d", sum.EpicsUpdated)
+		}
+	})
+}
+
+// --- markdown KEY_CONFLICT: key owned by github_projects (§16.1) --------------
+
+func TestPlanningImport_MarkdownKeyConflict(t *testing.T) {
+	ctx := context.Background()
+	projectID := uuid.New()
+	stories := newMockStoryRepo()
+	epics := newMockEpicRepo()
+
+	// A story owned by github_projects already holds key "S-1".
+	ghID := uuid.New()
+	stories.stories[ghID] = &model.Story{
+		ID: ghID, ProjectID: projectID, Key: "S-1", Title: "github story",
+		Status: model.StoryStatusBacklog, Source: string(port.SourceGitHub),
+		ExternalID: storyStrPtr("node-gh-1"),
+	}
+
+	// Markdown import sends a story with the same key.
+	res := &port.FetchResult{Stories: []port.ImportedStory{mdStory("S-1", "markdown story", "")}}
+	svc := newImportSvc(stories, epics, port.SourceMarkdown, res)
+	sum, err := svc.Import(ctx, projectID, mdConfig())
+	if err != nil {
+		t.Fatalf("Import: %v", err)
+	}
+
+	if sum.Failed != 1 {
+		t.Errorf("expected Failed=1, got %d", sum.Failed)
+	}
+	if len(sum.Errors) == 0 || sum.Errors[0].Code != "KEY_CONFLICT" {
+		t.Errorf("expected KEY_CONFLICT error, got %v", sum.Errors)
+	}
+	// The github story must NOT be overwritten.
+	got := stories.stories[ghID]
+	if got.Title != "github story" {
+		t.Errorf("github story must not be overwritten, got title %q", got.Title)
+	}
+	if got.Source != string(port.SourceGitHub) {
+		t.Errorf("source must stay %s, got %q", port.SourceGitHub, got.Source)
+	}
+	if sum.StoriesCreated != 0 || sum.StoriesUpdated != 0 {
+		t.Errorf("no story must be created or updated on KEY_CONFLICT, got created=%d updated=%d", sum.StoriesCreated, sum.StoriesUpdated)
+	}
+}
+
+// --- epic same source, external_id different: NAME_CONFLICT warning (§16.2) ---
+
+func TestPlanningImport_EpicSameSourceDifferentExternalID(t *testing.T) {
+	ctx := context.Background()
+	projectID := uuid.New()
+	stories := newMockStoryRepo()
+	epics := newMockEpicRepo()
+
+	// An existing github_projects epic holds name "Auth" with external_id "node-1".
+	existingEpicID := uuid.New()
+	epics.epics[existingEpicID] = &model.Epic{
+		ID: existingEpicID, ProjectID: projectID, Name: "Auth",
+		Status: model.EpicStatusBacklog, Source: string(port.SourceGitHub),
+		ExternalID: storyStrPtr("node-1"),
+	}
+
+	// A second github_projects import brings an epic with the SAME name but a
+	// DIFFERENT external_id ("node-2"), plus a child story linked to it.
+	res := &port.FetchResult{
+		Epics: []port.ImportedEpic{{
+			Ref: port.SourceRef{Source: port.SourceGitHub, ExternalID: "node-2"},
+			Key: "GH-2", Name: "Auth",
+		}},
+		Stories: []port.ImportedStory{{
+			Ref:     port.SourceRef{Source: port.SourceGitHub, ExternalID: "S-child"},
+			Key:     "GH-1",
+			Title:   "child story",
+			EpicRef: &port.SourceRef{Source: port.SourceGitHub, ExternalID: "node-2"},
+		}},
+	}
+	svc := newImportSvc(stories, epics, port.SourceGitHub, res)
+	sum, err := svc.Import(ctx, projectID, ghConfig())
+	if err != nil {
+		t.Fatalf("Import: %v", err)
+	}
+
+	// Must produce a NAME_CONFLICT warning (not a failure).
+	var hasNameConflict bool
+	for _, w := range sum.Warnings {
+		if w.Code == "NAME_CONFLICT" {
+			hasNameConflict = true
+		}
+	}
+	if !hasNameConflict {
+		t.Errorf("expected NAME_CONFLICT warning, got warnings=%v", sum.Warnings)
+	}
+	if sum.Failed != 0 {
+		t.Errorf("same-source name collision must not fail the batch: failed=%d errors=%v", sum.Failed, sum.Errors)
+	}
+
+	// Provenance of the existing epic must NOT be overwritten.
+	got := epics.epics[existingEpicID]
+	if got.Source != string(port.SourceGitHub) {
+		t.Errorf("source must stay %s, got %q", port.SourceGitHub, got.Source)
+	}
+	if got.ExternalID == nil || *got.ExternalID != "node-1" {
+		t.Errorf("external_id must stay node-1, got %v", got.ExternalID)
+	}
+
+	// The child story must link to the existing (not a phantom new) epic.
+	for _, s := range stories.stories {
+		if s.Key == "GH-1" && (s.EpicID == nil || *s.EpicID != existingEpicID) {
+			t.Errorf("child story must link to existing epic %v, got %v", existingEpicID, s.EpicID)
+		}
+	}
+}
+
+// --- story done (by execution), current_stage nil → not locked (§16.9) --------
+
+func TestPlanningImport_DoneStoryNotLocked(t *testing.T) {
+	ctx := context.Background()
+	projectID := uuid.New()
+	stories := newMockStoryRepo()
+	epics := newMockEpicRepo()
+
+	oldHash := "old-hash-value"
+	storyID := uuid.New()
+	stories.stories[storyID] = &model.Story{
+		ID: storyID, ProjectID: projectID, Key: "S-1", Title: "old title",
+		Status: model.StoryStatusDone, CurrentStage: nil,
+		Source: string(port.SourceMarkdown), ExternalID: storyStrPtr("S-1"),
+		LastImportHash: &oldHash,
+	}
+
+	// Upstream changes the title; raw status does not map to done (falls back to backlog).
+	res := &port.FetchResult{Stories: []port.ImportedStory{{
+		Ref: port.SourceRef{Source: port.SourceMarkdown, ExternalID: "S-1"}, Key: "S-1",
+		Title: "new title", RawStatus: "backlog",
+	}}}
+	svc := newImportSvc(stories, epics, port.SourceMarkdown, res)
+	sum, err := svc.Import(ctx, projectID, mdConfig())
+	if err != nil {
+		t.Fatalf("Import: %v", err)
+	}
+
+	// done+nil-stage is NOT locked: spec changes must be applied.
+	if sum.Locked != 0 {
+		t.Errorf("done+nil-stage story must not be locked, got Locked=%d", sum.Locked)
+	}
+	if sum.StoriesUpdated != 1 {
+		t.Errorf("expected StoriesUpdated=1 (title changed), got %d", sum.StoriesUpdated)
+	}
+
+	got := stories.stories[storyID]
+	if got.Title != "new title" {
+		t.Errorf("title must be updated, got %q", got.Title)
+	}
+	// Status must stay done — never downgraded by import.
+	if got.Status != model.StoryStatusDone {
+		t.Errorf("done status must never be downgraded by import, got %q", got.Status)
+	}
+}
+
+// --- current_stage != nil blocks backlog→done promotion (§16.0) ---------------
+
+func TestPlanningImport_InStageBlocksPromotion(t *testing.T) {
+	ctx := context.Background()
+	projectID := uuid.New()
+	stories := newMockStoryRepo()
+	epics := newMockEpicRepo()
+
+	stage := "review"
+	storyID := uuid.New()
+	stories.stories[storyID] = &model.Story{
+		ID: storyID, ProjectID: projectID, Key: "S-1", Title: "in-stage story",
+		Status: model.StoryStatusBacklog, CurrentStage: &stage,
+		Source: string(port.SourceMarkdown), ExternalID: storyStrPtr("S-1"),
+	}
+
+	// Raw "done" would normally promote backlog→done, but current_stage != nil must block it.
+	res := &port.FetchResult{Stories: []port.ImportedStory{{
+		Ref: port.SourceRef{Source: port.SourceMarkdown, ExternalID: "S-1"}, Key: "S-1",
+		Title: "in-stage story", RawStatus: "done",
+	}}}
+	svc := newImportSvc(stories, epics, port.SourceMarkdown, res)
+	sum, err := svc.Import(ctx, projectID, mdConfig())
+	if err != nil {
+		t.Fatalf("Import: %v", err)
+	}
+
+	if sum.Locked != 1 {
+		t.Errorf("expected Locked=1 for in-stage story, got %d", sum.Locked)
+	}
+	got := stories.stories[storyID]
+	if got.Status != model.StoryStatusBacklog {
+		t.Errorf("backlog+in-stage must not be promoted to done, got %q", got.Status)
+	}
+	if sum.StoriesUpdated != 0 {
+		t.Errorf("locked story must not count as StoriesUpdated, got %d", sum.StoriesUpdated)
+	}
+}
+
 // --- source error -> 422 (InvalidState) -------------------------------------
 
 func TestPlanningImport_SourceErrorMapsTo422(t *testing.T) {
