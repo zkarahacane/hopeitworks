@@ -187,7 +187,7 @@ func setupStoryHandlerWithRuns() (*StoryHandler, *mockStoryRepo, *storyHandlerRu
 	svc := service.NewStoryService(repo)
 	// The deprecated /stories/import shim routes through the markdown planning
 	// connector; wire a real PlanningImportService over the same story repo.
-	planningSvc := service.NewPlanningImportService(repo, newMockEpicRepo(), planningadapter.NewFactory(nil, nil))
+	planningSvc := service.NewPlanningImportService(repo, newMockEpicRepo(), planningadapter.NewFactory(nil, nil, nil))
 	h := NewStoryHandler(svc, runRepo, planningSvc)
 	return h, repo, runRepo
 }

@@ -145,11 +145,24 @@ func run() error {
 	epicRepo := pgadapter.NewEpicRepo(queries)
 	epicService := service.NewEpicService(epicRepo)
 
+	// Encryption master key — shared by user API keys, credentials, and git PATs
+	// (derived once via crypto.DeriveKey inside each service).
+	encryptionKey := getEnvOrDefault("ENCRYPTION_KEY", cfg.Security.EncryptionKey)
+
+	// Git connection (Phase 1): encrypted PAT per project behind the credential seam.
+	// The service is BOTH the management API (Status/Set/Test/Clear) AND the resolver
+	// that both factories consume; it self-heals advisory status on real 401/403 (C1).
+	// The resolved PAT is consumed only by server-side git adapters — never injected
+	// into an agent container (A4 invariant).
+	gitConnRepo := pgadapter.NewGitConnectionRepository(queries)
+	gitConnValidator := gitadapter.NewGitHubConnectionValidator(getEnvOrDefault("GITHUB_API_BASE_URL", ""), logger)
+	gitConnSvc := service.NewGitConnectionService(gitConnRepo, projectRepo, gitConnValidator, encryptionKey, eventRepo, logger)
+
 	// Planning import (one-way connector): a source factory resolves the adapter
-	// per kind (markdown live; github_projects wired in Phase 3), and the service
-	// owns every upsert decision. Backs both POST /planning/import and the legacy
-	// /stories/import shim below.
-	planningFactory := planningadapter.NewFactory(projectRepo, logger)
+	// per kind (markdown live; github_projects resolves the PAT via the credential
+	// seam), and the service owns every upsert decision. Backs both POST
+	// /planning/import and the legacy /stories/import shim below.
+	planningFactory := planningadapter.NewFactory(projectRepo, gitConnSvc, logger)
 	planningImportService := service.NewPlanningImportService(storyRepo, epicRepo, planningFactory)
 
 	// Story service
@@ -188,9 +201,8 @@ func run() error {
 	environmentService := service.NewEnvironmentService(environmentRepo)
 	environmentHandler := handler.NewEnvironmentHandler(environmentService)
 
-	// Git connection (Phase 0): contract frozen + stub handler wired for a green
-	// build. Phase 1 replaces the stub with a real GitConnectionService.
-	gitConnectionHandler := handler.NewGitConnectionHandler()
+	// Git connection handler (Phase 1): owner-or-admin gated PAT management.
+	gitConnectionHandler := handler.NewGitConnectionHandler(gitConnSvc)
 
 	// Template renderer (Handlebars engine for prompt templates)
 	handlebarsRenderer := hbadapter.NewRenderer()
@@ -203,8 +215,8 @@ func run() error {
 	userHandler := handler.NewUserHandler(userService)
 	profileHandler := handler.NewProfileHandler(userService)
 
-	// API Key service (encrypted API key storage for users)
-	encryptionKey := getEnvOrDefault("ENCRYPTION_KEY", cfg.Security.EncryptionKey)
+	// API Key service (encrypted API key storage for users). encryptionKey is the
+	// shared master key resolved above.
 	apiKeyRepo := pgadapter.NewAPIKeyRepository(queries)
 	apiKeySvc := service.NewAPIKeyService(apiKeyRepo, encryptionKey)
 	apiKeyHandler := handler.NewAPIKeyHandler(apiKeySvc)
@@ -258,7 +270,7 @@ func run() error {
 
 	// Git provider factory (resolves GitProvider per project: github or gitea)
 	cmdRunner := pkgexec.NewRealCommandRunner()
-	gitProviderFactory := gitadapter.NewGitProviderFactory(projectRepo, cmdRunner, logger)
+	gitProviderFactory := gitadapter.NewGitProviderFactory(projectRepo, gitConnSvc, cmdRunner, logger)
 
 	// CI Poll action (no Docker required)
 	ciPollCfg := actionadapter.CIPollConfig{
