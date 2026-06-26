@@ -1,12 +1,34 @@
 <script setup lang="ts">
 import { inject, ref, computed, watch, onMounted, type Ref } from 'vue'
-import { formatDate } from '@/utils/formatDate'
+import { RouterLink } from 'vue-router'
+import Tag from 'primevue/tag'
+import { formatDate, formatRelativeDate } from '@/utils/formatDate'
 import { apiClient } from '@/api/client'
+import { useAuthStore } from '@/stores/auth'
+import { useGitConnection, type GitConnectionStatus } from './useGitConnection'
 import type { Project } from '@/stores/projects'
 
 const project = inject<Ref<Project | null>>('project')
 
 const p = computed(() => project?.value ?? null)
+
+// Read-only git connection badge — visible only to the project owner or a global admin
+// (the status endpoint is owner/admin gated, mirroring the settings card).
+const authStore = useAuthStore()
+const { status: gitStatus, statusSeverity } = useGitConnection()
+const gitConn = ref<GitConnectionStatus | null>(null)
+
+const canSeeGit = computed(() => {
+  const u = authStore.user
+  if (!u || !p.value) return false
+  return u.role === 'admin' || p.value.owner_id === u.id
+})
+
+async function fetchGitConnection() {
+  if (!canSeeGit.value || !p.value?.id) return
+  const result = await gitStatus.execute(p.value.id)
+  if (result) gitConn.value = result
+}
 
 const providerIcons: Record<string, string> = {
   github: 'pi pi-github',
@@ -37,12 +59,18 @@ async function fetchCounts() {
   runCount.value = runsData?.pagination?.total ?? null
 }
 
-onMounted(fetchCounts)
+onMounted(() => {
+  fetchCounts()
+  fetchGitConnection()
+})
 
 watch(
   () => p.value?.id,
   (id) => {
-    if (id) fetchCounts()
+    if (id) {
+      fetchCounts()
+      fetchGitConnection()
+    }
   },
 )
 </script>
@@ -111,6 +139,27 @@ watch(
                   <span>{{ p.git_provider }}</span>
                 </template>
                 <span v-else>—</span>
+              </dd>
+            </div>
+
+            <div v-if="canSeeGit">
+              <dt style="font-size: 0.75rem; color: var(--p-text-muted-color); margin-bottom: 0.25rem">Git connection</dt>
+              <dd class="flex items-center gap-2 flex-wrap" data-testid="overview-git-connection">
+                <Tag
+                  :value="gitConn?.status ?? 'unconfigured'"
+                  :severity="statusSeverity(gitConn?.status ?? 'unconfigured')"
+                />
+                <span style="font-size: 0.75rem; color: var(--p-text-muted-color)">
+                  last checked
+                  {{ gitConn?.last_validated_at ? formatRelativeDate(gitConn.last_validated_at) : 'never' }}
+                </span>
+                <RouterLink
+                  :to="{ name: 'project-settings', params: { id: p.id } }"
+                  style="color: var(--p-primary-color); text-decoration: underline; font-size: 0.75rem"
+                  data-testid="overview-git-connection-link"
+                >
+                  Manage
+                </RouterLink>
               </dd>
             </div>
 
