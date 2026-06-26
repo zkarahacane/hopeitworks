@@ -1,4 +1,4 @@
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, type Ref } from 'vue'
 import { apiClient } from '@/api/client'
 import { getApiErrorMessage } from '@/utils/apiError'
 import type { components } from '@/api/schema'
@@ -37,8 +37,15 @@ const SOURCE_ERROR_HINT =
  *
  * Both return the `PlanningImportResult` (or `null` on error, with `apiError` populated).
  * Refreshing the board after a commit is the store's responsibility (`runPlanningImport`).
+ *
+ * `options.githubConnected` is the import-flow guard: when the GitHub Projects source is
+ * selected and the project is NOT connected to GitHub, `canSubmit` stays false so the dialog
+ * can surface a "connect first" link instead of letting the request 422 opaquely. Defaults
+ * to connected (markdown imports are unaffected).
  */
-export function usePlanningImport() {
+export function usePlanningImport(options: { githubConnected?: Ref<boolean> } = {}) {
+  const githubConnected = options.githubConnected ?? ref(true)
+
   // ── Source selection ──────────────────────────────────────────────────────────
   const source = ref<PlanningSource>('markdown')
 
@@ -112,6 +119,8 @@ export function usePlanningImport() {
   /** Whether the current source has enough input to call the API. */
   const canSubmit = computed(() => {
     if (source.value === 'markdown') return !!fileContent.value
+    // GitHub Projects requires a live connection (import-flow guard) + a project URL.
+    if (!githubConnected.value) return false
     return projectUrl.value.trim() !== ''
   })
 
@@ -204,6 +213,7 @@ export function usePlanningImport() {
     // source
     source,
     canSubmit,
+    githubConnected,
     // markdown
     fileContent,
     fileName,
