@@ -22,11 +22,12 @@ type Server struct {
 	epicRuns       *EpicRunHandler
 	environment    *EnvironmentHandler
 	apiKeys        *APIKeyHandler
+	planning       *PlanningHandler
 }
 
 // NewServer creates a new Server with the given handlers.
-func NewServer(auth *AuthHandler, projects *ProjectHandler, users *UserHandler, profile *ProfileHandler, epics *EpicHandler, stories *StoryHandler, agents *AgentHandler, stacks *StackHandler, runs *RunHandler, pipelineConfig *PipelineConfigHandler, hitl *HITLHandler, costs *CostHandler, notifications *NotificationHandler, epicRuns *EpicRunHandler, environment *EnvironmentHandler, apiKeys *APIKeyHandler) *Server {
-	return &Server{auth: auth, projects: projects, users: users, profile: profile, epics: epics, stories: stories, agents: agents, stacks: stacks, runs: runs, pipelineConfig: pipelineConfig, hitl: hitl, costs: costs, notifications: notifications, epicRuns: epicRuns, environment: environment, apiKeys: apiKeys}
+func NewServer(auth *AuthHandler, projects *ProjectHandler, users *UserHandler, profile *ProfileHandler, epics *EpicHandler, stories *StoryHandler, agents *AgentHandler, stacks *StackHandler, runs *RunHandler, pipelineConfig *PipelineConfigHandler, hitl *HITLHandler, costs *CostHandler, notifications *NotificationHandler, epicRuns *EpicRunHandler, environment *EnvironmentHandler, apiKeys *APIKeyHandler, planning *PlanningHandler) *Server {
+	return &Server{auth: auth, projects: projects, users: users, profile: profile, epics: epics, stories: stories, agents: agents, stacks: stacks, runs: runs, pipelineConfig: pipelineConfig, hitl: hitl, costs: costs, notifications: notifications, epicRuns: epicRuns, environment: environment, apiKeys: apiKeys, planning: planning}
 }
 
 // RegisterUser delegates to AuthHandler.
@@ -187,6 +188,11 @@ func (s *Server) DeleteStory(w http.ResponseWriter, r *http.Request, projectID P
 // ImportStories delegates to StoryHandler.
 func (s *Server) ImportStories(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath) {
 	s.stories.ImportStories(w, r, projectID)
+}
+
+// ImportPlanning delegates to PlanningHandler.
+func (s *Server) ImportPlanning(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath) {
+	s.planning.ImportPlanning(w, r, projectID)
 }
 
 // ListGlobalAgents delegates to AgentHandler.

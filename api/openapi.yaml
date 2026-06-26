@@ -47,6 +47,8 @@ tags:
     description: User API key management endpoints
   - name: environments
     description: Project environment (execution composition) endpoints
+  - name: planning
+    description: Planning source import (one-way) from external sources
 
 paths:
   # ── Auth ────────────────────────────────────────────────────────────────
@@ -741,7 +743,9 @@ paths:
   /projects/{projectId}/stories/import:
     post:
       operationId: importStories
+      deprecated: true
       summary: Bulk import stories from markdown with YAML frontmatter
+      description: "Deprecated: use POST /projects/{projectId}/planning/import with source=markdown."
       tags: [stories]
       parameters:
         - $ref: "#/components/parameters/ProjectIdPath"
@@ -764,6 +768,39 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+
+  /projects/{projectId}/planning/import:
+    post:
+      operationId: importPlanning
+      summary: Import epics+stories from an external planning source (one-way)
+      tags: [planning]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlanningImportRequest"
+      responses:
+        "200":
+          description: Import summary (or dry-run preview) with per-node decisions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlanningImportResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          description: Source reachable but unusable (project not found, token scope, no items)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 
   /projects/{projectId}/stories/{storyId}:
     get:
@@ -2681,6 +2718,23 @@ components:
           example: backlog
         story_counts:
           $ref: "#/components/schemas/StoryCounts"
+        source:
+          type: string
+          enum: [manual, markdown, github_projects]
+          description: Planning provenance — origin of this epic (read-only).
+        external_id:
+          type: string
+          nullable: true
+          description: Stable id of the source item (read-only). Null for manual rows.
+        source_url:
+          type: string
+          nullable: true
+          description: Deep-link back to the source item (read-only). Null when none.
+        synced_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Last import that touched this epic (read-only). Null for manual rows.
         created_at:
           type: string
           format: date-time
@@ -2950,6 +3004,23 @@ components:
           $ref: "#/components/schemas/LatestRun"
           nullable: true
           description: Most recent run for the story with its current pipeline step, for the live board. Null when the story has never been run.
+        source:
+          type: string
+          enum: [manual, markdown, github_projects]
+          description: Planning provenance — origin of this story (read-only).
+        external_id:
+          type: string
+          nullable: true
+          description: Stable id of the source item (read-only). Null for manual rows.
+        source_url:
+          type: string
+          nullable: true
+          description: Deep-link back to the source item (read-only). Null when none.
+        synced_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Last import that touched this story (read-only). Null for manual rows.
         created_at:
           type: string
           format: date-time
@@ -3139,6 +3210,137 @@ components:
         code:
           type: string
           description: Machine-readable error code
+
+    # ── Planning Import ───────────────────────────────────────────────
+    PlanningImportRequest:
+      type: object
+      required: [source]
+      properties:
+        source:
+          type: string
+          enum: [markdown, github_projects]
+        dry_run:
+          type: boolean
+          default: false
+          description: "true = preview decisions only, no writes"
+        markdown:
+          $ref: "#/components/schemas/MarkdownImportConfig"
+        github_projects:
+          $ref: "#/components/schemas/GitHubProjectsImportConfig"
+
+    MarkdownImportConfig:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+          description: Raw markdown with YAML frontmatter
+
+    GitHubProjectsImportConfig:
+      type: object
+      required: [project_url]
+      properties:
+        project_url:
+          type: string
+          description: GitHub Projects v2 board URL (orgs/<o>/projects/<n> or users/<u>/projects/<n>)
+        status_field:
+          type: string
+          default: "Status"
+          description: Single-select field whose option is read as the raw status
+        done_options:
+          type: array
+          items:
+            type: string
+          description: Status option names mapped to done (case-insensitive). Empty => all backlog.
+        epic_issue_type:
+          type: string
+          default: "Epic"
+          description: issueType.name treated as an epic
+
+    PlanningImportResult:
+      type: object
+      required: [source, dry_run, epics_created, epics_updated, stories_created, stories_updated, skipped, locked, failed, errors, warnings, items]
+      properties:
+        source:
+          type: string
+          enum: [markdown, github_projects]
+        dry_run:
+          type: boolean
+        source_url:
+          type: string
+          nullable: true
+        epics_created:
+          type: integer
+        epics_updated:
+          type: integer
+        stories_created:
+          type: integer
+        stories_updated:
+          type: integer
+        skipped:
+          type: integer
+          description: Unchanged (hash match) no-ops
+        locked:
+          type: integer
+          description: "running/failed/in-stage rows: spec frozen"
+        failed:
+          type: integer
+        errors:
+          type: array
+          items:
+            $ref: "#/components/schemas/PlanningImportError"
+        warnings:
+          type: array
+          items:
+            $ref: "#/components/schemas/PlanningImportWarning"
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/PlanningImportItem"
+
+    PlanningImportError:
+      type: object
+      required: [code, message]
+      properties:
+        key:
+          type: string
+        external_id:
+          type: string
+        code:
+          type: string
+        message:
+          type: string
+
+    PlanningImportWarning:
+      type: object
+      required: [code, message]
+      properties:
+        key:
+          type: string
+        code:
+          type: string
+        message:
+          type: string
+
+    PlanningImportItem:
+      type: object
+      required: [key, kind, action]
+      properties:
+        key:
+          type: string
+        kind:
+          type: string
+          enum: [epic, story]
+        action:
+          type: string
+          enum: [create, update, skip, lock, fail]
+        source_url:
+          type: string
+          nullable: true
+        mapped_status:
+          type: string
+        reason:
+          type: string
 
     # ── Prompt Template ────────────────────────────────────────────────
     PromptTemplate:

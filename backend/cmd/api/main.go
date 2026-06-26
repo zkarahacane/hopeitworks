@@ -467,7 +467,10 @@ func run() error {
 	epicRunService := service.NewEpicRunService(epicRunRepo, storyRepo, epicRepo, schedulerService, parallelGroupExecutor, eventRepo, logger)
 	epicRunHandler := handler.NewEpicRunHandler(epicRunService)
 
-	server := handler.NewServer(authHandler, projectHandler, userHandler, profileHandler, epicHandler, storyHandler, agentHandler, stackHandler, runHandler, pipelineConfigHandler, hitlHandler, costHandler, notificationHandler, epicRunHandler, environmentHandler, apiKeyHandler)
+	// Planning import handler (Phase 0 stub; Phase 1 injects PlanningImportService).
+	planningHandler := handler.NewPlanningHandler()
+
+	server := handler.NewServer(authHandler, projectHandler, userHandler, profileHandler, epicHandler, storyHandler, agentHandler, stackHandler, runHandler, pipelineConfigHandler, hitlHandler, costHandler, notificationHandler, epicRunHandler, environmentHandler, apiKeyHandler, planningHandler)
 
 	// Project user handler
 	projectUserHandler := handler.NewProjectUserHandler(projectUserService)
