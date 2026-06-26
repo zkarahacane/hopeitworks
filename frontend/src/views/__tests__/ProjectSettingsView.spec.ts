@@ -70,6 +70,9 @@ function mountView() {
       provide: { project },
       stubs: {
         ProjectSettingsForm: ProjectSettingsFormStub,
+        // The git-connection card is exercised in its own spec; stub it here so the
+        // delete-flow view test doesn't need the Confirmation/Toast services or apiClient.
+        GitConnectionCard: true,
         Toast: true,
       },
     },
