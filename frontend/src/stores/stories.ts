@@ -2,6 +2,7 @@ import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { apiClient } from '@/api/client'
 import { getApiErrorMessage } from '@/utils/apiError'
+import { useEpicsStore } from '@/stores/epics'
 
 /** The currently active step of a run, for the live kanban. */
 export interface LatestRunStep {
@@ -46,6 +47,15 @@ export interface Story {
    */
   current_stage?: string | null
   latest_run?: LatestRun | null
+  /**
+   * Planning provenance (read-only, stamped by the import connector).
+   * `manual` = created in-app/seed; `markdown`/`github_projects` = imported.
+   * Drives the SourceBadge + the source_url deep-link.
+   */
+  source?: 'manual' | 'markdown' | 'github_projects'
+  external_id?: string | null
+  source_url?: string | null
+  synced_at?: string | null
   created_at: string
   updated_at: string
 }
@@ -346,6 +356,22 @@ export const useStoriesStore = defineStore('stories', () => {
     }
   }
 
+  /**
+   * Refresh the board after a planning import committed changes. An import can create
+   * epics (markdown `epic:` field / GitHub epic issues), so re-fetch epics first, then
+   * re-fetch stories — scoped to the selected epic, or all stories when none is selected.
+   * The actual import POST is owned by `usePlanningImport`; this only re-hydrates state.
+   */
+  async function runPlanningImport(projectId: string, epicId?: string | null) {
+    const epicsStore = useEpicsStore()
+    await epicsStore.fetchEpics(projectId)
+    if (epicId) {
+      await fetchStoriesByEpic(projectId, epicId)
+    } else {
+      await fetchAllStories(projectId)
+    }
+  }
+
   /** Reset store state to initial values */
   function reset() {
     items.value = []
@@ -498,6 +524,7 @@ export const useStoriesStore = defineStore('stories', () => {
     fetchAllStories,
     updateStory,
     createStory,
+    runPlanningImport,
     setSelectedStory,
     setFilters,
     clearError,
