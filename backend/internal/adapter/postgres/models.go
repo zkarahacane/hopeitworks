@@ -124,13 +124,17 @@ type Environment struct {
 }
 
 type Epic struct {
-	ID          uuid.UUID   `json:"id"`
-	ProjectID   uuid.UUID   `json:"project_id"`
-	Name        string      `json:"name"`
-	Description pgtype.Text `json:"description"`
-	Status      string      `json:"status"`
-	CreatedAt   time.Time   `json:"created_at"`
-	UpdatedAt   time.Time   `json:"updated_at"`
+	ID          uuid.UUID          `json:"id"`
+	ProjectID   uuid.UUID          `json:"project_id"`
+	Name        string             `json:"name"`
+	Description pgtype.Text        `json:"description"`
+	Status      string             `json:"status"`
+	CreatedAt   time.Time          `json:"created_at"`
+	UpdatedAt   time.Time          `json:"updated_at"`
+	Source      string             `json:"source"`
+	ExternalID  pgtype.Text        `json:"external_id"`
+	SourceUrl   pgtype.Text        `json:"source_url"`
+	SyncedAt    pgtype.Timestamptz `json:"synced_at"`
 }
 
 type EpicRun struct {
@@ -279,20 +283,25 @@ type Stack struct {
 }
 
 type Story struct {
-	ID                 uuid.UUID   `json:"id"`
-	ProjectID          uuid.UUID   `json:"project_id"`
-	EpicID             pgtype.UUID `json:"epic_id"`
-	Key                string      `json:"key"`
-	Title              string      `json:"title"`
-	Objective          pgtype.Text `json:"objective"`
-	TargetFiles        []byte      `json:"target_files"`
-	DependsOn          []byte      `json:"depends_on"`
-	Scope              pgtype.Text `json:"scope"`
-	Status             string      `json:"status"`
-	AcceptanceCriteria pgtype.Text `json:"acceptance_criteria"`
-	CreatedAt          time.Time   `json:"created_at"`
-	UpdatedAt          time.Time   `json:"updated_at"`
-	CurrentStage       pgtype.Text `json:"current_stage"`
+	ID                 uuid.UUID          `json:"id"`
+	ProjectID          uuid.UUID          `json:"project_id"`
+	EpicID             pgtype.UUID        `json:"epic_id"`
+	Key                string             `json:"key"`
+	Title              string             `json:"title"`
+	Objective          pgtype.Text        `json:"objective"`
+	TargetFiles        []byte             `json:"target_files"`
+	DependsOn          []byte             `json:"depends_on"`
+	Scope              pgtype.Text        `json:"scope"`
+	Status             string             `json:"status"`
+	AcceptanceCriteria pgtype.Text        `json:"acceptance_criteria"`
+	CreatedAt          time.Time          `json:"created_at"`
+	UpdatedAt          time.Time          `json:"updated_at"`
+	CurrentStage       pgtype.Text        `json:"current_stage"`
+	Source             string             `json:"source"`
+	ExternalID         pgtype.Text        `json:"external_id"`
+	SourceUrl          pgtype.Text        `json:"source_url"`
+	SyncedAt           pgtype.Timestamptz `json:"synced_at"`
+	LastImportHash     pgtype.Text        `json:"last_import_hash"`
 }
 
 type User struct {

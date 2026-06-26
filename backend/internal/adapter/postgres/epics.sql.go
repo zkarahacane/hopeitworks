@@ -26,7 +26,7 @@ func (q *Queries) CountEpicsByProject(ctx context.Context, projectID uuid.UUID) 
 const createEpic = `-- name: CreateEpic :one
 INSERT INTO epics (project_id, name, description, status)
 VALUES ($1, $2, $3, $4)
-RETURNING id, project_id, name, description, status, created_at, updated_at
+RETURNING id, project_id, name, description, status, created_at, updated_at, source, external_id, source_url, synced_at
 `
 
 type CreateEpicParams struct {
@@ -52,6 +52,10 @@ func (q *Queries) CreateEpic(ctx context.Context, arg CreateEpicParams) (Epic, e
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Source,
+		&i.ExternalID,
+		&i.SourceUrl,
+		&i.SyncedAt,
 	)
 	return i, err
 }
@@ -66,7 +70,7 @@ func (q *Queries) DeleteEpic(ctx context.Context, id uuid.UUID) error {
 }
 
 const getEpic = `-- name: GetEpic :one
-SELECT id, project_id, name, description, status, created_at, updated_at FROM epics WHERE id = $1
+SELECT id, project_id, name, description, status, created_at, updated_at, source, external_id, source_url, synced_at FROM epics WHERE id = $1
 `
 
 func (q *Queries) GetEpic(ctx context.Context, id uuid.UUID) (Epic, error) {
@@ -80,12 +84,16 @@ func (q *Queries) GetEpic(ctx context.Context, id uuid.UUID) (Epic, error) {
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Source,
+		&i.ExternalID,
+		&i.SourceUrl,
+		&i.SyncedAt,
 	)
 	return i, err
 }
 
 const listEpicsByProject = `-- name: ListEpicsByProject :many
-SELECT id, project_id, name, description, status, created_at, updated_at FROM epics
+SELECT id, project_id, name, description, status, created_at, updated_at, source, external_id, source_url, synced_at FROM epics
 WHERE project_id = $1
 ORDER BY created_at DESC
 LIMIT $2 OFFSET $3
@@ -114,6 +122,10 @@ func (q *Queries) ListEpicsByProject(ctx context.Context, arg ListEpicsByProject
 			&i.Status,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Source,
+			&i.ExternalID,
+			&i.SourceUrl,
+			&i.SyncedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -132,7 +144,7 @@ SET name = COALESCE($1, name),
     status = COALESCE($3, status),
     updated_at = now()
 WHERE id = $4
-RETURNING id, project_id, name, description, status, created_at, updated_at
+RETURNING id, project_id, name, description, status, created_at, updated_at, source, external_id, source_url, synced_at
 `
 
 type UpdateEpicParams struct {
@@ -158,6 +170,10 @@ func (q *Queries) UpdateEpic(ctx context.Context, arg UpdateEpicParams) (Epic, e
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Source,
+		&i.ExternalID,
+		&i.SourceUrl,
+		&i.SyncedAt,
 	)
 	return i, err
 }

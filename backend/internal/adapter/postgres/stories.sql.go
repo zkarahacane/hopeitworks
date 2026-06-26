@@ -74,7 +74,7 @@ func (q *Queries) CountStoriesByStatus(ctx context.Context, arg CountStoriesBySt
 const createStory = `-- name: CreateStory :one
 INSERT INTO stories (project_id, epic_id, key, title, objective, target_files, depends_on, scope, status, acceptance_criteria)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-RETURNING id, project_id, epic_id, key, title, objective, target_files, depends_on, scope, status, acceptance_criteria, created_at, updated_at, current_stage
+RETURNING id, project_id, epic_id, key, title, objective, target_files, depends_on, scope, status, acceptance_criteria, created_at, updated_at, current_stage, source, external_id, source_url, synced_at, last_import_hash
 `
 
 type CreateStoryParams struct {
@@ -119,6 +119,11 @@ func (q *Queries) CreateStory(ctx context.Context, arg CreateStoryParams) (Story
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CurrentStage,
+		&i.Source,
+		&i.ExternalID,
+		&i.SourceUrl,
+		&i.SyncedAt,
+		&i.LastImportHash,
 	)
 	return i, err
 }
@@ -133,7 +138,7 @@ func (q *Queries) DeleteStory(ctx context.Context, id uuid.UUID) error {
 }
 
 const getStory = `-- name: GetStory :one
-SELECT id, project_id, epic_id, key, title, objective, target_files, depends_on, scope, status, acceptance_criteria, created_at, updated_at, current_stage FROM stories WHERE id = $1
+SELECT id, project_id, epic_id, key, title, objective, target_files, depends_on, scope, status, acceptance_criteria, created_at, updated_at, current_stage, source, external_id, source_url, synced_at, last_import_hash FROM stories WHERE id = $1
 `
 
 func (q *Queries) GetStory(ctx context.Context, id uuid.UUID) (Story, error) {
@@ -154,12 +159,17 @@ func (q *Queries) GetStory(ctx context.Context, id uuid.UUID) (Story, error) {
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CurrentStage,
+		&i.Source,
+		&i.ExternalID,
+		&i.SourceUrl,
+		&i.SyncedAt,
+		&i.LastImportHash,
 	)
 	return i, err
 }
 
 const getStoryByKey = `-- name: GetStoryByKey :one
-SELECT id, project_id, epic_id, key, title, objective, target_files, depends_on, scope, status, acceptance_criteria, created_at, updated_at, current_stage FROM stories WHERE project_id = $1 AND key = $2
+SELECT id, project_id, epic_id, key, title, objective, target_files, depends_on, scope, status, acceptance_criteria, created_at, updated_at, current_stage, source, external_id, source_url, synced_at, last_import_hash FROM stories WHERE project_id = $1 AND key = $2
 `
 
 type GetStoryByKeyParams struct {
@@ -185,12 +195,17 @@ func (q *Queries) GetStoryByKey(ctx context.Context, arg GetStoryByKeyParams) (S
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CurrentStage,
+		&i.Source,
+		&i.ExternalID,
+		&i.SourceUrl,
+		&i.SyncedAt,
+		&i.LastImportHash,
 	)
 	return i, err
 }
 
 const listStoriesByEpic = `-- name: ListStoriesByEpic :many
-SELECT id, project_id, epic_id, key, title, objective, target_files, depends_on, scope, status, acceptance_criteria, created_at, updated_at, current_stage FROM stories
+SELECT id, project_id, epic_id, key, title, objective, target_files, depends_on, scope, status, acceptance_criteria, created_at, updated_at, current_stage, source, external_id, source_url, synced_at, last_import_hash FROM stories
 WHERE epic_id = $1
 ORDER BY created_at DESC
 LIMIT $2 OFFSET $3
@@ -226,6 +241,11 @@ func (q *Queries) ListStoriesByEpic(ctx context.Context, arg ListStoriesByEpicPa
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.CurrentStage,
+			&i.Source,
+			&i.ExternalID,
+			&i.SourceUrl,
+			&i.SyncedAt,
+			&i.LastImportHash,
 		); err != nil {
 			return nil, err
 		}
@@ -238,7 +258,7 @@ func (q *Queries) ListStoriesByEpic(ctx context.Context, arg ListStoriesByEpicPa
 }
 
 const listStoriesByProject = `-- name: ListStoriesByProject :many
-SELECT id, project_id, epic_id, key, title, objective, target_files, depends_on, scope, status, acceptance_criteria, created_at, updated_at, current_stage FROM stories
+SELECT id, project_id, epic_id, key, title, objective, target_files, depends_on, scope, status, acceptance_criteria, created_at, updated_at, current_stage, source, external_id, source_url, synced_at, last_import_hash FROM stories
 WHERE project_id = $1
 ORDER BY created_at DESC
 LIMIT $2 OFFSET $3
@@ -274,6 +294,11 @@ func (q *Queries) ListStoriesByProject(ctx context.Context, arg ListStoriesByPro
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.CurrentStage,
+			&i.Source,
+			&i.ExternalID,
+			&i.SourceUrl,
+			&i.SyncedAt,
+			&i.LastImportHash,
 		); err != nil {
 			return nil, err
 		}
@@ -286,7 +311,7 @@ func (q *Queries) ListStoriesByProject(ctx context.Context, arg ListStoriesByPro
 }
 
 const listStoriesByStatus = `-- name: ListStoriesByStatus :many
-SELECT id, project_id, epic_id, key, title, objective, target_files, depends_on, scope, status, acceptance_criteria, created_at, updated_at, current_stage FROM stories
+SELECT id, project_id, epic_id, key, title, objective, target_files, depends_on, scope, status, acceptance_criteria, created_at, updated_at, current_stage, source, external_id, source_url, synced_at, last_import_hash FROM stories
 WHERE project_id = $1 AND status = ANY($2::text[])
 ORDER BY created_at DESC
 LIMIT $3 OFFSET $4
@@ -328,6 +353,11 @@ func (q *Queries) ListStoriesByStatus(ctx context.Context, arg ListStoriesByStat
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.CurrentStage,
+			&i.Source,
+			&i.ExternalID,
+			&i.SourceUrl,
+			&i.SyncedAt,
+			&i.LastImportHash,
 		); err != nil {
 			return nil, err
 		}
@@ -351,7 +381,7 @@ SET title = COALESCE($1, title),
     epic_id = COALESCE($8, epic_id),
     updated_at = now()
 WHERE id = $9
-RETURNING id, project_id, epic_id, key, title, objective, target_files, depends_on, scope, status, acceptance_criteria, created_at, updated_at, current_stage
+RETURNING id, project_id, epic_id, key, title, objective, target_files, depends_on, scope, status, acceptance_criteria, created_at, updated_at, current_stage, source, external_id, source_url, synced_at, last_import_hash
 `
 
 type UpdateStoryParams struct {
@@ -394,6 +424,11 @@ func (q *Queries) UpdateStory(ctx context.Context, arg UpdateStoryParams) (Story
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CurrentStage,
+		&i.Source,
+		&i.ExternalID,
+		&i.SourceUrl,
+		&i.SyncedAt,
+		&i.LastImportHash,
 	)
 	return i, err
 }
@@ -403,7 +438,7 @@ UPDATE stories
 SET current_stage = $1,
     updated_at = now()
 WHERE id = $2
-RETURNING id, project_id, epic_id, key, title, objective, target_files, depends_on, scope, status, acceptance_criteria, created_at, updated_at, current_stage
+RETURNING id, project_id, epic_id, key, title, objective, target_files, depends_on, scope, status, acceptance_criteria, created_at, updated_at, current_stage, source, external_id, source_url, synced_at, last_import_hash
 `
 
 type UpdateStoryCurrentStageParams struct {
@@ -429,6 +464,11 @@ func (q *Queries) UpdateStoryCurrentStage(ctx context.Context, arg UpdateStoryCu
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CurrentStage,
+		&i.Source,
+		&i.ExternalID,
+		&i.SourceUrl,
+		&i.SyncedAt,
+		&i.LastImportHash,
 	)
 	return i, err
 }
