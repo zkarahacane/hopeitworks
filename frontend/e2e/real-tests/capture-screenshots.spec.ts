@@ -46,10 +46,10 @@ test('capture README screenshots', async ({ page }) => {
         animations: 'disabled',
         timeout: 20000,
       })
-      // eslint-disable-next-line no-console
+       
       console.log(`OK ${name} <- ${path}`)
     } catch (e) {
-      // eslint-disable-next-line no-console
+       
       console.log(`FAIL ${name} <- ${path}: ${(e as Error).message.split('\n')[0]}`)
     }
   }
