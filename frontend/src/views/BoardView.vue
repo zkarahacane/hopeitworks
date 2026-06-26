@@ -5,12 +5,13 @@ import Select from 'primevue/select'
 import Message from 'primevue/message'
 import Skeleton from 'primevue/skeleton'
 import Button from 'primevue/button'
-import Tag from 'primevue/tag'
 import KanbanBoard from '@/features/board/KanbanBoard.vue'
 import StoryDetailPanel from '@/features/board/StoryDetailPanel.vue'
+import StoryImportDialog from '@/features/board/StoryImportDialog.vue'
 import { useBoard } from '@/composables/useBoard'
 import { useProject } from '@/composables/useProject'
 import { useStoriesStore } from '@/stores/stories'
+import { useAuthStore } from '@/stores/auth'
 import { useToast } from 'primevue/usetoast'
 import Toast from 'primevue/toast'
 import RunLaunchConfirmDialog from '@/features/runs/RunLaunchConfirmDialog.vue'
@@ -43,18 +44,23 @@ const selectedEpicName = computed(() => {
 
 const { project } = useProject(projectId)
 
-// ── PLANNED IN read-only indicator ──────────────────────────────────────────
-// Frontend-only derivation: maps git_provider to a planning source label.
-// Backend gap: no planning_source field on Epic or Project — this is a
-// UI-layer heuristic until the backend exposes an explicit planning_source.
-// The indicator is read-only; the control is not interactive pending backend support.
+// ── Planning import (admin-gated) ───────────────────────────────────────────
+// Provenance now comes from the authoritative story.source / epic.source stamped
+// by the import connector (the old git_provider heuristic is gone). Only an admin
+// can trigger an import; non-admins never see the CTA.
+const auth = useAuthStore()
+const isAdmin = computed(() => auth.user?.role === 'admin')
 
-const derivedPlanningSource = computed((): string => {
-  const provider = project.value?.git_provider
-  if (provider === 'github') return 'GitHub'
-  if (provider === 'gitlab') return 'GitLab'
-  return 'GitHub' // sensible default
-})
+const importDialogVisible = ref(false)
+
+function openImportDialog() {
+  importDialogVisible.value = true
+}
+
+async function handleImported() {
+  // Re-hydrate epics + stories after a committed import (keep the selected epic scope).
+  await storiesStore.runPlanningImport(projectId, selectedEpicId.value)
+}
 
 // ── Epic selector ─────────────────────────────────────────────────────────────
 
@@ -205,12 +211,16 @@ async function handleStartStage(story: Story) {
         </p>
       </div>
 
-      <!-- PLANNED IN read-only indicator (backend planning_source not yet available) -->
-      <div class="flex flex-col items-end gap-1 shrink-0">
-        <span style="font-size: 0.72rem; color: var(--p-text-muted-color); text-transform: uppercase; letter-spacing: 0.05em">
-          Planned in
-        </span>
-        <Tag :value="derivedPlanningSource" :pt="{ root: { style: 'font-size: 0.78rem' } }" />
+      <!-- Import / Re-import planning (admin only) -->
+      <div v-if="isAdmin" class="flex items-center shrink-0">
+        <Button
+          :label="epics.length > 0 ? 'Re-import' : 'Import planning'"
+          icon="pi pi-download"
+          severity="secondary"
+          outlined
+          data-testid="board-import-button"
+          @click="openImportDialog"
+        />
       </div>
     </div>
 
@@ -288,7 +298,16 @@ async function handleStartStage(story: Story) {
           style="color: var(--p-text-muted-color)"
         >
           <i class="pi pi-th-large" style="font-size: 2.5rem" aria-hidden="true" />
-          <p style="font-size: 1rem">No epics found. Import stories to get started.</p>
+          <p style="font-size: 1rem">No epics found. Import a plan to get started.</p>
+          <Button
+            v-if="isAdmin"
+            label="Import planning"
+            icon="pi pi-download"
+            severity="success"
+            data-testid="board-empty-import-button"
+            @click="openImportDialog"
+          />
+          <p v-else style="font-size: 0.85rem">Contact an administrator to import a plan.</p>
         </div>
 
         <!-- Kanban board -->
@@ -331,6 +350,12 @@ async function handleStartStage(story: Story) {
       :loading="launchLoading"
       @confirm="handleConfirm"
       @cancel="dialogVisible = false"
+    />
+
+    <StoryImportDialog
+      v-model:visible="importDialogVisible"
+      :project-id="projectId"
+      @imported="handleImported"
     />
   </div>
 </template>

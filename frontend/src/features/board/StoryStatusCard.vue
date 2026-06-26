@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import type { Story } from '@/stores/stories'
 import StatusBadge from '@/ui/primitives/StatusBadge.vue'
+import SourceBadge from '@/ui/primitives/SourceBadge.vue'
 
 const props = defineProps<{
   story: Story
@@ -62,6 +63,9 @@ const cardStyleObj = computed(() =>
     >
       {{ story.title }}
     </span>
+    <div v-if="story.source && story.source !== 'manual'" class="flex">
+      <SourceBadge :source="story.source" :source-url="story.source_url" />
+    </div>
   </div>
 </template>
 
