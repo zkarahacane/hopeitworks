@@ -49,6 +49,8 @@ tags:
     description: Project environment (execution composition) endpoints
   - name: planning
     description: Planning source import (one-way) from external sources
+  - name: git-connection
+    description: Project git connection (encrypted PAT) management endpoints
 
 paths:
   # ── Auth ────────────────────────────────────────────────────────────────
@@ -1404,6 +1406,132 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
+
+  # ── Git Connection ─────────────────────────────────────────────────────
+  /projects/{id}/git-connection:
+    get:
+      operationId: getProjectGitConnection
+      summary: Get the project's git connection status (never returns the secret)
+      description: >
+        Returns the project's git connection status. The stored token is NEVER
+        returned; only advisory metadata is exposed (status, account login, last
+        4 characters, token type, scopes, expiry, last validation time, and the
+        active token source). Project owner or global admin only.
+      tags: [git-connection]
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: The project's git connection status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitConnectionStatus"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      operationId: setProjectGitConnection
+      summary: Set or replace the project's git token (validated before persist)
+      description: >
+        Stores an encrypted Personal Access Token for the project. When
+        `validate` is true (default) the token is probed against the provider
+        before being persisted. The token field is write-only and is never
+        returned. Project owner or global admin only.
+      tags: [git-connection]
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetGitConnectionRequest"
+      responses:
+        "200":
+          description: Connection set; returns the refreshed status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitConnectionStatus"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          description: >
+            Token rejected by the provider. Error `code` is one of
+            `GIT_CONNECTION_INVALID` (provider returned 401) or
+            `GIT_CONNECTION_INSUFFICIENT_SCOPE` (token is missing a required
+            scope). `GIT_CONNECTION_KEY_UNSET` is returned when the server
+            encryption key is unset or a known dev default.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      operationId: clearProjectGitConnection
+      summary: Clear the stored git token (reverts to env fallback)
+      description: >
+        Deletes the stored connection so token resolution reverts to the
+        environment fallback. Idempotent (no-op when absent). Project owner or
+        global admin only.
+      tags: [git-connection]
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "204":
+          description: Connection cleared
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /projects/{id}/git-connection/test:
+    post:
+      operationId: testProjectGitConnection
+      summary: Test the connection (stored token, or an unsaved token in the body)
+      description: >
+        Live-probes the provider with the stored token, or with an unsaved token
+        supplied in the body. Computes missing scopes versus the required set.
+        The token is never returned. Project owner or global admin only.
+      tags: [git-connection]
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TestGitConnectionRequest"
+      responses:
+        "200":
+          description: Connection test result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitConnectionTestResult"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          description: >
+            Connection unusable. Error `code` is one of
+            `GIT_CONNECTION_INVALID` or `GIT_CONNECTION_INSUFFICIENT_SCOPE`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 
   /agents:
     get:
@@ -4806,6 +4934,135 @@ components:
         per_page:
           type: integer
           example: 20
+
+    GitConnectionStatus:
+      type: object
+      description: >
+        Advisory git connection status for a project. NEVER contains the token.
+        `status`, `scopes`, `account_login` and `expires_at` are last-known
+        values and must be displayed alongside `last_validated_at`.
+      required:
+        - configured
+        - kind
+        - provider
+        - status
+      properties:
+        configured:
+          type: boolean
+          description: Whether a stored connection row exists for this project.
+        source:
+          type: string
+          enum: [connection, env, none]
+          # x-enum-varnames keeps the wire values (connection/env/none) while giving
+          # the generated Go constants unique identifiers, so `none` does not collide
+          # with other enums' `None` constant (oapi-codegen prefixes-on-collision).
+          x-enum-varnames: [SourceConnection, SourceEnv, SourceNone]
+          description: Origin of the active token (stored connection, environment fallback, or none).
+        kind:
+          type: string
+          enum: [pat]
+          description: Credential mechanism (v1 = PAT only).
+        provider:
+          type: string
+          enum: [github, gitea]
+        status:
+          type: string
+          enum: [unconfigured, connected, invalid, expired, insufficient_scope]
+        secret_last4:
+          type: string
+          nullable: true
+          example: "cd12"
+          description: Last 4 characters of the stored token (display hint only).
+        token_type:
+          type: string
+          enum: [classic, fine_grained, unknown]
+          nullable: true
+        account_login:
+          type: string
+          nullable: true
+        scopes:
+          type: array
+          items:
+            type: string
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_validated_at:
+          type: string
+          format: date-time
+          nullable: true
+        validation_error:
+          type: string
+          nullable: true
+          description: Fixed error code (e.g. unauthorized, insufficient_scope) — never raw provider text.
+
+    SetGitConnectionRequest:
+      type: object
+      required:
+        - token
+      properties:
+        kind:
+          type: string
+          enum: [pat]
+          default: pat
+          description: Credential mechanism (v1 = PAT only).
+        provider:
+          type: string
+          enum: [github, gitea]
+          default: github
+        token:
+          type: string
+          minLength: 1
+          maxLength: 255
+          writeOnly: true
+          description: The Personal Access Token. Write-only; never returned by the API.
+        validate:
+          type: boolean
+          default: true
+          description: Probe the provider before persisting the token.
+
+    TestGitConnectionRequest:
+      type: object
+      properties:
+        token:
+          type: string
+          writeOnly: true
+          description: Optional unsaved token to test. Omit to test the stored token.
+
+    GitConnectionTestResult:
+      type: object
+      required:
+        - ok
+        - status
+        - token_type
+      properties:
+        ok:
+          type: boolean
+        status:
+          type: string
+          enum: [connected, invalid, expired, insufficient_scope]
+        account_login:
+          type: string
+          nullable: true
+        scopes:
+          type: array
+          items:
+            type: string
+        missing_scopes:
+          type: array
+          items:
+            type: string
+          description: Required scopes minus granted scopes.
+        token_type:
+          type: string
+          enum: [classic, fine_grained, unknown]
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        message:
+          type: string
 
     Error:
       type: object

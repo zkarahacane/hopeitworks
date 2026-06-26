@@ -23,11 +23,12 @@ type Server struct {
 	environment    *EnvironmentHandler
 	apiKeys        *APIKeyHandler
 	planning       *PlanningHandler
+	gitConnection  *GitConnectionHandler
 }
 
 // NewServer creates a new Server with the given handlers.
-func NewServer(auth *AuthHandler, projects *ProjectHandler, users *UserHandler, profile *ProfileHandler, epics *EpicHandler, stories *StoryHandler, agents *AgentHandler, stacks *StackHandler, runs *RunHandler, pipelineConfig *PipelineConfigHandler, hitl *HITLHandler, costs *CostHandler, notifications *NotificationHandler, epicRuns *EpicRunHandler, environment *EnvironmentHandler, apiKeys *APIKeyHandler, planning *PlanningHandler) *Server {
-	return &Server{auth: auth, projects: projects, users: users, profile: profile, epics: epics, stories: stories, agents: agents, stacks: stacks, runs: runs, pipelineConfig: pipelineConfig, hitl: hitl, costs: costs, notifications: notifications, epicRuns: epicRuns, environment: environment, apiKeys: apiKeys, planning: planning}
+func NewServer(auth *AuthHandler, projects *ProjectHandler, users *UserHandler, profile *ProfileHandler, epics *EpicHandler, stories *StoryHandler, agents *AgentHandler, stacks *StackHandler, runs *RunHandler, pipelineConfig *PipelineConfigHandler, hitl *HITLHandler, costs *CostHandler, notifications *NotificationHandler, epicRuns *EpicRunHandler, environment *EnvironmentHandler, apiKeys *APIKeyHandler, planning *PlanningHandler, gitConnection *GitConnectionHandler) *Server {
+	return &Server{auth: auth, projects: projects, users: users, profile: profile, epics: epics, stories: stories, agents: agents, stacks: stacks, runs: runs, pipelineConfig: pipelineConfig, hitl: hitl, costs: costs, notifications: notifications, epicRuns: epicRuns, environment: environment, apiKeys: apiKeys, planning: planning, gitConnection: gitConnection}
 }
 
 // RegisterUser delegates to AuthHandler.
@@ -478,4 +479,24 @@ func (s *Server) CreateMyAPIKey(w http.ResponseWriter, r *http.Request) {
 // DeleteMyAPIKey delegates to APIKeyHandler.
 func (s *Server) DeleteMyAPIKey(w http.ResponseWriter, r *http.Request, keyID KeyIdPath) {
 	s.apiKeys.DeleteMyAPIKey(w, r, keyID)
+}
+
+// GetProjectGitConnection delegates to GitConnectionHandler.
+func (s *Server) GetProjectGitConnection(w http.ResponseWriter, r *http.Request, id IdPath) {
+	s.gitConnection.GetProjectGitConnection(w, r, id)
+}
+
+// SetProjectGitConnection delegates to GitConnectionHandler.
+func (s *Server) SetProjectGitConnection(w http.ResponseWriter, r *http.Request, id IdPath) {
+	s.gitConnection.SetProjectGitConnection(w, r, id)
+}
+
+// ClearProjectGitConnection delegates to GitConnectionHandler.
+func (s *Server) ClearProjectGitConnection(w http.ResponseWriter, r *http.Request, id IdPath) {
+	s.gitConnection.ClearProjectGitConnection(w, r, id)
+}
+
+// TestProjectGitConnection delegates to GitConnectionHandler.
+func (s *Server) TestProjectGitConnection(w http.ResponseWriter, r *http.Request, id IdPath) {
+	s.gitConnection.TestProjectGitConnection(w, r, id)
 }

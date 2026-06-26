@@ -188,6 +188,10 @@ func run() error {
 	environmentService := service.NewEnvironmentService(environmentRepo)
 	environmentHandler := handler.NewEnvironmentHandler(environmentService)
 
+	// Git connection (Phase 0): contract frozen + stub handler wired for a green
+	// build. Phase 1 replaces the stub with a real GitConnectionService.
+	gitConnectionHandler := handler.NewGitConnectionHandler()
+
 	// Template renderer (Handlebars engine for prompt templates)
 	handlebarsRenderer := hbadapter.NewRenderer()
 
@@ -478,7 +482,7 @@ func run() error {
 	// Planning import handler (POST /projects/{projectId}/planning/import).
 	planningHandler := handler.NewPlanningHandler(planningImportService)
 
-	server := handler.NewServer(authHandler, projectHandler, userHandler, profileHandler, epicHandler, storyHandler, agentHandler, stackHandler, runHandler, pipelineConfigHandler, hitlHandler, costHandler, notificationHandler, epicRunHandler, environmentHandler, apiKeyHandler, planningHandler)
+	server := handler.NewServer(authHandler, projectHandler, userHandler, profileHandler, epicHandler, storyHandler, agentHandler, stackHandler, runHandler, pipelineConfigHandler, hitlHandler, costHandler, notificationHandler, epicRunHandler, environmentHandler, apiKeyHandler, planningHandler, gitConnectionHandler)
 
 	// Project user handler
 	projectUserHandler := handler.NewProjectUserHandler(projectUserService)
