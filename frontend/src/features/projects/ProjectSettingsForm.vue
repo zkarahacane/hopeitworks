@@ -8,6 +8,7 @@ import Textarea from 'primevue/textarea'
 import Select from 'primevue/select'
 import FloatLabel from 'primevue/floatlabel'
 import Button from 'primevue/button'
+import Panel from 'primevue/panel'
 import { useAuthStore } from '@/stores/auth'
 import ProjectDeleteDialog from './ProjectDeleteDialog.vue'
 import type { Project, UpdateProjectPayload } from '@/stores/projects'
@@ -175,21 +176,31 @@ const onSubmit = handleSubmit((values) => {
         }}</small>
       </div>
 
-      <div class="flex flex-col gap-2">
-        <FloatLabel>
-          <InputText
-            id="settings-git-token-env"
-            v-model="gitTokenEnv"
-            v-bind="gitTokenEnvAttrs"
-            class="w-full"
-            placeholder="GITEA_TOKEN"
-          />
-          <label for="settings-git-token-env">Git Token Env Var</label>
-        </FloatLabel>
-        <small :style="{ color: 'var(--p-text-muted-color)' }"
-          >Name of the environment variable holding the git token (defaults to GITHUB_TOKEN)</small
-        >
-      </div>
+      <!-- Legacy fallback: the primary path is now the Git connection card (encrypted PAT). -->
+      <Panel
+        header="Advanced — legacy env-var fallback"
+        toggleable
+        collapsed
+        data-testid="git-token-env-advanced"
+      >
+        <div class="flex flex-col gap-2">
+          <FloatLabel>
+            <InputText
+              id="settings-git-token-env"
+              v-model="gitTokenEnv"
+              v-bind="gitTokenEnvAttrs"
+              class="w-full"
+              placeholder="GITEA_TOKEN"
+            />
+            <label for="settings-git-token-env">Git Token Env Var</label>
+          </FloatLabel>
+          <small :style="{ color: 'var(--p-text-muted-color)' }">
+            Optional fallback: name of an environment variable holding the git token (defaults to
+            GITHUB_TOKEN). Prefer the Git connection card below, which stores an encrypted token
+            per project. This is only used when no connection is stored.
+          </small>
+        </div>
+      </Panel>
 
       <div class="flex flex-col gap-2">
         <FloatLabel>

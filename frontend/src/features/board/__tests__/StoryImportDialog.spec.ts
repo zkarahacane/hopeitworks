@@ -1,13 +1,30 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
-import { mount, type VueWrapper } from '@vue/test-utils'
+import { mount, type VueWrapper, flushPromises } from '@vue/test-utils'
 import { h, defineComponent, ref } from 'vue'
 import PrimeVue from 'primevue/config'
 import StoryImportDialog from '../StoryImportDialog.vue'
 import type { PlanningImportResult } from '@/composables/usePlanningImport'
+import type { GitConnectionStatus } from '@/features/projects/useGitConnection'
 
 vi.mock('@/api/client', () => ({
-  apiClient: { GET: vi.fn(), PUT: vi.fn(), POST: vi.fn() },
+  apiClient: { GET: vi.fn(), PUT: vi.fn(), POST: vi.fn(), DELETE: vi.fn() },
 }))
+
+// ── useGitConnection mock — drives the import-flow guard ──────────────────────
+const gitStatusExecute = vi.fn()
+vi.mock('@/features/projects/useGitConnection', () => ({
+  useGitConnection: () => ({
+    status: { execute: gitStatusExecute, isLoading: ref(false), error: ref(null), data: ref(null) },
+    save: { execute: vi.fn(), isLoading: ref(false), error: ref(null), data: ref(null) },
+    test: { execute: vi.fn(), isLoading: ref(false), error: ref(null), data: ref(null) },
+    clear: { execute: vi.fn(), isLoading: ref(false), error: ref(null), data: ref(null) },
+    statusSeverity: (s: string) => s,
+  }),
+}))
+
+function gitStatus(overrides: Partial<GitConnectionStatus> = {}): GitConnectionStatus {
+  return { configured: true, kind: 'pat', provider: 'github', status: 'connected', ...overrides }
+}
 
 // ── Mutable state shared with the usePlanningImport mock ──────────────────────
 const mockState = {
@@ -61,6 +78,15 @@ const DialogStub = defineComponent({
   },
 })
 
+/** Stub RouterLink as a plain anchor (no router plugin in this test). */
+const RouterLinkStub = defineComponent({
+  name: 'RouterLink',
+  props: ['to'],
+  setup(_, { slots }) {
+    return () => h('a', {}, slots.default?.())
+  },
+})
+
 function emptyResult(overrides: Partial<PlanningImportResult> = {}): PlanningImportResult {
   return {
     source: 'markdown',
@@ -98,6 +124,8 @@ beforeEach(() => {
   mockState.apiError.value = null
   mockState.isLoading.value = false
   vi.clearAllMocks()
+  // Default: project is connected to GitHub (guard hidden).
+  gitStatusExecute.mockResolvedValue(gitStatus())
 })
 
 function mountComponent(props: Partial<{ visible: boolean; projectId: string }> = {}) {
@@ -105,7 +133,7 @@ function mountComponent(props: Partial<{ visible: boolean; projectId: string }> 
     props: { visible: true, projectId: 'p1', ...props },
     global: {
       plugins: [PrimeVue],
-      stubs: { Dialog: DialogStub },
+      stubs: { Dialog: DialogStub, RouterLink: RouterLinkStub },
     },
   })
   return wrapper
@@ -246,6 +274,33 @@ describe('StoryImportDialog', () => {
     it('renders nothing when visible is false', () => {
       mountComponent({ visible: false })
       expect(wrapper.find('.p-dialog').exists()).toBe(false)
+    })
+  })
+
+  describe('GitHub import-flow guard', () => {
+    it('shows the connect-first guard when the project is not connected', async () => {
+      gitStatusExecute.mockResolvedValue(gitStatus({ status: 'unconfigured', configured: false }))
+      mockState.source.value = 'github_projects'
+      mountComponent()
+      await flushPromises()
+      expect(wrapper.find('[data-testid="github-connection-guard"]').exists()).toBe(true)
+      expect(wrapper.find('[data-testid="github-connection-guard-link"]').exists()).toBe(true)
+    })
+
+    it('hides the guard when the project is connected', async () => {
+      gitStatusExecute.mockResolvedValue(gitStatus({ status: 'connected' }))
+      mockState.source.value = 'github_projects'
+      mountComponent()
+      await flushPromises()
+      expect(wrapper.find('[data-testid="github-connection-guard"]').exists()).toBe(false)
+    })
+
+    it('shows the guard when the status probe fails (conservative)', async () => {
+      gitStatusExecute.mockResolvedValue(null)
+      mockState.source.value = 'github_projects'
+      mountComponent()
+      await flushPromises()
+      expect(wrapper.find('[data-testid="github-connection-guard"]').exists()).toBe(true)
     })
   })
 })
