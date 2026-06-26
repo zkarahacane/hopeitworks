@@ -71,6 +71,34 @@ func (m *mockEpicRepo) Delete(_ context.Context, id uuid.UUID) error {
 	delete(m.epics, id)
 	return nil
 }
+func (m *mockEpicRepo) GetBySourceRef(_ context.Context, projectID uuid.UUID, source, externalID string) (*model.Epic, error) {
+	for _, e := range m.epics {
+		if e.ProjectID == projectID && e.Source == source && e.ExternalID != nil && *e.ExternalID == externalID {
+			return e, nil
+		}
+	}
+	return nil, errors.NewNotFound("epic", externalID)
+}
+func (m *mockEpicRepo) GetByName(_ context.Context, projectID uuid.UUID, name string) (*model.Epic, error) {
+	for _, e := range m.epics {
+		if e.ProjectID == projectID && e.Name == name {
+			return e, nil
+		}
+	}
+	return nil, errors.NewNotFound("epic", name)
+}
+func (m *mockEpicRepo) CreateFromImport(ctx context.Context, e *model.Epic) (*model.Epic, error) {
+	for _, existing := range m.epics {
+		if existing.ProjectID == e.ProjectID && existing.Name == e.Name {
+			return nil, errors.NewConflict("epic", e.Name)
+		}
+	}
+	return m.Create(ctx, e)
+}
+func (m *mockEpicRepo) UpdateFromImport(_ context.Context, e *model.Epic) (*model.Epic, error) {
+	m.epics[e.ID] = e
+	return e, nil
+}
 
 func TestEpicService_Create(t *testing.T) {
 	projectID := uuid.New()

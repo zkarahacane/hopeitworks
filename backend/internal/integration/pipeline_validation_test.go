@@ -17,11 +17,23 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/zakari/hopeitworks/backend/internal/adapter/markdown"
+	planningadapter "github.com/zakari/hopeitworks/backend/internal/adapter/planning"
 	"github.com/zakari/hopeitworks/backend/internal/adapter/postgres"
 	"github.com/zakari/hopeitworks/backend/internal/domain/model"
+	"github.com/zakari/hopeitworks/backend/internal/domain/port"
 	"github.com/zakari/hopeitworks/backend/internal/domain/service"
 	"github.com/zakari/hopeitworks/backend/internal/testutil"
 )
+
+// newMarkdownImportService builds a PlanningImportService wired with the markdown
+// adapter against a real DB — the replacement for the deleted StoryService.Import
+// used to seed stories from the reference todo-stories.md fixture.
+func newMarkdownImportService(storyRepo port.StoryRepository, queries *postgres.Queries) *service.PlanningImportService {
+	epicRepo := postgres.NewEpicRepo(queries)
+	projectRepo := postgres.NewProjectRepo(queries)
+	factory := planningadapter.NewFactory(projectRepo, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	return service.NewPlanningImportService(storyRepo, epicRepo, factory)
+}
 
 // testProjectStoriesPath returns the path to testdata/todo-stories.md.
 func testProjectStoriesPath() string {
@@ -76,7 +88,7 @@ func TestIntegration_PipelineValidation_StoryImport(t *testing.T) {
 	ctx := context.Background()
 	queries := postgres.New(db.Pool)
 	storyRepo := postgres.NewStoryRepo(queries)
-	storySvc := service.NewStoryService(storyRepo)
+	importSvc := newMarkdownImportService(storyRepo, queries)
 
 	projectID := testutil.CreateProject(t, db.Pool)
 
@@ -87,35 +99,24 @@ func TestIntegration_PipelineValidation_StoryImport(t *testing.T) {
 		t.Fatalf("failed to read test-project stories: %v", err)
 	}
 
-	// Parse stories from markdown
+	// Sanity-check the fixture parses to >0 blocks before importing.
 	parsed := markdown.ParseStoryMarkdown(string(content))
 	if len(parsed) == 0 {
 		t.Fatal("expected at least 1 parsed story, got 0")
 	}
 
-	// Import stories into the system
-	inputs := make([]service.ImportStoryInput, 0, len(parsed))
-	for _, p := range parsed {
-		inputs = append(inputs, service.ImportStoryInput{
-			Key:                p.Key,
-			Title:              p.Title,
-			Epic:               p.Epic,
-			DependsOn:          p.DependsOn,
-			Scope:              p.Scope,
-			Status:             p.Status,
-			AcceptanceCriteria: p.AcceptanceCriteria,
-			ParseError:         p.ParseError,
-		})
+	importCfg := port.ImportConfig{
+		Source:   port.SourceMarkdown,
+		Markdown: &port.MarkdownConfig{Content: string(content)},
 	}
-
-	result, err := storySvc.Import(ctx, projectID, inputs)
+	result, err := importSvc.Import(ctx, projectID, importCfg)
 	if err != nil {
 		t.Fatalf("Import() error = %v", err)
 	}
 
 	t.Run("all 5 stories imported successfully", func(t *testing.T) {
-		if result.Imported != 5 {
-			t.Errorf("expected 5 imported stories, got %d", result.Imported)
+		if result.StoriesCreated != 5 {
+			t.Errorf("expected 5 created stories, got %d", result.StoriesCreated)
 		}
 		if result.Failed != 0 {
 			t.Errorf("expected 0 failures, got %d: %v", result.Failed, result.Errors)
@@ -175,16 +176,21 @@ func TestIntegration_PipelineValidation_StoryImport(t *testing.T) {
 		}
 	})
 
-	t.Run("re-import updates existing stories", func(t *testing.T) {
-		result2, err := storySvc.Import(ctx, projectID, inputs)
+	t.Run("re-import of unchanged content is an idempotent no-op", func(t *testing.T) {
+		result2, err := importSvc.Import(ctx, projectID, importCfg)
 		if err != nil {
 			t.Fatalf("second Import() error = %v", err)
 		}
-		if result2.Updated != 5 {
-			t.Errorf("expected 5 updated stories, got %d", result2.Updated)
+		// New connector: an unchanged re-import is hash-gated to a true no-op
+		// (Skipped), never a churny update, and never a duplicate.
+		if result2.Skipped != 5 {
+			t.Errorf("expected 5 skipped (hash no-op) stories, got %d", result2.Skipped)
 		}
-		if result2.Imported != 0 {
-			t.Errorf("expected 0 new imports on re-import, got %d", result2.Imported)
+		if result2.StoriesCreated != 0 {
+			t.Errorf("expected 0 new creates on re-import, got %d", result2.StoriesCreated)
+		}
+		if result2.StoriesUpdated != 0 {
+			t.Errorf("expected 0 updates on unchanged re-import, got %d", result2.StoriesUpdated)
 		}
 	})
 }
@@ -576,7 +582,7 @@ func TestIntegration_PipelineValidation_FullFlow(t *testing.T) {
 
 	// 2. Import stories from test-project markdown
 	storyRepo := postgres.NewStoryRepo(queries)
-	storySvc := service.NewStoryService(storyRepo)
+	importSvc := newMarkdownImportService(storyRepo, queries)
 
 	storiesPath := testProjectStoriesPath()
 	content, err := os.ReadFile(storiesPath)
@@ -584,22 +590,10 @@ func TestIntegration_PipelineValidation_FullFlow(t *testing.T) {
 		t.Fatalf("failed to read test-project stories: %v", err)
 	}
 
-	parsed := markdown.ParseStoryMarkdown(string(content))
-	inputs := make([]service.ImportStoryInput, 0, len(parsed))
-	for _, p := range parsed {
-		inputs = append(inputs, service.ImportStoryInput{
-			Key:                p.Key,
-			Title:              p.Title,
-			Epic:               p.Epic,
-			DependsOn:          p.DependsOn,
-			Scope:              p.Scope,
-			Status:             p.Status,
-			AcceptanceCriteria: p.AcceptanceCriteria,
-			ParseError:         p.ParseError,
-		})
-	}
-
-	importResult, err := storySvc.Import(ctx, projectID, inputs)
+	importResult, err := importSvc.Import(ctx, projectID, port.ImportConfig{
+		Source:   port.SourceMarkdown,
+		Markdown: &port.MarkdownConfig{Content: string(content)},
+	})
 	if err != nil {
 		t.Fatalf("Import() error = %v", err)
 	}
@@ -681,7 +675,7 @@ func TestIntegration_PipelineValidation_FullFlow(t *testing.T) {
 	}
 
 	t.Logf("Full pipeline validation passed: %d stories imported, run completed with %d steps, %d events generated",
-		importResult.Imported, len(completedRun.Steps), len(events))
+		importResult.StoriesCreated, len(completedRun.Steps), len(events))
 }
 
 // noopJobQueue implements port.JobQueue for integration tests.

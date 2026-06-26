@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	planningadapter "github.com/zakari/hopeitworks/backend/internal/adapter/planning"
 	"github.com/zakari/hopeitworks/backend/internal/api/middleware"
 	"github.com/zakari/hopeitworks/backend/internal/domain/model"
 	"github.com/zakari/hopeitworks/backend/internal/domain/port"
@@ -152,6 +153,29 @@ func (m *mockStoryRepo) Delete(_ context.Context, id uuid.UUID) error {
 	return nil
 }
 
+func (m *mockStoryRepo) GetBySourceRef(_ context.Context, projectID uuid.UUID, source, externalID string) (*model.Story, error) {
+	for _, s := range m.stories {
+		if s.ProjectID == projectID && s.Source == source && s.ExternalID != nil && *s.ExternalID == externalID {
+			return s, nil
+		}
+	}
+	return nil, errors.NewNotFound("story", externalID)
+}
+
+func (m *mockStoryRepo) CreateFromImport(ctx context.Context, s *model.Story) (*model.Story, error) {
+	return m.Create(ctx, s)
+}
+
+func (m *mockStoryRepo) UpdateFromImport(_ context.Context, s *model.Story) (*model.Story, error) {
+	m.stories[s.ID] = s
+	return s, nil
+}
+
+func (m *mockStoryRepo) UpdateProvenanceOnly(_ context.Context, s *model.Story) (*model.Story, error) {
+	m.stories[s.ID] = s
+	return s, nil
+}
+
 func setupStoryHandler() (*StoryHandler, *mockStoryRepo) {
 	h, repo, _ := setupStoryHandlerWithRuns()
 	return h, repo
@@ -161,7 +185,10 @@ func setupStoryHandlerWithRuns() (*StoryHandler, *mockStoryRepo, *storyHandlerRu
 	repo := newMockStoryRepo()
 	runRepo := &storyHandlerRunRepo{latestByStory: make(map[uuid.UUID]*model.LatestRun)}
 	svc := service.NewStoryService(repo)
-	h := NewStoryHandler(svc, runRepo)
+	// The deprecated /stories/import shim routes through the markdown planning
+	// connector; wire a real PlanningImportService over the same story repo.
+	planningSvc := service.NewPlanningImportService(repo, newMockEpicRepo(), planningadapter.NewFactory(nil, nil))
+	h := NewStoryHandler(svc, runRepo, planningSvc)
 	return h, repo, runRepo
 }
 
@@ -882,4 +909,86 @@ func TestListStories_PopulatesLatestRunBatch(t *testing.T) {
 			}
 		}
 	}
+}
+
+// TestImportStories_ShimContract asserts the deprecated /stories/import endpoint
+// keeps its byte-identical ImportStoriesResult contract after being rewired
+// through the markdown planning connector (§16.14a): the JSON has exactly the
+// {imported, updated, failed, errors} keys and the happy-path counts hold.
+func TestImportStories_ShimContract(t *testing.T) {
+	h, repo, _ := setupStoryHandlerWithRuns()
+	projectID := uuid.New()
+
+	content := "---\nkey: S-01\n---\n# First\nbody one\n---\nkey: S-02\n---\n# Second\nbody two"
+	body, _ := json.Marshal(ImportStoriesRequest{Content: content})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/projects/"+projectID.String()+"/stories/import",
+		bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(middleware.SetUserContext(req.Context(), uuid.New(), model.RoleAdmin))
+	rec := httptest.NewRecorder()
+
+	h.ImportStories(rec, req, projectID)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+
+	// Byte-identical contract: the response object has exactly these keys.
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(rec.Body.Bytes(), &raw); err != nil {
+		t.Fatalf("decode raw: %v", err)
+	}
+	wantKeys := map[string]bool{"imported": true, "updated": true, "failed": true, "errors": true}
+	if len(raw) != len(wantKeys) {
+		t.Errorf("ImportStoriesResult must keep exactly %v keys, got %v", keysOf(wantKeys), keysOf(rawKeys(raw)))
+	}
+	for k := range wantKeys {
+		if _, ok := raw[k]; !ok {
+			t.Errorf("missing expected key %q in shim response", k)
+		}
+	}
+
+	var resp ImportStoriesResult
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode result: %v", err)
+	}
+	if resp.Imported != 2 || resp.Updated != 0 || resp.Failed != 0 {
+		t.Errorf("expected imported=2 updated=0 failed=0, got %+v", resp)
+	}
+	if len(repo.stories) != 2 {
+		t.Errorf("expected 2 stories persisted via the shim, got %d", len(repo.stories))
+	}
+
+	// Re-import of unchanged content is an idempotent no-op: imported=0, updated=0.
+	rec2 := httptest.NewRecorder()
+	req2 := httptest.NewRequest(http.MethodPost, "/api/v1/projects/"+projectID.String()+"/stories/import",
+		bytes.NewReader(body))
+	req2 = req2.WithContext(middleware.SetUserContext(req2.Context(), uuid.New(), model.RoleAdmin))
+	h.ImportStories(rec2, req2, projectID)
+	var resp2 ImportStoriesResult
+	if err := json.Unmarshal(rec2.Body.Bytes(), &resp2); err != nil {
+		t.Fatalf("decode result 2: %v", err)
+	}
+	if resp2.Imported != 0 || resp2.Updated != 0 {
+		t.Errorf("unchanged re-import via shim should be a no-op, got %+v", resp2)
+	}
+	if len(repo.stories) != 2 {
+		t.Errorf("re-import must not duplicate, got %d stories", len(repo.stories))
+	}
+}
+
+func rawKeys(m map[string]json.RawMessage) map[string]bool {
+	out := make(map[string]bool, len(m))
+	for k := range m {
+		out[k] = true
+	}
+	return out
+}
+
+func keysOf(m map[string]bool) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	return out
 }
