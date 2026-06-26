@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"strings"
 	"testing"
 )
 
@@ -49,6 +50,76 @@ func TestScrubHandler(t *testing.T) {
 	}
 	if entry["api_key"] != redactedValue {
 		t.Errorf("api_key should be redacted, got %q", entry["api_key"])
+	}
+}
+
+func TestScrub_TokenPatterns(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		leak string // substring that must NOT survive
+	}{
+		{"classic PAT", "auth failed for ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", "ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"},
+		{"oauth token", "token gho_ABCDEFGHIJKLMNOPQRSTUVWXYZ012345", "gho_ABCDEFGHIJKLMNOPQRSTUVWXYZ012345"},
+		{"fine-grained PAT", "using github_pat_11ABCDE0123_secretpart", "github_pat_11ABCDE0123_secretpart"},
+		{"url credentials", "clone https://x-access-token:ghp_TOKEN1234567890abcdef@github.com/o/r.git failed", "ghp_TOKEN1234567890abcdef@"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			out := Scrub(tc.in)
+			if strings.Contains(out, tc.leak) {
+				t.Fatalf("Scrub leaked %q in %q", tc.leak, out)
+			}
+			if !strings.Contains(out, redactedValue) {
+				t.Fatalf("Scrub did not redact: %q", out)
+			}
+		})
+	}
+}
+
+func TestScrubHandler_RedactsTokenInMessageAndAttrs(t *testing.T) {
+	const tok = "ghp_LEAKED000111222333444555666777888"
+	var buf bytes.Buffer
+	logger := slog.New(&ScrubHandler{Handler: slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo})})
+
+	logger.Info("cloning with "+tok,
+		slog.String("repo_url", "https://user:"+tok+"@github.com/o/r"),
+		slog.String("note", "raw token "+tok),
+		slog.Group("nested", slog.String("inner_token_field", tok)),
+	)
+
+	out := buf.String()
+	if strings.Contains(out, tok) {
+		t.Fatalf("token survived scrubbing in log output: %s", out)
+	}
+}
+
+func TestScrubHandler_KeySubstringAndSafeIdentifiers(t *testing.T) {
+	var buf bytes.Buffer
+	logger := slog.New(&ScrubHandler{Handler: slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo})})
+
+	logger.Info("t",
+		slog.String("encryption_key", "supersecret"), // *key* -> redacted
+		slog.String("access_token_value", "tok"),     // *token* -> redacted
+		slog.String("story_key", "S-14"),             // identifier -> preserved
+		slog.String("stack_key", "go-1.23"),          // identifier -> preserved
+	)
+
+	var entry map[string]interface{}
+	if err := json.Unmarshal(buf.Bytes(), &entry); err != nil {
+		t.Fatalf("parse log: %v", err)
+	}
+	if entry["encryption_key"] != redactedValue {
+		t.Errorf("encryption_key should be redacted, got %v", entry["encryption_key"])
+	}
+	if entry["access_token_value"] != redactedValue {
+		t.Errorf("access_token_value should be redacted, got %v", entry["access_token_value"])
+	}
+	if entry["story_key"] != "S-14" {
+		t.Errorf("story_key must stay readable, got %v", entry["story_key"])
+	}
+	if entry["stack_key"] != "go-1.23" {
+		t.Errorf("stack_key must stay readable, got %v", entry["stack_key"])
 	}
 }
 
