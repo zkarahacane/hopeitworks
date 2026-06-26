@@ -234,5 +234,13 @@ func buildAPIEpic(e *model.Epic, counts model.StoryCounts) Epic {
 	if e.Description != nil {
 		epic.Description = e.Description
 	}
+	// Planning provenance (read-only).
+	if e.Source != "" {
+		src := EpicSource(e.Source)
+		epic.Source = &src
+	}
+	epic.ExternalId = e.ExternalID
+	epic.SourceUrl = e.SourceURL
+	epic.SyncedAt = e.SyncedAt
 	return epic
 }
