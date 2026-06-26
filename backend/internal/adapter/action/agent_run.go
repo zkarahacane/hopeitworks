@@ -342,6 +342,8 @@ func buildClaudeMD(project *model.Project, role string, story *model.Story) stri
 		storyRef = story.Key + " — " + story.Title
 	}
 
+	storySection := buildStorySection(story)
+
 	switch role {
 	case "review", "reviewer":
 		return "# Agent context — " + projectName + "\n\n" +
@@ -349,6 +351,7 @@ func buildClaudeMD(project *model.Project, role string, story *model.Story) stri
 			"## Project\n" +
 			projectDescription + "\n" +
 			"Repository: " + repoURL + "\n\n" +
+			storySection + "\n" +
 			"## The changes to review\n" +
 			"Inspect the diff for this story yourself with `git diff origin/main...HEAD` and `git log -p origin/main..HEAD`. Review only those changes.\n\n" +
 			"## Review checklist\n" +
@@ -365,6 +368,7 @@ func buildClaudeMD(project *model.Project, role string, story *model.Story) stri
 			"## Project\n" +
 			projectDescription + "\n" +
 			"Repository: " + repoURL + "\n\n" +
+			storySection + "\n" +
 			"## Conventions\n" +
 			"- Follow the existing structure, style, and conventions of the repository.\n" +
 			"- Keep your changes scoped to the story. Do not refactor unrelated code.\n" +
@@ -374,6 +378,48 @@ func buildClaudeMD(project *model.Project, role string, story *model.Story) stri
 			"2. The TESTS pass. Run the test suite; everything must be green.\n" +
 			"3. If the build or tests fail, FIX the code and re-run until they pass. Do NOT finish with a broken build or failing tests.\n"
 	}
+}
+
+// buildStorySection returns the "## Story" CLAUDE.md block for the given story.
+// Optional fields (Objective, Scope, TargetFiles, AcceptanceCriteria) are omitted when
+// nil or empty. The provenance line is always present and reflects the import source:
+//   - github_projects + SourceURL  → "Source: github — <url>"
+//   - markdown                     → "Source: markdown:<key>"
+//   - manual / legacy              → "Source: manual:<key>"
+func buildStorySection(story *model.Story) string {
+	var b strings.Builder
+	b.WriteString("## Story\n")
+
+	storyRef := story.Key
+	if story.Title != "" {
+		storyRef = story.Key + " — " + story.Title
+	}
+	b.WriteString(storyRef + "\n")
+
+	// Provenance line — three variants per spec §11.
+	switch {
+	case story.Source == string(port.SourceGitHub) && story.SourceURL != nil:
+		b.WriteString("Source: github — " + *story.SourceURL + "\n")
+	case story.Source == string(port.SourceMarkdown):
+		b.WriteString("Source: markdown:" + story.Key + "\n")
+	default:
+		b.WriteString("Source: manual:" + story.Key + "\n")
+	}
+
+	if story.Objective != nil && *story.Objective != "" {
+		b.WriteString("\nObjective: " + *story.Objective + "\n")
+	}
+	if story.Scope != nil && *story.Scope != "" {
+		b.WriteString("\nScope: " + *story.Scope + "\n")
+	}
+	if len(story.TargetFiles) > 0 {
+		b.WriteString("\nTarget files: " + strings.Join(story.TargetFiles, ", ") + "\n")
+	}
+	if story.AcceptanceCriteria != nil && *story.AcceptanceCriteria != "" {
+		b.WriteString("\nAcceptance criteria:\n" + *story.AcceptanceCriteria + "\n")
+	}
+
+	return b.String()
 }
 
 // resolveRole returns the agent role for the current run step.
