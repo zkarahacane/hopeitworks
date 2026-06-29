@@ -547,3 +547,7 @@ func (m *humanMockRunRepo) UpdateRunMetadata(_ context.Context, _ uuid.UUID, _ m
 func (m *humanMockRunRepo) AppendStepLogTail(_ context.Context, _ uuid.UUID, _ string) error {
 	return nil
 }
+
+func (m *humanMockStoryRepo) SetWritebackStatus(_ context.Context, _ uuid.UUID, _ string) error {
+	return nil
+}

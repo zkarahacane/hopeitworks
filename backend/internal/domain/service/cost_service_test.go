@@ -1177,3 +1177,7 @@ func (m *mockRunRepoForCost) UpdateRunMetadata(_ context.Context, _ uuid.UUID, _
 func (m *mockRunRepoForCost) AppendStepLogTail(_ context.Context, _ uuid.UUID, _ string) error {
 	return nil
 }
+
+func (m *mockStoryRepoForCost) SetWritebackStatus(_ context.Context, _ uuid.UUID, _ string) error {
+	return nil
+}

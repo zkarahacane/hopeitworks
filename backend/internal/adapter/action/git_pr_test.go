@@ -611,3 +611,7 @@ func TestGitPRAction_Execute_ObjectiveTruncation(t *testing.T) {
 func (m *prMockStoryRepo) CountByEpicGroupedByStatus(_ context.Context, _ uuid.UUID) (model.StoryCounts, error) {
 	return model.StoryCounts{}, nil
 }
+
+func (m *prMockStoryRepo) SetWritebackStatus(_ context.Context, _ uuid.UUID, _ string) error {
+	return nil
+}

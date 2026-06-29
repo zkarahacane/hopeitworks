@@ -2346,3 +2346,7 @@ func TestAgentRunAction_NoPromptAudit_WhenEmpty(t *testing.T) {
 		}
 	}
 }
+
+func (m *mockStoryRepo) SetWritebackStatus(_ context.Context, _ uuid.UUID, _ string) error {
+	return nil
+}

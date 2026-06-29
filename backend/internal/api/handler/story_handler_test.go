@@ -992,3 +992,7 @@ func keysOf(m map[string]bool) []string {
 	}
 	return out
 }
+
+func (m *mockStoryRepo) SetWritebackStatus(_ context.Context, _ uuid.UUID, _ string) error {
+	return nil
+}

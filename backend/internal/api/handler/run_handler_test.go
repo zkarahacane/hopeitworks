@@ -757,3 +757,7 @@ func (m *runHandlerRunRepo) UpdateRunMetadata(_ context.Context, _ uuid.UUID, _ 
 func (m *runHandlerRunRepo) AppendStepLogTail(_ context.Context, _ uuid.UUID, _ string) error {
 	return nil
 }
+
+func (m *runHandlerStoryRepo) SetWritebackStatus(_ context.Context, _ uuid.UUID, _ string) error {
+	return nil
+}
