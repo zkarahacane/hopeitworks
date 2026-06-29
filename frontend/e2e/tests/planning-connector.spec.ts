@@ -195,7 +195,9 @@ async function setupConnectorMock(
   })
 
   // Connector endpoints (GET / PUT / status-options).
-  await page.route('**/api/v1/projects/p1/planning/connector*', async (route) => {
+  // Use ** (not *) so the glob crosses the "/" into the /status-options sub-path —
+  // Playwright's single * does not match the path separator.
+  await page.route('**/api/v1/projects/p1/planning/connector**', async (route) => {
     const url = route.request().url()
     const method = route.request().method()
 
