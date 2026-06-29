@@ -600,3 +600,7 @@ func (m *hitlMockRunRepo) UpdateRunMetadata(_ context.Context, _ uuid.UUID, _ ma
 func (m *hitlMockRunRepo) AppendStepLogTail(_ context.Context, _ uuid.UUID, _ string) error {
 	return nil
 }
+
+func (m *hitlMockStoryRepo) SetWritebackStatus(_ context.Context, _ uuid.UUID, _ string) error {
+	return nil
+}

@@ -39,7 +39,11 @@ type ImportedEpic struct {
 // ImportedStory is the source-agnostic story an adapter emits.
 // nil / empty for a field means "source does not carry this" => service PRESERVES.
 type ImportedStory struct {
-	Ref                SourceRef
+	Ref SourceRef
+	// ExternalItemID is the ProjectV2Item id (github_projects) — the write-back
+	// target for the field mutation, distinct from Ref.ExternalID (content node id).
+	// Empty for sources that have no item concept (markdown).
+	ExternalItemID     string
 	Key                string // MUST match ^[A-Z0-9]+-\d+$ (validated by service)
 	Title              string
 	Objective          *string // markdown: always nil
@@ -89,6 +93,62 @@ type PlanningSourceAdapter interface {
 // PlanningSourceFactory resolves the adapter for a kind (parallels GitProviderFactory).
 type PlanningSourceFactory interface {
 	For(ctx context.Context, projectID uuid.UUID, kind SourceKind) (PlanningSourceAdapter, error)
+}
+
+// PlanningStatusOption is one selectable value of the tracker status field.
+type PlanningStatusOption struct {
+	ID   string
+	Name string
+}
+
+// PlanningStatusOptions is the resolved status single-select field: its id (when
+// resolvable) plus every option. It powers BOTH the connector status-options endpoint
+// and the write-back (which needs the field id + the target option id).
+type PlanningStatusOptions struct {
+	FieldID   string
+	FieldName string
+	Options   []PlanningStatusOption
+}
+
+// WriteBackRequest is one outbound status push for a single story item. StatusFieldID
+// is preferred; when empty the sink resolves it from StatusFieldName. A non-empty
+// Comment is posted on the item's content node (skipped silently for a DraftIssue).
+type WriteBackRequest struct {
+	ProjectURL      string
+	ItemID          string // ProjectV2Item id (the mutation target)
+	ContentNodeID   string // issue/PR node id (addComment subject); empty for drafts
+	StatusFieldID   string
+	StatusFieldName string
+	OptionID        string
+	Comment         string
+}
+
+// WriteBackResult is the outcome of a successful write-back (for the audit row).
+type WriteBackResult struct {
+	RemoteStatus  string // applied option name, when resolvable
+	CommentPosted bool
+}
+
+// PlanningSourceSink is the OUTBOUND counterpart of PlanningSourceAdapter: it resolves
+// the status options and pushes a single status (one-way, hopeitworks -> tracker).
+type PlanningSourceSink interface {
+	// StatusOptions resolves the status single-select field (id + options) of a board.
+	StatusOptions(ctx context.Context, projectURL, statusField string) (PlanningStatusOptions, error)
+	// WriteBack pushes one status (and optional comment) to a single item.
+	WriteBack(ctx context.Context, req WriteBackRequest) (WriteBackResult, error)
+}
+
+// PlanningSinkFactory resolves the outbound sink for a project, obtaining the token
+// through the same GitCredentialResolver seam the import factory uses.
+type PlanningSinkFactory interface {
+	Sink(ctx context.Context, projectID uuid.UUID) (PlanningSourceSink, error)
+}
+
+// WriteBackEnqueuer enqueues an async status write-back. It is the seam the
+// PipelineExecutor depends on so the domain never imports the River/job adapter
+// (avoids an import cycle). A nil enqueuer is a no-op at the call site.
+type WriteBackEnqueuer interface {
+	EnqueueWriteBack(ctx context.Context, projectID, storyID, runID uuid.UUID, status string) error
 }
 
 // ImportSummary powers BOTH the dry-run preview UI and the post-import result UI.

@@ -14,8 +14,11 @@ import (
 	"github.com/zakari/hopeitworks/backend/internal/domain/port"
 )
 
-// Ensure JobQueue implements port.JobQueue at compile time.
-var _ port.JobQueue = (*JobQueue)(nil)
+// Ensure JobQueue implements its ports at compile time.
+var (
+	_ port.JobQueue          = (*JobQueue)(nil)
+	_ port.WriteBackEnqueuer = (*JobQueue)(nil)
+)
 
 // JobQueue implements port.JobQueue using River backed by Postgres.
 type JobQueue struct {
@@ -61,6 +64,25 @@ func (q *JobQueue) EnqueueExecuteRun(ctx context.Context, runID uuid.UUID) error
 	})
 	if err != nil {
 		return fmt.Errorf("enqueue execute_run job: %w", err)
+	}
+	return nil
+}
+
+// EnqueueWriteBack enqueues an async status write-back to the external tracker. Unlike
+// execute_run, retries are desirable here: River's exponential backoff handles GitHub
+// rate limits / transient 5xx (the worker returns an error only for those). RunID may
+// be uuid.Nil for a non-run transition.
+func (q *JobQueue) EnqueueWriteBack(ctx context.Context, projectID, storyID, runID uuid.UUID, status string) error {
+	_, err := q.client.Insert(ctx, WriteBackArgs{
+		ProjectID: projectID,
+		StoryID:   storyID,
+		RunID:     runID,
+		Status:    status,
+	}, &river.InsertOpts{
+		MaxAttempts: 10,
+	})
+	if err != nil {
+		return fmt.Errorf("enqueue planning_write_back job: %w", err)
 	}
 	return nil
 }

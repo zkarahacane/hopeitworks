@@ -405,3 +405,7 @@ func TestNotificationAction_Execute_StoryLookupFailure(t *testing.T) {
 func (m *notificationMockStoryRepo) CountByEpicGroupedByStatus(_ context.Context, _ uuid.UUID) (model.StoryCounts, error) {
 	return model.StoryCounts{}, nil
 }
+
+func (m *notificationMockStoryRepo) SetWritebackStatus(_ context.Context, _ uuid.UUID, _ string) error {
+	return nil
+}

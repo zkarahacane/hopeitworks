@@ -41,4 +41,8 @@ type StoryRepository interface {
 	// UpdateProvenanceOnly refreshes a LOCKED story's cosmetic title + provenance
 	// only. It deliberately does NOT advance last_import_hash.
 	UpdateProvenanceOnly(ctx context.Context, s *model.Story) (*model.Story, error)
+
+	// SetWritebackStatus sets the story's outbound write-back state
+	// (disabled|pending|synced|failed). Managed solely by the write-back path.
+	SetWritebackStatus(ctx context.Context, id uuid.UUID, status string) error
 }

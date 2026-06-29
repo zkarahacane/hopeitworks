@@ -6,29 +6,30 @@ import "net/http"
 // It embeds Unimplemented to satisfy methods that are not yet implemented.
 type Server struct {
 	Unimplemented
-	auth           *AuthHandler
-	projects       *ProjectHandler
-	users          *UserHandler
-	profile        *ProfileHandler
-	epics          *EpicHandler
-	stories        *StoryHandler
-	agents         *AgentHandler
-	stacks         *StackHandler
-	runs           *RunHandler
-	pipelineConfig *PipelineConfigHandler
-	hitl           *HITLHandler
-	costs          *CostHandler
-	notifications  *NotificationHandler
-	epicRuns       *EpicRunHandler
-	environment    *EnvironmentHandler
-	apiKeys        *APIKeyHandler
-	planning       *PlanningHandler
-	gitConnection  *GitConnectionHandler
+	auth              *AuthHandler
+	projects          *ProjectHandler
+	users             *UserHandler
+	profile           *ProfileHandler
+	epics             *EpicHandler
+	stories           *StoryHandler
+	agents            *AgentHandler
+	stacks            *StackHandler
+	runs              *RunHandler
+	pipelineConfig    *PipelineConfigHandler
+	hitl              *HITLHandler
+	costs             *CostHandler
+	notifications     *NotificationHandler
+	epicRuns          *EpicRunHandler
+	environment       *EnvironmentHandler
+	apiKeys           *APIKeyHandler
+	planning          *PlanningHandler
+	planningConnector *PlanningConnectorHandler
+	gitConnection     *GitConnectionHandler
 }
 
 // NewServer creates a new Server with the given handlers.
-func NewServer(auth *AuthHandler, projects *ProjectHandler, users *UserHandler, profile *ProfileHandler, epics *EpicHandler, stories *StoryHandler, agents *AgentHandler, stacks *StackHandler, runs *RunHandler, pipelineConfig *PipelineConfigHandler, hitl *HITLHandler, costs *CostHandler, notifications *NotificationHandler, epicRuns *EpicRunHandler, environment *EnvironmentHandler, apiKeys *APIKeyHandler, planning *PlanningHandler, gitConnection *GitConnectionHandler) *Server {
-	return &Server{auth: auth, projects: projects, users: users, profile: profile, epics: epics, stories: stories, agents: agents, stacks: stacks, runs: runs, pipelineConfig: pipelineConfig, hitl: hitl, costs: costs, notifications: notifications, epicRuns: epicRuns, environment: environment, apiKeys: apiKeys, planning: planning, gitConnection: gitConnection}
+func NewServer(auth *AuthHandler, projects *ProjectHandler, users *UserHandler, profile *ProfileHandler, epics *EpicHandler, stories *StoryHandler, agents *AgentHandler, stacks *StackHandler, runs *RunHandler, pipelineConfig *PipelineConfigHandler, hitl *HITLHandler, costs *CostHandler, notifications *NotificationHandler, epicRuns *EpicRunHandler, environment *EnvironmentHandler, apiKeys *APIKeyHandler, planning *PlanningHandler, planningConnector *PlanningConnectorHandler, gitConnection *GitConnectionHandler) *Server {
+	return &Server{auth: auth, projects: projects, users: users, profile: profile, epics: epics, stories: stories, agents: agents, stacks: stacks, runs: runs, pipelineConfig: pipelineConfig, hitl: hitl, costs: costs, notifications: notifications, epicRuns: epicRuns, environment: environment, apiKeys: apiKeys, planning: planning, planningConnector: planningConnector, gitConnection: gitConnection}
 }
 
 // RegisterUser delegates to AuthHandler.
@@ -194,6 +195,21 @@ func (s *Server) ImportStories(w http.ResponseWriter, r *http.Request, projectID
 // ImportPlanning delegates to PlanningHandler.
 func (s *Server) ImportPlanning(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath) {
 	s.planning.ImportPlanning(w, r, projectID)
+}
+
+// GetPlanningConnector delegates to PlanningConnectorHandler.
+func (s *Server) GetPlanningConnector(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath) {
+	s.planningConnector.GetPlanningConnector(w, r, projectID)
+}
+
+// SetPlanningConnector delegates to PlanningConnectorHandler.
+func (s *Server) SetPlanningConnector(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath) {
+	s.planningConnector.SetPlanningConnector(w, r, projectID)
+}
+
+// GetPlanningStatusOptions delegates to PlanningConnectorHandler.
+func (s *Server) GetPlanningStatusOptions(w http.ResponseWriter, r *http.Request, projectID ProjectIdPath, params GetPlanningStatusOptionsParams) {
+	s.planningConnector.GetPlanningStatusOptions(w, r, projectID, params)
 }
 
 // ListGlobalAgents delegates to AgentHandler.

@@ -458,3 +458,7 @@ func TestGetEpicRun_NotFound(t *testing.T) {
 func (m *mockStoryRepoForEpicRun) CountByEpicGroupedByStatus(_ context.Context, _ uuid.UUID) (model.StoryCounts, error) {
 	return model.StoryCounts{}, nil
 }
+
+func (m *mockStoryRepoForEpicRun) SetWritebackStatus(_ context.Context, _ uuid.UUID, _ string) error {
+	return nil
+}

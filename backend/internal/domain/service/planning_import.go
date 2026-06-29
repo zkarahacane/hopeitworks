@@ -323,6 +323,7 @@ func (s *PlanningImportService) createStory(ctx context.Context, projectID uuid.
 		Status:             mapped,
 		Source:             source,
 		ExternalID:         &extID,
+		ExternalItemID:     ptrIfNonEmpty(is.ExternalItemID),
 		SourceURL:          ptrIfNonEmpty(url),
 		LastImportHash:     &hash,
 	})
@@ -344,8 +345,19 @@ func (s *PlanningImportService) updateStory(ctx context.Context, cfg port.Import
 		existing.CurrentStage != nil
 	hash := canonicalStoryHash(is, mapped)
 
-	// Hash no-op (unlocked, unchanged spec) => true no-op, no write.
+	// Hash no-op (unlocked, unchanged spec) => true no-op, no write. external_item_id
+	// is provenance (not in the spec hash), so a row imported before write-back
+	// shipped would never receive it; backfill it best-effort here without disturbing
+	// the no-op gate (reuses the provenance-only write — same values, +item id).
 	if !locked && existing.LastImportHash != nil && *existing.LastImportHash == hash {
+		if !cfg.DryRun && is.ExternalItemID != "" && derefStr(existing.ExternalItemID) != is.ExternalItemID {
+			upd := *existing
+			upd.ExternalItemID = &is.ExternalItemID
+			if _, err := s.stories.UpdateProvenanceOnly(ctx, &upd); err != nil {
+				s.failStory(summary, is, codeUpsertError, fmt.Sprintf("backfill external_item_id: %v", err))
+				return
+			}
+		}
 		summary.Skipped++
 		s.decide(summary, existing.Key, kindStory, actionSkip, url, existing.Status, "unchanged (hash match)")
 		return
@@ -357,12 +369,14 @@ func (s *PlanningImportService) updateStory(ctx context.Context, cfg port.Import
 		provChanged := existing.Title != is.Title ||
 			existing.Source != source ||
 			derefStr(existing.ExternalID) != extID ||
-			derefStr(existing.SourceURL) != url
+			derefStr(existing.SourceURL) != url ||
+			(is.ExternalItemID != "" && derefStr(existing.ExternalItemID) != is.ExternalItemID)
 		if provChanged && !cfg.DryRun {
 			upd := *existing
 			upd.Title = is.Title
 			upd.Source = source
 			upd.ExternalID = &extID
+			upd.ExternalItemID = mergeStrPtr(ptrIfNonEmpty(is.ExternalItemID), existing.ExternalItemID)
 			upd.SourceURL = ptrIfNonEmpty(url)
 			if _, err := s.stories.UpdateProvenanceOnly(ctx, &upd); err != nil {
 				s.failStory(summary, is, codeUpsertError, fmt.Sprintf("update story provenance: %v", err))
@@ -389,6 +403,7 @@ func (s *PlanningImportService) updateStory(ctx context.Context, cfg port.Import
 	merged.Status = resolveStoryStatus(existing, mapped)
 	merged.Source = source
 	merged.ExternalID = &extID
+	merged.ExternalItemID = mergeStrPtr(ptrIfNonEmpty(is.ExternalItemID), existing.ExternalItemID)
 	merged.SourceURL = ptrIfNonEmpty(url)
 	merged.LastImportHash = &hash
 

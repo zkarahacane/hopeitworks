@@ -227,6 +227,35 @@ type PipelineConfig struct {
 	UpdatedAt  time.Time `json:"updated_at"`
 }
 
+type PlanningConnector struct {
+	ProjectID        uuid.UUID   `json:"project_id"`
+	Source           string      `json:"source"`
+	ProjectUrl       pgtype.Text `json:"project_url"`
+	StatusField      string      `json:"status_field"`
+	DoneOptions      []byte      `json:"done_options"`
+	EpicIssueType    string      `json:"epic_issue_type"`
+	StatusMapping    []byte      `json:"status_mapping"`
+	WritebackEnabled bool        `json:"writeback_enabled"`
+	PostRunComment   bool        `json:"post_run_comment"`
+	CreatedAt        time.Time   `json:"created_at"`
+	UpdatedAt        time.Time   `json:"updated_at"`
+}
+
+type PlanningWriteBack struct {
+	ID             uuid.UUID   `json:"id"`
+	ProjectID      uuid.UUID   `json:"project_id"`
+	StoryID        uuid.UUID   `json:"story_id"`
+	RunID          pgtype.UUID `json:"run_id"`
+	Source         pgtype.Text `json:"source"`
+	ExternalID     pgtype.Text `json:"external_id"`
+	InternalStatus pgtype.Text `json:"internal_status"`
+	RemoteStatus   pgtype.Text `json:"remote_status"`
+	Success        bool        `json:"success"`
+	ErrorCode      pgtype.Text `json:"error_code"`
+	ErrorMessage   pgtype.Text `json:"error_message"`
+	CreatedAt      time.Time   `json:"created_at"`
+}
+
 type Project struct {
 	ID                   uuid.UUID      `json:"id"`
 	Name                 string         `json:"name"`
@@ -320,6 +349,8 @@ type Story struct {
 	SourceUrl          pgtype.Text        `json:"source_url"`
 	SyncedAt           pgtype.Timestamptz `json:"synced_at"`
 	LastImportHash     pgtype.Text        `json:"last_import_hash"`
+	ExternalItemID     pgtype.Text        `json:"external_item_id"`
+	WritebackStatus    pgtype.Text        `json:"writeback_status"`
 }
 
 type User struct {
