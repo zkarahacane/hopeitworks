@@ -15,6 +15,7 @@ import (
 
 	"github.com/zakari/hopeitworks/backend/internal/domain/port"
 	"github.com/zakari/hopeitworks/backend/pkg/errors"
+	"github.com/zakari/hopeitworks/backend/pkg/log"
 )
 
 // Compile-time check that GiteaAPIAdapter implements GitProvider.
@@ -41,10 +42,15 @@ func NewGiteaAPIAdapter(baseURL, token string, runner port.CommandRunner, logger
 	}
 }
 
-// CloneRepo clones a repository with the token injected in the URL.
+// CloneRepo clones a repository with the token injected in the URL. The token is
+// injected ONLY into the argument handed to git; it is stripped from anything that
+// could surface in a log or error (A1): the safe (credential-free) URL is logged,
+// and git's stderr is scrubbed before being wrapped.
 func (a *GiteaAPIAdapter) CloneRepo(ctx context.Context, repoURL string, targetDir string) error {
+	safeURL := stripCredentials(repoURL)
+
 	a.logger.DebugContext(ctx, "cloning repository via gitea",
-		"repo_url", repoURL,
+		"repo_url", safeURL,
 		"target_dir", targetDir,
 	)
 
@@ -52,8 +58,8 @@ func (a *GiteaAPIAdapter) CloneRepo(ctx context.Context, repoURL string, targetD
 	if err != nil {
 		return errors.NewDomainError(
 			errors.ErrCodeGitOperationFailed,
-			fmt.Sprintf("failed to build clone URL: %v", err),
-			map[string]any{"repo_url": repoURL},
+			fmt.Sprintf("failed to build clone URL: %v", log.Scrub(err.Error())),
+			map[string]any{"repo_url": safeURL},
 		)
 	}
 
@@ -61,8 +67,8 @@ func (a *GiteaAPIAdapter) CloneRepo(ctx context.Context, repoURL string, targetD
 	if err != nil {
 		return errors.NewDomainError(
 			errors.ErrCodeGitOperationFailed,
-			fmt.Sprintf("failed to clone repository %s: %v", repoURL, err),
-			map[string]any{"repo_url": repoURL, "target_dir": targetDir},
+			fmt.Sprintf("failed to clone repository %s: %v", safeURL, log.Scrub(err.Error())),
+			map[string]any{"repo_url": safeURL, "target_dir": targetDir},
 		)
 	}
 	return nil
@@ -667,7 +673,8 @@ func extractBaseURL(repoURL string) string {
 func injectTokenInURL(repoURL, token string) (string, error) {
 	parsed, err := url.Parse(repoURL)
 	if err != nil {
-		return "", fmt.Errorf("parse URL %s: %w", repoURL, err)
+		// A1: never echo a (possibly credential-bearing) URL verbatim in an error.
+		return "", fmt.Errorf("parse repo URL %s: %w", stripCredentials(repoURL), err)
 	}
 	parsed.User = url.User(token)
 	return parsed.String(), nil

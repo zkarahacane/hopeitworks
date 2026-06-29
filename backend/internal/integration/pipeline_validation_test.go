@@ -31,7 +31,7 @@ import (
 func newMarkdownImportService(storyRepo port.StoryRepository, queries *postgres.Queries) *service.PlanningImportService {
 	epicRepo := postgres.NewEpicRepo(queries)
 	projectRepo := postgres.NewProjectRepo(queries)
-	factory := planningadapter.NewFactory(projectRepo, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	factory := planningadapter.NewFactory(projectRepo, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	return service.NewPlanningImportService(storyRepo, epicRepo, factory)
 }
 

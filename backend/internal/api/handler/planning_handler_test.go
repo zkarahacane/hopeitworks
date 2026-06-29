@@ -18,7 +18,7 @@ func setupPlanningHandler() (*PlanningHandler, *mockStoryRepo, *mockEpicRepo) {
 	storyRepo := newMockStoryRepo()
 	epicRepo := newMockEpicRepo()
 	// Real markdown factory so the connector actually parses the body end-to-end.
-	factory := planningadapter.NewFactory(nil, nil)
+	factory := planningadapter.NewFactory(nil, nil, nil)
 	svc := service.NewPlanningImportService(storyRepo, epicRepo, factory)
 	return NewPlanningHandler(svc), storyRepo, epicRepo
 }

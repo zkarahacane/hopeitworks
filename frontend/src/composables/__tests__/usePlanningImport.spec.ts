@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { nextTick } from 'vue'
+import { nextTick, ref } from 'vue'
 
 const postMock = vi.fn()
 
@@ -156,6 +156,38 @@ describe('usePlanningImport', () => {
     await nextTick()
     expect(p.result.value).toBeNull()
     expect(p.committed.value).toBe(false)
+  })
+
+  describe('import-flow guard (githubConnected)', () => {
+    it('blocks the GitHub source when the project is not connected', () => {
+      const p = usePlanningImport({ githubConnected: ref(false) })
+      p.source.value = 'github_projects'
+      p.projectUrl.value = 'https://github.com/orgs/acme/projects/3'
+      expect(p.canSubmit.value).toBe(false)
+    })
+
+    it('allows the GitHub source once connected', () => {
+      const connected = ref(false)
+      const p = usePlanningImport({ githubConnected: connected })
+      p.source.value = 'github_projects'
+      p.projectUrl.value = 'https://github.com/orgs/acme/projects/3'
+      expect(p.canSubmit.value).toBe(false)
+      connected.value = true
+      expect(p.canSubmit.value).toBe(true)
+    })
+
+    it('does not gate the markdown source on the GitHub connection', () => {
+      const p = usePlanningImport({ githubConnected: ref(false) })
+      p.fileContent.value = '# x'
+      expect(p.canSubmit.value).toBe(true)
+    })
+
+    it('defaults to connected when no guard is provided (backward compatible)', () => {
+      const p = usePlanningImport()
+      p.source.value = 'github_projects'
+      p.projectUrl.value = 'https://github.com/orgs/acme/projects/3'
+      expect(p.canSubmit.value).toBe(true)
+    })
   })
 
   it('parses a local markdown preview (valid + invalid blocks)', () => {

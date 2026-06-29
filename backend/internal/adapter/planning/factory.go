@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"os"
 	"strings"
 
 	"github.com/google/uuid"
@@ -16,54 +15,71 @@ import (
 var _ port.PlanningSourceFactory = (*Factory)(nil)
 
 // Factory resolves the PlanningSourceAdapter for a given source kind, parallel to
-// git.DefaultGitProviderFactory. It carries projectRepo + logger now so the
-// Phase-3 github_projects case can resolve the project's PAT (via its git token
-// env) without changing this constructor's signature or the main.go wiring.
+// git.DefaultGitProviderFactory. It obtains the GitHub PAT through the single
+// resolution seam (port.GitCredentialResolver): a stored PAT connection, else the
+// legacy env path.
 type Factory struct {
 	projectRepo port.ProjectRepository
+	resolver    port.GitCredentialResolver
 	logger      *slog.Logger
 }
 
-// NewFactory creates a new planning source Factory.
-func NewFactory(projectRepo port.ProjectRepository, logger *slog.Logger) *Factory {
-	return &Factory{projectRepo: projectRepo, logger: logger}
+// NewFactory creates a new planning source Factory. The resolver is the
+// GitConnectionService (token resolution + C1 status self-heal).
+func NewFactory(projectRepo port.ProjectRepository, resolver port.GitCredentialResolver, logger *slog.Logger) *Factory {
+	return &Factory{projectRepo: projectRepo, resolver: resolver, logger: logger}
 }
 
 // For resolves the adapter for kind. markdown is live; github_projects resolves the
-// project's PAT (from its git token env, GITHUB_TOKEN fallback), builds an
-// authenticated githubv4 client, and returns the adapter. An unknown kind is
+// project's PAT through the credential seam, builds an authenticated githubv4
+// client, and returns the adapter wrapped so a definitive auth failure (401/403)
+// during import self-heals the stored connection status (C1). An unknown kind is
 // rejected. The service maps a resolution error to SOURCE_ERROR (HTTP 422).
 func (f *Factory) For(ctx context.Context, projectID uuid.UUID, kind port.SourceKind) (port.PlanningSourceAdapter, error) {
 	switch kind {
 	case port.SourceMarkdown:
 		return NewMarkdownAdapter(), nil
 	case port.SourceGitHub:
-		if f.projectRepo == nil {
-			return nil, fmt.Errorf("github planning adapter unavailable: no project repository configured")
+		if f.projectRepo == nil || f.resolver == nil {
+			return nil, fmt.Errorf("github planning adapter unavailable: no credential resolver configured")
 		}
-		project, err := f.projectRepo.GetByID(ctx, projectID)
+		tok, err := f.resolver.TokenForProject(ctx, projectID)
 		if err != nil {
-			return nil, fmt.Errorf("resolve github planning adapter: get project: %w", err)
+			return nil, fmt.Errorf("resolve github planning adapter: resolve token: %w", err)
 		}
-		token := resolveGitHubToken(project.GitTokenEnv)
-		if token == "" {
-			return nil, fmt.Errorf("no github token available: set the project's git token env var or GITHUB_TOKEN")
+		if tok.Value == "" {
+			return nil, fmt.Errorf("no github token available: connect this project to GitHub in project settings")
 		}
-		return NewGitHubProjectsAdapter(NewGitHubClient(ctx, token), f.logger), nil
+		adapter := NewGitHubProjectsAdapter(NewGitHubClient(ctx, tok.Value), f.logger)
+		return newReconcilingAdapter(adapter, f.resolver, projectID), nil
 	default:
 		return nil, fmt.Errorf("unsupported planning source: %s", kind)
 	}
 }
 
-// resolveGitHubToken reads the PAT from the env var named by gitTokenEnv, falling
-// back to GITHUB_TOKEN (replicates git.resolveGitToken, which is unexported).
-func resolveGitHubToken(gitTokenEnv *string) string {
-	if gitTokenEnv != nil && *gitTokenEnv != "" {
-		if v := os.Getenv(*gitTokenEnv); v != "" {
-			return v
-		}
+// reconcilingAdapter wraps a PlanningSourceAdapter so a Fetch auth failure self-heals
+// the stored connection status (C1) on the import path.
+type reconcilingAdapter struct {
+	inner     port.PlanningSourceAdapter
+	resolver  port.GitCredentialResolver
+	projectID uuid.UUID
+}
+
+func newReconcilingAdapter(inner port.PlanningSourceAdapter, resolver port.GitCredentialResolver, projectID uuid.UUID) port.PlanningSourceAdapter {
+	if resolver == nil {
+		return inner
 	}
-	return os.Getenv("GITHUB_TOKEN")
+	return &reconcilingAdapter{inner: inner, resolver: resolver, projectID: projectID}
+}
+
+func (a *reconcilingAdapter) Kind() port.SourceKind { return a.inner.Kind() }
+
+func (a *reconcilingAdapter) Fetch(ctx context.Context, projectID uuid.UUID, cfg port.ImportConfig) (*port.FetchResult, error) {
+	res, err := a.inner.Fetch(ctx, projectID, cfg)
+	if err != nil {
+		a.resolver.ReconcileFromOperationError(ctx, a.projectID, err)
+	}
+	return res, err
 }
 
 // normalizeScope validates a raw scope string against the story scope enum

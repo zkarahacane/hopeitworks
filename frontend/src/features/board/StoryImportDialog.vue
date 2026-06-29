@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
+import { RouterLink } from 'vue-router'
 import Dialog from 'primevue/dialog'
 import Button from 'primevue/button'
 import Tag from 'primevue/tag'
@@ -10,6 +11,7 @@ import SelectButton from 'primevue/selectbutton'
 import InputText from 'primevue/inputtext'
 import AutoComplete from 'primevue/autocomplete'
 import { usePlanningImport, type PlanningSource } from '@/composables/usePlanningImport'
+import { useGitConnection, type GitConnectionStatus } from '@/features/projects/useGitConnection'
 
 const props = defineProps<{
   visible: boolean
@@ -20,6 +22,27 @@ const emit = defineEmits<{
   'update:visible': [value: boolean]
   imported: []
 }>()
+
+// ── Import-flow guard (GitHub Projects) ──────────────────────────────────────
+// GitHub imports need a live connection. Fetch the advisory status when the dialog
+// opens; if it isn't `connected`, gate the source (canSubmit stays false) and surface
+// an inline "connect first" link to settings instead of an opaque 422 on import.
+const { status: gitStatus } = useGitConnection()
+const gitConn = ref<GitConnectionStatus | null>(null)
+const githubConnected = computed(() => gitConn.value?.status === 'connected')
+
+async function refreshGitConnection() {
+  const result = await gitStatus.execute(props.projectId)
+  gitConn.value = result
+}
+
+watch(
+  () => props.visible,
+  (open) => {
+    if (open) refreshGitConnection()
+  },
+  { immediate: true },
+)
 
 const {
   source,
@@ -40,7 +63,7 @@ const {
   preview,
   commit,
   reset,
-} = usePlanningImport()
+} = usePlanningImport({ githubConnected })
 
 const sourceOptions: { label: string; value: PlanningSource }[] = [
   { label: 'Markdown', value: 'markdown' },
@@ -213,6 +236,22 @@ function handleClose() {
 
       <!-- ── GitHub Projects source ──────────────────────────────────────────── -->
       <div v-else class="flex flex-col gap-3" data-testid="github-panel">
+        <!-- Import-flow guard: block until the project is connected to GitHub. -->
+        <Message
+          v-if="!githubConnected"
+          severity="warn"
+          :closable="false"
+          data-testid="github-connection-guard"
+        >
+          This project is not connected to GitHub.
+          <RouterLink
+            :to="{ name: 'project-settings', params: { id: projectId } }"
+            data-testid="github-connection-guard-link"
+            @click="handleClose"
+          >
+            Connect this project to GitHub first →
+          </RouterLink>
+        </Message>
         <div class="flex flex-col gap-1">
           <label for="gh-project-url" style="font-size: 0.78rem; color: var(--p-text-muted-color)">
             Project URL

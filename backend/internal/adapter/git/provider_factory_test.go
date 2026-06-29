@@ -38,6 +38,22 @@ func (m *factoryMockProjectRepo) ResetCircuitBreaker(_ context.Context, _ uuid.U
 	return nil, nil
 }
 
+// stubResolver is a no-op port.GitCredentialResolver for factory tests.
+type stubResolver struct{ token string }
+
+func (s stubResolver) TokenForProject(_ context.Context, _ uuid.UUID) (port.GitToken, error) {
+	return port.GitToken{Value: s.token}, nil
+}
+func (stubResolver) ReconcileFromOperationError(_ context.Context, _ uuid.UUID, _ error) {}
+
+// underlying unwraps the reconciling decorator to expose the concrete adapter.
+func underlying(p port.GitProvider) port.GitProvider {
+	if rp, ok := p.(*reconcilingProvider); ok {
+		return rp.inner
+	}
+	return p
+}
+
 func TestDefaultGitProviderFactory_ForProjectID_GitHub(t *testing.T) {
 	projectID := uuid.New()
 	repo := &factoryMockProjectRepo{
@@ -49,7 +65,7 @@ func TestDefaultGitProviderFactory_ForProjectID_GitHub(t *testing.T) {
 
 	runner := newMockCommandRunner()
 
-	factory := NewGitProviderFactory(repo, runner, testLogger())
+	factory := NewGitProviderFactory(repo, stubResolver{token: "t"}, runner, testLogger())
 
 	provider, err := factory.ForProjectID(context.Background(), projectID)
 	if err != nil {
@@ -57,7 +73,7 @@ func TestDefaultGitProviderFactory_ForProjectID_GitHub(t *testing.T) {
 	}
 
 	// Verify it returns the API-based GitHub adapter (no gh CLI dependency).
-	if _, ok := provider.(*GitHubAPIAdapter); !ok {
+	if _, ok := underlying(provider).(*GitHubAPIAdapter); !ok {
 		t.Fatalf("expected *GitHubAPIAdapter, got %T", provider)
 	}
 }
@@ -73,14 +89,14 @@ func TestDefaultGitProviderFactory_ForProjectID_EmptyDefaultsToGitHub(t *testing
 
 	runner := newMockCommandRunner()
 
-	factory := NewGitProviderFactory(repo, runner, testLogger())
+	factory := NewGitProviderFactory(repo, stubResolver{token: "t"}, runner, testLogger())
 
 	provider, err := factory.ForProjectID(context.Background(), projectID)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if _, ok := provider.(*GitHubAPIAdapter); !ok {
+	if _, ok := underlying(provider).(*GitHubAPIAdapter); !ok {
 		t.Fatalf("expected *GitHubAPIAdapter for empty git_provider, got %T", provider)
 	}
 }
@@ -98,14 +114,14 @@ func TestDefaultGitProviderFactory_ForProjectID_Gitea(t *testing.T) {
 
 	runner := newMockCommandRunner()
 
-	factory := NewGitProviderFactory(repo, runner, testLogger())
+	factory := NewGitProviderFactory(repo, stubResolver{token: "t"}, runner, testLogger())
 
 	provider, err := factory.ForProjectID(context.Background(), projectID)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if _, ok := provider.(*GiteaAPIAdapter); !ok {
+	if _, ok := underlying(provider).(*GiteaAPIAdapter); !ok {
 		t.Fatalf("expected *GiteaAPIAdapter, got %T", provider)
 	}
 }
@@ -119,7 +135,7 @@ func TestDefaultGitProviderFactory_ForProjectID_UnsupportedProvider(t *testing.T
 		},
 	}
 
-	factory := NewGitProviderFactory(repo, nil, testLogger())
+	factory := NewGitProviderFactory(repo, stubResolver{}, nil, testLogger())
 
 	_, err := factory.ForProjectID(context.Background(), projectID)
 	if err == nil {
@@ -132,7 +148,7 @@ func TestDefaultGitProviderFactory_ForProjectID_ProjectNotFound(t *testing.T) {
 		err: fmt.Errorf("project not found"),
 	}
 
-	factory := NewGitProviderFactory(repo, nil, testLogger())
+	factory := NewGitProviderFactory(repo, stubResolver{}, nil, testLogger())
 
 	_, err := factory.ForProjectID(context.Background(), uuid.New())
 	if err == nil {

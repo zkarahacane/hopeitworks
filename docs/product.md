@@ -146,6 +146,67 @@ L'importeur ne pose que deux statuts de planning : `backlog` ou `done`. Les stat
 - **`/stories/import` déprécié** : l'ancien endpoint est maintenu pour compatibilité (redirige vers le nouveau service) mais déprécié — utiliser `POST /projects/{id}/planning/import` avec `source: markdown`.
 - **Concurrence** : deux imports simultanés du même projet sont last-writer-wins sur les champs cosmétiques. Le verrou row-level (`running`/`failed`/`current_stage`) protège les stories en cours d'exécution.
 
+### Connexion GitHub par PAT
+
+Un projet peut stocker un **Personal Access Token (PAT) GitHub chiffré** dans Project Settings → "Git connection". Ce token est résolu à la place de la variable d'environnement `GITHUB_TOKEN` ou `git_token_env` pour toutes les opérations qui nécessitent un accès à GitHub : import depuis GitHub Projects v2, création de branches, PR, polling CI.
+
+#### Coller un PAT
+
+1. Dans le projet → **Settings** → section "Git connection".
+2. Coller le token dans le champ "Personal Access Token" (masqué, toggle mask).
+3. Cliquer **Save & verify** : le backend valide le token auprès de GitHub avant de le chiffrer et de le persister. Un statut `connected` avec les 4 derniers caractères du token (`…abcd`) et le type (`classic` ou `fine_grained`) s'affiche.
+
+Le token est chiffré **AES-256-GCM** au repos (même clé que les API keys utilisateur, `ENCRYPTION_KEY`). Il n'est jamais retourné par l'API — seulement ses 4 derniers caractères sont exposés.
+
+#### Tester la connexion
+
+Le bouton **Test connection** re-sonde GitHub à la demande et rafraîchit le statut. Il peut être utilisé avec un token non encore sauvegardé (saisi dans le champ) ou avec le token stocké (champ vide).
+
+#### Sens des statuts
+
+| Statut | Signification |
+|---|---|
+| `unconfigured` | Aucun token stocké ; résolution se fait via `GITHUB_TOKEN` / `git_token_env`. |
+| `connected` | Token validé lors du dernier "Save & verify" ou "Test connection". |
+| `invalid` | Token rejeté par GitHub (401). Doit être remplacé. |
+| `expired` | Token fine-grained avec `expires_at` dépassé (détecté localement). |
+| `insufficient_scope` | Token valide mais manque `read:project` (et/ou `repo`/`read:org`). |
+
+**Important — anti-déphasage** : le statut affiché est le **dernier connu** (horodatage "Last checked"). Il n'est PAS mis à jour en continu. Il se resynchronise automatiquement lors d'une vraie opération (import, branche, PR) : si GitHub retourne 401/403, le statut passe à `invalid`/`insufficient_scope` sans intervention. Utiliser "Test connection" pour forcer une vérification à la demande.
+
+#### Scopes recommandés
+
+| Scénario | Scopes minimum |
+|---|---|
+| Import GitHub Projects v2 (organisation) | `read:project` + `read:org` |
+| Import + issues privées | `read:project` + `repo` |
+| Branche / PR via API | `repo` |
+
+**Fine-grained PAT recommandé** pour limiter le blast radius (portée par dépôt ou par organisation, expiry obligatoire, approuvable par l'organisation). Limitation : les fine-grained PATs ne peuvent pas lire les **Projects v2 appartenant à un compte personnel** (uniquement les projets d'organisation).
+
+Pour les projets qui mixent les deux cas, un **PAT classique** avec `read:project` + `repo` reste accepté ; le risque (blast radius account-wide, pas d'expiry par défaut) doit être pesé.
+
+#### Fallback d'environnement
+
+Si aucun token n'est stocké pour le projet (ou après "Disconnect"), la plateforme se rabat sur :
+
+1. La variable d'environnement nommée dans `git_token_env` du projet (Advanced settings).
+2. La variable d'environnement `GITHUB_TOKEN` du serveur.
+
+Le champ `git_token_env` est accessible via **Settings → Advanced — legacy env-var fallback** (masqué par défaut). Il est maintenu pour compatibilité avec les déploiements existants.
+
+#### Qui peut connecter
+
+Seuls l'**owner du projet** et les **admins globaux** peuvent créer, modifier ou supprimer la connexion Git d'un projet. Les autres membres voient l'état en lecture seule.
+
+#### Déconnecter
+
+Le bouton **Disconnect** (⚠️ derrière une confirmation) supprime le token chiffré. La résolution revient au fallback d'environnement. L'action est idempotente (no-op si aucun token n'est stocké).
+
+#### Garde d'import
+
+L'onglet **GitHub Projects** du dialog d'import reste désactivé tant que la connexion n'est pas `connected`. Un lien "Connect this project to GitHub first →" pointe vers les settings. Cela remplace l'ancienne erreur 422 opaque retournée lors de l'import sans token.
+
 ### Exécution de pipeline
 - Lancement d'une story : substrat isolé → agent code → branche → PR
 - Pipeline configurable par projet (groupes d'étapes = stages, agents, modèles, prompts)

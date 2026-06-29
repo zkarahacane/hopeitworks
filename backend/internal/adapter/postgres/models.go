@@ -164,6 +164,24 @@ type Event struct {
 	CreatedAt  time.Time `json:"created_at"`
 }
 
+type GitConnection struct {
+	ID              uuid.UUID          `json:"id"`
+	ProjectID       uuid.UUID          `json:"project_id"`
+	Provider        string             `json:"provider"`
+	Kind            string             `json:"kind"`
+	EncryptedSecret []byte             `json:"encrypted_secret"`
+	SecretLast4     pgtype.Text        `json:"secret_last4"`
+	TokenType       pgtype.Text        `json:"token_type"`
+	Scopes          []string           `json:"scopes"`
+	Status          string             `json:"status"`
+	AccountLogin    pgtype.Text        `json:"account_login"`
+	ExpiresAt       pgtype.Timestamptz `json:"expires_at"`
+	LastValidatedAt pgtype.Timestamptz `json:"last_validated_at"`
+	ValidationError pgtype.Text        `json:"validation_error"`
+	CreatedAt       time.Time          `json:"created_at"`
+	UpdatedAt       time.Time          `json:"updated_at"`
+}
+
 type HitlRequest struct {
 	ID               uuid.UUID          `json:"id"`
 	RunStepID        uuid.UUID          `json:"run_step_id"`
