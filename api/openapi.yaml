@@ -804,6 +804,119 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /projects/{projectId}/planning/connector:
+    get:
+      operationId: getPlanningConnector
+      summary: Get the project's persisted planning connector config (status write-back)
+      description: >
+        Returns the project's persisted planning connector: the import source and
+        its settings (GitHub Projects board URL, status field, done options, epic
+        issue type) plus the status write-back configuration (internal->tracker
+        status mapping, write-back and comment toggles). 404 when no connector has
+        been configured yet. Project owner or global admin only.
+      tags: [planning]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+      responses:
+        "200":
+          description: The project's planning connector
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlanningConnector"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      operationId: setPlanningConnector
+      summary: Create or replace the project's planning connector config
+      description: >
+        Persists the planning connector for the project (one per project). Stores
+        the import settings and the status write-back configuration so they no
+        longer have to be re-entered on every import. Enabling writeback_enabled
+        requires a configured git connection and a usable status mapping. Project
+        owner or global admin only.
+      tags: [planning]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetPlanningConnectorRequest"
+      responses:
+        "200":
+          description: Connector saved; returns the persisted config
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlanningConnector"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          description: >
+            Connector rejected. Error `code` is one of
+            `PLANNING_CONNECTOR_NO_GIT_CONNECTION` (write-back requires a stored git
+            connection) or `PLANNING_CONNECTOR_INVALID_MAPPING` (write-back enabled
+            without a usable status mapping).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /projects/{projectId}/planning/connector/status-options:
+    get:
+      operationId: getPlanningStatusOptions
+      summary: List the external tracker's status field options (to build the mapping)
+      description: >
+        Live-probes the configured external tracker and returns the single-select
+        status field and its options, so the UI can map each internal status
+        (backlog/running/done/failed) onto a concrete tracker option. Uses the
+        persisted connector when present, or the query parameters to probe before
+        the connector is saved. Project owner or global admin only.
+      tags: [planning]
+      parameters:
+        - $ref: "#/components/parameters/ProjectIdPath"
+        - name: project_url
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Override the board URL to probe (defaults to the persisted connector).
+        - name: status_field
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Override the status field name (defaults to the persisted connector or "Status").
+      responses:
+        "200":
+          description: The tracker's status field and its options
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlanningStatusOptions"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          description: Tracker reachable but the status field could not be resolved.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /projects/{projectId}/stories/{storyId}:
     get:
       operationId: getStory
@@ -3149,6 +3262,16 @@ components:
           format: date-time
           nullable: true
           description: Last import that touched this story (read-only). Null for manual rows.
+        writeback_status:
+          type: string
+          enum: [disabled, pending, synced, failed]
+          nullable: true
+          description: >
+            State of the last status write-back to the external tracker (read-only).
+            disabled = no connector / write-back off / source is manual; pending = a
+            write-back is queued or in flight; synced = the tracker reflects the
+            internal status; failed = the last write-back attempt errored. Null for
+            manual rows.
         created_at:
           type: string
           format: date-time
@@ -3469,6 +3592,130 @@ components:
           type: string
         reason:
           type: string
+
+    # ── Planning Connector (persisted config + status write-back) ──────
+    PlanningStatusMapping:
+      type: object
+      description: >
+        Maps each internal story status to an external tracker status option id.
+        A null/omitted value means "do not write back for this status". For
+        GitHub Projects v2 the values are single-select option ids.
+      properties:
+        backlog:
+          type: string
+          nullable: true
+        running:
+          type: string
+          nullable: true
+        done:
+          type: string
+          nullable: true
+        failed:
+          type: string
+          nullable: true
+
+    PlanningConnector:
+      type: object
+      required:
+        - project_id
+        - source
+        - writeback_enabled
+        - post_run_comment
+      properties:
+        project_id:
+          type: string
+          format: uuid
+        source:
+          type: string
+          enum: [github_projects]
+          description: Write-back is only supported for github_projects (markdown is a one-way upload).
+        project_url:
+          type: string
+          nullable: true
+          description: GitHub Projects v2 board URL.
+        status_field:
+          type: string
+          default: "Status"
+          description: Single-select field used for status read/write.
+        done_options:
+          type: array
+          items:
+            type: string
+          description: Status option names mapped to done on import (case-insensitive).
+        epic_issue_type:
+          type: string
+          default: "Epic"
+        status_mapping:
+          $ref: "#/components/schemas/PlanningStatusMapping"
+        writeback_enabled:
+          type: boolean
+          default: false
+          description: When true, internal status transitions are pushed to the tracker.
+        post_run_comment:
+          type: boolean
+          default: false
+          description: When true, a comment linking the run is posted on the tracker item at each transition.
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    SetPlanningConnectorRequest:
+      type: object
+      required: [source]
+      properties:
+        source:
+          type: string
+          enum: [github_projects]
+        project_url:
+          type: string
+        status_field:
+          type: string
+          default: "Status"
+        done_options:
+          type: array
+          items:
+            type: string
+        epic_issue_type:
+          type: string
+          default: "Epic"
+        status_mapping:
+          $ref: "#/components/schemas/PlanningStatusMapping"
+        writeback_enabled:
+          type: boolean
+          default: false
+        post_run_comment:
+          type: boolean
+          default: false
+
+    PlanningStatusOptions:
+      type: object
+      required: [field_name, options]
+      properties:
+        field_id:
+          type: string
+          nullable: true
+          description: Tracker field id of the status single-select (when resolvable).
+        field_name:
+          type: string
+          example: Status
+        options:
+          type: array
+          items:
+            $ref: "#/components/schemas/PlanningStatusOption"
+
+    PlanningStatusOption:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          description: Stable option id used as the write-back target.
+        name:
+          type: string
+          example: In Progress
 
     # ── Prompt Template ────────────────────────────────────────────────
     PromptTemplate:
