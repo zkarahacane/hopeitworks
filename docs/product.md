@@ -70,7 +70,7 @@ Project → Epic → Story → Run → Step
 
 ### Planning connectors
 
-**Principe** : la plateforme est une couche d'exécution agnostique au planning. Les connecteurs permettent d'importer un plan externe (epics + stories) dans la base interne, sans écriture retour ni synchronisation continue.
+**Principe** : la plateforme est une couche d'exécution agnostique au planning. Les connecteurs permettent d'importer un plan externe (epics + stories) dans la base interne. Pour GitHub Projects v2, un connecteur persisté permet en plus de **renvoyer les transitions de statut** vers le tracker (write-back optionnel).
 
 #### Sources disponibles en v1
 
@@ -92,10 +92,11 @@ Chaque story et epic porte quatre champs de provenance :
 
 Le badge de provenance (`SourceBadge`) remplace l'ancienne heuristique `git_provider` de `BoardView`. Il affiche : **In-app** (manual), **Markdown** (markdown), **GitHub Projects** (github_projects). Quand `source_url` est renseignée, le badge est un lien vers l'item d'origine.
 
-#### Import one-way (pas de write-back)
+#### Import inbound
 
-- L'import est **unidirectionnel** : la plateforme lit la source, normalise, upsert. Aucune écriture retour vers GitHub Projects ou le fichier markdown.
+- L'import est **inbound** : la plateforme lit la source, normalise, upsert. Aucune écriture retour vers le fichier Markdown.
 - Le board est une **projection générée** du plan importé, pas un miroir live.
+- Pour GitHub Projects v2, un **write-back de statut optionnel** peut renvoyer chaque transition de pipeline vers le tracker (voir section ci-dessous).
 
 #### Re-import réconciliatoire (jamais destructif)
 
@@ -127,7 +128,7 @@ L'importeur ne pose que deux statuts de planning : `backlog` ou `done`. Les stat
 | Markdown | Par `(project_id, key)` — une ligne `manual` backfillée se soigne elle-même en `markdown` au premier re-import |
 | GitHub Projects | Par `(project_id, source, external_id)` — le node_id opaque est stable même si le numéro d'issue change |
 
-#### UI
+#### UI — import
 
 - **Dialog sélecteur de source** (admin only) : bouton "Import planning" / "Re-import" dans le header du board ou en CTA de l'état vide.
 - **Sélecteur de source** (`SelectButton`) : Markdown | GitHub Projects.
@@ -138,13 +139,61 @@ L'importeur ne pose que deux statuts de planning : `backlog` ou `done`. Les stat
 - **Badge de provenance** : chaque carte du board affiche le badge source ; `source_url` est un lien externe vers l'item d'origine.
 - **Re-import admin-gated** : `POST /planning/import` requiert le rôle admin. Sur `403`, message inline.
 
-#### Limites v1 connues
+#### Limites connues
 
 - **Edition amont mid-run gelée** : si une story est en cours d'exécution, le re-import ne met pas à jour son titre/spec (gelé). La modification est réappliquée automatiquement au **premier re-import après la fin du run**. Pas de badge "drift" ni de file d'attente de changements pendants.
 - **`DependsOn` GitHub et ancestry multi-niveau différés** : seul le parent direct (`parent.id`) est importé en v1 ; le parcours jusqu'à l'epic ancêtre le plus proche et les dépendances natives GitHub sont différés.
-- **Pas de sync sauvegardée/planifiée** : la config GitHub (URL, done_options…) n'est pas persistée ; chaque re-import ressaisit l'URL. Un endpoint `GET /projects/{id}/planning` et un scheduler de sync sont différés.
+- **Pas de sync planifiée** : la resynchronisation s'effectue manuellement (bouton "Re-import"). Un scheduler de sync périodique est différé.
 - **`/stories/import` déprécié** : l'ancien endpoint est maintenu pour compatibilité (redirige vers le nouveau service) mais déprécié — utiliser `POST /projects/{id}/planning/import` avec `source: markdown`.
 - **Concurrence** : deux imports simultanés du même projet sont last-writer-wins sur les champs cosmétiques. Le verrou row-level (`running`/`failed`/`current_stage`) protège les stories en cours d'exécution.
+- **Write-back Markdown** : le write-back de statut n'est pas disponible pour les sources Markdown (format statique). Seul GitHub Projects v2 supporte le write-back.
+
+#### Connecteur persisté et write-back de statut (GitHub Projects v2)
+
+Un **connecteur de planning** peut être configuré par projet dans **Settings → "Tracker & sync"**. Il lie le projet à un board GitHub Projects v2 spécifique et configure le write-back de statut.
+
+**Configuration** (API : `GET/PUT /projects/{id}/planning/connector`) :
+
+| Champ | Rôle |
+|---|---|
+| `project_url` | URL du board GitHub Projects v2 |
+| `status_field` | Nom du champ single-select du board (défaut "Status") |
+| `done_options` | Options de statut considérées comme `done` à l'import |
+| `epic_issue_type` | Type d'issue considéré comme epic (défaut "Epic") |
+| `status_mapping` | Mapping interne → option GitHub : `{backlog, running, done, failed}` → option id (nullable) |
+| `writeback_enabled` | Active le renvoi des transitions de statut vers le tracker |
+| `post_run_comment` | Poste un commentaire avec le lien du run sur l'item tracker à chaque transition |
+
+**Workflow utilisateur** :
+
+1. Aller dans le projet → **Settings** → section **"Tracker & sync"**.
+2. Saisir la `project_url` et le `status_field`.
+3. Cliquer **"Load options"** pour sonder le board et obtenir les options réelles du champ.
+4. Mapper chaque statut interne (`backlog`, `running`, `done`, `failed`) vers une option GitHub, ou utiliser **"Auto-fill"** (matching par convention, insensible à la casse).
+5. Activer les toggles **"Enable write-back"** et/ou **"Post run comment"**.
+6. Cliquer **"Save"** — le connecteur est persisté.
+
+Le connecteur pré-remplit automatiquement le dialog d'import (plus besoin de ressaisir l'URL à chaque re-import).
+
+**Write-back automatique** : à chaque transition de statut déclenchée par le pipeline (backlog → running → done/failed), si `writeback_enabled` est vrai et que l'option correspondante est mappée, le backend met à jour le champ de statut de l'issue GitHub Projects via l'API. Si `post_run_comment` est vrai, un commentaire avec le lien vers le run est posté sur l'issue.
+
+**Contraintes** :
+- Requiert une connexion GitHub (PAT) valide. Sans connexion, `PUT /planning/connector` retourne `422 PLANNING_CONNECTOR_NO_GIT_CONNECTION`.
+- `writeback_enabled: true` sans aucune option mappée retourne `422 PLANNING_CONNECTOR_INVALID_MAPPING`.
+- Accès réservé à l'owner du projet et aux admins globaux.
+
+**État de synchronisation sur la story** (`writeback_status`) :
+
+| Valeur | Signification |
+|---|---|
+| `disabled` | Write-back désactivé ou story sans mapping applicable |
+| `pending` | Transition en file, write-back en cours |
+| `synced` | Dernière transition reflétée avec succès dans le tracker |
+| `failed` | Dernière tentative de write-back en erreur |
+
+Le `WritebackStatusBadge` est affiché dans le panneau de détail de la story (visible pour `pending`, `synced`, `failed` ; masqué pour `disabled`).
+
+**Raccourci** : le bouton **"Tracker & sync"** dans l'éditeur de pipeline renvoie directement vers la section correspondante des settings du projet.
 
 ### Connexion GitHub par PAT
 
