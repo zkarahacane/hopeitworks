@@ -74,14 +74,15 @@ LIMIT 1;
 -- name: CreateStoryFromImport :one
 -- Import-create: the SERVICE has computed every value (status projection, epic
 -- resolution, provenance). target_files is deliberately ABSENT (never written by
--- import — DB default applies); current_stage is executor-owned.
+-- import — DB default applies); current_stage is executor-owned. external_item_id
+-- is the ProjectV2Item id (write-back target), distinct from the content node id.
 INSERT INTO stories (
     project_id, epic_id, key, title, objective, acceptance_criteria,
-    scope, depends_on, status, source, external_id, source_url,
+    scope, depends_on, status, source, external_id, external_item_id, source_url,
     synced_at, last_import_hash
 ) VALUES (
     @project_id, @epic_id, @key, @title, @objective, @acceptance_criteria,
-    @scope, @depends_on, @status, @source, @external_id, @source_url,
+    @scope, @depends_on, @status, @source, @external_id, @external_item_id, @source_url,
     now(), @last_import_hash
 )
 RETURNING *;
@@ -100,6 +101,7 @@ UPDATE stories SET
     epic_id             = @epic_id,
     source              = @source,
     external_id         = @external_id,
+    external_item_id    = @external_item_id,
     source_url          = @source_url,
     synced_at           = now(),
     last_import_hash    = @last_import_hash,
@@ -112,11 +114,19 @@ RETURNING *;
 -- Crucially does NOT touch last_import_hash, so the deferred spec change is
 -- re-applied on the FIRST re-import after the run terminates.
 UPDATE stories SET
-    title       = @title,
-    source      = @source,
-    external_id = @external_id,
-    source_url  = @source_url,
-    synced_at   = now(),
-    updated_at  = now()
+    title            = @title,
+    source           = @source,
+    external_id      = @external_id,
+    external_item_id = @external_item_id,
+    source_url       = @source_url,
+    synced_at        = now(),
+    updated_at       = now()
 WHERE id = @id
 RETURNING *;
+
+-- name: SetStoryWritebackStatus :exec
+-- Sets the last write-back state (disabled|pending|synced|failed). Managed solely by
+-- the write-back path; the importer and run engine never touch this column.
+UPDATE stories
+SET writeback_status = $2, updated_at = now()
+WHERE id = $1;
