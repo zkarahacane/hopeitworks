@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, onMounted, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useToast } from 'primevue/usetoast'
 import Button from 'primevue/button'
 import ConfirmDialog from 'primevue/confirmdialog'
@@ -16,6 +16,7 @@ import { useAgents } from '@/composables/useAgents'
 import type { PipelineStep, Guard, TransitionPolicy } from '@/stores/pipelineConfig'
 
 const route = useRoute()
+const router = useRouter()
 const toast = useToast()
 const { user } = useAuth()
 
@@ -169,22 +170,33 @@ async function handleSave() {
           Compose roles, steps and gates. The runtime handles containers, isolation &amp; parallelism.
         </p>
       </div>
-      <div v-if="isAdmin && !isLoading && !error" class="flex gap-2">
+      <div class="flex items-center gap-2 flex-wrap justify-end">
         <Button
-          label="+ Add group"
+          label="Tracker & sync"
+          icon="pi pi-link"
           severity="secondary"
-          data-testid="add-group-btn"
-          @click="handleAddGroup"
+          text
+          size="small"
+          data-testid="tracker-sync-link"
+          @click="router.push({ name: 'project-settings', params: { id: projectId } })"
         />
-        <Button
-          label="Save"
-          icon="pi pi-save"
-          severity="success"
-          :disabled="!isDirty"
-          :loading="isSaving"
-          data-testid="save-config-btn"
-          @click="handleSave"
-        />
+        <template v-if="isAdmin && !isLoading && !error">
+          <Button
+            label="+ Add group"
+            severity="secondary"
+            data-testid="add-group-btn"
+            @click="handleAddGroup"
+          />
+          <Button
+            label="Save"
+            icon="pi pi-save"
+            severity="success"
+            :disabled="!isDirty"
+            :loading="isSaving"
+            data-testid="save-config-btn"
+            @click="handleSave"
+          />
+        </template>
       </div>
     </div>
 

@@ -6,6 +6,7 @@ import { useToast } from 'primevue/usetoast'
 import Toast from 'primevue/toast'
 import ProjectSettingsForm from '@/features/projects/ProjectSettingsForm.vue'
 import GitConnectionCard from '@/features/projects/GitConnectionCard.vue'
+import PlanningConnectorCard from '@/features/projects/PlanningConnectorCard.vue'
 import { useProjects } from '@/composables/useProjects'
 import type { Project, UpdateProjectPayload } from '@/stores/projects'
 
@@ -70,6 +71,8 @@ async function handleDelete() {
     />
 
     <GitConnectionCard v-if="project" :project="project" />
+
+    <PlanningConnectorCard v-if="project" :project="project" />
 
     <p v-else :style="{ color: 'var(--p-text-muted-color)' }">Loading project settings...</p>
 
