@@ -193,6 +193,8 @@ Le connecteur pré-remplit automatiquement le dialog d'import (plus besoin de re
 
 Le `WritebackStatusBadge` est affiché dans le panneau de détail de la story (visible pour `pending`, `synced`, `failed` ; masqué pour `disabled`).
 
+> **Stories importées avant l'activation du write-back** : le renvoi de statut cible l'_item_ du board (`external_item_id`), capturé à l'import. Une story importée **avant** cette fonctionnalité n'a pas cet identifiant et passera `failed` (`MISSING_TARGET`) à sa première transition. **Re-importer le board** une fois renseigne l'identifiant et rétablit le write-back ; aucune autre action n'est requise.
+
 **Raccourci** : le bouton **"Tracker & sync"** dans l'éditeur de pipeline renvoie directement vers la section correspondante des settings du projet.
 
 ### Connexion GitHub par PAT
