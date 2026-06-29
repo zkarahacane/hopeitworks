@@ -286,6 +286,10 @@ func toAPIStory(s *model.Story, latest *model.LatestRun) Story {
 	story.ExternalId = s.ExternalID
 	story.SourceUrl = s.SourceURL
 	story.SyncedAt = s.SyncedAt
+	if s.WritebackStatus != nil {
+		wb := StoryWritebackStatus(*s.WritebackStatus)
+		story.WritebackStatus = &wb
+	}
 	story.LatestRun = toAPILatestRun(latest)
 	return story
 }

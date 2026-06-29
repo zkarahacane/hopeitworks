@@ -165,6 +165,20 @@ func run() error {
 	planningFactory := planningadapter.NewFactory(projectRepo, gitConnSvc, logger)
 	planningImportService := service.NewPlanningImportService(storyRepo, epicRepo, planningFactory)
 
+	// Planning write-back (one-way outbound: hopeitworks -> tracker). The connector
+	// service persists the per-project config (status field + mapping + toggles) and
+	// serves the live status-options probe; the write-back service is the River worker
+	// side that pushes a single status. Both reuse planningFactory as the sink factory
+	// (token via the same credential seam) and gitConnSvc as the resolver.
+	planningConnectorRepo := pgadapter.NewPlanningConnectorRepository(queries)
+	planningWriteBackRepo := pgadapter.NewPlanningWriteBackRepository(queries)
+	planningConnectorService := service.NewPlanningConnectorService(planningConnectorRepo, projectRepo, gitConnSvc, planningFactory)
+	planningWriteBackService := service.NewPlanningWriteBackService(
+		planningConnectorRepo, storyRepo, planningWriteBackRepo, planningFactory,
+		getEnvOrDefault("PUBLIC_BASE_URL", ""), logger,
+	)
+	planningConnectorHandler := handler.NewPlanningConnectorHandler(planningConnectorService)
+
 	// Story service
 	storyService := service.NewStoryService(storyRepo)
 	storyHandler := handler.NewStoryHandler(storyService, runRepo, planningImportService)
@@ -375,12 +389,17 @@ func run() error {
 	// River job queue for async pipeline execution
 	workers := river.NewWorkers()
 	river.AddWorker(workers, riveradapter.NewExecuteRunWorker(pipelineExecutor))
+	// Async tracker status write-back worker (one-way outbound). Registered before the
+	// client is created (River requires all workers up front).
+	river.AddWorker(workers, riveradapter.NewWriteBackWorker(planningWriteBackService))
 
 	jobQueue, err := riveradapter.NewJobQueue(pool, workers)
 	if err != nil {
 		logger.Warn("river job queue unavailable, run launching disabled", "error", err)
 	}
 	if jobQueue != nil {
+		// The executor enqueues a write-back on each running/done/failed transition.
+		pipelineExecutor.SetWriteBackEnqueuer(jobQueue)
 		go func() {
 			if startErr := jobQueue.Client().Start(appCtx); startErr != nil && startErr != context.Canceled {
 				logger.Error("river client failed", "error", startErr)
@@ -494,7 +513,7 @@ func run() error {
 	// Planning import handler (POST /projects/{projectId}/planning/import).
 	planningHandler := handler.NewPlanningHandler(planningImportService)
 
-	server := handler.NewServer(authHandler, projectHandler, userHandler, profileHandler, epicHandler, storyHandler, agentHandler, stackHandler, runHandler, pipelineConfigHandler, hitlHandler, costHandler, notificationHandler, epicRunHandler, environmentHandler, apiKeyHandler, planningHandler, gitConnectionHandler)
+	server := handler.NewServer(authHandler, projectHandler, userHandler, profileHandler, epicHandler, storyHandler, agentHandler, stackHandler, runHandler, pipelineConfigHandler, hitlHandler, costHandler, notificationHandler, epicRunHandler, environmentHandler, apiKeyHandler, planningHandler, planningConnectorHandler, gitConnectionHandler)
 
 	// Project user handler
 	projectUserHandler := handler.NewProjectUserHandler(projectUserService)
