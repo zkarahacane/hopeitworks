@@ -159,7 +159,7 @@ For `source = manual` / legacy markdown without an external id, fall back to the
 
 - **v1 — one-way inbound.** External tracker is the source of truth for planning; we only read. No conflict resolution, no webhook infra required (poll or on-demand "Import" button). Lowest risk, 90% of the value (visibility on our board, agent-ready stories).
 - **v2 — webhook delta.** Add `POST /webhooks/{source}` endpoints, HMAC verify (`X-Hub-Signature-256` / `X-Gitlab-Token` / Jira shared secret), dedup on delivery id (`X-GitHub-Delivery`), call `adapter.Normalize` → upsert. GitHub `projects_v2_item.edited` and GitLab issue hooks carry the field delta inline — no follow-up query. Keep a nightly full resync as a consistency backstop.
-- **v3 — status write-back (optional).** Only ever write execution state back: `in_progress` / `done` / `blocked` + a link to our run/PR. Never overwrite title/body/AC. GitHub: PR/issue comment + label; Jira: transition + comment; GitLab: scoped label `workflow::done` via `PUT /issues/:iid`. This is where `PlanningSourceAdapter.WriteBack` activates.
+- **v3 — status write-back.** ✅ **Livré (GitHub Projects v2)** — connecteur persisté (`GET/PUT /projects/{id}/planning/connector`) avec mapping explicite des 4 statuts internes vers des options GitHub, propagation automatique à chaque transition du pipeline, commentaire optionnel avec lien du run, `writeback_status` sur la story (`disabled|pending|synced|failed`), badge `WritebackStatusBadge` dans le détail de story. Accès owner/admin. Erreurs documentées (`PLANNING_CONNECTOR_NO_GIT_CONNECTION`, `PLANNING_CONNECTOR_INVALID_MAPPING`). Markdown write-back et GitLab/Jira write-back restent futurs (non livrés).
 
 ### 3.4 Where it lives (hexagonal placement)
 
