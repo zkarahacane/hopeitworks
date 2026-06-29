@@ -103,7 +103,7 @@ services:
       GITHUB_TOKEN: ${GITHUB_TOKEN}
       CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN}
       CALLBACK_BASE_URL: http://api:8081
-      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-dev-encryption-key-32bytes!!}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-agent-test-encryption-key-not-for-prod}
       SMTP_HOST: test-mailhog
       SMTP_PORT: 1025
       SMTP_FROM: ${SMTP_FROM:-noreply@hopeitworks.local}
