@@ -277,6 +277,7 @@ func (r *StoryRepo) CreateFromImport(ctx context.Context, story *model.Story) (*
 		Status:             story.Status,
 		Source:             story.Source,
 		ExternalID:         textFromStringPtr(story.ExternalID),
+		ExternalItemID:     textFromStringPtr(story.ExternalItemID),
 		SourceUrl:          textFromStringPtr(story.SourceURL),
 		LastImportHash:     textFromStringPtr(story.LastImportHash),
 	})
@@ -306,6 +307,7 @@ func (r *StoryRepo) UpdateFromImport(ctx context.Context, story *model.Story) (*
 		EpicID:             uuidFromPtr(story.EpicID),
 		Source:             story.Source,
 		ExternalID:         textFromStringPtr(story.ExternalID),
+		ExternalItemID:     textFromStringPtr(story.ExternalItemID),
 		SourceUrl:          textFromStringPtr(story.SourceURL),
 		LastImportHash:     textFromStringPtr(story.LastImportHash),
 	})
@@ -324,11 +326,12 @@ func (r *StoryRepo) UpdateFromImport(ctx context.Context, story *model.Story) (*
 // UpdateProvenanceOnly refreshes a locked story's title + provenance only.
 func (r *StoryRepo) UpdateProvenanceOnly(ctx context.Context, story *model.Story) (*model.Story, error) {
 	row, err := r.queries.UpdateStoryProvenanceOnly(ctx, UpdateStoryProvenanceOnlyParams{
-		ID:         story.ID,
-		Title:      story.Title,
-		Source:     story.Source,
-		ExternalID: textFromStringPtr(story.ExternalID),
-		SourceUrl:  textFromStringPtr(story.SourceURL),
+		ID:             story.ID,
+		Title:          story.Title,
+		Source:         story.Source,
+		ExternalID:     textFromStringPtr(story.ExternalID),
+		ExternalItemID: textFromStringPtr(story.ExternalItemID),
+		SourceUrl:      textFromStringPtr(story.SourceURL),
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -381,13 +384,30 @@ func toDomainStory(s Story) (*model.Story, error) {
 	if s.ExternalID.Valid {
 		story.ExternalID = &s.ExternalID.String
 	}
+	if s.ExternalItemID.Valid {
+		story.ExternalItemID = &s.ExternalItemID.String
+	}
 	if s.SourceUrl.Valid {
 		story.SourceURL = &s.SourceUrl.String
 	}
 	if s.LastImportHash.Valid {
 		story.LastImportHash = &s.LastImportHash.String
 	}
+	if s.WritebackStatus.Valid {
+		story.WritebackStatus = &s.WritebackStatus.String
+	}
 	return story, nil
+}
+
+// SetWritebackStatus sets the story's outbound write-back state in place.
+func (r *StoryRepo) SetWritebackStatus(ctx context.Context, id uuid.UUID, status string) error {
+	if err := r.queries.SetStoryWritebackStatus(ctx, SetStoryWritebackStatusParams{
+		ID:              id,
+		WritebackStatus: pgtype.Text{String: status, Valid: true},
+	}); err != nil {
+		return apperrors.NewInternal("failed to set story writeback status", err)
+	}
+	return nil
 }
 
 // marshalJSONB marshals a string slice to JSONB bytes. Returns nil for nil slices.
