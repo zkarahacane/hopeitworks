@@ -1687,3 +1687,7 @@ func TestExecuteRun_AllAutoRunsToCompletion(t *testing.T) {
 		t.Errorf("expected all-auto pipeline to complete, got %s", got)
 	}
 }
+
+func (m *mockStoryRepoForExecutor) SetWritebackStatus(_ context.Context, _ uuid.UUID, _ string) error {
+	return nil
+}

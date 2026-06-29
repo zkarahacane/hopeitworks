@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -18,14 +19,21 @@ import (
 	"golang.org/x/oauth2"
 )
 
-// Compile-time check that GitHubProjectsAdapter implements port.PlanningSourceAdapter.
-var _ port.PlanningSourceAdapter = (*GitHubProjectsAdapter)(nil)
+// Compile-time checks: GitHubProjectsAdapter is BOTH the inbound import adapter and
+// the outbound write-back sink (it shares URL/project resolution + the rate-limited
+// client between the two directions).
+var (
+	_ port.PlanningSourceAdapter = (*GitHubProjectsAdapter)(nil)
+	_ port.PlanningSourceSink    = (*GitHubProjectsAdapter)(nil)
+)
 
 // gqlClient is the minimal GraphQL surface the adapter needs. It is satisfied by
 // *githubv4.Client and lets tests inject a client pointed at an httptest server
-// returning recorded JSON (no network).
+// returning recorded JSON (no network). Mutate is used by the outbound sink
+// (write-back); the import path uses only Query.
 type gqlClient interface {
 	Query(ctx context.Context, q interface{}, variables map[string]interface{}) error
+	Mutate(ctx context.Context, m interface{}, input githubv4.Input, variables map[string]interface{}) error
 }
 
 // GitHubProjectsAdapter normalizes a GitHub Projects v2 board (read via GraphQL)
@@ -39,6 +47,12 @@ type gqlClient interface {
 type GitHubProjectsAdapter struct {
 	client gqlClient
 	logger *slog.Logger
+
+	// fieldCache memoizes resolved status field id/options per (projectURL|field) for
+	// the lifetime of this adapter instance (best-effort; the factory builds a fresh
+	// adapter per request so the cache mostly de-dupes within a single WriteBack).
+	mu         sync.Mutex
+	fieldCache map[string]port.PlanningStatusOptions
 }
 
 // NewGitHubProjectsAdapter builds an adapter over an already-authenticated client.
@@ -46,7 +60,7 @@ func NewGitHubProjectsAdapter(client gqlClient, logger *slog.Logger) *GitHubProj
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &GitHubProjectsAdapter{client: client, logger: logger}
+	return &GitHubProjectsAdapter{client: client, logger: logger, fieldCache: map[string]port.PlanningStatusOptions{}}
 }
 
 // Kind reports the source discriminator this adapter handles ("github_projects").
@@ -358,7 +372,10 @@ func (a *GitHubProjectsAdapter) mapItem(it *githubProjectItem, gh *port.GitHubPr
 	}
 
 	res.Stories = append(res.Stories, port.ImportedStory{
-		Ref:                port.SourceRef{Source: port.SourceGitHub, ExternalID: extID, URL: url},
+		Ref: port.SourceRef{Source: port.SourceGitHub, ExternalID: extID, URL: url},
+		// The ProjectV2Item id (it.ID) is the write-back target for the field
+		// mutation, distinct from the content node id stored in Ref.ExternalID.
+		ExternalItemID:     string(it.ID),
 		Key:                key,
 		Title:              title,
 		Objective:          nil, // v1: no body parsing

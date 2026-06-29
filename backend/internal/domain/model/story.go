@@ -51,10 +51,15 @@ type Story struct {
 	// ("manual" | "markdown" | "github_projects"); the pointer fields are nil for
 	// in-app/seed rows. These are import-managed; the run engine never writes them.
 	Source         string     // port.SourceManual / SourceMarkdown / SourceGitHub
-	ExternalID     *string    // remote node id (github_projects) or key (markdown); nil for manual
+	ExternalID     *string    // remote content node id (github_projects) or key (markdown); nil for manual
+	ExternalItemID *string    // ProjectV2Item id (github_projects) — write-back target; nil otherwise
 	SourceURL      *string    // deep-link to the source item; nil for manual/markdown
 	SyncedAt       *time.Time // last successful import touch
 	LastImportHash *string    // sha256 of the last normalized import payload (no-op gate)
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
+	// WritebackStatus is the last-known state of the outbound status push to the
+	// external tracker (disabled|pending|synced|failed). Nil for rows that never had
+	// a write-back attempt. Managed solely by the write-back path.
+	WritebackStatus *string
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
 }

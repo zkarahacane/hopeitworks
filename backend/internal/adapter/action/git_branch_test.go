@@ -559,3 +559,7 @@ func TestGitBranchAction_Execute_NilConfig(t *testing.T) {
 func (m *gbMockStoryRepo) CountByEpicGroupedByStatus(_ context.Context, _ uuid.UUID) (model.StoryCounts, error) {
 	return model.StoryCounts{}, nil
 }
+
+func (m *gbMockStoryRepo) SetWritebackStatus(_ context.Context, _ uuid.UUID, _ string) error {
+	return nil
+}

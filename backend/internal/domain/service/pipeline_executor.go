@@ -44,13 +44,14 @@ func stageStartedKey(stageID string) string { return metaStageStartedPrefix + st
 
 // PipelineExecutor orchestrates sequential execution of pipeline steps.
 type PipelineExecutor struct {
-	runRepo        port.RunRepository
-	storyRepo      port.StoryRepository
-	actionReg      port.ActionRegistry
-	eventPub       port.EventPublisher
-	circuitBreaker *CircuitBreakerService
-	hitlRepo       port.HITLRepository
-	logger         *slog.Logger
+	runRepo           port.RunRepository
+	storyRepo         port.StoryRepository
+	actionReg         port.ActionRegistry
+	eventPub          port.EventPublisher
+	circuitBreaker    *CircuitBreakerService
+	hitlRepo          port.HITLRepository
+	writeBackEnqueuer port.WriteBackEnqueuer
+	logger            *slog.Logger
 }
 
 // NewPipelineExecutor creates a new pipeline executor.
@@ -80,6 +81,12 @@ func (e *PipelineExecutor) SetCircuitBreaker(cb *CircuitBreakerService) {
 // gate is raised at the boundary). All non-gate behaviour is unaffected.
 func (e *PipelineExecutor) SetHITLRepo(repo port.HITLRepository) {
 	e.hitlRepo = repo
+}
+
+// SetWriteBackEnqueuer wires the async tracker write-back enqueuer. Optional: when
+// unset (nil), status transitions are simply not pushed to the external tracker.
+func (e *PipelineExecutor) SetWriteBackEnqueuer(enq port.WriteBackEnqueuer) {
+	e.writeBackEnqueuer = enq
 }
 
 // ExecuteRun executes all steps of a run sequentially.
@@ -524,6 +531,34 @@ func (e *PipelineExecutor) updateStoryStatus(ctx context.Context, run *model.Run
 		"run_id":   run.ID.String(),
 		"status":   status,
 	})
+
+	// Push the transition to the external tracker (one-way write-back). Only the run
+	// lifecycle transitions are propagated — running/done/failed — never backlog or a
+	// pause/cancel reset. Best-effort: a write-back enqueue failure never fails the run.
+	e.enqueueWriteBack(ctx, run, status)
+}
+
+// enqueueWriteBack marks the story write-back pending and enqueues an async push for
+// the run lifecycle transitions (running/done/failed). No-op when no enqueuer is wired
+// or the status is not a propagated transition.
+func (e *PipelineExecutor) enqueueWriteBack(ctx context.Context, run *model.Run, status string) {
+	if e.writeBackEnqueuer == nil || run.StoryID == uuid.Nil {
+		return
+	}
+	switch status {
+	case model.StoryStatusRunning, model.StoryStatusDone, model.StoryStatusFailed:
+	default:
+		return // backlog / pause / cancel reset is never written back
+	}
+
+	if err := e.storyRepo.SetWritebackStatus(ctx, run.StoryID, string(model.WritebackPending)); err != nil {
+		e.logger.Warn("failed to set story writeback_status pending",
+			"story_id", run.StoryID, "run_id", run.ID, "error", err)
+	}
+	if err := e.writeBackEnqueuer.EnqueueWriteBack(ctx, run.ProjectID, run.StoryID, run.ID, status); err != nil {
+		e.logger.Warn("failed to enqueue status write-back",
+			"story_id", run.StoryID, "run_id", run.ID, "status", status, "error", err)
+	}
 }
 
 // stageRef is the in-memory identity of the stage a run is currently in.

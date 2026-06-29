@@ -2475,3 +2475,7 @@ func TestRunService_StartStage_RejectsRunningRun(t *testing.T) {
 		t.Errorf("expected conflict DomainError, got %v", err)
 	}
 }
+
+func (m *mockStoryRepoForRun) SetWritebackStatus(_ context.Context, _ uuid.UUID, _ string) error {
+	return nil
+}
