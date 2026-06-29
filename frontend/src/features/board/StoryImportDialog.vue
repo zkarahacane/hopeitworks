@@ -12,6 +12,7 @@ import InputText from 'primevue/inputtext'
 import AutoComplete from 'primevue/autocomplete'
 import { usePlanningImport, type PlanningSource } from '@/composables/usePlanningImport'
 import { useGitConnection, type GitConnectionStatus } from '@/features/projects/useGitConnection'
+import { usePlanningConnector } from '@/composables/usePlanningConnector'
 
 const props = defineProps<{
   visible: boolean
@@ -31,9 +32,33 @@ const { status: gitStatus } = useGitConnection()
 const gitConn = ref<GitConnectionStatus | null>(null)
 const githubConnected = computed(() => gitConn.value?.status === 'connected')
 
+// ── Persisted connector pre-fill (GitHub Projects) ───────────────────────────
+// When a PlanningConnector is saved for this project, pre-fill the GitHub form
+// fields so the user doesn't have to re-enter them on every import.
+const { fetchConnector } = usePlanningConnector()
+
 async function refreshGitConnection() {
-  const result = await gitStatus.execute(props.projectId)
-  gitConn.value = result
+  const [gitResult, connResult] = await Promise.all([
+    gitStatus.execute(props.projectId),
+    fetchConnector.execute(props.projectId),
+  ])
+  gitConn.value = gitResult
+  // Pre-fill GitHub fields from the persisted connector (non-destructive: only
+  // fills when the field is currently empty so a user mid-edit isn't overwritten).
+  if (connResult) {
+    if (!projectUrl.value && connResult.project_url) {
+      projectUrl.value = connResult.project_url
+    }
+    if (!statusField.value || statusField.value === 'Status') {
+      statusField.value = connResult.status_field ?? 'Status'
+    }
+    if (!doneOptions.value.length && connResult.done_options?.length) {
+      doneOptions.value = [...connResult.done_options]
+    }
+    if (!epicIssueType.value || epicIssueType.value === 'Epic') {
+      epicIssueType.value = connResult.epic_issue_type ?? 'Epic'
+    }
+  }
 }
 
 watch(

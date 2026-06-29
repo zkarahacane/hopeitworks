@@ -9,6 +9,7 @@ import StoryEditorForm from './StoryEditorForm.vue'
 import { useStoryEditor } from '@/composables/useStoryEditor'
 import StatusBadge from '@/ui/primitives/StatusBadge.vue'
 import SourceBadge from '@/ui/primitives/SourceBadge.vue'
+import WritebackStatusBadge from '@/ui/primitives/WritebackStatusBadge.vue'
 
 const props = defineProps<{
   story: Story | null
@@ -82,6 +83,7 @@ async function handleSave() {
             :severity="scopeSeverityMap[story.scope] ?? 'secondary'"
           />
           <SourceBadge :source="story.source" :source-url="story.source_url" />
+          <WritebackStatusBadge :status="story.writeback_status" :show-disabled="false" />
         </div>
         <div class="flex items-center gap-2">
           <Button

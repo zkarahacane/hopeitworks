@@ -56,6 +56,15 @@ export interface Story {
   external_id?: string | null
   source_url?: string | null
   synced_at?: string | null
+  /**
+   * State of the last status write-back to the external tracker (read-only).
+   * `disabled` = no connector / write-back off / source is manual;
+   * `pending`  = a write-back is queued or in flight;
+   * `synced`   = the tracker reflects the internal status;
+   * `failed`   = the last write-back attempt errored.
+   * Null for manual rows.
+   */
+  writeback_status?: 'disabled' | 'pending' | 'synced' | 'failed' | null
   created_at: string
   updated_at: string
 }
